@@ -115,6 +115,7 @@ Reserved globally:
 | Key | Meaning |
 |---|---|
 | `j` / `k` | down / up |
+| `h` / `l` | focus the pane to the left / right (tiled views such as the PR workspace) |
 | `g g` / `G` | top / bottom |
 | `ctrl+d` / `ctrl+u` | half page down / up |
 | `ctrl+f` / `ctrl+b` | full page down / up |
@@ -143,7 +144,7 @@ Reserved prefixes:
 |---|---|
 | `g …` | goto: `g g` top, `g t` / `g T` next / previous tab |
 | `] x` / `[ x` | next / previous *x*: `f` file, `h` hunk, `c` comment thread, `s` section |
-| `z …` | folds (expand/collapse threads, files) |
+| `z …` | folds (expand/collapse threads, files) and horizontal scrolling: `z h` / `z l` a few columns, `z H` / `z L` half a screen (as in vim) |
 
 Adding a binding or command: make sure it doesn't collide with the tables above or another binding active in the same view, add it with help text, and **list every new or changed binding in the PR description** so the maintainer can approve it. Any binding an issue marks "TBD" is the maintainer's call; propose one in the PR and ask.
 
