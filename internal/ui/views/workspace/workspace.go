@@ -121,6 +121,12 @@ type View struct {
 	focus    pane
 	ov       overview
 	picker   *picker.Model // non-nil while the file picker is open
+	// pickerItems are the paths the picker was built from; a choice is
+	// resolved by path because a refresh may replace the file list meanwhile.
+	pickerItems []string
+	paneFile    string // path last given to filePane.SetFile
+	paneW       int    // size last given to filePane.SetSize
+	paneH       int
 
 	width, height int
 }
@@ -272,7 +278,11 @@ func (v *View) prLoaded(msg prLoadedMsg) tea.Cmd {
 
 func (v *View) diffLoaded(msg diffLoadedMsg) tea.Cmd {
 	v.diffPending = false
-	v.diff = DiffState{Raw: msg.raw, Err: msg.err}
+	if msg.err != nil && v.diff.Raw != "" && !errors.Is(msg.err, github.ErrDiffTooLarge) {
+		v.diff.Loading = false // keep the loaded diff; the error goes to the status bar
+	} else {
+		v.diff = DiffState{Raw: msg.raw, Err: msg.err}
+	}
 	v.filePane.SetDiff(v.diff)
 	// A diff that is merely too large is shown in the diff pane, not as a
 	// transient error.
@@ -302,7 +312,11 @@ func (v *View) selectedPath() string {
 
 func (v *View) selectionChanged() {
 	if v.sel > 0 && v.sel <= len(v.files()) {
-		v.filePane.SetFile(v.files()[v.sel-1])
+		f := v.files()[v.sel-1]
+		if f.Path != v.paneFile {
+			v.paneFile = f.Path
+			v.filePane.SetFile(f)
+		}
 	}
 }
 
@@ -434,6 +448,7 @@ func (v *View) openPicker() {
 	for i, f := range files {
 		items[i] = f.Path
 	}
+	v.pickerItems = items
 	v.picker = picker.New(v.th, "Go to file", items)
 }
 
@@ -445,7 +460,12 @@ func (v *View) pickerKey(msg tea.KeyPressMsg) {
 		v.picker = nil
 	case picker.Chosen:
 		v.picker = nil
-		v.selectEntry(res.Index + 1)
+		path := v.pickerItems[res.Index]
+		for i, f := range v.files() {
+			if f.Path == path {
+				v.selectEntry(i + 1)
+			}
+		}
 	case picker.Open:
 	}
 }

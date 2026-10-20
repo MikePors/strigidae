@@ -38,6 +38,7 @@ func (v *View) paneWidths() (files, right int) {
 func (v *View) layout() {
 	filesW, rightW := v.paneWidths()
 	h := max(0, v.panesHeight()-2)
+	v.sizeFilePane(filesW, rightW, h)
 	if rightW > 0 {
 		v.ov.ensure(v.th, v.md, v.detail, v.now(), max(1, rightW-4), h)
 	}
@@ -49,6 +50,22 @@ func (v *View) layout() {
 			v.filesTop = v.sel - h + 1
 		}
 		v.filesTop = max(0, min(v.filesTop, v.entries()-h))
+	}
+}
+
+// sizeFilePane tells the file pane its inner size, also while it is hidden in
+// a narrow terminal, whenever that size changes.
+func (v *View) sizeFilePane(filesW, rightW, h int) {
+	if rightW == 0 {
+		rightW = v.width // the pane would get the whole width once shown
+		if filesW > 0 && v.width >= narrowBelow {
+			rightW = v.width - filesW
+		}
+	}
+	w := max(0, rightW-2)
+	if w != v.paneW || h != v.paneH {
+		v.paneW, v.paneH = w, h
+		v.filePane.SetSize(w, h)
 	}
 }
 

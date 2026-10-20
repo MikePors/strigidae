@@ -27,7 +27,19 @@ type DiffState struct {
 // FilePane is the content of the right pane while a file is selected. The
 // diff component plugs in here through WithFilePane.
 //
-// The workspace calls SetTheme, SetDiff and SetFile outside of rendering,
+// Contract notes for implementers:
+//   - SetDiff may be called again with an identical Raw (once when a load
+//     starts, with Loading set, once when it ends, and on every refresh). Cache
+//     parsing by Raw. A failed refresh keeps the previous Raw and Err stays nil.
+//   - SetFile is called only when the selected path changes, never on a
+//     refresh that keeps the same file. Keep cursor and scroll then, and
+//     re-resolve the file against the newest SetDiff.
+//   - ChangedFile.Path is the new path, or the old path for a deleted file:
+//     look files up by new path and fall back to the old one.
+//   - SetSize is called whenever the pane's inner size changes (and before the
+//     first Render), so Update can use it for page scrolling.
+//
+// The workspace calls SetTheme, SetDiff, SetFile and SetSize outside of rendering,
 // forwards every keys.Msg it does not handle itself (movement, scrolling and
 // the pane's own sequences) to Update while the right pane has focus, and
 // calls Render with the pane's inner size. FullHelp must list every binding
@@ -40,6 +52,8 @@ type FilePane interface {
 	// SetFile is called when the selected file changes (and when the pull
 	// request reloads with a file selected).
 	SetFile(f github.ChangedFile)
+	// SetSize gives the pane's inner size; it is called whenever it changes.
+	SetSize(width, height int)
 	// Update handles a key while the right pane has focus.
 	Update(msg keys.Msg) tea.Cmd
 	// Render draws the pane in exactly width columns and at most height rows.
@@ -58,6 +72,7 @@ var _ FilePane = (*placeholderPane)(nil)
 
 func (p *placeholderPane) SetTheme(th theme.Theme)      { p.th = th }
 func (p *placeholderPane) SetDiff(DiffState)            {}
+func (p *placeholderPane) SetSize(_, _ int)             {}
 func (p *placeholderPane) SetFile(f github.ChangedFile) { p.file = f }
 func (p *placeholderPane) Update(keys.Msg) tea.Cmd      { return nil }
 func (p *placeholderPane) FullHelp() [][]key.Binding    { return nil }

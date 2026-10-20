@@ -17,7 +17,8 @@ import (
 // description followed by the conversation, in a scrollable viewport.
 type overview struct {
 	vp       viewport.Model
-	width    int // content width the viewport was built for
+	width    int       // content width the viewport was built for
+	builtAt  time.Time // minute the content was built in; relative times age with it
 	dirty    bool
 	sections []int // first line of the description and of the conversation
 }
@@ -34,7 +35,8 @@ func (o *overview) invalidate() { o.dirty = true }
 func (o *overview) ensure(th theme.Theme, md *markdown.Renderer, d *github.PullRequestDetail, now time.Time, width, height int) {
 	o.vp.SetWidth(width)
 	o.vp.SetHeight(height)
-	if d == nil || (!o.dirty && o.width == width) {
+	minute := now.Truncate(time.Minute)
+	if d == nil || (!o.dirty && o.width == width && minute.Equal(o.builtAt)) {
 		return
 	}
 	var b strings.Builder
@@ -70,7 +72,7 @@ func (o *overview) ensure(th theme.Theme, md *markdown.Renderer, d *github.PullR
 	}
 
 	o.vp.SetContent(strings.TrimRight(b.String(), "\n"))
-	o.width, o.dirty = width, false
+	o.width, o.builtAt, o.dirty = width, minute, false
 }
 
 // jump scrolls to the next (delta > 0) or previous section start.
