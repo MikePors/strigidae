@@ -75,6 +75,11 @@ func (p *parser) feed(n int, line string) {
 		p.addLine(Line{Kind: NoNewline, Text: markerText(line)})
 		return
 	}
+	if p.hasHunk && line != "" && strings.IndexByte(" +-", line[0]) >= 0 {
+		// Counts are used up but the diff goes on: the header lied.
+		p.fail(n, "diff line beyond the hunk's line counts")
+		return
+	}
 	if rest, ok := strings.CutPrefix(line, "diff --git "); ok {
 		p.startFile(rest)
 		return
@@ -97,7 +102,7 @@ func (p *parser) bodyLine(line string) bool {
 	case strings.HasPrefix(line, `\`):
 		p.addLine(Line{Kind: NoNewline, Text: markerText(line)})
 		return true
-	case line == "" || line[0] == ' ':
+	case line == "" || line == "\r" || line[0] == ' ':
 		if p.oldRem == 0 || p.newRem == 0 {
 			return false
 		}

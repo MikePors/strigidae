@@ -259,6 +259,51 @@ func TestBadPatchPathKeepsGitHeaderPath(t *testing.T) {
 	}
 }
 
+func TestLinesBeyondCounts(t *testing.T) {
+	const head = "diff --git a/f b/f\n--- a/f\n+++ b/f\n"
+	tests := []struct {
+		name    string
+		body    string
+		wantErr bool
+		lines   int
+	}{
+		{"exact", "@@ -1 +1 @@\n-a\n+b\n", false, 2},
+		{"extra add and delete", "@@ -1 +1 @@\n-a\n+b\n+c\n-d\n", true, 2},
+		{"extra context", "@@ -1 +1 @@\n-a\n+b\n tail\n", true, 2},
+		{"extra after marker", "@@ -1 +1 @@\n-a\n+b\n\\ No newline at end of file\n+c\n", true, 3},
+		{"trailing blank line is fine", "@@ -1 +1 @@\n-a\n+b\n\n", false, 2},
+		{"second hunk after exact first", "@@ -1 +1 @@\n-a\n+b\n@@ -5 +5 @@\n-c\n+d\n", false, 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d, err := Parse(head + tt.body)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
+			}
+			if got := len(d.Files[0].Hunks[0].Lines); got != tt.lines {
+				t.Errorf("first hunk has %d lines, want %d", got, tt.lines)
+			}
+		})
+	}
+}
+
+func TestCRLFBlankContextLine(t *testing.T) {
+	in := "diff --git a/w b/w\r\n--- a/w\r\n+++ b/w\r\n@@ -1,3 +1,3 @@\r\n one\r\n\r\n-two\r\n+three\r\n"
+	d, err := Parse(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Line{
+		{Context, 1, 1, "one"},
+		{Context, 2, 2, ""},
+		{Delete, 3, 0, "two"},
+		{Add, 0, 3, "three"},
+	}
+	if diff := cmp.Diff(want, d.Files[0].Hunks[0].Lines); diff != "" {
+		t.Errorf("lines (-want +got):\n%s", diff)
+	}
+}
+
 func FuzzParse(f *testing.F) {
 	for _, name := range []string{"multi.diff", "crlf.diff", "truncated.diff"} {
 		b, err := os.ReadFile(filepath.Join("testdata", name))
