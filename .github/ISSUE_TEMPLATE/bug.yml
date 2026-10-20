@@ -1,0 +1,40 @@
+name: Bug
+description: Something doesn't work as expected
+labels: ["type:bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The `strig` invocation, keys pressed, and the repo/PR if it's public.
+      placeholder: |
+        1. strig -R owner/repo
+        2. enter on PR #12
+        3. ]c
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: strig version
+      description: Output of `strig --version`
+    validations:
+      required: true
+  - type: input
+    id: terminal
+    attributes:
+      label: OS and terminal
+      placeholder: Ubuntu 24.04, kitty 0.39 inside tmux 3.5
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant lines from `~/.local/state/strig/strig.log`. Check that nothing sensitive is included.
+      render: text
