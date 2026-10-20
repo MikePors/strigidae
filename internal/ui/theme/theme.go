@@ -47,6 +47,8 @@ type Theme struct {
 	DiffNoNewline    lipgloss.Style // "\ No newline at end of file" rows
 	Syntax           Syntax         // foreground-only token styles
 	// --- end diff pane ---
+
+	PRList PRListStyles // pull request tables
 }
 
 // Syntax holds the foreground-only styles for highlighted code tokens.
@@ -110,5 +112,7 @@ func New(isDark bool) Theme {
 			Operator: lipgloss.NewStyle().Foreground(c("#8a5a00", "#ffd43b")),
 		},
 		// --- end diff pane ---
+
+		PRList: newPRListStyles(c),
 	}
 }
