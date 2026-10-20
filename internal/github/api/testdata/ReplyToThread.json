@@ -1,0 +1,15 @@
+{
+  "data": {
+    "addPullRequestReviewThreadReply": {
+      "comment": {
+        "id": "PRRC_kwDOExample05",
+        "url": "https://github.com/MikePors/strigidae/pull/27#discussion_r5",
+        "body": "Done.",
+        "diffHunk": "@@ -0,0 +1,20 @@\n+package github\n",
+        "createdAt": "2026-10-19T09:00:00Z",
+        "author": {"login": "MikePors"},
+        "reactionGroups": []
+      }
+    }
+  }
+}

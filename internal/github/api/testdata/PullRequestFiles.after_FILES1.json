@@ -1,0 +1,15 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "conn": {
+          "pageInfo": {"hasNextPage": false, "endCursor": "FILES2"},
+          "nodes": [
+            {"path": "docs/old.md", "additions": 0, "deletions": 12, "changeType": "DELETED"},
+            {"path": "docs/new.md", "additions": 5, "deletions": 5, "changeType": "RENAMED"}
+          ]
+        }
+      }
+    }
+  }
+}

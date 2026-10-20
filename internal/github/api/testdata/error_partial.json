@@ -1,0 +1,28 @@
+{
+  "data": {
+    "repository": {
+      "pullRequests": {
+        "totalCount": 1,
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": ""
+        },
+        "nodes": [
+          null
+        ]
+      }
+    }
+  },
+  "errors": [
+    {
+      "type": "SERVICE_UNAVAILABLE",
+      "path": [
+        "repository",
+        "pullRequests",
+        "nodes",
+        0
+      ],
+      "message": "Something went wrong while executing your query."
+    }
+  ]
+}

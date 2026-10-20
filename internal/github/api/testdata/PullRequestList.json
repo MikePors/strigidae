@@ -1,0 +1,46 @@
+{
+  "data": {
+    "repository": {
+      "pullRequests": {
+        "totalCount": 3,
+        "pageInfo": {"hasNextPage": true, "endCursor": "Y3Vyc29yOnYyOpHOAAAAAg=="},
+        "nodes": [
+          {
+            "id": "PR_kwDOExample01",
+            "number": 27,
+            "title": "feat(api): add GitHub client layer",
+            "url": "https://github.com/MikePors/strigidae/pull/27",
+            "isDraft": true,
+            "state": "OPEN",
+            "createdAt": "2026-10-18T09:00:00Z",
+            "updatedAt": "2026-10-19T08:30:00Z",
+            "reviewDecision": null,
+            "baseRefName": "main",
+            "headRefName": "feat/4-github-client",
+            "headRefOid": "0000000000000000000000000000000000001111",
+            "author": {"login": "MikePors"},
+            "commentCount": {"totalCount": 2},
+            "repository": {"nameWithOwner": "MikePors/strigidae"}
+          },
+          {
+            "id": "PR_kwDOExample02",
+            "number": 26,
+            "title": "chore: add issue forms and PR template",
+            "url": "https://github.com/MikePors/strigidae/pull/26",
+            "isDraft": false,
+            "state": "OPEN",
+            "createdAt": "2026-10-17T12:00:00Z",
+            "updatedAt": "2026-10-18T10:15:00Z",
+            "reviewDecision": "APPROVED",
+            "baseRefName": "main",
+            "headRefName": "chore/3-templates",
+            "headRefOid": "0000000000000000000000000000000000002222",
+            "author": null,
+            "commentCount": {"totalCount": 0},
+            "repository": {"nameWithOwner": "MikePors/strigidae"}
+          }
+        ]
+      }
+    }
+  }
+}

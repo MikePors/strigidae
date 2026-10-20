@@ -1,0 +1,77 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "id": "PR_kwDOExample01",
+        "number": 27,
+        "title": "feat(api): add GitHub client layer",
+        "url": "https://github.com/MikePors/strigidae/pull/27",
+        "isDraft": false,
+        "state": "OPEN",
+        "createdAt": "2026-10-18T09:00:00Z",
+        "updatedAt": "2026-10-19T08:30:00Z",
+        "reviewDecision": "CHANGES_REQUESTED",
+        "baseRefName": "main",
+        "headRefName": "feat/4-github-client",
+        "headRefOid": "0000000000000000000000000000000000001111",
+        "author": {"login": "MikePors"},
+        "commentCount": {"totalCount": 2},
+        "repository": {"nameWithOwner": "MikePors/strigidae"},
+        "body": "Closes #4\n\n## Summary\nAdds the client layer.\n",
+        "additions": 120,
+        "deletions": 7,
+        "labels": {"nodes": [{"name": "enhancement", "color": "a2eeef"}]},
+        "reviewRequests": {
+          "nodes": [
+            {"requestedReviewer": {"__typename": "User", "login": "octocat"}},
+            {"requestedReviewer": {"__typename": "Team", "slug": "maintainers"}},
+            {"requestedReviewer": null}
+          ]
+        },
+        "files": {
+          "pageInfo": {"hasNextPage": true, "endCursor": "FILES1"},
+          "nodes": [
+            {"path": "internal/github/client.go", "additions": 40, "deletions": 0, "changeType": "ADDED"},
+            {"path": "go.mod", "additions": 3, "deletions": 1, "changeType": "MODIFIED"}
+          ]
+        },
+        "comments": {
+          "pageInfo": {"hasNextPage": true, "endCursor": "C1"},
+          "nodes": [
+            {
+              "id": "IC_kwDOExample01",
+              "url": "https://github.com/MikePors/strigidae/pull/27#issuecomment-1",
+              "body": "Looks good overall.",
+              "createdAt": "2026-10-18T11:00:00Z",
+              "author": {"login": "octocat"},
+              "reactionGroups": [
+                {"content": "THUMBS_UP", "viewerHasReacted": true, "reactors": {"totalCount": 2}},
+                {"content": "HEART", "viewerHasReacted": false, "reactors": {"totalCount": 0}}
+              ]
+            },
+            {
+              "id": "IC_kwDOExample02",
+              "url": "https://github.com/MikePors/strigidae/pull/27#issuecomment-2",
+              "body": "Thanks!",
+              "createdAt": "2026-10-18T12:00:00Z",
+              "author": null,
+              "reactionGroups": []
+            }
+          ]
+        },
+        "reviews": {
+          "pageInfo": {"hasNextPage": true, "endCursor": "R1"},
+          "nodes": [
+            {
+              "id": "PRR_kwDOExample01",
+              "state": "CHANGES_REQUESTED",
+              "body": "Please add tests.",
+              "submittedAt": "2026-10-18T13:00:00Z",
+              "author": {"login": "octocat"}
+            }
+          ]
+        }
+      }
+    }
+  }
+}

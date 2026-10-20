@@ -1,0 +1,28 @@
+{
+  "data": {
+    "search": {
+      "issueCount": 2,
+      "pageInfo": {"hasNextPage": false, "endCursor": "Y3Vyc29yOjI="},
+      "nodes": [
+        {
+          "id": "PR_kwDOOther01",
+          "number": 5,
+          "title": "Fix typo in README",
+          "url": "https://github.com/octo/widgets/pull/5",
+          "isDraft": false,
+          "state": "OPEN",
+          "createdAt": "2026-09-01T10:00:00Z",
+          "updatedAt": "2026-09-02T10:00:00Z",
+          "reviewDecision": "CHANGES_REQUESTED",
+          "baseRefName": "main",
+          "headRefName": "fix-typo",
+          "headRefOid": "0000000000000000000000000000000000001111",
+          "author": {"login": "octocat"},
+          "commentCount": {"totalCount": 4},
+          "repository": {"nameWithOwner": "octo/widgets"}
+        },
+        {}
+      ]
+    }
+  }
+}
