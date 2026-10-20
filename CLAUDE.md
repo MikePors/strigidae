@@ -40,6 +40,7 @@ internal/github/fake/   in-memory Client for tests and demos
 internal/diff/          unified-diff parsing and modelling (pure, no UI)
 internal/config/        config file loading and validation
 internal/editor/        $EDITOR handoff for writing comments
+internal/gitrepo/       infer the GitHub repo (host + owner/name) from a checkout's remotes
 internal/logging/       log file setup
 internal/golden/        golden-file test helper
 internal/ui/            app shell: root model, the View interface, navigation and status messages, status bar, command line
@@ -62,7 +63,7 @@ cmd/strig ──► ui/views/* ──► ui/components ──► ui ──► ui
 
 - `internal/ui` (the shell) and `ui/keys`, `ui/theme`, `ui/components` **never import `ui/views/*`**. A view opens another view by **building it and sending `ui.PushMsg{View: v}`**; the root model only manages the stack. `cmd/strig` builds the first view.
 - Views may import other views (e.g. `prlist` builds a `prdetail`), as long as there's no cycle.
-- Non-UI packages (`github`, `diff`, `config`, `editor`, `logging`, `version`) never import UI packages.
+- Non-UI packages (`github`, `diff`, `config`, `editor`, `gitrepo`, `logging`, `version`) never import UI packages.
 - Only `cmd/strig` imports `internal/github/api`.
 
 These rules are enforced by `depguard` in `.golangci.yml`; `make lint` fails on a violation.

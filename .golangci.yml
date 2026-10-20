@@ -41,6 +41,7 @@ linters:
             - "**/internal/diff/**"
             - "**/internal/config/**"
             - "**/internal/editor/**"
+            - "**/internal/gitrepo/**"
             - "**/internal/logging/**"
             - "**/internal/version/**"
           deny:

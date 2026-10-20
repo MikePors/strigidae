@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -11,22 +12,51 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/github/api"
+	"github.com/MikePors/strigidae/internal/gitrepo"
 	"github.com/MikePors/strigidae/internal/logging"
 	"github.com/MikePors/strigidae/internal/ui"
 	"github.com/MikePors/strigidae/internal/ui/theme"
-	"github.com/MikePors/strigidae/internal/ui/views/placeholder"
+	"github.com/MikePors/strigidae/internal/ui/views/prlist"
 	"github.com/MikePors/strigidae/internal/version"
 )
 
-func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+// deps are the side effects run needs, injected so tests exercise flag
+// handling and repository inference without a checkout, the network or a
+// terminal.
+type deps struct {
+	getwd     func() (string, error)
+	runner    gitrepo.Runner
+	newClient func(host string) (github.Client, error)
+	start     func(client github.Client, repo github.Repo, stderr io.Writer) error
 }
 
-func run(args []string, stdout, stderr io.Writer) int {
+func realDeps() deps {
+	return deps{
+		getwd:  os.Getwd,
+		runner: gitrepo.ExecRunner,
+		newClient: func(host string) (github.Client, error) {
+			c, err := api.New(api.Options{Host: host})
+			if err != nil {
+				return nil, err
+			}
+			return c, nil
+		},
+		start: runTUI,
+	}
+}
+
+func main() {
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr, realDeps()))
+}
+
+func run(args []string, stdout, stderr io.Writer, d deps) int {
 	fs := flag.NewFlagSet("strig", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	showVersion := fs.Bool("version", false, "print version and exit")
 	showLogPath := fs.Bool("log-path", false, "print the log file path and exit")
+	repoFlag := fs.String("R", "", "repository to show as `owner/repo` (default: the current checkout's upstream or origin remote)")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -45,10 +75,52 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return printLine(stdout, stderr, path)
 	}
 
-	if err := runTUI(stderr); err != nil {
+	target, code := resolveTarget(*repoFlag, stderr, d)
+	if code != 0 {
+		return code
+	}
+	client, err := d.newClient(target.Host)
+	if errors.Is(err, github.ErrNotAuthenticated) {
+		_, _ = fmt.Fprintln(stderr, "strig: not signed in to GitHub: run `gh auth login` and try again") // best effort, before the TUI starts
+		return 1
+	}
+	if err != nil {
+		return fail(stderr, err)
+	}
+	if err := d.start(client, target.Repo, stderr); err != nil {
 		return fail(stderr, err)
 	}
 	return 0
+}
+
+// resolveTarget decides which repository to show: -R if given, else the
+// current checkout's remote. A nonzero code means run should exit with it.
+func resolveTarget(repoFlag string, stderr io.Writer, d deps) (gitrepo.Remote, int) {
+	if repoFlag != "" {
+		repo, err := github.ParseRepo(repoFlag)
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "strig: -R: %v\n", err) // best effort
+			return gitrepo.Remote{}, 2
+		}
+		// No host: the client uses the gh default (GH_HOST or github.com).
+		return gitrepo.Remote{Repo: repo}, 0
+	}
+	dir, err := d.getwd()
+	if err != nil {
+		return gitrepo.Remote{}, fail(stderr, err)
+	}
+	remote, err := gitrepo.Infer(context.Background(), d.runner, dir)
+	switch {
+	case err == nil:
+		return remote, 0
+	case errors.Is(err, gitrepo.ErrNotCheckout):
+		_, _ = fmt.Fprintln(stderr, "strig: run strig inside a GitHub repository checkout, or pass -R owner/repo") // best effort
+	case errors.Is(err, gitrepo.ErrNoGitHubRemote):
+		_, _ = fmt.Fprintln(stderr, "strig: no GitHub remote (upstream or origin) in this checkout; pass -R owner/repo") // best effort
+	default:
+		return gitrepo.Remote{}, fail(stderr, err)
+	}
+	return gitrepo.Remote{}, 1
 }
 
 func printLine(stdout, stderr io.Writer, s string) int {
@@ -66,14 +138,14 @@ func fail(stderr io.Writer, err error) int {
 // runTUI starts the interactive program. Logs go to a file because the TUI
 // owns the terminal; if the file can't be opened we warn once and carry on
 // with logging discarded.
-func runTUI(stderr io.Writer) error {
+func runTUI(client github.Client, repo github.Repo, stderr io.Writer) error {
 	logger, closeLog := openLog(stderr)
 	defer closeLog()
 	logging.Install(logger)
-	logger.Info("starting", "version", version.String())
+	logger.Info("starting", "version", version.String(), "repo", repo.String())
 
 	th := theme.Default()
-	model := ui.New(placeholder.New(th, 1), th, ui.Options{Logger: logger})
+	model := ui.New(prlist.New(client, repo, th, prlist.Options{}), th, ui.Options{Logger: logger})
 	if _, err := tea.NewProgram(model).Run(); err != nil {
 		logger.Error("program failed", "err", err)
 		return fmt.Errorf("run: %w", err)
