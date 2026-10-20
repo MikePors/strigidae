@@ -66,7 +66,7 @@ func TestStart(t *testing.T) {
 		env      map[string]string
 		home     func() (string, error)
 		wantFile string // log file that should receive the line; "" means discarded
-		wantWarn string
+		wantErr  string // prefix of the returned error; "" means no error
 	}{
 		{
 			name: "opens the file", env: map[string]string{"XDG_STATE_HOME": dir}, home: home,
@@ -74,25 +74,25 @@ func TestStart(t *testing.T) {
 		},
 		{
 			name: "no home", home: func() (string, error) { return "", errors.New("none") },
-			wantWarn: "strig: logging disabled: find home directory: none\n",
+			wantErr: "find home directory: none",
 		},
 		{
 			name: "unwritable directory", env: map[string]string{"XDG_STATE_HOME": blocker}, home: home,
-			wantWarn: "strig: logging disabled: create log directory: ",
+			wantErr: "create log directory: ",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var warn bytes.Buffer
-			l, closeLog := Start(&warn, func(k string) string { return tt.env[k] }, tt.home)
+			// The logger and close must be usable whether or not Start failed.
+			l, closeLog, err := Start(func(k string) string { return tt.env[k] }, tt.home)
 			l.Info("hello")
 			closeLog()
 
-			if tt.wantWarn == "" && warn.Len() > 0 {
-				t.Errorf("unexpected warning %q", warn.String())
-			}
-			if !strings.HasPrefix(warn.String(), tt.wantWarn) || strings.Count(warn.String(), "\n") > 1 {
-				t.Errorf("warning = %q, want one line starting %q", warn.String(), tt.wantWarn)
+			switch {
+			case tt.wantErr == "" && err != nil:
+				t.Errorf("unexpected error %v", err)
+			case tt.wantErr != "" && (err == nil || !strings.HasPrefix(err.Error(), tt.wantErr)):
+				t.Errorf("err = %v, want prefix %q", err, tt.wantErr)
 			}
 			if tt.wantFile == "" {
 				return
