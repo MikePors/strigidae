@@ -6,6 +6,12 @@ Closes #
 ## How to try it
 <!-- Exact `strig` invocation and the keys to press. -->
 
+## Test notes
+<!-- What the tests cover, and anything the maintainer should check live on GitHub. -->
+
+## Screenshot / recording
+<!-- For visible UI changes: a screenshot or asciinema/vhs recording. Delete if not applicable. -->
+
 ## New keybindings
 <!-- Key, view, action, or "none". These need maintainer approval. -->
 

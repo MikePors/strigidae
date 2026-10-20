@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    # Daily, so new Go or dependency vulnerabilities show up on main before they surprise a PR.
+    - cron: "17 6 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -34,8 +38,20 @@ jobs:
       - name: go mod tidy
         run: make tidy-check
 
-      - name: Vulnerabilities
-        run: make vuln
-
       - name: Workflow lint
         run: make actionlint
+
+  # Separate job: a failure here usually means the Go toolchain or a dependency
+  # needs bumping (see CLAUDE.md), not that the PR's code is wrong.
+  vulnerabilities:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: "**/go.sum"
+
+      - name: govulncheck
+        run: make vuln
