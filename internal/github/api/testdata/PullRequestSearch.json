@@ -16,6 +16,7 @@
           "reviewDecision": "CHANGES_REQUESTED",
           "baseRefName": "main",
           "headRefName": "fix-typo",
+          "headRefOid": "0000000000000000000000000000000000001111",
           "author": {"login": "octocat"},
           "commentCount": {"totalCount": 4},
           "repository": {"nameWithOwner": "octo/widgets"}

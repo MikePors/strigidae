@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -26,6 +27,7 @@ var opRE = regexp.MustCompile(`(?:query|mutation)\s+(\w+)`)
 type call struct {
 	Method  string
 	Path    string
+	Query   string
 	Op      string
 	Vars    map[string]any
 	Accept  string
@@ -73,6 +75,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.t.Errorf("bad graphql request: %v", err)
 		}
 		c.Vars = req.Variables
+		c.Query = req.Query
 		if m := opRE.FindStringSubmatch(req.Query); m != nil {
 			c.Op = m[1]
 		}
@@ -135,6 +138,8 @@ func newTestClient(t *testing.T, s *server) *Client {
 
 var repo = github.Repo{Owner: "MikePors", Name: "strigidae"}
 
+func sha(n int) string { return fmt.Sprintf("%040x", n*0x1111) }
+
 func mustTime(t *testing.T, s string) time.Time {
 	t.Helper()
 	v, err := time.Parse(time.RFC3339, s)
@@ -158,13 +163,13 @@ func TestListPullRequestsPagination(t *testing.T) {
 		Next:  "Y3Vyc29yOnYyOpHOAAAAAg==",
 		Items: []github.PullRequest{
 			{
-				Repo: repo, Number: 27, Title: "feat(api): add GitHub client layer", Author: "MikePors",
+				ID: "PR_kwDOExample01", HeadSHA: sha(1), Repo: repo, Number: 27, Title: "feat(api): add GitHub client layer", Author: "MikePors",
 				State: github.PRStateOpen, Draft: true, CommentCount: 2,
 				CreatedAt: mustTime(t, "2026-10-18T09:00:00Z"), UpdatedAt: mustTime(t, "2026-10-19T08:30:00Z"),
 				URL: "https://github.com/MikePors/strigidae/pull/27", HeadRef: "feat/4-github-client", BaseRef: "main",
 			},
 			{
-				Repo: repo, Number: 26, Title: "chore: add issue forms and PR template", Author: "ghost",
+				ID: "PR_kwDOExample02", HeadSHA: sha(2), Repo: repo, Number: 26, Title: "chore: add issue forms and PR template", Author: "ghost",
 				State: github.PRStateOpen, ReviewDecision: github.ReviewDecisionApproved,
 				CreatedAt: mustTime(t, "2026-10-17T12:00:00Z"), UpdatedAt: mustTime(t, "2026-10-18T10:15:00Z"),
 				URL: "https://github.com/MikePors/strigidae/pull/26", HeadRef: "chore/3-templates", BaseRef: "main",
@@ -219,7 +224,7 @@ func TestSearchPullRequests(t *testing.T) {
 		t.Fatalf("unexpected page: %+v", page)
 	}
 	want := github.PullRequest{
-		Repo: github.Repo{Owner: "octo", Name: "widgets"}, Number: 5, Title: "Fix typo in README", Author: "octocat",
+		ID: "PR_kwDOOther01", HeadSHA: sha(1), Repo: github.Repo{Owner: "octo", Name: "widgets"}, Number: 5, Title: "Fix typo in README", Author: "octocat",
 		State: github.PRStateOpen, ReviewDecision: github.ReviewDecisionChangesRequested, CommentCount: 4,
 		CreatedAt: mustTime(t, "2026-09-01T10:00:00Z"), UpdatedAt: mustTime(t, "2026-09-02T10:00:00Z"),
 		URL: "https://github.com/octo/widgets/pull/5", HeadRef: "fix-typo", BaseRef: "main",
@@ -238,7 +243,7 @@ func TestGetPullRequest(t *testing.T) {
 	}
 	want := github.PullRequestDetail{
 		PullRequest: github.PullRequest{
-			Repo: repo, Number: 27, Title: "feat(api): add GitHub client layer", Author: "MikePors",
+			ID: "PR_kwDOExample01", HeadSHA: sha(1), Repo: repo, Number: 27, Title: "feat(api): add GitHub client layer", Author: "MikePors",
 			State: github.PRStateOpen, ReviewDecision: github.ReviewDecisionChangesRequested, CommentCount: 2,
 			CreatedAt: mustTime(t, "2026-10-18T09:00:00Z"), UpdatedAt: mustTime(t, "2026-10-19T08:30:00Z"),
 			URL: "https://github.com/MikePors/strigidae/pull/27", HeadRef: "feat/4-github-client", BaseRef: "main",
@@ -265,19 +270,27 @@ func TestGetPullRequest(t *testing.T) {
 				CreatedAt: mustTime(t, "2026-10-18T12:00:00Z"),
 				URL:       "https://github.com/MikePors/strigidae/pull/27#issuecomment-2",
 			},
+			{
+				ID: "IC_kwDOExample04", Author: "octocat", Body: "One more thing.",
+				CreatedAt: mustTime(t, "2026-10-18T15:00:00Z"),
+				URL:       "https://github.com/MikePors/strigidae/pull/27#issuecomment-3",
+				Reactions: []github.ReactionSummary{{Content: github.ReactionRocket, Count: 1}},
+			},
 		},
 		Reviews: []github.Review{
 			{
 				ID: "PRR_kwDOExample01", Author: "octocat", State: github.ReviewChangesRequested,
 				Body: "Please add tests.", SubmittedAt: mustTime(t, "2026-10-18T13:00:00Z"),
 			},
+			// The viewer's draft review is kept; its SubmittedAt is zero.
+			{ID: "PRR_kwDOExample02", Author: "MikePors", State: github.ReviewPending},
 		},
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("mismatch (-want +got):\n%s", diff)
 	}
-	if n := len(s.Calls()); n != 2 {
-		t.Errorf("got %d requests, want 2 (detail + remaining files)", n)
+	if n := len(s.Calls()); n != 4 {
+		t.Errorf("got %d requests, want 4 (detail + remaining files, comments, reviews)", n)
 	}
 }
 
@@ -309,12 +322,13 @@ func TestListReviewThreads(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p1.Next != "THREADS1" || p1.Total != 3 || len(p1.Items) != 2 {
+	if p1.Next != "THREADS1" || p1.Total != 5 || len(p1.Items) != 2 {
 		t.Fatalf("unexpected page 1: next=%q total=%d items=%d", p1.Next, p1.Total, len(p1.Items))
 	}
 	open := github.ReviewThread{
-		ID: "PRRT_kwDOExample01", Path: "internal/github/client.go",
-		Line: 12, OriginalLine: 12, StartLine: 10, OriginalStartLine: 10, DiffSide: github.SideRight,
+		ID: "PRRT_kwDOExample01", SubjectType: github.SubjectLine, Path: "internal/github/client.go",
+		Line: 12, OriginalLine: 12, StartLine: 10, OriginalStartLine: 10,
+		DiffSide: github.SideRight, StartDiffSide: github.SideRight,
 		Comments: []github.ReviewComment{
 			{
 				ID: "PRRC_kwDOExample01", Author: "octocat", Body: "Should this take a context?",
@@ -345,8 +359,20 @@ func TestListReviewThreads(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p2.HasMore() || len(p2.Items) != 1 || !p2.Items[0].IsOutdated || p2.Items[0].IsResolved {
-		t.Errorf("unexpected page 2: %+v", p2)
+	if p2.HasMore() || len(p2.Items) != 3 || !p2.Items[0].IsOutdated || p2.Items[0].IsResolved {
+		t.Fatalf("unexpected page 2: %+v", p2)
+	}
+	// A file-level thread has no lines but is not outdated.
+	file := p2.Items[1]
+	if file.SubjectType != github.SubjectFile || file.IsOutdated || file.Line != 0 || file.OriginalLine != 0 {
+		t.Errorf("unexpected file-level thread: %+v", file)
+	}
+	// A range can start on the removed side and end on the added side, and
+	// a pending draft comment is flagged.
+	rng := p2.Items[2]
+	if rng.StartDiffSide != github.SideLeft || rng.DiffSide != github.SideRight || rng.StartLine != 12 || rng.Line != 30 ||
+		len(rng.Comments) != 1 || !rng.Comments[0].Pending {
+		t.Errorf("unexpected cross-side range thread: %+v", rng)
 	}
 }
 
@@ -425,10 +451,10 @@ func TestErrors(t *testing.T) {
 			},
 		},
 		{
-			name: "graphql rate limited uses reset header",
+			name: "graphql rate limited with points remaining uses graphql bucket reset",
 			override: func(s *server) func(call, http.ResponseWriter) bool {
 				return fixtureError(s, "error_rate_limited.json", map[string]string{
-					"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": strconv.FormatInt(resetAt.Unix(), 10),
+					"X-RateLimit-Resource": "graphql", "X-RateLimit-Remaining": "5", "X-RateLimit-Reset": strconv.FormatInt(resetAt.Unix(), 10),
 				})
 			},
 			run: func(c *Client) error {
@@ -510,6 +536,38 @@ func TestErrors(t *testing.T) {
 				var rl *github.RateLimitError
 				if !errors.As(err, &rl) || !rl.ResetAt.Equal(time.Unix(1_060, 0)) {
 					t.Errorf("want RateLimitError reset at 1060, got %v", err)
+				}
+			},
+		},
+		{
+			// The primary bucket still has requests; its reset must not be used.
+			name: "403 secondary rate limit without Retry-After", status: 403,
+			headers: map[string]string{"X-RateLimit-Remaining": "4200", "X-RateLimit-Reset": "4600"},
+			body:    `{"message":"You have exceeded a secondary rate limit"}`,
+			check: func(t *testing.T, err error) {
+				var rl *github.RateLimitError
+				if !errors.As(err, &rl) || !rl.ResetAt.Equal(time.Unix(1_060, 0)) {
+					t.Errorf("want RateLimitError reset at now+1m, got %v", err)
+				}
+			},
+		},
+		{
+			name: "403 secondary rate limit with Retry-After date", status: 403,
+			headers: map[string]string{"Retry-After": time.Unix(1_300, 0).UTC().Format(http.TimeFormat)},
+			body:    `{"message":"You have exceeded a secondary rate limit"}`,
+			check: func(t *testing.T, err error) {
+				var rl *github.RateLimitError
+				if !errors.As(err, &rl) || !rl.ResetAt.Equal(time.Unix(1_300, 0)) {
+					t.Errorf("want RateLimitError reset at 1300, got %v", err)
+				}
+			},
+		},
+		{
+			name: "429 without headers", status: 429, body: `{"message":"slow down"}`,
+			check: func(t *testing.T, err error) {
+				var rl *github.RateLimitError
+				if !errors.As(err, &rl) || !rl.ResetAt.Equal(time.Unix(1_060, 0)) {
+					t.Errorf("want RateLimitError reset at now+1m, got %v", err)
 				}
 			},
 		},

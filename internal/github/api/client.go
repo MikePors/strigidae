@@ -115,15 +115,15 @@ func (c *Client) query(ctx context.Context, query string, vars map[string]any, o
 	return nil
 }
 
-// limitTracker remembers the most recent rate-limit reset time GitHub
-// reported, because GraphQL rate-limit errors arrive as HTTP 200 whose body
-// does not say when the limit resets.
+// limitTracker remembers, per rate-limit bucket (the X-RateLimit-Resource
+// header: "core", "graphql", "search", ...), when the service said the limit
+// resets. GraphQL rate-limit errors arrive as HTTP 200 whose body does not say
+// when, and REST and GraphQL buckets reset at different times.
 type limitTracker struct {
 	base http.RoundTripper
 
-	mu        sync.Mutex
-	remaining string
-	reset     time.Time
+	mu     sync.Mutex
+	resets map[string]time.Time
 }
 
 func (t *limitTracker) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -131,22 +131,21 @@ func (t *limitTracker) RoundTrip(req *http.Request) (*http.Response, error) {
 	if err != nil {
 		return resp, err
 	}
-	if reset, ok := parseReset(resp.Header.Get("X-RateLimit-Reset")); ok {
+	resource := resp.Header.Get("X-RateLimit-Resource")
+	if reset, ok := parseReset(resp.Header.Get("X-RateLimit-Reset")); ok && resource != "" {
 		t.mu.Lock()
-		t.reset = reset
-		t.remaining = resp.Header.Get("X-RateLimit-Remaining")
+		if t.resets == nil {
+			t.resets = map[string]time.Time{}
+		}
+		t.resets[resource] = reset
 		t.mu.Unlock()
 	}
 	return resp, nil
 }
 
-// exhaustedReset returns the reset time if the last response said no requests
-// remain.
-func (t *limitTracker) exhaustedReset() time.Time {
+// resetFor returns the last reset time seen for the bucket, or zero.
+func (t *limitTracker) resetFor(resource string) time.Time {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.remaining == "0" {
-		return t.reset
-	}
-	return time.Time{}
+	return t.resets[resource]
 }

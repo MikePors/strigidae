@@ -4,14 +4,32 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
+	ghapi "github.com/cli/go-gh/v2/pkg/api"
+
 	"github.com/MikePors/strigidae/internal/github"
 )
+
+// prQualifiers are the search tokens that already restrict results to pull
+// requests. Whole tokens are compared: "is:private" and "-is:pr" do not count.
+var prQualifiers = []string{"is:pr", "type:pr", "is:pull-request", "type:pull-request"}
+
+func hasPRQualifier(query string) bool {
+	for _, f := range strings.Fields(query) {
+		if slices.Contains(prQualifiers, f) {
+			return true
+		}
+	}
+	return false
+}
 
 func afterVar(p github.PageRequest) any {
 	if p.After == "" {
@@ -52,7 +70,7 @@ func (c *Client) SearchPullRequests(ctx context.Context, query string, page gith
 		}
 	}
 	q := query
-	if !strings.Contains(q, "is:pr") {
+	if !hasPRQualifier(q) {
 		q = "is:pr " + q
 	}
 	vars := map[string]any{"query": q, "first": page.Size(), "after": afterVar(page)}
@@ -83,7 +101,14 @@ func (c *Client) getPullRequest(ctx context.Context, repo github.Repo, number in
 		}
 	}
 	vars := map[string]any{"owner": repo.Owner, "name": repo.Name, "number": number}
-	if err := c.query(ctx, pullRequestDetailQuery, vars, &resp); err != nil {
+	err := c.query(ctx, detailQuery(true), vars, &resp)
+	if isScopeError(err) {
+		// Team details need read:org. Retry once without them rather than
+		// failing a pull request the user can otherwise read.
+		resp.Repository = nil
+		err = c.query(ctx, detailQuery(false), vars, &resp)
+	}
+	if err != nil {
 		return github.PullRequestDetail{}, err
 	}
 	if resp.Repository == nil || resp.Repository.PullRequest == nil {
@@ -110,7 +135,12 @@ func (c *Client) getPullRequest(ctx context.Context, repo github.Repo, number in
 func collectMore[N any](ctx context.Context, c *Client, repo github.Repo, number int, query string, first gqlConn[N]) ([]N, error) {
 	nodes := first.Nodes
 	cursor := first.PageInfo.next()
+	seen := map[string]bool{}
 	for cursor != "" {
+		if seen[cursor] {
+			return nil, fmt.Errorf("pagination did not advance (repeated cursor %q)", cursor)
+		}
+		seen[cursor] = true
 		var resp struct {
 			Repository *struct {
 				PullRequest *struct{ Conn gqlConn[N] }
@@ -135,6 +165,10 @@ func (c *Client) GetDiff(ctx context.Context, repo github.Repo, number int) (str
 	path := fmt.Sprintf("repos/%s/%s/pulls/%d", url.PathEscape(repo.Owner), url.PathEscape(repo.Name), number)
 	resp, err := c.diff.RequestWithContext(ctx, "GET", path, nil)
 	if err != nil {
+		var httpErr *ghapi.HTTPError
+		if errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusNotAcceptable {
+			return "", fmt.Errorf("load diff of %s#%d: %w: %w", repo, number, github.ErrDiffTooLarge, err)
+		}
 		return "", fmt.Errorf("load diff of %s#%d: %w", repo, number, c.mapError(err))
 	}
 	defer func() { _ = resp.Body.Close() }()

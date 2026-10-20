@@ -3,11 +3,12 @@
     "repository": {
       "pullRequest": {
         "reviewThreads": {
-          "totalCount": 3,
+          "totalCount": 5,
           "pageInfo": {"hasNextPage": true, "endCursor": "THREADS1"},
           "nodes": [
             {
               "id": "PRRT_kwDOExample01",
+              "subjectType": "LINE",
               "isResolved": false,
               "isOutdated": false,
               "path": "internal/github/client.go",
@@ -16,6 +17,7 @@
               "startLine": 10,
               "originalStartLine": 10,
               "diffSide": "RIGHT",
+              "startDiffSide": "RIGHT",
               "resolvedBy": null,
               "comments": {
                 "nodes": [
@@ -45,6 +47,7 @@
             },
             {
               "id": "PRRT_kwDOExample02",
+              "subjectType": "LINE",
               "isResolved": true,
               "isOutdated": true,
               "path": "go.mod",
@@ -53,6 +56,7 @@
               "startLine": null,
               "originalStartLine": null,
               "diffSide": "LEFT",
+              "startDiffSide": null,
               "resolvedBy": {"login": "MikePors"},
               "comments": {
                 "nodes": [

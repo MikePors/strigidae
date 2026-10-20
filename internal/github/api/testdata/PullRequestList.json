@@ -17,6 +17,7 @@
             "reviewDecision": null,
             "baseRefName": "main",
             "headRefName": "feat/4-github-client",
+            "headRefOid": "0000000000000000000000000000000000001111",
             "author": {"login": "MikePors"},
             "commentCount": {"totalCount": 2},
             "repository": {"nameWithOwner": "MikePors/strigidae"}
@@ -33,6 +34,7 @@
             "reviewDecision": "APPROVED",
             "baseRefName": "main",
             "headRefName": "chore/3-templates",
+            "headRefOid": "0000000000000000000000000000000000002222",
             "author": null,
             "commentCount": {"totalCount": 0},
             "repository": {"nameWithOwner": "MikePors/strigidae"}

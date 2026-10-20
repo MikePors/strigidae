@@ -13,6 +13,7 @@
         "reviewDecision": "CHANGES_REQUESTED",
         "baseRefName": "main",
         "headRefName": "feat/4-github-client",
+        "headRefOid": "0000000000000000000000000000000000001111",
         "author": {"login": "MikePors"},
         "commentCount": {"totalCount": 2},
         "repository": {"nameWithOwner": "MikePors/strigidae"},
@@ -35,7 +36,7 @@
           ]
         },
         "comments": {
-          "pageInfo": {"hasNextPage": false, "endCursor": "C1"},
+          "pageInfo": {"hasNextPage": true, "endCursor": "C1"},
           "nodes": [
             {
               "id": "IC_kwDOExample01",
@@ -59,7 +60,7 @@
           ]
         },
         "reviews": {
-          "pageInfo": {"hasNextPage": false, "endCursor": "R1"},
+          "pageInfo": {"hasNextPage": true, "endCursor": "R1"},
           "nodes": [
             {
               "id": "PRR_kwDOExample01",

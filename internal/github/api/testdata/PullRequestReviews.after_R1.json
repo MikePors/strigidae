@@ -1,0 +1,25 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "conn": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "endCursor": "R2"
+          },
+          "nodes": [
+            {
+              "id": "PRR_kwDOExample02",
+              "state": "PENDING",
+              "body": "",
+              "submittedAt": null,
+              "author": {
+                "login": "MikePors"
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

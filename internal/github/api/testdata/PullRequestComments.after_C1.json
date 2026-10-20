@@ -1,0 +1,34 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "conn": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "endCursor": "C2"
+          },
+          "nodes": [
+            {
+              "id": "IC_kwDOExample04",
+              "url": "https://github.com/MikePors/strigidae/pull/27#issuecomment-3",
+              "body": "One more thing.",
+              "createdAt": "2026-10-18T15:00:00Z",
+              "author": {
+                "login": "octocat"
+              },
+              "reactionGroups": [
+                {
+                  "content": "ROCKET",
+                  "viewerHasReacted": false,
+                  "reactors": {
+                    "totalCount": 1
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}

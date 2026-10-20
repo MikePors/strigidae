@@ -16,7 +16,7 @@ const reactionSelection = `reactionGroups { content viewerHasReacted reactors { 
 const pullRequestFields = `
 fragment PullRequestFields on PullRequest {
   id number title url isDraft state createdAt updatedAt reviewDecision
-  baseRefName headRefName
+  baseRefName headRefName headRefOid
   author { login }
   commentCount: comments { totalCount }
   repository { nameWithOwner }
@@ -29,7 +29,7 @@ const (
 
 	reviewSelection = `id state body submittedAt author { login }`
 
-	reviewCommentSelection = `id url body diffHunk createdAt author { login } ` + reactionSelection
+	reviewCommentSelection = `id url state body diffHunk createdAt author { login } ` + reactionSelection
 )
 
 const listPullRequestsQuery = `
@@ -52,7 +52,18 @@ query ` + opPullRequestSearch + `($query: String!, $first: Int!, $after: String)
   }
 }` + pullRequestFields
 
-const pullRequestDetailQuery = `
+// detailQuery builds the pull request detail query. Reading Team fields needs
+// the read:org scope, so withTeams=false asks only for the type name of
+// requested reviewers.
+func detailQuery(withTeams bool) string {
+	reviewer := `... on User { login } ... on Team { slug } ... on Bot { login } ... on Mannequin { login }`
+	if !withTeams {
+		reviewer = `... on User { login } ... on Bot { login } ... on Mannequin { login }`
+	}
+	return fmt.Sprintf(pullRequestDetailQueryFmt, reviewer)
+}
+
+const pullRequestDetailQueryFmt = `
 query ` + opPullRequestDetail + `($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
@@ -60,7 +71,7 @@ query ` + opPullRequestDetail + `($owner: String!, $name: String!, $number: Int!
       body additions deletions
       labels(first: 50) { nodes { name color } }
       reviewRequests(first: 50) {
-        nodes { requestedReviewer { __typename ... on User { login } ... on Team { slug } ... on Bot { login } ... on Mannequin { login } } }
+        nodes { requestedReviewer { __typename %s } }
       }
       files(first: 100) { pageInfo { hasNextPage endCursor } nodes { ` + fileSelection + ` } }
       comments(first: 100) { pageInfo { hasNextPage endCursor } nodes { ` + issueCommentSelection + ` } }
@@ -96,7 +107,7 @@ query ` + opReviewThreads + `($owner: String!, $name: String!, $number: Int!, $f
         totalCount
         pageInfo { hasNextPage endCursor }
         nodes {
-          id isResolved isOutdated path line originalLine startLine originalStartLine diffSide
+          id subjectType isResolved isOutdated path line originalLine startLine originalStartLine diffSide startDiffSide
           resolvedBy { login }
           comments(first: 100) { nodes { ` + reviewCommentSelection + ` } }
         }

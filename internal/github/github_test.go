@@ -61,6 +61,14 @@ func TestRateLimitError(t *testing.T) {
 	if got := (&RateLimitError{}).RetryAfter(now); got != 0 {
 		t.Errorf("RetryAfter unknown = %v", got)
 	}
+	// The message must not depend on the local time zone.
+	zoned := &RateLimitError{ResetAt: time.Date(2026, 10, 19, 10, 0, 0, 0, time.FixedZone("X", -7*3600))}
+	if got, want := zoned.Error(), "GitHub API rate limit exceeded; resets at 2026-10-19T17:00:00Z"; got != want {
+		t.Errorf("Error() = %q, want %q", got, want)
+	}
+	if got := (&RateLimitError{}).Error(); got != "GitHub API rate limit exceeded" {
+		t.Errorf("Error() = %q", got)
+	}
 	wrapped := fmt.Errorf("list: %w", e)
 	var target *RateLimitError
 	if !errors.As(wrapped, &target) || target != e {

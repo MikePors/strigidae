@@ -64,19 +64,49 @@ func isRateLimited(e *ghapi.HTTPError) bool {
 	return strings.Contains(strings.ToLower(e.Message), "rate limit")
 }
 
+// defaultSecondaryWait is the documented advice when a secondary limit gives
+// no Retry-After: wait at least a minute.
+const defaultSecondaryWait = time.Minute
+
+// httpResetAt works out when a rate-limited REST request may be retried.
+// X-RateLimit-Reset belongs to the primary bucket, so it is only used when
+// that bucket is actually exhausted.
 func (c *Client) httpResetAt(e *ghapi.HTTPError) time.Time {
-	if secs, err := strconv.Atoi(e.Headers.Get("Retry-After")); err == nil {
-		return c.now().Add(time.Duration(secs) * time.Second)
+	if v := e.Headers.Get("Retry-After"); v != "" {
+		if secs, err := strconv.Atoi(v); err == nil {
+			return c.now().Add(time.Duration(secs) * time.Second)
+		}
+		if t, err := http.ParseTime(v); err == nil {
+			return t
+		}
 	}
-	reset, _ := parseReset(e.Headers.Get("X-RateLimit-Reset"))
-	return reset
+	if e.Headers.Get("X-RateLimit-Remaining") == "0" {
+		if reset, ok := parseReset(e.Headers.Get("X-RateLimit-Reset")); ok {
+			return reset
+		}
+	}
+	return c.now().Add(defaultSecondaryWait)
+}
+
+// isScopeError reports whether err is a GraphQL permission/scope failure.
+func isScopeError(err error) bool {
+	var gqlErr *ghapi.GraphQLError
+	if err == nil || !errors.As(err, &gqlErr) {
+		return false
+	}
+	for _, item := range gqlErr.Errors {
+		if item.Type == "FORBIDDEN" || item.Type == "INSUFFICIENT_SCOPES" {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Client) mapGraphQLError(e *ghapi.GraphQLError) error {
 	for _, item := range e.Errors {
 		switch item.Type {
 		case "RATE_LIMITED":
-			return &github.RateLimitError{ResetAt: c.limit.exhaustedReset(), Err: e}
+			return &github.RateLimitError{ResetAt: c.limit.resetFor("graphql"), Err: e}
 		case "NOT_FOUND":
 			return fmt.Errorf("%w: %w", github.ErrNotFound, e)
 		case "FORBIDDEN", "INSUFFICIENT_SCOPES":

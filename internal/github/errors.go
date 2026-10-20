@@ -14,6 +14,9 @@ var (
 	ErrNotFound = errors.New("not found")
 	// ErrForbidden means the token lacks permission for the operation.
 	ErrForbidden = errors.New("forbidden")
+	// ErrDiffTooLarge means GitHub refuses to produce the diff over the API
+	// because the pull request exceeds its file or line limits.
+	ErrDiffTooLarge = errors.New("diff too large for the GitHub API")
 )
 
 // RateLimitError means GitHub refused the request because a rate limit was hit.
@@ -29,7 +32,7 @@ func (e *RateLimitError) Error() string {
 	if e.ResetAt.IsZero() {
 		return "GitHub API rate limit exceeded"
 	}
-	return fmt.Sprintf("GitHub API rate limit exceeded; resets at %s", e.ResetAt.Local().Format(time.TimeOnly))
+	return fmt.Sprintf("GitHub API rate limit exceeded; resets at %s", e.ResetAt.UTC().Format(time.RFC3339))
 }
 
 // Unwrap returns the underlying API error.

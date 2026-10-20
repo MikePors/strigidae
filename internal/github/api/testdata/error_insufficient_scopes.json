@@ -1,0 +1,22 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": null
+    }
+  },
+  "errors": [
+    {
+      "type": "INSUFFICIENT_SCOPES",
+      "path": [
+        "repository",
+        "pullRequest",
+        "reviewRequests",
+        "nodes",
+        1,
+        "requestedReviewer",
+        "slug"
+      ],
+      "message": "Your token has not been granted the required scopes to execute this query. The 'slug' field requires one of the following scopes: ['read:org'], but your token has only been granted the: ['repo'] scopes."
+    }
+  ]
+}

@@ -48,6 +48,7 @@ type gqlPullRequest struct {
 	ReviewDecision string
 	BaseRefName    string
 	HeadRefName    string
+	HeadRefOid     string
 	Author         *gqlActor
 	CommentCount   struct{ TotalCount int }
 	Repository     struct{ NameWithOwner string }
@@ -70,6 +71,7 @@ type gqlIssueComment struct {
 
 type gqlReviewComment struct {
 	ID             string
+	State          string
 	URL            string
 	Body           string
 	DiffHunk       string
@@ -118,6 +120,7 @@ type gqlPullRequestDetail struct {
 
 type gqlThread struct {
 	ID                string
+	SubjectType       string
 	IsResolved        bool
 	IsOutdated        bool
 	Path              string
@@ -126,6 +129,7 @@ type gqlThread struct {
 	StartLine         *int
 	OriginalStartLine *int
 	DiffSide          string
+	StartDiffSide     string
 	ResolvedBy        *gqlActor
 	Comments          struct{ Nodes []gqlReviewComment }
 }
@@ -136,6 +140,8 @@ func mapPullRequest(n gqlPullRequest) (github.PullRequest, error) {
 		return github.PullRequest{}, err
 	}
 	return github.PullRequest{
+		ID:             n.ID,
+		HeadSHA:        n.HeadRefOid,
 		Repo:           repo,
 		Number:         n.Number,
 		Title:          n.Title,
@@ -203,6 +209,7 @@ func mapReviewComment(n gqlReviewComment) github.ReviewComment {
 		CreatedAt: n.CreatedAt,
 		URL:       n.URL,
 		DiffHunk:  n.DiffHunk,
+		Pending:   n.State == "PENDING",
 		Reactions: mapReactions(n.ReactionGroups),
 	}
 }
@@ -256,6 +263,7 @@ func intOrZero(p *int) int {
 func mapThread(n gqlThread) github.ReviewThread {
 	t := github.ReviewThread{
 		ID:                n.ID,
+		SubjectType:       github.ThreadSubject(n.SubjectType),
 		IsResolved:        n.IsResolved,
 		IsOutdated:        n.IsOutdated,
 		Path:              n.Path,
@@ -264,6 +272,7 @@ func mapThread(n gqlThread) github.ReviewThread {
 		StartLine:         intOrZero(n.StartLine),
 		OriginalStartLine: intOrZero(n.OriginalStartLine),
 		DiffSide:          github.DiffSide(n.DiffSide),
+		StartDiffSide:     github.DiffSide(n.StartDiffSide),
 	}
 	if n.ResolvedBy != nil {
 		t.ResolvedBy = n.ResolvedBy.login()
