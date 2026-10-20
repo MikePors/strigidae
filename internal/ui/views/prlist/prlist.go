@@ -14,6 +14,7 @@ import (
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/ui"
 	"github.com/MikePors/strigidae/internal/ui/keys"
+	"github.com/MikePors/strigidae/internal/ui/termtext"
 	"github.com/MikePors/strigidae/internal/ui/theme"
 )
 
@@ -102,7 +103,17 @@ func openInBrowser(url string) error {
 func (v *View) Loading() bool { return v.loading || v.loadingMore }
 
 // Title implements ui.View.
-func (v *View) Title() string { return v.repo.String() }
+func (v *View) Title() string { return v.repoName() }
+
+// repoName is the repository name made safe to draw (it can come from -R).
+func (v *View) repoName() string { return termtext.Clean(v.repo.String()) }
+
+// safeError is an error whose text is safe to draw: API and launcher errors
+// can embed attacker-controlled text. It keeps the chain for errors.Is/As.
+type safeError struct{ err error }
+
+func (e safeError) Error() string { return termtext.Clean(e.err.Error()) }
+func (e safeError) Unwrap() error { return e.err }
 
 // ShortHelp implements ui.View.
 func (v *View) ShortHelp() []key.Binding {
@@ -158,7 +169,7 @@ func (v *View) loaded(msg prsLoadedMsg) tea.Cmd {
 		v.err = msg.err
 		v.moreFailed = msg.more // stop auto-paging until R
 
-		return ui.Error(fmt.Errorf("load pull requests in %s: %w", v.repo, msg.err))
+		return ui.Error(safeError{fmt.Errorf("load pull requests in %s: %w", v.repo, msg.err)})
 	}
 	v.err = nil
 	v.next = msg.page.Next
@@ -233,6 +244,10 @@ func (v *View) handleKey(msg keys.Msg) tea.Cmd {
 func (v *View) refresh() tea.Cmd {
 	v.seq++
 	v.loading, v.loadingMore, v.moreFailed = true, false, false
+	// Intentional limit: the API caps a page at 100 rows, so past row 100 the
+	// refreshed list is shorter than the old one and the selection falls back
+	// to the same row index, which may be a different PR. The rest pages in
+	// lazily as before.
 	// Ask for as many rows as are loaded (up to the API maximum) so the rows
 	// the user has paged through survive; zero means the default size.
 	return v.fetch(github.PageRequest{Limit: min(len(v.prs), github.MaxPageSize)}, false)
@@ -270,7 +285,7 @@ func (v *View) browseSelected() tea.Cmd {
 			return ui.ErrorMsg{Err: fmt.Errorf("pull request #%d has no URL", pr.Number)}
 		}
 		if err := open(url); err != nil {
-			return ui.ErrorMsg{Err: fmt.Errorf("open #%d in browser: %w", pr.Number, err)}
+			return ui.ErrorMsg{Err: safeError{fmt.Errorf("open #%d in browser: %w", pr.Number, err)}}
 		}
 		return ui.InfoMsg{Text: fmt.Sprintf("opened #%d in browser", pr.Number)}
 	}

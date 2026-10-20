@@ -184,6 +184,54 @@ func TestRefreshKeepsSelectionPastFirstPage(t *testing.T) {
 	}
 }
 
+func TestRefreshCapsAtMaxPageSize(t *testing.T) {
+	c := fakeWith(makePRs(250))
+	v := loadedView(t, c, nil)
+	for len(v.prs) < 150 {
+		deliver(t, v, press(v, "G"))
+	}
+	v.cursor = 120
+	deliver(t, v, press(v, "R"))
+	calls := c.Calls()
+	if got := calls[len(calls)-1].Page.Limit; got != github.MaxPageSize {
+		t.Errorf("refresh limit = %d, want %d", got, github.MaxPageSize)
+	}
+	// Pinned: only the first 100 rows are reloaded and the cursor keeps its
+	// index (clamped), even though that may now be a different PR.
+	if len(v.prs) != 100 || v.cursor != 99 {
+		t.Errorf("after refresh: prs=%d cursor=%d, want 100 and 99", len(v.prs), v.cursor)
+	}
+}
+
+func TestUntrustedTextIsCleaned(t *testing.T) {
+	repo := github.Repo{Owner: "ev\x1b[2Jil", Name: "re\x07po"}
+	c := fake.New()
+	c.SetError(fake.MethodListPullRequests, errors.New("boom\x1b]52;c;aGk=\x07\u202e\u009b"))
+	v := New(c, repo, theme.Default(), Options{})
+	v.Update(tea.WindowSizeMsg{Width: 80, Height: 8})
+
+	if strings.ContainsAny(v.Title(), "\x1b\x07") {
+		t.Errorf("title contains control characters: %q", v.Title())
+	}
+	if out := ansi.Strip(v.Render(80, 8)); strings.ContainsAny(out, "\x1b\x07") {
+		t.Errorf("loading text contains control characters: %q", out)
+	}
+
+	cmd := deliver(t, v, v.Init())
+	status := cmd().(ui.ErrorMsg).Err.Error()
+	out := ansi.Strip(v.Render(80, 8))
+	for _, s := range []string{status, out} {
+		for _, r := range strings.ReplaceAll(s, "\n", "") {
+			if r < ' ' || (r >= 0x7f && r <= 0x9f) || r == '\u202e' {
+				t.Fatalf("control rune %q reached the screen: %q", r, s)
+			}
+		}
+	}
+	if !strings.Contains(status, "boom") {
+		t.Errorf("status lost the message: %q", status)
+	}
+}
+
 func TestRefreshSelectionGone(t *testing.T) {
 	c := fakeWith(makePRs(10))
 	v := loadedView(t, c, nil)

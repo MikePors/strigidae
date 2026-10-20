@@ -33,11 +33,11 @@ func (v *View) Render(width, height int) string {
 	var out string
 	switch {
 	case len(v.prs) == 0 && v.loading:
-		out = v.th.Muted.Render(fmt.Sprintf("Loading pull requests in %s...", v.repo))
+		out = v.th.Muted.Render(fmt.Sprintf("Loading pull requests in %s...", v.repoName()))
 	case len(v.prs) == 0 && v.err != nil:
 		out = v.errorState(width)
 	case len(v.prs) == 0:
-		out = v.th.Muted.Render(fmt.Sprintf("no open pull requests in %s", v.repo))
+		out = v.th.Muted.Render(fmt.Sprintf("no open pull requests in %s", v.repoName()))
 	default:
 		out = v.table(width, height)
 	}
@@ -57,7 +57,7 @@ func fit(s string, width, height int) string {
 
 func (v *View) errorState(width int) string {
 	head := v.th.PRList.ChangesRequested.Render("Could not load pull requests")
-	body := ansi.Wrap(v.err.Error(), width, "")
+	body := ansi.Wrap(safeError{v.err}.Error(), width, "")
 	return head + "\n" + body + "\n\n" + v.th.Muted.Render("Press R to retry.")
 }
 
