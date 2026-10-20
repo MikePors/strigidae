@@ -1,9 +1,13 @@
 package logging
 
 import (
+	"bytes"
 	"errors"
+	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -47,5 +51,24 @@ func TestOpen(t *testing.T) {
 	b, err := os.ReadFile(path)
 	if err != nil || len(b) == 0 {
 		t.Fatalf("log file empty or unreadable: %v", err)
+	}
+}
+
+func TestInstall(t *testing.T) {
+	prevSlog, prevOut, prevFlags := slog.Default(), log.Writer(), log.Flags()
+	t.Cleanup(func() {
+		slog.SetDefault(prevSlog)
+		log.SetOutput(prevOut)
+		log.SetFlags(prevFlags)
+	})
+
+	var buf bytes.Buffer
+	Install(slog.New(slog.NewTextHandler(&buf, nil)), &buf)
+	log.Print("from std log")
+	slog.Info("from slog")
+	for _, want := range []string{"from std log", "from slog"} {
+		if !strings.Contains(buf.String(), want) {
+			t.Errorf("log output missing %q: %q", want, buf.String())
+		}
 	}
 }

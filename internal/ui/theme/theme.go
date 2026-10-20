@@ -19,6 +19,7 @@ type Theme struct {
 	StatusInfo    lipgloss.Style // transient informational message
 	StatusError   lipgloss.Style // transient error message
 	StatusHint    lipgloss.Style // short key hints shown when idle
+	StatusCommand lipgloss.Style // command line row
 	Spinner       lipgloss.Style // loading spinner glyph
 
 	// Help overlay.
@@ -56,6 +57,7 @@ func New(isDark bool) Theme {
 		StatusInfo:    bar.Foreground(c("#1f7a3d", "#8ce99a")),
 		StatusError:   bar.Bold(true).Foreground(c("#c92a2a", "#ff8787")),
 		StatusHint:    bar.Foreground(muted),
+		StatusCommand: bar.Bold(true),
 		Spinner:       bar.Foreground(accent),
 
 		HelpTitle:   lipgloss.NewStyle().Bold(true).Foreground(accent),

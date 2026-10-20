@@ -25,8 +25,9 @@ import (
 //   - ThemeMsg when the theme changes.
 //   - every other message (command results, ticks); only the top view sees them.
 //
-// The root handles Back (q), Help (?) and Quit (ctrl+c) itself and never
-// forwards them; Cancel (esc) is always forwarded.
+// The root handles Help (?) and the command line (:) itself and never
+// forwards them; Cancel (esc) is always forwarded. esc never navigates: it
+// only cancels or clears state inside the view. Leaving a view is ":q".
 //
 // ShortHelp and FullHelp come from help.KeyMap. List only bindings specific
 // to the view; the global ones are added by the root. FullHelp doubles as the
@@ -48,8 +49,12 @@ type View interface {
 }
 
 // KeyCapturer is optionally implemented by views with a focused text input.
-// While CapturesKeys returns true the root forwards every key, other than
-// ctrl+c, as a raw tea.KeyPressMsg without interpreting it.
+// While CapturesKeys returns true the root forwards every key as a raw
+// tea.KeyPressMsg without interpreting it.
+//
+// There is no ctrl+c escape hatch, so a capturer MUST release capture when it
+// receives esc. Every capturer is covered by TestCapturersReleaseOnEsc; add
+// new ones to its table. The root's command line is the reference pattern.
 type KeyCapturer interface {
 	CapturesKeys() bool
 }

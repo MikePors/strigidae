@@ -4,6 +4,8 @@ package logging
 
 import (
 	"fmt"
+	"io"
+	"log"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -33,4 +35,13 @@ func Open(path string) (*slog.Logger, *os.File, error) {
 		return nil, nil, fmt.Errorf("open log file: %w", err)
 	}
 	return slog.New(slog.NewTextHandler(f, nil)), f, nil
+}
+
+// Install routes the standard library's default loggers to the log file, so a
+// dependency calling log.Printf or slog.Info can never write to stderr and
+// corrupt the screen. It is the one place the program mutates global logger
+// state. Pass io.Discard to silence them.
+func Install(l *slog.Logger, w io.Writer) {
+	slog.SetDefault(l)
+	log.SetOutput(w)
 }

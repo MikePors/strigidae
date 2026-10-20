@@ -55,6 +55,7 @@ type Model struct {
 	seqGen        int
 
 	showHelp bool
+	cmdline  commandLine
 	status   struct {
 		text string
 		kind statusKind
@@ -86,6 +87,7 @@ func New(root View, th theme.Theme, opts Options) *Model {
 		tick:    opts.Tick,
 		seqWait: opts.SeqTimeout,
 		msgTTL:  opts.MessageTTL,
+		cmdline: newCommandLine(),
 		loading: map[string]struct{}{},
 		spin:    spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(th.Spinner)),
 	}
@@ -145,6 +147,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spin, cmd = m.spin.Update(msg)
 		return m, cmd
 	default:
+		if m.cmdline.active {
+			return m, tea.Batch(m.cmdline.update(msg), m.forward(msg))
+		}
 		return m, m.forward(msg)
 	}
 }
@@ -191,6 +196,7 @@ func (m *Model) pop() tea.Cmd {
 
 func (m *Model) resetKeys() {
 	m.showHelp = false
+	m.cmdline.close()
 	m.matcher.Reset()
 	m.seqGen++
 }
@@ -226,11 +232,15 @@ func (m *Model) bindings() []key.Binding {
 
 func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	k := msg.String()
-	if key.Matches(msg, m.keys.Quit) {
-		return tea.Quit
+	if m.cmdline.active {
+		line, ok, cmd := m.cmdline.handleKey(msg)
+		if ok {
+			return parseCommand(line)
+		}
+		return cmd
 	}
 	if m.showHelp {
-		if key.Matches(msg, m.keys.Help, m.keys.Back, m.keys.Cancel) {
+		if key.Matches(msg, m.keys.Help, m.keys.Cancel) {
 			m.showHelp = false
 		}
 		return nil
@@ -264,16 +274,16 @@ func (m *Model) expireSequence(gen int) tea.Cmd {
 	return nil
 }
 
-// dispatch acts on a resolved key or sequence: the root consumes Back and
-// Help, everything else goes to the view.
+// dispatch acts on a resolved key or sequence: the root consumes Help and
+// Command, everything else goes to the view.
 func (m *Model) dispatch(seq string) tea.Cmd {
 	km := keys.Msg{Seq: seq}
 	switch {
-	case key.Matches(km, m.keys.Back):
-		return m.pop()
 	case key.Matches(km, m.keys.Help):
 		m.showHelp = true
 		return nil
+	case key.Matches(km, m.keys.Command):
+		return m.cmdline.open()
 	}
 	return m.forward(km)
 }
@@ -282,7 +292,7 @@ func (m *Model) dispatch(seq string) tea.Cmd {
 func (m *Model) View() tea.View {
 	var v tea.View
 	if m.width > 0 && m.height > 0 {
-		v = tea.NewView(m.content() + "\n" + m.bar().render(m.th, m.width))
+		v = tea.NewView(m.content() + "\n" + m.bottomRow())
 	}
 	v.AltScreen = true
 	return v
@@ -332,4 +342,12 @@ func shortHelp(bs []key.Binding) string {
 		}
 	}
 	return strings.Join(parts, "  ")
+}
+
+// bottomRow is the status bar, or the command line while it is open.
+func (m *Model) bottomRow() string {
+	if m.cmdline.active {
+		return m.th.StatusCommand.Width(m.width).MaxWidth(m.width).Render(m.cmdline.input.View())
+	}
+	return m.bar().render(m.th, m.width)
 }

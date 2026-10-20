@@ -34,6 +34,9 @@ func newFake(title string) *fakeView {
 func (f *fakeView) Init() tea.Cmd { return nil }
 func (f *fakeView) Update(msg tea.Msg) (View, tea.Cmd) {
 	f.got = append(f.got, msg)
+	if k, ok := msg.(tea.KeyPressMsg); ok && k.String() == "esc" {
+		f.capture = false
+	}
 	return f, nil
 }
 func (f *fakeView) Render(_, _ int) string    { return f.title + " body" }
@@ -89,7 +92,7 @@ func run(m *Model, cmd tea.Cmd) {
 
 func TestKeyEncoding(t *testing.T) {
 	// Guards the assumption press() relies on: key names match binding names.
-	for _, s := range []string{"j", "G", "?", "ctrl+c", "esc", "enter"} {
+	for _, s := range []string{"j", "G", "?", ":", "ctrl+c", "esc", "enter", "tab", "ctrl+o"} {
 		k := keyFor(s)
 		if k.String() != s {
 			t.Errorf("key for %q stringifies as %q", s, k.String())
@@ -105,44 +108,176 @@ func keyFor(s string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeyEscape}
 	case "enter":
 		return tea.KeyPressMsg{Code: tea.KeyEnter}
+	case "tab":
+		return tea.KeyPressMsg{Code: tea.KeyTab}
+	case "ctrl+o":
+		return tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl}
 	}
 	return tea.KeyPressMsg{Code: []rune(s)[0], Text: s}
 }
 
-func TestQuitAndBack(t *testing.T) {
-	t.Run("q on root quits", func(t *testing.T) {
-		m := newModel(newFake("root"))
-		if !isQuit(press(m, "q")) {
-			t.Error("q on root view should quit")
+func TestCommandLine(t *testing.T) {
+	typeLine := func(m *Model, line string) tea.Cmd {
+		press(m, ":")
+		for _, r := range line {
+			press(m, string(r))
+		}
+		return press(m, "enter")
+	}
+	t.Run(": opens and captures keys", func(t *testing.T) {
+		v := newFake("v")
+		m := newModel(v)
+		press(m, ":")
+		if !m.cmdline.active {
+			t.Fatal(": should open the command line")
+		}
+		press(m, "j")
+		if len(v.keyMsgs()) != 0 || m.cmdline.input.Value() != "j" {
+			t.Errorf("keys leaked to view or were not captured; value = %q", m.cmdline.input.Value())
 		}
 	})
-	t.Run("ctrl-c quits from anywhere", func(t *testing.T) {
+	t.Run(":q on root quits", func(t *testing.T) {
+		m := newModel(newFake("root"))
+		_, cmd := m.Update(typeLine(m, "q")())
+		if !isQuit(cmd) {
+			t.Error(":q on the root view should quit")
+		}
+	})
+	t.Run(":q pops a pushed view", func(t *testing.T) {
 		m := newModel(newFake("root"))
 		run(m, Push(newFake("child")))
-		press(m, "?")
-		if !isQuit(press(m, "ctrl+c")) {
-			t.Error("ctrl+c should quit even with help open on a pushed view")
+		run(m, typeLine(m, "quit"))
+		if len(m.stack) != 1 {
+			t.Errorf("depth = %d, want 1", len(m.stack))
 		}
 	})
-	t.Run("QuitMsg quits", func(t *testing.T) {
+	t.Run(":qa quits from anywhere", func(t *testing.T) {
 		m := newModel(newFake("root"))
-		_, cmd := m.Update(QuitMsg{})
-		if !isQuit(cmd) {
-			t.Error("QuitMsg should quit")
+		run(m, Push(newFake("child")))
+		cmd := typeLine(m, "qa")
+		if cmd == nil {
+			t.Fatal("expected a command")
+		}
+		if _, ok := cmd().(QuitMsg); !ok {
+			t.Error(":qa should produce QuitMsg")
 		}
 	})
-	t.Run("esc is passed to the view, not used for popping", func(t *testing.T) {
-		root, child := newFake("root"), newFake("child")
-		m := newModel(root)
-		run(m, Push(child))
+	t.Run("unknown command shows an error", func(t *testing.T) {
+		m := newModel(newFake("root"))
+		run(m, typeLine(m, "frobnicate now"))
+		if m.status.text != "not a command: frobnicate" || m.status.kind != statusError {
+			t.Errorf("status = %+v", m.status)
+		}
+	})
+	t.Run("esc cancels", func(t *testing.T) {
+		m := newModel(newFake("root"))
+		press(m, ":")
+		press(m, "q")
 		press(m, "esc")
-		if len(m.stack) != 2 {
-			t.Errorf("stack depth = %d, want 2", len(m.stack))
-		}
-		if diff := cmp.Diff([]keys.Msg{{Seq: "esc"}}, child.keyMsgs()); diff != "" {
-			t.Errorf("child key msgs mismatch (-want +got):\n%s", diff)
+		if m.cmdline.active || len(m.stack) != 1 {
+			t.Error("esc should cancel the command line without running it")
 		}
 	})
+	t.Run("backspace on empty line cancels, otherwise deletes", func(t *testing.T) {
+		m := newModel(newFake("root"))
+		press(m, ":")
+		press(m, "q")
+		m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+		if !m.cmdline.active || m.cmdline.input.Value() != "" {
+			t.Fatal("first backspace should delete the character")
+		}
+		m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+		if m.cmdline.active {
+			t.Error("backspace on an empty line should cancel")
+		}
+	})
+	t.Run("ctrl-c and q do nothing special", func(t *testing.T) {
+		m := newModel(newFake("root"))
+		if cmd := press(m, "ctrl+c"); isQuit(cmd) {
+			t.Error("ctrl+c must not quit")
+		}
+		if cmd := press(m, "q"); isQuit(cmd) || len(m.stack) != 1 {
+			t.Error("bare q must not quit or pop")
+		}
+	})
+	t.Run("tab and ctrl+o are not intercepted", func(t *testing.T) {
+		m := newModel(newFake("root"))
+		press(m, "tab")
+		press(m, "ctrl+o")
+		if m.cmdline.active || m.showHelp || len(m.stack) != 1 {
+			t.Error("reserved keys must not navigate")
+		}
+	})
+}
+
+func TestParseCommand(t *testing.T) {
+	tests := []struct {
+		line string
+		want tea.Msg // nil: expect a "not a command" error for wantName
+		name string
+	}{
+		{line: "q", want: PopMsg{}},
+		{line: "quit", want: PopMsg{}},
+		{line: "  q  ", want: PopMsg{}},
+		{line: "qa", want: QuitMsg{}},
+		{line: "qall", want: QuitMsg{}},
+		{line: "quitall", want: QuitMsg{}},
+		{line: "zzz arg", name: "zzz"},
+		{line: "Q", name: "Q"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.line, func(t *testing.T) {
+			got := parseCommand(tt.line)()
+			if tt.want == nil {
+				em, ok := got.(ErrorMsg)
+				if !ok || em.Err.Error() != "not a command: "+tt.name {
+					t.Errorf("got %#v, want not-a-command error for %q", got, tt.name)
+				}
+				return
+			}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+	if parseCommand("   ") != nil {
+		t.Error("blank line should do nothing")
+	}
+}
+
+// TestCapturersReleaseOnEsc is the safety net for having no ctrl+c: every
+// component that captures keys must release capture on esc.
+func TestCapturersReleaseOnEsc(t *testing.T) {
+	tests := []struct {
+		name string
+		// setup returns a root with the capturer engaged, and a func reporting
+		// whether it still captures.
+		setup func() (*Model, func() bool)
+	}{
+		{"command line", func() (*Model, func() bool) {
+			m := newModel(newFake("v"))
+			press(m, ":")
+			press(m, "x")
+			return m, m.cmdline.CapturesKeys
+		}},
+		{"view implementing KeyCapturer", func() (*Model, func() bool) {
+			v := newFake("v")
+			v.capture = true
+			return newModel(v), v.CapturesKeys
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, captures := tt.setup()
+			if !captures() {
+				t.Fatal("setup did not engage capture")
+			}
+			press(m, "esc")
+			if captures() {
+				t.Error("capturer still holds keys after esc")
+			}
+		})
+	}
 }
 
 func TestPushPop(t *testing.T) {
@@ -160,9 +295,7 @@ func TestPushPop(t *testing.T) {
 		t.Errorf("crumbs = %q", got)
 	}
 
-	if cmd := press(m, "q"); cmd != nil {
-		t.Errorf("q on child returned a command, want nil")
-	}
+	run(m, Pop())
 	if m.top() != View(root) || len(m.stack) != 1 {
 		t.Errorf("pop failed: depth %d", len(m.stack))
 	}
@@ -243,16 +376,13 @@ func TestKeyCapture(t *testing.T) {
 	v := newFake("v")
 	v.capture = true
 	m := newModel(v)
-	press(m, "q")
+	press(m, ":")
 	press(m, "?")
-	if len(m.stack) != 1 || m.showHelp {
-		t.Error("captured keys must not trigger back or help")
+	if m.cmdline.active || m.showHelp {
+		t.Error("captured keys must not open the command line or help")
 	}
-	if len(v.got) != 3 { // size + q + ?
+	if len(v.got) != 3 { // size + : + ?
 		t.Errorf("view got %d msgs, want 3", len(v.got))
-	}
-	if !isQuit(press(m, "ctrl+c")) {
-		t.Error("ctrl+c must still quit while capturing")
 	}
 }
 
@@ -268,7 +398,7 @@ func TestHelpToggle(t *testing.T) {
 	if len(v.keyMsgs()) != 0 {
 		t.Error("keys must not reach the view while help is open")
 	}
-	for _, closer := range []string{"?", "q", "esc"} {
+	for _, closer := range []string{"?", "esc"} {
 		m.showHelp = true
 		press(m, closer)
 		if m.showHelp {
@@ -276,7 +406,7 @@ func TestHelpToggle(t *testing.T) {
 		}
 	}
 	if len(m.stack) != 1 {
-		t.Error("closing help with q must not pop")
+		t.Error("closing help must not pop")
 	}
 }
 
@@ -389,4 +519,12 @@ func TestStatusBarStyled(t *testing.T) {
 	if got == ansi.Strip(got) {
 		t.Error("expected ANSI styling in the rendered bar")
 	}
+}
+
+func TestCommandLineGolden(t *testing.T) {
+	m := newModel(newFake("v"))
+	press(m, ":")
+	press(m, "q")
+	press(m, "a")
+	golden.Assert(t, "command_line", m.View().Content, false)
 }

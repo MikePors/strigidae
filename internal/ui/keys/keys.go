@@ -21,8 +21,7 @@ type Msg struct{ Seq string }
 func (m Msg) String() string { return m.Seq }
 
 // Global holds the bindings reserved across the whole app. Views use them
-// through the Msg they receive; the root model itself handles Back, Help and
-// Quit.
+// through the Msg they receive; the root model itself handles Help and Command.
 type Global struct {
 	Down, Up             key.Binding
 	Top, Bottom          key.Binding
@@ -33,12 +32,9 @@ type Global struct {
 	Refresh              key.Binding
 	Search               key.Binding
 	NextMatch, PrevMatch key.Binding
-	Back                 key.Binding
 	Cancel               key.Binding
 	Help                 key.Binding
-	Quit                 key.Binding
-	// Command is reserved for a future command line. It is disabled so it is
-	// neither matched nor listed in help until it is implemented.
+	// Command opens the command line (":q", ":qa"). The root handles it.
 	Command key.Binding
 }
 
@@ -62,12 +58,9 @@ func DefaultGlobal() Global {
 		Search:    b("/", "/", "filter / search"),
 		NextMatch: b("n", "n", "next match"),
 		PrevMatch: b("N", "N", "previous match"),
-		Back:      b("q", "q", "back (quit on root)"),
 		Cancel:    b("esc", "esc", "cancel / clear"),
 		Help:      b("?", "?", "toggle help"),
-		Quit:      b("ctrl+c", "ctrl+c", "quit"),
-		Command: key.NewBinding(key.WithKeys(":"), key.WithHelp(":", "command line"),
-			key.WithDisabled()),
+		Command:   b(":", ":", "command line (:q close, :qa quit)"),
 	}
 }
 
@@ -77,7 +70,7 @@ func (g Global) Bindings() []key.Binding {
 	for _, grp := range g.FullHelp() {
 		out = append(out, grp...)
 	}
-	return append(out, g.Command)
+	return out
 }
 
 // FullHelp groups the global bindings for the help overlay.
@@ -85,6 +78,6 @@ func (g Global) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{g.Down, g.Up, g.Top, g.Bottom, g.HalfDown, g.HalfUp, g.PageDown, g.PageUp},
 		{g.Select, g.Open, g.Refresh, g.Search, g.NextMatch, g.PrevMatch},
-		{g.Back, g.Cancel, g.Help, g.Quit},
+		{g.Cancel, g.Help, g.Command},
 	}
 }

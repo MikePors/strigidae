@@ -134,7 +134,7 @@ func (v *View) Render(width, height int) string {
 	var b strings.Builder
 	b.WriteString(v.th.Title.Render(fmt.Sprintf("Welcome to strig (screen %d)", max(1, v.depth))))
 	b.WriteString("\n")
-	b.WriteString(v.th.Muted.Render("Placeholder: j/k gg/G ctrl-d/u ctrl-f/b to move, enter to push, q to go back"))
+	b.WriteString(v.th.Muted.Render("Placeholder: j/k gg/G ctrl-d/u ctrl-f/b to move, enter to push, :q to go back"))
 	end := min(lineCount, v.top+v.listHeight())
 	for i := v.top; i < end; i++ {
 		line := fmt.Sprintf("  Sample item %03d", i+1)

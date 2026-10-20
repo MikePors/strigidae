@@ -149,8 +149,8 @@ func TestGlobalBindings(t *testing.T) {
 	if !key.Matches(Msg{Seq: "R"}, g.Refresh) || key.Matches(Msg{Seq: "r"}, g.Refresh) {
 		t.Error("refresh must be R, not r")
 	}
-	if key.Matches(Msg{Seq: ":"}, g.Command) {
-		t.Error("command binding is reserved and must be disabled")
+	if !key.Matches(Msg{Seq: ":"}, g.Command) {
+		t.Error(": should open the command line")
 	}
 	seen := map[string]bool{}
 	for _, b := range g.Bindings() {
@@ -161,7 +161,7 @@ func TestGlobalBindings(t *testing.T) {
 			seen[k] = true
 		}
 	}
-	for _, k := range []string{"r", "c"} {
+	for _, k := range []string{"r", "c", "q", "ctrl+c", "tab", "ctrl+o", "ctrl+i"} {
 		if seen[k] {
 			t.Errorf("%q is reserved and must not be bound globally", k)
 		}
