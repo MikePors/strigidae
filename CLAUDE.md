@@ -40,11 +40,13 @@ internal/github/fake/   in-memory Client for tests and demos
 internal/diff/          unified-diff parsing and modelling (pure, no UI)
 internal/config/        config file loading and validation
 internal/editor/        $EDITOR handoff for writing comments
+internal/gitrepo/       infer the GitHub repo (host + owner/name) from a checkout's remotes
 internal/logging/       log file setup
 internal/golden/        golden-file test helper
 internal/ui/            app shell: root model, the View interface, navigation and status messages, status bar, command line
 internal/ui/keys/       keymap registry and multi-key sequence handling
 internal/ui/theme/      Lip Gloss styles; every colour lives here
+internal/ui/termtext/   sanitising of untrusted text (Clean, CleanBlock); imports no other ui package
 internal/ui/components/ reusable widgets (PR table, markdown pane, thread, …)
 internal/ui/views/<v>/  one package per screen: prlist, prdetail, diff, dashboard, …
 ```
@@ -62,7 +64,7 @@ cmd/strig ──► ui/views/* ──► ui/components ──► ui ──► ui
 
 - `internal/ui` (the shell) and `ui/keys`, `ui/theme`, `ui/components` **never import `ui/views/*`**. A view opens another view by **building it and sending `ui.PushMsg{View: v}`**; the root model only manages the stack. `cmd/strig` builds the first view.
 - Views may import other views (e.g. `prlist` builds a `prdetail`), as long as there's no cycle.
-- Non-UI packages (`github`, `diff`, `config`, `editor`, `logging`, `version`) never import UI packages.
+- Non-UI packages (`github`, `diff`, `config`, `editor`, `gitrepo`, `logging`, `version`) never import UI packages.
 - Only `cmd/strig` imports `internal/github/api`.
 
 These rules are enforced by `depguard` in `.golangci.yml`; `make lint` fails on a violation.
@@ -89,13 +91,15 @@ These rules are enforced by `depguard` in `.golangci.yml`; `make lint` fails on 
 - **Embedded bubbles components** (viewport, list, …): drive them through their methods (`ScrollDown`, `GotoTop`, …) in response to `keys.Msg`; never forward a `keys.Msg` to their `Update`.
 - **Text inputs capture keys.** A view with a focused text input (filter, command line, reply box) implements `ui.KeyCapturer`; while it captures, it receives every key raw and no global bindings or sequences fire. `esc` must always release capture, and every capturing component needs a test proving it.
 - **Sizing**: views receive the space they may draw in and must not draw outside it. Handle `tea.WindowSizeMsg` everywhere.
+- **Untrusted text.** Everything that comes from GitHub or git (titles, names, labels, paths, branch names, markdown bodies, diff content) is attacker-controlled and can carry terminal escape sequences. Pass it through `internal/ui/termtext` (`Clean` for single-line, `CleanBlock` before markdown rendering) before it reaches the screen, and test with a hostile fixture.
 - **Styling**: no inline colours or ad-hoc `lipgloss.NewStyle()` in views; add a named style to `internal/ui/theme`.
 - **Performance**: large diffs must stay smooth. Render only the visible window, and cache expensive work (syntax highlighting, markdown rendering) keyed by content and width.
 
 ### Logging
 
 - `log/slog` to a file under `$XDG_STATE_HOME/strig/` (fallback `~/.local/state/strig/`); `strig --log-path` prints it. **Never** write to stdout or stderr while the TUI is running; it corrupts the screen.
-- At startup the standard library's default loggers (`log`, `slog`) are redirected to the log file, so a dependency that logs can't corrupt the screen. That's the one allowed global mutation besides build-time values.
+- At startup the standard library's default loggers (`log`, `slog`) are redirected to the log file, so a dependency that logs can't corrupt the screen. That's one of the two allowed global mutations besides build-time values.
+- The other: at startup `cmd/strig` sets `github.com/cli/browser`'s `Stdout` and `Stderr` to `io.Discard`, so browser launchers such as `xdg-open` (used by `o`) can't write to the screen.
 - Never log tokens, auth headers, or full API response bodies.
 
 ## Keybindings

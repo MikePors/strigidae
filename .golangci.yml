@@ -31,6 +31,7 @@ linters:
             - "**/internal/ui/*.go"
             - "**/internal/ui/keys/**"
             - "**/internal/ui/theme/**"
+            - "**/internal/ui/termtext/**"
             - "**/internal/ui/components/**"
           deny:
             - pkg: github.com/MikePors/strigidae/internal/ui/views
@@ -41,6 +42,7 @@ linters:
             - "**/internal/diff/**"
             - "**/internal/config/**"
             - "**/internal/editor/**"
+            - "**/internal/gitrepo/**"
             - "**/internal/logging/**"
             - "**/internal/version/**"
           deny:

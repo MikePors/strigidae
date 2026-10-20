@@ -33,6 +33,8 @@ type Theme struct {
 	Normal   lipgloss.Style // plain text
 	Muted    lipgloss.Style // de-emphasised text
 	Selected lipgloss.Style // the highlighted row in a list
+
+	PRList PRListStyles // pull request tables
 }
 
 // Default returns the default theme for a dark terminal background.
@@ -69,5 +71,7 @@ func New(isDark bool) Theme {
 		Normal:   lipgloss.NewStyle(),
 		Muted:    lipgloss.NewStyle().Foreground(muted),
 		Selected: lipgloss.NewStyle().Bold(true).Foreground(c("#5f3dc4", "#d0bfff")),
+
+		PRList: newPRListStyles(c),
 	}
 }
