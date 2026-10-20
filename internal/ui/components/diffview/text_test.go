@@ -52,6 +52,22 @@ func TestWindow(t *testing.T) {
 		{10, 5, ""},
 		{8, 5, "cd"},
 	}
+	emoji := []Span{{"❤️❤️a", ClassPlain}}
+	for _, tt := range []struct {
+		off, width int
+		want       string
+	}{
+		{0, 4, "❤️❤️"},
+		{0, 3, "❤️ "},
+		{1, 3, " ❤️"},
+		{2, 3, "❤️a"},
+		{3, 2, " a"},
+	} {
+		got, used := window(emoji, tt.off, tt.width)
+		if j := join(got); j != tt.want || used != ansi.StringWidth(j) {
+			t.Errorf("emoji window(%d,%d) = %q (used %d), want %q", tt.off, tt.width, j, used, tt.want)
+		}
+	}
 	for _, tt := range tests {
 		got, used := window(spans, tt.off, tt.width)
 		if j := join(got); j != tt.want {

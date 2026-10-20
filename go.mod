@@ -12,6 +12,7 @@ require (
 	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/cli/go-gh/v2 v2.16.2
 	github.com/google/go-cmp v0.7.0
+	github.com/rivo/uniseg v0.4.7
 )
 
 require (
@@ -34,7 +35,6 @@ require (
 	github.com/mattn/go-runewidth v0.0.30 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/muesli/termenv v0.16.0 // indirect
-	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/thlib/go-timezone-local v0.0.8 // indirect
 	github.com/xo/terminfo v1.0.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect

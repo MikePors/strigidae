@@ -43,6 +43,7 @@ type Theme struct {
 	DiffGutterAdd    lipgloss.Style // line numbers on added lines
 	DiffGutterDelete lipgloss.Style // line numbers on deleted lines
 	DiffHunk         lipgloss.Style // "@@ ... @@" header rows
+	DiffHunkCursor   lipgloss.Style // header row under the cursor
 	DiffNoNewline    lipgloss.Style // "\ No newline at end of file" rows
 	Syntax           Syntax         // foreground-only token styles
 	// --- end diff pane ---
@@ -97,6 +98,7 @@ func New(isDark bool) Theme {
 		DiffGutterAdd:    lipgloss.NewStyle().Foreground(c("#1f7a3d", "#8ce99a")).Background(c("#ccffd8", "#17382a")),
 		DiffGutterDelete: lipgloss.NewStyle().Foreground(c("#c92a2a", "#ff8787")).Background(c("#ffd7d5", "#42191d")),
 		DiffHunk:         lipgloss.NewStyle().Foreground(c("#0b6e99", "#74c0fc")).Background(c("#ddf4ff", "#1b2a3a")),
+		DiffHunkCursor:   lipgloss.NewStyle().Bold(true).Foreground(c("#0b6e99", "#74c0fc")).Background(c("#c5e4f5", "#2c4560")),
 		DiffNoNewline:    lipgloss.NewStyle().Italic(true).Foreground(muted),
 		Syntax: Syntax{
 			Keyword:  lipgloss.NewStyle().Foreground(c("#a626a4", "#da77f2")),

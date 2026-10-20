@@ -61,7 +61,7 @@ func newStyleSet(th theme.Theme) styleSet {
 		}
 	}
 	s.hunk[0] = th.DiffHunk
-	s.hunk[1] = th.DiffHunk.Bold(true).Underline(true)
+	s.hunk[1] = th.DiffHunkCursor
 	return s
 }
 
@@ -100,7 +100,7 @@ func (m *Model) renderRow(i int) string {
 	for _, sp := range visible {
 		b.WriteString(v.code[sp.Class].Render(sp.Text))
 	}
-	if pad := codeW - used; pad > 0 && (kind != kindContext || cur == 1) {
+	if pad := codeW - used; pad > 0 {
 		b.WriteString(v.fill.Render(spaces(pad)))
 	}
 	return b.String()
@@ -136,6 +136,7 @@ func (m *Model) renderHunk(header string, cur int) string {
 	if cur == 1 {
 		mark = ">"
 	}
+	header, _ = displayText(header) // the section text is copied from file content
 	s := ansi.Truncate(mark+header, m.w, "")
 	s += spaces(m.w - ansi.StringWidth(s))
 	return m.styles.hunk[cur].Render(s)

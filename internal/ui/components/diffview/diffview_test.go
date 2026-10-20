@@ -193,9 +193,9 @@ func TestSetFileSameFileKeepsPosition(t *testing.T) {
 	if m.cursor != 7 {
 		t.Errorf("cursor reset to %d", m.cursor)
 	}
-	m.SetFile(fixture(t, "server.go"))
+	m.SetFile(fixture(t, "pkg/new.go"))
 	if m.cursor != 0 {
-		t.Errorf("new file should reset cursor, got %d", m.cursor)
+		t.Errorf("different path should reset cursor, got %d", m.cursor)
 	}
 }
 
