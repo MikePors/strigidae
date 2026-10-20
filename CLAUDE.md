@@ -28,7 +28,7 @@ If something here is wrong or missing, say so in your PR rather than silently wo
 | GitHub auth + API | `github.com/cli/go-gh/v2` (reuses the `gh` CLI's login; GraphQL + REST) |
 | Test diffs | `github.com/google/go-cmp/cmp` |
 
-The v1 Charm paths (`github.com/charmbracelet/{bubbletea,bubbles,lipgloss,glamour}`) are banned by the linter; `github.com/charmbracelet/x/...` helpers such as `x/ansi` are fine. **Any other dependency** needs a one-line justification in the PR description.
+The v1 Charm paths (`github.com/charmbracelet/{bubbletea,bubbles,lipgloss,glamour}`) are banned by the linter; `github.com/charmbracelet/x/...` helpers such as `x/ansi` are fine. Prefer the standard library and the libraries above; **any other dependency** needs a one-line justification in the PR description.
 
 ## Layout
 
@@ -67,14 +67,15 @@ cmd/strig ──► ui/views/* ──► ui/components ──► ui ──► ui
 ## Process-wide rules
 
 - **Never write to stdout or stderr while the TUI is running**; it corrupts the screen. Log with `log/slog` to the file under `$XDG_STATE_HOME/strig/` (fallback `~/.local/state/strig/`; `strig --log-path` prints it). Never log tokens, auth headers, or full API response bodies.
-- **No global mutable state** apart from build-time values such as `version.Version` and two startup redirections in `cmd/strig`: the standard `log`/`slog` default loggers go to the log file, and `github.com/cli/browser`'s `Stdout`/`Stderr` go to `io.Discard` (so `xdg-open` can't write to the screen).
+- **No global mutable state** apart from build-time values such as `version.Version` and two startup redirections: `internal/logging` points the standard `log`/`slog` default loggers at the log file (so a dependency that logs can't corrupt the screen), and `cmd/strig` sets `github.com/cli/browser`'s `Stdout`/`Stderr` to `io.Discard` (so `xdg-open` can't either).
+- **Never hardcode `github.com` as the host.** Take it from the git remote, `-R`, or the auth/config, so GitHub Enterprise can work later.
 - **Untrusted text.** Everything from GitHub or git (titles, names, labels, paths, branches, markdown, diff content, error messages) is attacker-controlled and can carry terminal escapes. It goes through `internal/ui/termtext` before reaching the screen; details in `internal/ui/CLAUDE.md`.
 
 ## Testing
 
-- `go test ./...` must never touch the network or the real `gh` config. Use `internal/github/fake` or fixtures in a `testdata/` directory next to the test.
+- `go test ./...` must never touch the network or the real `gh` config. Use `internal/github/fake` or fixtures in a `testdata/` directory next to the test. Scrub tokens and personal data from anything recorded.
 - **Table-driven tests** with the standard `testing` package; compare plain data with `cmp.Diff`. Models have unexported fields (which make `cmp.Diff` panic): test them through behaviour or exported accessors.
-- What must be tested: parsing and mapping logic, keymap/sequence handling, state transitions in `Update`, and each view's main states (loading, empty, error, populated).
+- What must be tested: parsing and mapping logic, keymap/sequence handling, state transitions in `Update`, and each view's main states (see `internal/ui/CLAUDE.md`).
 - No `time.Sleep` in tests. Inject clocks and timers.
 
 ## Code style
@@ -88,9 +89,9 @@ cmd/strig ──► ui/views/* ──► ui/components ──► ui ──► ui
 ## Workflow
 
 1. **Branch** off an up-to-date `main`: `<type>/<issue#>-<short-slug>`, e.g. `feat/6-pr-list`. Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`.
-2. **Commit** in small, coherent steps with [Conventional Commits](https://www.conventionalcommits.org/) messages and PR titles: `feat(diff): add hunk navigation`.
+2. **Commit** in small, coherent steps with [Conventional Commits](https://www.conventionalcommits.org/) messages and PR titles: `feat(diff): add hunk navigation` (the scope is optional).
 3. **Run `make check`** (fmt-check, lint, race tests, tidy-check, govulncheck, actionlint, build). Install `shellcheck` locally for full parity with CI.
-4. **Open a PR** against `main` using the template: `Closes #N`; what changed and why; how to try it (exact `strig` invocation and keys) and test notes; a screenshot for visible UI changes; new keybindings and dependencies; follow-ups left out of scope.
+4. **Open a PR** against `main` using the template: `Closes #N`; what changed and why; how to try it (exact `strig` invocation and keys) and test notes; a screenshot or recording for visible UI changes; new keybindings and dependencies; follow-ups left out of scope.
 5. CI must be green. Address review comments with new commits; don't rewrite history on a PR under review.
 
 **Definition of done:** the issue's acceptance criteria are met; tests cover the new logic and main view states; `make check` passes; new keybindings appear in the help overlay; README/docs reflect user-facing changes; the PR description is complete.
