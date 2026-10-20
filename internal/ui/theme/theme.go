@@ -33,6 +33,24 @@ type Theme struct {
 	Normal   lipgloss.Style // plain text
 	Muted    lipgloss.Style // de-emphasised text
 	Selected lipgloss.Style // the highlighted row in a list
+
+	// --- Diff pane (diffview) ---
+	DiffContext      lipgloss.Style // code on unchanged lines
+	DiffAdd          lipgloss.Style // code on added lines (carries the row background)
+	DiffDelete       lipgloss.Style // code on deleted lines (carries the row background)
+	DiffCursor       lipgloss.Style // code and gutter on the cursor row
+	DiffGutter       lipgloss.Style // line numbers on unchanged lines
+	DiffGutterAdd    lipgloss.Style // line numbers on added lines
+	DiffGutterDelete lipgloss.Style // line numbers on deleted lines
+	DiffHunk         lipgloss.Style // "@@ ... @@" header rows
+	DiffNoNewline    lipgloss.Style // "\ No newline at end of file" rows
+	Syntax           Syntax         // foreground-only token styles
+	// --- end diff pane ---
+}
+
+// Syntax holds the foreground-only styles for highlighted code tokens.
+type Syntax struct {
+	Keyword, String, Comment, Number, Function, Type, Operator lipgloss.Style
 }
 
 // Default returns the default theme for a dark terminal background.
@@ -69,5 +87,26 @@ func New(isDark bool) Theme {
 		Normal:   lipgloss.NewStyle(),
 		Muted:    lipgloss.NewStyle().Foreground(muted),
 		Selected: lipgloss.NewStyle().Bold(true).Foreground(c("#5f3dc4", "#d0bfff")),
+
+		// --- Diff pane ---
+		DiffContext:      lipgloss.NewStyle(),
+		DiffAdd:          lipgloss.NewStyle().Background(c("#e6ffec", "#12261e")),
+		DiffDelete:       lipgloss.NewStyle().Background(c("#ffebe9", "#2d1517")),
+		DiffCursor:       lipgloss.NewStyle().Background(c("#dde1f5", "#33364d")),
+		DiffGutter:       lipgloss.NewStyle().Foreground(muted),
+		DiffGutterAdd:    lipgloss.NewStyle().Foreground(c("#1f7a3d", "#8ce99a")).Background(c("#ccffd8", "#17382a")),
+		DiffGutterDelete: lipgloss.NewStyle().Foreground(c("#c92a2a", "#ff8787")).Background(c("#ffd7d5", "#42191d")),
+		DiffHunk:         lipgloss.NewStyle().Foreground(c("#0b6e99", "#74c0fc")).Background(c("#ddf4ff", "#1b2a3a")),
+		DiffNoNewline:    lipgloss.NewStyle().Italic(true).Foreground(muted),
+		Syntax: Syntax{
+			Keyword:  lipgloss.NewStyle().Foreground(c("#a626a4", "#da77f2")),
+			String:   lipgloss.NewStyle().Foreground(c("#2f7d32", "#a9e34b")),
+			Comment:  lipgloss.NewStyle().Italic(true).Foreground(muted),
+			Number:   lipgloss.NewStyle().Foreground(c("#b8590a", "#ffa94d")),
+			Function: lipgloss.NewStyle().Foreground(c("#1c62b9", "#74c0fc")),
+			Type:     lipgloss.NewStyle().Foreground(c("#0a7f8f", "#66d9e8")),
+			Operator: lipgloss.NewStyle().Foreground(c("#8a5a00", "#ffd43b")),
+		},
+		// --- end diff pane ---
 	}
 }
