@@ -63,6 +63,10 @@ func run(args []string, stdout, stderr io.Writer, d deps) int {
 		}
 		return 2
 	}
+	if fs.NArg() > 0 {
+		_, _ = fmt.Fprintf(stderr, "strig: unexpected argument %q (did you mean -R %s?)\n", fs.Arg(0), fs.Arg(0)) // best effort
+		return 2
+	}
 
 	switch {
 	case *showVersion:

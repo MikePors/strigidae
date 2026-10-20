@@ -71,6 +71,20 @@ func TestRunUnknownFlag(t *testing.T) {
 	}
 }
 
+func TestRunPositionalArgument(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	h := newHarness(map[string]string{"origin": "git@github.com:o/r.git"}, true, nil)
+	if code := run([]string{"cli/cli"}, &stdout, &stderr, h.deps); code != 2 {
+		t.Fatalf("exit code = %d, want 2", code)
+	}
+	if want := `strig: unexpected argument "cli/cli" (did you mean -R cli/cli?)`; !strings.Contains(stderr.String(), want) {
+		t.Errorf("stderr = %q, want %q", stderr.String(), want)
+	}
+	if !h.started.IsZero() {
+		t.Error("TUI started despite the stray argument")
+	}
+}
+
 func TestRunHelp(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	h := newHarness(nil, false, nil)
