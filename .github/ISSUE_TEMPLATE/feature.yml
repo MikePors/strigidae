@@ -1,0 +1,23 @@
+name: Feature
+description: Propose new functionality or a change in behaviour
+labels: ["type:feature"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What do you want to do?
+      description: The workflow or problem, from a user's point of view.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What's in and what's out. Mention any keybindings, config, or layout you have in mind.
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: How we'll know it's done.
+      value: |
+        - [ ]
