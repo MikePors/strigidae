@@ -2,8 +2,7 @@
 // navigation and status messages, the status bar, and the help overlay.
 //
 // Screens implement View and are composed by the root Model. Views never
-// touch the stack; they return commands built by Push, Pop, Quit, Info, Error
-// and Loading, and the root acts on the resulting messages.
+// touch the stack; they return commands built by Push, Pop, Quit, Info and Error, and the root acts on the resulting messages.
 package ui
 
 import (
@@ -23,7 +22,17 @@ import (
 //     minus the status bar), on push and on every resize. Views below the top
 //     of the stack get it too.
 //   - ThemeMsg when the theme changes.
-//   - every other message (command results, ticks); only the top view sees them.
+//   - every other message (command results, spinner and blink ticks, ...) is
+//     broadcast to EVERY view in the stack, so a result is never lost because
+//     another view was pushed meanwhile. Views must therefore ignore messages
+//     that are not theirs: result messages carry an identity (repo, PR number,
+//     request sequence number; see CLAUDE.md), and bubbles components already
+//     filter their own ticks by ID.
+//
+// Embedded bubbles components (viewport, list, ...) are driven through their
+// methods in response to keys.Msg (vp.ScrollDown, vp.HalfPageDown, vp.GotoTop,
+// ...). Do not pass a keys.Msg into a component's Update: those match only
+// tea.KeyPressMsg and would silently do nothing.
 //
 // The root handles Help (?) and the command line (:) itself and never
 // forwards them; Cancel (esc) is always forwarded. esc never navigates: it
@@ -57,4 +66,17 @@ type View interface {
 // new ones to its table. The root's command line is the reference pattern.
 type KeyCapturer interface {
 	CapturesKeys() bool
+}
+
+// Loader is optionally implemented by views that load data. The root shows
+// the status bar spinner while the active (top) view reports Loading, so the
+// view owns its loading state and popping it ends its spinner.
+type Loader interface {
+	Loading() bool
+}
+
+// Resumer is optionally implemented by views that want to know they are
+// visible again after the view above them was popped (for example to refresh).
+type Resumer interface {
+	Resumed() tea.Cmd
 }

@@ -63,12 +63,18 @@ func TestInstall(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	Install(slog.New(slog.NewTextHandler(&buf, nil)), &buf)
-	log.Print("from std log")
+	Install(slog.New(slog.NewTextHandler(&buf, nil)))
+	log.Printf("from std log")
 	slog.Info("from slog")
-	for _, want := range []string{"from std log", "from slog"} {
-		if !strings.Contains(buf.String(), want) {
-			t.Errorf("log output missing %q: %q", want, buf.String())
+	out := buf.String()
+	for _, want := range []string{`msg="from std log"`, `msg="from slog"`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("log output missing %s: %q", want, out)
+		}
+	}
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		if !strings.HasPrefix(line, "time=") || !strings.Contains(line, "level=") {
+			t.Errorf("line lacks timestamp or level: %q", line)
 		}
 	}
 }

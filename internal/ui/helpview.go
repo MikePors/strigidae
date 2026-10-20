@@ -16,7 +16,7 @@ const helpKeyWidth = 9
 func renderHelp(th theme.Theme, title string, global, view [][]key.Binding, width int) string {
 	g := helpColumn(th, "Global", global)
 	v := helpColumn(th, title, view)
-	head := th.HelpTitle.Render("Help") + th.Muted.Render("  ? / q / esc to close")
+	head := th.HelpTitle.Render("Help") + th.Muted.Render("  ? / esc to close")
 
 	var body string
 	switch {

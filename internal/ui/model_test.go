@@ -2,10 +2,12 @@ package ui
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -21,6 +23,9 @@ type fakeView struct {
 	title   string
 	next    key.Binding // view-specific sequence "] f"
 	capture bool
+	loading bool
+	resumed int
+	results int
 	got     []tea.Msg
 }
 
@@ -32,10 +37,20 @@ func newFake(title string) *fakeView {
 }
 
 func (f *fakeView) Init() tea.Cmd { return nil }
+func (f *fakeView) Loading() bool { return f.loading }
+func (f *fakeView) Resumed() tea.Cmd {
+	f.resumed++
+	return nil
+}
+
 func (f *fakeView) Update(msg tea.Msg) (View, tea.Cmd) {
 	f.got = append(f.got, msg)
 	if k, ok := msg.(tea.KeyPressMsg); ok && k.String() == "esc" {
 		f.capture = false
+	}
+	if _, ok := msg.(resultMsg); ok {
+		f.results++
+		f.loading = false
 	}
 	return f, nil
 }
@@ -433,24 +448,92 @@ func TestStatusMessages(t *testing.T) {
 	}
 }
 
-func TestLoading(t *testing.T) {
-	m := newModel(newFake("v"))
+// resultMsg stands in for a command result addressed to a view.
+type resultMsg struct{}
 
-	_, cmd := m.Update(LoadingMsg{Key: "a", Loading: true})
-	if cmd == nil || m.bar().spinner == "" {
-		t.Error("loading should start the spinner")
+func TestSpinnerFollowsTopView(t *testing.T) {
+	root, child := newFake("root"), newFake("child")
+	root.loading = true
+	m := newModel(root)
+
+	if !m.spinning || m.bar().spinner == "" {
+		t.Fatal("a loading top view should start the spinner")
 	}
-	_, cmd = m.Update(LoadingMsg{Key: "b", Loading: true})
-	if cmd != nil {
-		t.Error("second load must not start a second tick chain")
-	}
-	m.Update(LoadingMsg{Key: "a", Loading: false})
-	if m.bar().spinner == "" {
-		t.Error("spinner should stay while another load is active")
-	}
-	m.Update(LoadingMsg{Key: "b", Loading: false})
+	run(m, Push(child))
 	if m.bar().spinner != "" {
-		t.Error("spinner should stop when all loads finish")
+		t.Error("spinner must follow the top view, which is not loading")
+	}
+	run(m, Pop())
+	if m.bar().spinner == "" {
+		t.Error("spinner should return when the loading view is revealed again")
+	}
+	root.loading = false
+	m.Update(resultMsg{})
+	if m.bar().spinner != "" {
+		t.Error("spinner should stop when the view stops loading")
+	}
+}
+
+func TestPoppedViewEndsItsSpinner(t *testing.T) {
+	root, child := newFake("root"), newFake("child")
+	m := newModel(root)
+	run(m, Push(child))
+	child.loading = true
+	m.Update(struct{}{}) // any message makes the root re-check
+	if m.bar().spinner == "" {
+		t.Fatal("child is loading; spinner expected")
+	}
+	run(m, Pop())
+	if m.bar().spinner != "" {
+		t.Error("popping the loading view must end its spinner")
+	}
+}
+
+func TestResultReachesCoveredView(t *testing.T) {
+	root, child := newFake("root"), newFake("child")
+	root.loading = true
+	m := newModel(root)
+	run(m, Push(child)) // pushed while root's load is in flight
+
+	m.Update(resultMsg{}) // the load finishes while child is on top
+	if root.results != 1 || child.results != 1 {
+		t.Fatalf("result delivery: root %d, child %d; want both 1 (broadcast)", root.results, child.results)
+	}
+	run(m, Pop())
+	if root.loading || m.bar().spinner != "" {
+		t.Error("after :q the lower view should show its result with no stuck spinner")
+	}
+}
+
+func TestResumed(t *testing.T) {
+	root, child := newFake("root"), newFake("child")
+	m := newModel(root)
+	run(m, Push(child))
+	if root.resumed != 0 {
+		t.Fatal("push must not resume")
+	}
+	run(m, Pop())
+	if root.resumed != 1 || child.resumed != 0 {
+		t.Errorf("resumed: root %d, child %d; want 1, 0", root.resumed, child.resumed)
+	}
+}
+
+func TestSpinnerTicks(t *testing.T) {
+	v := newFake("v")
+	m := newModel(v)
+
+	own := spinner.New().Tick() // a tick from a spinner the view owns
+	before := len(v.got)
+	m.Update(own)
+	if len(v.got) != before+1 {
+		t.Error("a view's own spinner tick must reach the view")
+	}
+
+	rootTick := m.spin.Tick()
+	before = len(v.got)
+	m.Update(rootTick)
+	if len(v.got) != before {
+		t.Error("the root spinner's tick must be consumed, not forwarded")
 	}
 }
 
@@ -501,6 +584,13 @@ func TestStatusBarGolden(t *testing.T) {
 		{"error", statusBar{crumbs: "strig", text: "load failed: rate limited", kind: statusError}, 60},
 		{"info_narrow", statusBar{crumbs: "strig", text: "a rather long informational message", kind: statusInfo, pending: "]"}, 30},
 		{"tiny", statusBar{crumbs: "a very long breadcrumb trail"}, 10},
+		{"long_crumbs_error_pending", statusBar{
+			crumbs:  "owner/repo \u203a #123 Fix the thing \u203a internal/ui/model.go",
+			text:    "post failed: 422",
+			kind:    statusError,
+			pending: "g",
+			spinner: "\u28fe",
+		}, 40},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -527,4 +617,23 @@ func TestCommandLineGolden(t *testing.T) {
 	press(m, "q")
 	press(m, "a")
 	golden.Assert(t, "command_line", m.View().Content, false)
+}
+
+func TestCommandLineStaysOneRow(t *testing.T) {
+	m := newModel(newFake("v"))
+	m.Update(tea.WindowSizeMsg{Width: 20, Height: 6})
+	press(m, ":")
+	for range 60 {
+		press(m, "x")
+	}
+	got := m.View().Content
+	if n := lipgloss.Height(got); n != 6 {
+		t.Errorf("frame height = %d, want 6", n)
+	}
+	for i, line := range strings.Split(got, "\n") {
+		if w := lipgloss.Width(line); w > 20 {
+			t.Errorf("line %d is %d columns wide, want <= 20", i, w)
+		}
+	}
+	golden.Assert(t, "command_line_overflow", got, false)
 }

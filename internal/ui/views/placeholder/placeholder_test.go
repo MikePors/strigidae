@@ -66,14 +66,27 @@ func TestEnterPushesNextScreen(t *testing.T) {
 	}
 }
 
-func TestRefreshShowsLoading(t *testing.T) {
+func TestRefresh(t *testing.T) {
 	v := sized()
-	if cmd := send(v, "R"); cmd == nil {
-		t.Fatal("R should start a refresh")
+	cmd := send(v, "R")
+	if cmd == nil || !v.Loading() {
+		t.Fatal("R should start a refresh and report loading")
 	}
-	_, cmd := v.Update(refreshedMsg{})
-	if cmd == nil {
-		t.Error("refreshedMsg should clear loading and show info")
+	own, ok := cmd().(refreshedMsg)
+	if !ok {
+		t.Fatalf("refresh result is %T", cmd())
+	}
+
+	// Another screen's result, or a stale one, is ignored.
+	v.Update(refreshedMsg{depth: own.depth + 1, seq: own.seq})
+	v.Update(refreshedMsg{depth: own.depth, seq: own.seq - 1})
+	if !v.Loading() {
+		t.Error("results for other screens or older requests must be ignored")
+	}
+
+	_, cmd = v.Update(own)
+	if v.Loading() || cmd == nil {
+		t.Error("own result should stop loading and show an info message")
 	}
 }
 

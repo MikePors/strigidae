@@ -4,8 +4,6 @@ package logging
 
 import (
 	"fmt"
-	"io"
-	"log"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -37,11 +35,12 @@ func Open(path string) (*slog.Logger, *os.File, error) {
 	return slog.New(slog.NewTextHandler(f, nil)), f, nil
 }
 
-// Install routes the standard library's default loggers to the log file, so a
+// Install routes the standard library's default loggers to l, so a
 // dependency calling log.Printf or slog.Info can never write to stderr and
-// corrupt the screen. It is the one place the program mutates global logger
-// state. Pass io.Discard to silence them.
-func Install(l *slog.Logger, w io.Writer) {
+// corrupt the screen. slog.SetDefault also sends the log package through l's
+// handler, so those lines get a timestamp and level. This is the one place the
+// program mutates global logger state; pass a logger with an io.Discard
+// handler to silence them.
+func Install(l *slog.Logger) {
 	slog.SetDefault(l)
-	log.SetOutput(w)
 }

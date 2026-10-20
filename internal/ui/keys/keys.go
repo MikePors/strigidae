@@ -15,6 +15,10 @@ import "charm.land/bubbles/v2/key"
 // sequence, matches a binding that is active in that view. Seq is the key name
 // ("j", "ctrl+d") or the space-joined sequence ("g g"). Msg implements
 // fmt.Stringer so it works with key.Matches.
+//
+// Msg is not a tea.KeyPressMsg: embedded bubbles components (viewport, ...)
+// ignore it. Views drive them through their methods (ScrollDown, GotoTop, ...)
+// in response to a Msg and never forward it to the component's Update.
 type Msg struct{ Seq string }
 
 // String returns the matched key or sequence.

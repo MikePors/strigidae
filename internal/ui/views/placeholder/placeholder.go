@@ -16,28 +16,36 @@ import (
 	"github.com/MikePors/strigidae/internal/ui/theme"
 )
 
-const (
-	lineCount  = 100
-	loadingKey = "placeholder"
-)
+const lineCount = 100
 
-type refreshedMsg struct{}
+// refreshedMsg is the result of a refresh. Like every real result message it
+// carries identity (the screen's depth and a request number) so a screen
+// ignores results meant for another screen or an older request.
+type refreshedMsg struct{ depth, seq int }
 
 // View is the placeholder screen.
 type View struct {
 	th            theme.Theme
 	km            keys.Global
 	depth         int
+	seq           int  // latest refresh request
+	loading       bool // a refresh is in flight
 	cursor, top   int
 	width, height int
 }
 
-var _ ui.View = (*View)(nil)
+var (
+	_ ui.View   = (*View)(nil)
+	_ ui.Loader = (*View)(nil)
+)
 
 // New returns a placeholder at nesting depth (1 for the root screen).
 func New(th theme.Theme, depth int) *View {
 	return &View{th: th, km: keys.DefaultGlobal(), depth: depth}
 }
+
+// Loading implements ui.Loader.
+func (v *View) Loading() bool { return v.loading }
 
 // Init implements ui.View.
 func (v *View) Init() tea.Cmd { return nil }
@@ -65,7 +73,11 @@ func (v *View) Update(msg tea.Msg) (ui.View, tea.Cmd) {
 	case ui.ThemeMsg:
 		v.th = msg.Theme
 	case refreshedMsg:
-		return v, tea.Batch(ui.Loading(loadingKey, false), ui.Info("refreshed (nothing to refresh yet)"))
+		if msg.depth != v.depth || msg.seq != v.seq {
+			return v, nil
+		}
+		v.loading = false
+		return v, ui.Info("refreshed (nothing to refresh yet)")
 	case keys.Msg:
 		return v, v.handleKey(msg)
 	}
@@ -94,8 +106,10 @@ func (v *View) handleKey(msg keys.Msg) tea.Cmd {
 	case key.Matches(msg, v.km.Select):
 		return ui.Push(New(v.th, v.depth+1))
 	case key.Matches(msg, v.km.Refresh):
-		return tea.Batch(ui.Loading(loadingKey, true),
-			tea.Tick(time.Second, func(time.Time) tea.Msg { return refreshedMsg{} }))
+		v.seq++
+		v.loading = true
+		depth, seq := v.depth, v.seq
+		return tea.Tick(time.Second, func(time.Time) tea.Msg { return refreshedMsg{depth: depth, seq: seq} })
 	case key.Matches(msg, v.km.Open):
 		return ui.Info("nothing to open in the browser yet")
 	case key.Matches(msg, v.km.Cancel):

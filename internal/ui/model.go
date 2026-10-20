@@ -61,8 +61,8 @@ type Model struct {
 		kind statusKind
 		id   int
 	}
-	loading map[string]struct{}
-	spin    spinner.Model
+	spinning bool // the root spinner's tick chain is running
+	spin     spinner.Model
 }
 
 // New returns a root model whose stack holds just root.
@@ -88,7 +88,6 @@ func New(root View, th theme.Theme, opts Options) *Model {
 		seqWait: opts.SeqTimeout,
 		msgTTL:  opts.MessageTTL,
 		cmdline: newCommandLine(),
-		loading: map[string]struct{}{},
 		spin:    spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(th.Spinner)),
 	}
 }
@@ -105,52 +104,56 @@ func (m *Model) contentSize() (w, h int) { return m.width, max(0, m.height-1) }
 
 // Update implements tea.Model.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	cmd := m.update(msg)
+	return m, tea.Batch(cmd, m.syncSpinner())
+}
+
+func (m *Model) update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		return m, m.broadcast(m.sizeMsg())
+		m.cmdline.input.SetWidth(max(1, msg.Width-2)) // room for the prompt and cursor
+		return m.broadcast(m.sizeMsg())
 	case tea.BackgroundColorMsg:
 		m.th = theme.New(msg.IsDark())
 		m.spin.Style = m.th.Spinner
-		return m, m.broadcast(ThemeMsg{Theme: m.th})
+		return m.broadcast(ThemeMsg{Theme: m.th})
 	case tea.KeyPressMsg:
-		return m, m.handleKey(msg)
+		return m.handleKey(msg)
 	case PushMsg:
-		return m, m.push(msg.View)
+		return m.push(msg.View)
 	case PopMsg:
-		return m, m.pop()
+		return m.pop()
 	case QuitMsg:
-		return m, tea.Quit
+		return tea.Quit
 	case InfoMsg:
-		return m, m.setStatus(msg.Text, statusInfo)
+		return m.setStatus(msg.Text, statusInfo)
 	case ErrorMsg:
 		m.log.Warn("error shown to user", "err", msg.Err)
 		text := "error"
 		if msg.Err != nil {
 			text = msg.Err.Error()
 		}
-		return m, m.setStatus(text, statusError)
-	case LoadingMsg:
-		return m, m.setLoading(msg)
+		return m.setStatus(text, statusError)
 	case clearStatusMsg:
 		if msg.id == m.status.id {
 			m.status.text, m.status.kind = "", statusNone
 		}
-		return m, nil
+		return nil
 	case seqTimeoutMsg:
-		return m, m.expireSequence(msg.gen)
+		return m.expireSequence(msg.gen)
 	case spinner.TickMsg:
-		if len(m.loading) == 0 {
-			return m, nil // let the tick chain die while idle
+		if msg.ID != m.spin.ID() {
+			return m.broadcastOther(msg) // a view's own spinner
+		}
+		if !m.spinning {
+			return nil // let the tick chain die while idle
 		}
 		var cmd tea.Cmd
 		m.spin, cmd = m.spin.Update(msg)
-		return m, cmd
+		return cmd
 	default:
-		if m.cmdline.active {
-			return m, tea.Batch(m.cmdline.update(msg), m.forward(msg))
-		}
-		return m, m.forward(msg)
+		return m.broadcastOther(msg)
 	}
 }
 
@@ -166,6 +169,15 @@ func (m *Model) broadcast(msg tea.Msg) tea.Cmd {
 		m.stack[i], cmds[i] = v.Update(msg)
 	}
 	return tea.Batch(cmds...)
+}
+
+// broadcastOther sends a message the root does not consume to every view (and
+// to the command line, for cursor blink).
+func (m *Model) broadcastOther(msg tea.Msg) tea.Cmd {
+	if m.cmdline.active {
+		return tea.Batch(m.cmdline.update(msg), m.broadcast(msg))
+	}
+	return m.broadcast(msg)
 }
 
 func (m *Model) forward(msg tea.Msg) tea.Cmd {
@@ -191,6 +203,9 @@ func (m *Model) pop() tea.Cmd {
 	}
 	m.stack = m.stack[:len(m.stack)-1]
 	m.log.Debug("pop view", "depth", len(m.stack))
+	if r, ok := m.top().(Resumer); ok {
+		return r.Resumed()
+	}
 	return nil
 }
 
@@ -208,15 +223,18 @@ func (m *Model) setStatus(text string, kind statusKind) tea.Cmd {
 	return m.tick(m.msgTTL, func(time.Time) tea.Msg { return clearStatusMsg{id: id} })
 }
 
-func (m *Model) setLoading(msg LoadingMsg) tea.Cmd {
-	was := len(m.loading) > 0
-	if msg.Loading {
-		m.loading[msg.Key] = struct{}{}
-	} else {
-		delete(m.loading, msg.Key)
-	}
-	if !was && len(m.loading) > 0 {
+// syncSpinner starts the root spinner's tick chain when the top view is
+// loading and lets it die when it is not. It runs after every Update, so
+// push, pop and view state changes are all covered.
+func (m *Model) syncSpinner() tea.Cmd {
+	l, ok := m.top().(Loader)
+	want := ok && l.Loading()
+	switch {
+	case want && !m.spinning:
+		m.spinning = true
 		return m.spin.Tick
+	case !want:
+		m.spinning = false
 	}
 	return nil
 }
@@ -328,7 +346,7 @@ func (m *Model) bar() statusBar {
 	if b.kind == statusNone {
 		b.text = shortHelp(m.top().ShortHelp())
 	}
-	if len(m.loading) > 0 {
+	if m.spinning {
 		b.spinner = m.spin.View()
 	}
 	return b
@@ -347,7 +365,7 @@ func shortHelp(bs []key.Binding) string {
 // bottomRow is the status bar, or the command line while it is open.
 func (m *Model) bottomRow() string {
 	if m.cmdline.active {
-		return m.th.StatusCommand.Width(m.width).MaxWidth(m.width).Render(m.cmdline.input.View())
+		return m.th.StatusCommand.Width(m.width).MaxWidth(m.width).MaxHeight(1).Render(m.cmdline.input.View())
 	}
 	return m.bar().render(m.th, m.width)
 }
