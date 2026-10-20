@@ -248,6 +248,24 @@ func TestNavigation(t *testing.T) {
 	}
 }
 
+func TestClean(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"plain title", "plain title"},
+		{"tab\there\nnewline", "tab here newline"},
+		{"esc\x1b[31mred", "esc [31mred"},
+		{"c1\u009bcsi", "c1 csi"},
+		{"del\x7fchar", "del char"},
+		{"rtl‮evil", "rtl evil"},
+		{"iso⁦late⁩d", "iso late d"},
+		{"unicode ✓ ok", "unicode ✓ ok"},
+	}
+	for _, tt := range tests {
+		if got := clean(tt.in); got != tt.want {
+			t.Errorf("clean(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
 func TestRelativeAge(t *testing.T) {
 	tests := []struct {
 		ago  time.Duration
