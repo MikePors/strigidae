@@ -92,7 +92,9 @@ Reserved globally:
 | `?` | help overlay |
 | `/`, `n` / `N` | filter or search, next / previous match |
 | `o` | open the current item in the browser |
-| `r` | refresh |
+| `R` | refresh |
+| `c` | new comment (top-level, or on the cursor line in a diff) |
+| `r` | reply to the focused comment thread |
 | `:` | reserved for a future command line |
 
 Reserved prefixes:
