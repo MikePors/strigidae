@@ -4,3 +4,6 @@
 /dist/
 .idea/
 .vscode/
+
+# Claude Code agent worktrees
+/.claude/

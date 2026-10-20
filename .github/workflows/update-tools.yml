@@ -1,0 +1,74 @@
+name: Update dev tools
+
+# Dependabot can't update tools pinned with go.mod's `tool` directive,
+# so this bumps them monthly and opens a PR.
+on:
+  schedule:
+    - cron: "23 7 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: "**/go.sum"
+
+      - name: Update tools
+        run: make update-tools
+
+      - name: Check for changes
+        id: diff
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # PRs opened with GITHUB_TOKEN don't trigger CI, so run the checks here
+      # and report the result in the PR body.
+      - name: Run checks
+        id: check
+        if: steps.diff.outputs.changed == 'true'
+        continue-on-error: true
+        run: make check
+
+      - name: Open pull request
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHECK_OUTCOME: ${{ steps.check.outcome }}
+        run: |
+          branch="chore/update-tools-$(date -u +%Y-%m)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git commit -am "chore(tools): update dev tools"
+          git push --force -u origin "$branch"
+
+          {
+            echo "Monthly update of the dev tools pinned under \`tools/\`."
+            echo
+            echo "\`make check\` result in the workflow run: **${CHECK_OUTCOME}**"
+            echo
+            echo "CI does not run automatically on PRs opened by this workflow."
+            echo "Close and reopen this PR to trigger it."
+            echo
+            echo '```'
+            git diff --stat HEAD~1
+            echo '```'
+          } > body.md
+
+          if ! gh pr view "$branch" > /dev/null 2>&1; then
+            gh pr create --base main --head "$branch" \
+              --title "chore(tools): update dev tools" --body-file body.md
+          fi

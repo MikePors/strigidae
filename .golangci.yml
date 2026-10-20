@@ -3,6 +3,7 @@ version: "2"
 linters:
   enable:
     - bodyclose
+    - depguard
     - errorlint
     - gocritic
     - misspell
@@ -11,11 +12,50 @@ linters:
     - unconvert
     - unparam
   settings:
-    errcheck:
-      exclude-functions:
-        - fmt.Fprint
-        - fmt.Fprintf
-        - fmt.Fprintln
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    depguard:
+      # Enforces the package dependency graph in CLAUDE.md ("Layout").
+      rules:
+        real-github-client:
+          files:
+            - "$all"
+            - "!**/cmd/strig/**"
+            - "!**/internal/github/api/**"
+          deny:
+            - pkg: github.com/MikePors/strigidae/internal/github/api
+              desc: only cmd/strig constructs the real GitHub client; everything else uses the github.Client interface
+        ui-shell-imports-no-views:
+          files:
+            - "**/internal/ui/*.go"
+            - "**/internal/ui/keys/**"
+            - "**/internal/ui/theme/**"
+            - "**/internal/ui/components/**"
+          deny:
+            - pkg: github.com/MikePors/strigidae/internal/ui/views
+              desc: the shell and shared UI packages never import views; a view opens another by building it and sending ui.PushMsg
+        core-imports-no-ui:
+          files:
+            - "**/internal/github/**"
+            - "**/internal/diff/**"
+            - "**/internal/config/**"
+            - "**/internal/editor/**"
+            - "**/internal/logging/**"
+            - "**/internal/version/**"
+          deny:
+            - pkg: github.com/MikePors/strigidae/internal/ui
+              desc: non-UI packages must not depend on UI packages
+        no-charm-v1:
+          deny:
+            - pkg: github.com/charmbracelet/bubbletea
+              desc: use charm.land/bubbletea/v2
+            - pkg: github.com/charmbracelet/bubbles
+              desc: use charm.land/bubbles/v2
+            - pkg: github.com/charmbracelet/lipgloss
+              desc: use charm.land/lipgloss/v2
+            - pkg: github.com/charmbracelet/glamour
+              desc: use charm.land/glamour/v2
 
 formatters:
   enable:
