@@ -68,6 +68,45 @@ func fakeGit(toplevel bool, remotes map[string]string) Runner {
 	}
 }
 
+func TestInferKnownHosts(t *testing.T) {
+	known := func(h string) bool { return h == "github.com" || h == "ghe.example.com" }
+	tests := []struct {
+		name      string
+		remotes   map[string]string
+		want      Remote
+		wantHosts []string // set when an UnknownHostError is expected
+	}{
+		{"known origin", map[string]string{"origin": "git@github.com:o/r.git"}, Remote{"github.com", github.Repo{Owner: "o", Name: "r"}}, nil},
+		{"gitlab upstream falls back to github origin",
+			map[string]string{"upstream": "git@gitlab.com:o/r.git", "origin": "git@github.com:me/r.git"},
+			Remote{"github.com", github.Repo{Owner: "me", Name: "r"}}, nil},
+		{"ssh alias only", map[string]string{"origin": "github-work:acme/app.git"}, Remote{}, []string{"github-work"}},
+		{"both unknown", map[string]string{"upstream": "git@gitlab.com:o/r.git", "origin": "github-work:acme/app.git"}, Remote{}, []string{"gitlab.com", "github-work"}},
+		{"enterprise host", map[string]string{"origin": "https://ghe.example.com/o/r"}, Remote{"ghe.example.com", github.Repo{Owner: "o", Name: "r"}}, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := Infer(context.Background(), fakeGit(true, tt.remotes), "/work", known)
+			if tt.wantHosts != nil {
+				var ue *UnknownHostError
+				if !errors.As(err, &ue) {
+					t.Fatalf("err = %v, want *UnknownHostError", err)
+				}
+				if diff := cmp.Diff(tt.wantHosts, ue.Hosts); diff != "" {
+					t.Errorf("hosts (-want +got):\n%s", diff)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("(-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestInfer(t *testing.T) {
 	up := "git@github.com:upstream-owner/repo.git"
 	origin := "https://github.com/fork-owner/repo.git"
@@ -87,7 +126,7 @@ func TestInfer(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Infer(context.Background(), fakeGit(tt.toplevel, tt.remotes), "/work")
+			got, err := Infer(context.Background(), fakeGit(tt.toplevel, tt.remotes), "/work", nil)
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("err = %v, want %v", err, tt.wantErr)
 			}

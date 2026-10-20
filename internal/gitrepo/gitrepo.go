@@ -49,20 +49,45 @@ func ExecRunner(ctx context.Context, dir string, args ...string) (string, error)
 }
 
 // Infer finds the GitHub repository for the checkout containing dir.
-func Infer(ctx context.Context, run Runner, dir string) (Remote, error) {
+//
+// A remote whose host knownHost rejects is skipped, so a mirror on another
+// forge falls through to the next remote. A nil knownHost accepts every host.
+func Infer(ctx context.Context, run Runner, dir string, knownHost func(host string) bool) (Remote, error) {
 	if _, err := run(ctx, dir, "rev-parse", "--show-toplevel"); err != nil {
 		return Remote{}, fmt.Errorf("%w: %w", ErrNotCheckout, err)
 	}
+	var unknown []string
 	for _, name := range remoteNames {
 		raw, err := run(ctx, dir, "remote", "get-url", name)
 		if err != nil {
 			continue // remote not configured
 		}
-		if r, err := ParseURL(raw); err == nil {
-			return r, nil
+		r, err := ParseURL(raw)
+		if err != nil {
+			continue
 		}
+		if knownHost != nil && !knownHost(r.Host) {
+			unknown = append(unknown, r.Host)
+			continue
+		}
+		return r, nil
+	}
+	if len(unknown) > 0 {
+		return Remote{}, &UnknownHostError{Hosts: unknown}
 	}
 	return Remote{}, ErrNoGitHubRemote
+}
+
+// UnknownHostError means the checkout has parseable remotes, but none on a
+// host the caller recognises (for example an SSH alias or another forge).
+type UnknownHostError struct {
+	// Hosts are the hosts of the rejected remotes, in preference order.
+	Hosts []string
+}
+
+// Error implements error.
+func (e *UnknownHostError) Error() string {
+	return fmt.Sprintf("remote host %q is not a known GitHub host", strings.Join(e.Hosts, `", "`))
 }
 
 // ParseURL parses a git remote URL into a host and repository. It accepts

@@ -2,6 +2,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"flag"
@@ -9,9 +10,12 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"slices"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	cliBrowser "github.com/cli/browser"
+	"github.com/cli/go-gh/v2/pkg/auth"
 
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/github/api"
@@ -29,6 +33,8 @@ import (
 type deps struct {
 	getwd     func() (string, error)
 	runner    gitrepo.Runner
+	// knownHost reports whether host is a GitHub host gh can talk to.
+	knownHost func(host string) bool
 	newClient func(host string) (github.Client, error)
 	start     func(client github.Client, repo github.Repo, stderr io.Writer) error
 }
@@ -37,6 +43,9 @@ func realDeps() deps {
 	return deps{
 		getwd:  os.Getwd,
 		runner: gitrepo.ExecRunner,
+		knownHost: func(host string) bool {
+			return slices.Contains(auth.KnownHosts(), host) || host == "github.com" || host == os.Getenv("GH_HOST")
+		},
 		newClient: func(host string) (github.Client, error) {
 			c, err := api.New(api.Options{Host: host})
 			if err != nil {
@@ -86,7 +95,11 @@ func run(args []string, stdout, stderr io.Writer, d deps) int {
 	}
 	client, err := d.newClient(target.Host)
 	if errors.Is(err, github.ErrNotAuthenticated) {
-		_, _ = fmt.Fprintln(stderr, "strig: not signed in to GitHub: run `gh auth login` and try again") // best effort, before the TUI starts
+		login := "gh auth login"
+		if target.Host != "" {
+			login += " --hostname " + target.Host
+		}
+		_, _ = fmt.Fprintf(stderr, "strig: not signed in to %s: run `%s` and try again\n", cmp.Or(target.Host, "GitHub"), login) // best effort, before the TUI starts
 		return 1
 	}
 	if err != nil {
@@ -114,10 +127,13 @@ func resolveTarget(repoFlag string, stderr io.Writer, d deps) (gitrepo.Remote, i
 	if err != nil {
 		return gitrepo.Remote{}, fail(stderr, err)
 	}
-	remote, err := gitrepo.Infer(context.Background(), d.runner, dir)
+	remote, err := gitrepo.Infer(context.Background(), d.runner, dir, d.knownHost)
+	var unknown *gitrepo.UnknownHostError
 	switch {
 	case err == nil:
 		return remote, 0
+	case errors.As(err, &unknown):
+		_, _ = fmt.Fprintf(stderr, "strig: remote host %q isn't a GitHub host gh is signed in to; pass -R owner/repo or run gh auth login --hostname <host>\n", strings.Join(unknown.Hosts, `", "`)) // best effort
 	case errors.Is(err, gitrepo.ErrNotCheckout):
 		_, _ = fmt.Fprintln(stderr, "strig: run strig inside a GitHub repository checkout, or pass -R owner/repo") // best effort
 	case errors.Is(err, gitrepo.ErrNoGitHubRemote):

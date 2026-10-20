@@ -40,6 +40,7 @@ func newHarness(remotes map[string]string, checkout bool, clientErr error) harne
 			}
 			return "", errors.New("no such remote")
 		},
+		knownHost: func(host string) bool { return host == "github.com" || host == "ghe.example.com" },
 		newClient: func(host string) (github.Client, error) {
 			*h.clientHost = host
 			if clientErr != nil {
@@ -149,6 +150,14 @@ func TestRunRepoSelection(t *testing.T) {
 			wantRepo: "acme/widgets", wantHost: "ghe.example.com", wantClient: true,
 		},
 		{
+			name: "gitlab upstream falls back to github origin", remotes: map[string]string{"origin": origin, "upstream": "git@gitlab.com:acme/widgets.git"}, checkout: true,
+			wantRepo: "fork/widgets", wantHost: "github.com", wantClient: true,
+		},
+		{
+			name: "ssh alias host is named in the error", remotes: map[string]string{"origin": "github-work:acme/app.git"}, checkout: true,
+			wantCode: 1, wantStderr: `remote host "github-work" isn't a GitHub host gh is signed in to; pass -R owner/repo or run gh auth login --hostname <host>`,
+		},
+		{
 			name: "-R overrides inference", args: []string{"-R", "o/r"}, remotes: map[string]string{"origin": origin}, checkout: true,
 			wantRepo: "o/r", wantHost: "", wantClient: true,
 		},
@@ -171,7 +180,7 @@ func TestRunRepoSelection(t *testing.T) {
 		{
 			name: "not authenticated", remotes: map[string]string{"origin": origin}, checkout: true,
 			clientErr: github.ErrNotAuthenticated,
-			wantCode:  1, wantHost: "github.com", wantClient: true, wantStderr: "gh auth login",
+			wantCode:  1, wantHost: "github.com", wantClient: true, wantStderr: "not signed in to github.com: run `gh auth login --hostname github.com`",
 		},
 		{
 			name: "client failure", remotes: map[string]string{"origin": origin}, checkout: true,
