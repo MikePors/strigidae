@@ -33,6 +33,30 @@ type Theme struct {
 	Normal   lipgloss.Style // plain text
 	Muted    lipgloss.Style // de-emphasised text
 	Selected lipgloss.Style // the highlighted row in a list
+
+	// IsDark reports whether this is the dark variant; renderers that need a
+	// fixed palette (Glamour) pick theirs from it instead of auto-detecting.
+	IsDark bool
+
+	// --- PR workspace (#7) ---
+	PaneBorder       lipgloss.Style // frame of an unfocused pane
+	PaneBorderFocus  lipgloss.Style // frame of the focused pane
+	PaneTitle        lipgloss.Style // title in an unfocused pane's top edge
+	PaneTitleFocus   lipgloss.Style // title in the focused pane's top edge
+	FileAdded        lipgloss.Style // change-type marker and +N counts
+	FileDeleted      lipgloss.Style // change-type marker and -N counts
+	FileModified     lipgloss.Style // change-type marker for modified, renamed and other files
+	StateOpen        lipgloss.Style // PR state badges
+	StateDraft       lipgloss.Style
+	StateMerged      lipgloss.Style
+	StateClosed      lipgloss.Style
+	Author           lipgloss.Style // comment and PR authors
+	Pending          lipgloss.Style // pending (draft) review marker
+	ErrorText        lipgloss.Style // inline error messages in content areas
+	SectionHeading   lipgloss.Style // "Description" / "Conversation" headings
+	OverlayBorder    lipgloss.Style // frame of popups such as the file picker
+	OverlayItem      lipgloss.Style // unselected row in a popup
+	OverlayItemFocus lipgloss.Style // selected row in a popup
 }
 
 // Default returns the default theme for a dark terminal background.
@@ -49,6 +73,8 @@ func New(isDark bool) Theme {
 	accent := c("#5f3dc4", "#b197fc")
 	warm := c("#b8590a", "#ffc078")
 	muted := c("#6b6b7b", "#8b8b9b")
+	green := c("#1f7a3d", "#8ce99a")
+	red := c("#c92a2a", "#ff8787")
 
 	return Theme{
 		StatusBar:     bar,
@@ -69,5 +95,25 @@ func New(isDark bool) Theme {
 		Normal:   lipgloss.NewStyle(),
 		Muted:    lipgloss.NewStyle().Foreground(muted),
 		Selected: lipgloss.NewStyle().Bold(true).Foreground(c("#5f3dc4", "#d0bfff")),
+		IsDark:   isDark,
+
+		PaneBorder:       lipgloss.NewStyle().Foreground(muted),
+		PaneBorderFocus:  lipgloss.NewStyle().Foreground(accent),
+		PaneTitle:        lipgloss.NewStyle().Foreground(muted),
+		PaneTitleFocus:   lipgloss.NewStyle().Bold(true).Foreground(c("#ffffff", "#1a1a22")).Background(accent),
+		FileAdded:        lipgloss.NewStyle().Foreground(green),
+		FileDeleted:      lipgloss.NewStyle().Foreground(red),
+		FileModified:     lipgloss.NewStyle().Foreground(warm),
+		StateOpen:        lipgloss.NewStyle().Bold(true).Foreground(green),
+		StateDraft:       lipgloss.NewStyle().Bold(true).Foreground(muted),
+		StateMerged:      lipgloss.NewStyle().Bold(true).Foreground(accent),
+		StateClosed:      lipgloss.NewStyle().Bold(true).Foreground(red),
+		Author:           lipgloss.NewStyle().Bold(true),
+		Pending:          lipgloss.NewStyle().Bold(true).Foreground(warm),
+		ErrorText:        lipgloss.NewStyle().Bold(true).Foreground(red),
+		SectionHeading:   lipgloss.NewStyle().Bold(true).Foreground(accent),
+		OverlayBorder:    lipgloss.NewStyle().Foreground(accent),
+		OverlayItem:      lipgloss.NewStyle(),
+		OverlayItemFocus: lipgloss.NewStyle().Bold(true).Foreground(c("#5f3dc4", "#d0bfff")).Reverse(true),
 	}
 }
