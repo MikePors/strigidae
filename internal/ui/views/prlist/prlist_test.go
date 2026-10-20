@@ -182,6 +182,36 @@ func TestLoadError(t *testing.T) {
 	}
 }
 
+func TestFailedNextPageIsNotRetried(t *testing.T) {
+	c := fakeWith(makePRs(45))
+	v := loadedView(t, c, nil)
+	cmd := press(v, "G")
+	c.SetError(fake.MethodListPullRequests, errors.New("rate limited"))
+	errCmd := deliver(t, v, cmd)
+	if _, ok := errCmd().(ui.ErrorMsg); !ok {
+		t.Fatal("failed page should report an error")
+	}
+	if v.Loading() {
+		t.Error("still loading after failure")
+	}
+	calls := len(c.Calls())
+	for _, k := range []string{"k", "j", "G", "j"} {
+		if cmd := press(v, k); cmd != nil {
+			t.Fatalf("key %q retried the failed page", k)
+		}
+	}
+	if len(c.Calls()) != calls {
+		t.Error("extra requests were made")
+	}
+
+	// R clears the flag; once it succeeds, paging resumes.
+	c.SetError(fake.MethodListPullRequests, nil)
+	// The selection is still at the end, so the refresh result itself pages on.
+	if more := deliver(t, v, press(v, "R")); more == nil {
+		t.Error("paging should resume after a successful refresh")
+	}
+}
+
 func TestOpenInBrowser(t *testing.T) {
 	var opened []string
 	open := func(u string) error { opened = append(opened, u); return nil }

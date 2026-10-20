@@ -60,6 +60,7 @@ type View struct {
 	loading     bool   // a first-page (re)load is in flight
 	loadingMore bool   // a next-page load is in flight
 	err         error  // the last failed load, cleared by the next success
+	moreFailed  bool   // the last next-page load failed; no auto-retry until R
 
 	cursor, top   int
 	width, height int
@@ -155,6 +156,8 @@ func (v *View) loaded(msg prsLoadedMsg) tea.Cmd {
 	}
 	if msg.err != nil {
 		v.err = msg.err
+		v.moreFailed = msg.more // stop auto-paging until R
+
 		return ui.Error(fmt.Errorf("load pull requests in %s: %w", v.repo, msg.err))
 	}
 	v.err = nil
@@ -228,14 +231,14 @@ func (v *View) handleKey(msg keys.Msg) tea.Cmd {
 // new ones arrive.
 func (v *View) refresh() tea.Cmd {
 	v.seq++
-	v.loading, v.loadingMore = true, false
+	v.loading, v.loadingMore, v.moreFailed = true, false, false
 	return v.fetch(github.PageRequest{}, false)
 }
 
 // maybeLoadMore requests the next page when the selection is near the end of
 // what is loaded.
 func (v *View) maybeLoadMore() tea.Cmd {
-	if v.next == "" || v.loading || v.loadingMore || v.cursor < len(v.prs)-1-loadMoreMargin {
+	if v.next == "" || v.loading || v.moreFailed || v.loadingMore || v.cursor < len(v.prs)-1-loadMoreMargin {
 		return nil
 	}
 	v.loadingMore = true
