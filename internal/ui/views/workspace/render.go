@@ -127,7 +127,7 @@ func (v *View) renderFailure() string {
 func (v *View) renderHeader(width int) []string {
 	d := v.detail
 	badge := v.stateBadge()
-	line1 := badge + " " + v.th.Title.Render(fmt.Sprintf("#%d", d.Number)) + " " + v.th.Normal.Bold(true).Render(d.Title)
+	line1 := badge + " " + v.th.Title.Render(fmt.Sprintf("#%d", d.Number)) + " " + v.th.StrongText.Render(d.Title)
 
 	sep := v.th.Muted.Render(" · ")
 	parts := []string{

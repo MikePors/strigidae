@@ -85,6 +85,33 @@ func (p *stubPane) FullHelp() [][]key.Binding {
 	}}
 }
 
+func TestSetFileOnChangedMetadata(t *testing.T) {
+	h := loaded(t, 100, 30)
+	p := &recordPane{placeholderPane: placeholderPane{th: theme.New(true)}}
+	h.v.filePane = p
+	h.press("j")
+	if len(p.files) != 1 {
+		t.Fatalf("SetFile calls = %v", p.files)
+	}
+	d := testDetail()
+	d.Files[0].Additions = 99
+	h.send(prLoadedMsg{repo: testRepo, number: 7, seq: h.v.seq, detail: d})
+	if len(p.files) != 2 || p.files[1].Additions != 99 || p.files[1].Path != p.files[0].Path {
+		t.Errorf("pane did not get the new metadata: %+v", p.files)
+	}
+	h.send(prLoadedMsg{repo: testRepo, number: 7, seq: h.v.seq, detail: d})
+	if len(p.files) != 2 {
+		t.Errorf("unchanged file repeated: %+v", p.files)
+	}
+}
+
+type recordPane struct {
+	placeholderPane
+	files []github.ChangedFile
+}
+
+func (p *recordPane) SetFile(f github.ChangedFile) { p.files = append(p.files, f) }
+
 func TestFilePaneContractThroughRoot(t *testing.T) {
 	c := fake.New()
 	c.SetPullRequest(testDetail())

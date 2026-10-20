@@ -31,8 +31,10 @@ type DiffState struct {
 //   - SetDiff may be called again with an identical Raw (once when a load
 //     starts, with Loading set, once when it ends, and on every refresh). Cache
 //     parsing by Raw. A failed refresh keeps the previous Raw and Err stays nil.
-//   - SetFile is called only when the selected path changes, never on a
-//     refresh that keeps the same file. Keep cursor and scroll then, and
+//   - SetFile is called when the selected file differs from the last one
+//     given (a different path, or the same path with new metadata after a
+//     refresh); an unchanged file is not repeated. A repeat call for the same
+//     path means only the metadata changed: keep cursor and scroll, and
 //     re-resolve the file against the newest SetDiff.
 //   - ChangedFile.Path is the new path, or the old path for a deleted file:
 //     look files up by new path and fall back to the old one.
@@ -49,8 +51,9 @@ type FilePane interface {
 	SetTheme(th theme.Theme)
 	// SetDiff is called when a diff load starts and when it finishes.
 	SetDiff(d DiffState)
-	// SetFile is called when the selected file changes (and when the pull
-	// request reloads with a file selected).
+	// SetFile is called when the selected file changes, and again when the
+	// same path comes back with different metadata (change type, counts)
+	// after a refresh. A repeat call for the same path keeps cursor and scroll.
 	SetFile(f github.ChangedFile)
 	// SetSize gives the pane's inner size; it is called whenever it changes.
 	SetSize(width, height int)

@@ -54,7 +54,9 @@ type Theme struct {
 	Pending          lipgloss.Style // pending (draft) review marker
 	ErrorText        lipgloss.Style // inline error messages in content areas
 	SectionHeading   lipgloss.Style // "Description" / "Conversation" headings
-	OverlayBorder    lipgloss.Style // frame of popups such as the file picker
+	OverlayBorder    lipgloss.Style // title text on the frame of popups such as the file picker
+	OverlayBox       lipgloss.Style // rounded frame around a popup
+	StrongText       lipgloss.Style // bold body text, e.g. a PR title
 	OverlayItem      lipgloss.Style // unselected row in a popup
 	OverlayItemFocus lipgloss.Style // selected row in a popup
 }
@@ -113,6 +115,8 @@ func New(isDark bool) Theme {
 		ErrorText:        lipgloss.NewStyle().Bold(true).Foreground(red),
 		SectionHeading:   lipgloss.NewStyle().Bold(true).Foreground(accent),
 		OverlayBorder:    lipgloss.NewStyle().Foreground(accent),
+		OverlayBox:       lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(accent),
+		StrongText:       lipgloss.NewStyle().Bold(true),
 		OverlayItem:      lipgloss.NewStyle(),
 		OverlayItemFocus: lipgloss.NewStyle().Bold(true).Foreground(c("#5f3dc4", "#d0bfff")).Reverse(true),
 	}

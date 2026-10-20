@@ -8,7 +8,6 @@ import (
 	"unicode"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MikePors/strigidae/internal/ui/theme"
@@ -147,9 +146,7 @@ func (m *Model) Render(width, height int) string {
 			lines = append(lines, m.th.OverlayItem.Render("  "+label))
 		}
 	}
-	box := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(m.th.OverlayBorder.GetForeground()).
+	box := m.th.OverlayBox.
 		Width(w).
 		Render(strings.Join(lines, "\n"))
 	return m.titled(box)

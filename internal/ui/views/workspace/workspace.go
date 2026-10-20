@@ -124,8 +124,8 @@ type View struct {
 	// pickerItems are the paths the picker was built from; a choice is
 	// resolved by path because a refresh may replace the file list meanwhile.
 	pickerItems []string
-	paneFile    string // path last given to filePane.SetFile
-	paneW       int    // size last given to filePane.SetSize
+	paneFile    github.ChangedFile // last value given to filePane.SetFile
+	paneW       int                // size last given to filePane.SetSize
 	paneH       int
 
 	width, height int
@@ -313,8 +313,8 @@ func (v *View) selectedPath() string {
 func (v *View) selectionChanged() {
 	if v.sel > 0 && v.sel <= len(v.files()) {
 		f := v.files()[v.sel-1]
-		if f.Path != v.paneFile {
-			v.paneFile = f.Path
+		if f != v.paneFile {
+			v.paneFile = f
 			v.filePane.SetFile(f)
 		}
 	}
