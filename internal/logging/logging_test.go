@@ -54,6 +54,57 @@ func TestOpen(t *testing.T) {
 	}
 }
 
+func TestStart(t *testing.T) {
+	dir := t.TempDir()
+	blocker := filepath.Join(dir, "file")
+	if err := os.WriteFile(blocker, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	home := func() (string, error) { return dir, nil }
+	tests := []struct {
+		name     string
+		env      map[string]string
+		home     func() (string, error)
+		wantFile string // log file that should receive the line; "" means discarded
+		wantWarn string
+	}{
+		{
+			name: "opens the file", env: map[string]string{"XDG_STATE_HOME": dir}, home: home,
+			wantFile: filepath.Join(dir, "strig", "strig.log"),
+		},
+		{
+			name: "no home", home: func() (string, error) { return "", errors.New("none") },
+			wantWarn: "strig: logging disabled: find home directory: none\n",
+		},
+		{
+			name: "unwritable directory", env: map[string]string{"XDG_STATE_HOME": blocker}, home: home,
+			wantWarn: "strig: logging disabled: create log directory: ",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var warn bytes.Buffer
+			l, closeLog := Start(&warn, func(k string) string { return tt.env[k] }, tt.home)
+			l.Info("hello")
+			closeLog()
+
+			if tt.wantWarn == "" && warn.Len() > 0 {
+				t.Errorf("unexpected warning %q", warn.String())
+			}
+			if !strings.HasPrefix(warn.String(), tt.wantWarn) || strings.Count(warn.String(), "\n") > 1 {
+				t.Errorf("warning = %q, want one line starting %q", warn.String(), tt.wantWarn)
+			}
+			if tt.wantFile == "" {
+				return
+			}
+			b, err := os.ReadFile(tt.wantFile)
+			if err != nil || !strings.Contains(string(b), `msg=hello`) {
+				t.Errorf("log file missing line: %q, %v", b, err)
+			}
+		})
+	}
+}
+
 func TestInstall(t *testing.T) {
 	prevSlog, prevOut, prevFlags := slog.Default(), log.Writer(), log.Flags()
 	t.Cleanup(func() {

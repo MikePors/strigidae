@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 
 	tea "charm.land/bubbletea/v2"
@@ -155,7 +154,7 @@ func fail(stderr io.Writer, err error) int {
 // owns the terminal; if the file can't be opened we warn once and carry on
 // with logging discarded.
 func runTUI(client github.Client, repo github.Repo, stderr io.Writer) error {
-	logger, closeLog := openLog(stderr)
+	logger, closeLog := logging.Start(stderr, os.Getenv, os.UserHomeDir)
 	defer closeLog()
 	logging.Install(logger)
 	silenceBrowser()
@@ -178,18 +177,4 @@ func runTUI(client github.Client, repo github.Repo, stderr io.Writer) error {
 func silenceBrowser() {
 	cliBrowser.Stdout = io.Discard
 	cliBrowser.Stderr = io.Discard
-}
-
-func openLog(stderr io.Writer) (*slog.Logger, func()) {
-	discard := slog.New(slog.NewTextHandler(io.Discard, nil))
-	path, err := logging.Path(os.Getenv, os.UserHomeDir)
-	if err == nil {
-		var l *slog.Logger
-		var f *os.File
-		if l, f, err = logging.Open(path); err == nil {
-			return l, func() { _ = f.Close() }
-		}
-	}
-	_, _ = fmt.Fprintf(stderr, "strig: logging disabled: %v\n", err) // best effort, before the TUI starts
-	return discard, func() {}
 }
