@@ -10,11 +10,9 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"slices"
 
 	tea "charm.land/bubbletea/v2"
 	cliBrowser "github.com/cli/browser"
-	"github.com/cli/go-gh/v2/pkg/auth"
 
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/github/api"
@@ -42,9 +40,7 @@ func realDeps() deps {
 	return deps{
 		getwd:  os.Getwd,
 		runner: gitrepo.ExecRunner,
-		knownHost: func(host string) bool {
-			return slices.Contains(auth.KnownHosts(), host) || host == "github.com" || host == os.Getenv("GH_HOST")
-		},
+		knownHost: api.KnownHost,
 		newClient: func(host string) (github.Client, error) {
 			c, err := api.New(api.Options{Host: host})
 			if err != nil {
