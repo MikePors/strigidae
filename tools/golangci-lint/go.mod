@@ -1,4 +1,4 @@
-module github.com/MikePors/strigidae/tools
+module github.com/MikePors/strigidae/tools/golangci-lint
 
 go 1.27.0
 

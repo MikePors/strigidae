@@ -14,7 +14,8 @@ Requires Go (any recent version; the `go` command fetches the exact toolchain pi
 make build        # builds ./bin/strig
 ./bin/strig --version
 make test         # go test -race ./...
-make lint         # golangci-lint (pinned in tools/go.mod)
+make check        # everything CI runs: fmt, lint, test, tidy, govulncheck, actionlint
+make lint         # golangci-lint (tools are pinned in tools/<name>/go.mod)
 ```
 
 Or install directly:

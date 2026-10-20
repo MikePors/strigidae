@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  build-test-lint:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -27,3 +27,15 @@ jobs:
 
       - name: Lint
         run: make lint
+
+      - name: Format
+        run: make fmt-check
+
+      - name: go mod tidy
+        run: make tidy-check
+
+      - name: Vulnerabilities
+        run: make vuln
+
+      - name: Workflow lint
+        run: make actionlint
