@@ -1,0 +1,23 @@
+diff --git "a/h\303\251llo w\303\266rld.txt" "b/h\303\251llo w\303\266rld.txt"
+index 1111111..2222222 100644
+--- "a/h\303\251llo w\303\266rld.txt"	
++++ "b/h\303\251llo w\303\266rld.txt"	
+@@ -1 +1 @@
+-a
++b
+diff --git a/plain space.txt b/plain space.txt
+index 1111111..2222222 100644
+--- a/plain space.txt	
++++ b/plain space.txt	
+@@ -1 +1 @@
+-c
++d
+diff --git "a/tab\there.txt" "b/new \"q\".txt"
+similarity index 90%
+rename from "tab\there.txt"
+rename to "new \"q\".txt"
+--- "a/tab\there.txt"	
++++ "b/new \"q\".txt"	
+@@ -1 +1 @@
+-e
++f

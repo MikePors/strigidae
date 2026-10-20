@@ -210,11 +210,17 @@ func (p *parser) headerLine(line string) {
 // patchPath extracts the path from a "--- a/x" or "+++ b/x" operand. /dev/null
 // reports ok=false.
 func patchPath(s string) (string, bool) {
-	if i := strings.IndexByte(s, '\t'); i >= 0 && !strings.HasPrefix(s, `"`) {
-		s = s[:i] // some tools append a timestamp after a tab
+	if strings.HasPrefix(s, `"`) {
+		q, err := strconv.QuotedPrefix(s) // git appends a TAB after names containing spaces
+		if err != nil {
+			return "", false // undecodable: keep the path from the diff --git line
+		}
+		s = q
+	} else if i := strings.IndexByte(s, '\t'); i >= 0 {
+		s = s[:i] // a tab-separated timestamp or trailing TAB
 	}
 	s = unquote(s)
-	if s == "/dev/null" {
+	if s == "/dev/null" || s == "" {
 		return "", false
 	}
 	if len(s) > 2 && (s[:2] == "a/" || s[:2] == "b/") {

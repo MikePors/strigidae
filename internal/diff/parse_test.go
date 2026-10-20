@@ -220,6 +220,45 @@ func TestStatusAndKindStrings(t *testing.T) {
 	}
 }
 
+func TestQuotedPathsWithTrailingTab(t *testing.T) {
+	d, err := Parse(load(t, "quoted.diff"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	type paths struct{ Old, New string }
+	var got []paths
+	for _, f := range d.Files {
+		got = append(got, paths{f.OldPath, f.NewPath})
+	}
+	want := []paths{
+		{"héllo wörld.txt", "héllo wörld.txt"},
+		{"plain space.txt", "plain space.txt"},
+		{"tab\there.txt", "new \"q\".txt"},
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("paths (-want +got):\n%s", diff)
+	}
+	for _, p := range []string{"héllo wörld.txt", "plain space.txt", "new \"q\".txt", "tab\there.txt"} {
+		if d.File(p) == nil {
+			t.Errorf("File(%q) = nil", p)
+		}
+	}
+	if len(d.Files[0].Hunks) != 1 {
+		t.Error("hunk lost")
+	}
+}
+
+func TestBadPatchPathKeepsGitHeaderPath(t *testing.T) {
+	in := "diff --git a/x.txt b/x.txt\n--- \"a/bad\\q\"\n+++ \"b/bad\\q\"\n@@ -1 +1 @@\n-a\n+b\n"
+	d, err := Parse(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f := d.Files[0]; f.OldPath != "x.txt" || f.NewPath != "x.txt" {
+		t.Errorf("paths = %q, %q", f.OldPath, f.NewPath)
+	}
+}
+
 func FuzzParse(f *testing.F) {
 	for _, name := range []string{"multi.diff", "crlf.diff", "truncated.diff"} {
 		b, err := os.ReadFile(filepath.Join("testdata", name))
