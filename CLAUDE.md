@@ -84,6 +84,9 @@ These rules are enforced by `depguard` in `.golangci.yml`; `make lint` fails on 
 - **No goroutines** outside of `tea.Cmd`s, and no shared mutable state between the model and commands.
 - **Only the root model is a `tea.Model`.** In Bubble Tea v2, `tea.Model.View()` returns a `tea.View` struct; the root wraps its output in one. Screens implement our own `ui.View` interface (`internal/ui/view.go`): `Update(msg) (View, tea.Cmd)` and `Render(width, height int) string`, plus title and help bindings.
 - **Views** live in `internal/ui/views/<name>` and are composed by the root model's **view stack**. Navigation is message-driven: a view returns a command producing `ui.PushMsg` / `ui.PopMsg`; it never reaches into the stack itself.
+- **Message routing.** Keys go only to the top view. Every other message (command results, ticks) goes to every view in the stack, so a view must ignore results that aren't its own (see the identity rule above).
+- **Loading and lifecycle.** A view that loads data implements `ui.Loader`; the status bar spinner follows the top view. A view revealed by `:q` gets `ui.Resumer.Resumed()` and may refresh.
+- **Embedded bubbles components** (viewport, list, …): drive them through their methods (`ScrollDown`, `GotoTop`, …) in response to `keys.Msg`; never forward a `keys.Msg` to their `Update`.
 - **Text inputs capture keys.** A view with a focused text input (filter, command line, reply box) implements `ui.KeyCapturer`; while it captures, it receives every key raw and no global bindings or sequences fire. `esc` must always release capture, and every capturing component needs a test proving it.
 - **Sizing**: views receive the space they may draw in and must not draw outside it. Handle `tea.WindowSizeMsg` everywhere.
 - **Styling**: no inline colours or ad-hoc `lipgloss.NewStyle()` in views; add a named style to `internal/ui/theme`.
