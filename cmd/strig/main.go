@@ -23,10 +23,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 
 	if *showVersion {
-		fmt.Fprintf(stdout, "strig %s\n", version.String())
+		_, _ = fmt.Fprintf(stdout, "strig %s\n", version.String())
 		return 0
 	}
 
-	fmt.Fprintln(stderr, "strig: nothing to see yet; try --version")
+	_, _ = fmt.Fprintln(stderr, "strig: nothing to see yet; try --version")
 	return 1
 }
