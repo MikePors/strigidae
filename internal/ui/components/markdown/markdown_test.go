@@ -24,7 +24,7 @@ func TestRenderCachesAndTrims(t *testing.T) {
 		t.Error("cached render differs")
 	}
 	r.Render("# Title\n\nsome **bold** text", 60)
-	if len(r.cache) != 2 {
+	if len(r.cache) != 1 {
 		t.Errorf("width should be part of the cache key, size = %d", len(r.cache))
 	}
 }

@@ -17,9 +17,12 @@ type cacheKey struct {
 // Renderer renders Markdown with a fixed Glamour style. It is not safe for
 // concurrent use; views call it from Update and Render only.
 type Renderer struct {
-	style     string
-	renderers map[int]*glamour.TermRenderer
-	cache     map[cacheKey]string
+	style string
+	// Only the current width is kept: callers render at one width at a time,
+	// so a window resize drops what was built for the old one.
+	width int
+	tr    *glamour.TermRenderer
+	cache map[cacheKey]string
 }
 
 // New returns a Renderer using Glamour's dark or light style. The style is
@@ -29,7 +32,7 @@ func New(dark bool) *Renderer {
 	if dark {
 		style = styles.DarkStyle
 	}
-	return &Renderer{style: style, renderers: map[int]*glamour.TermRenderer{}, cache: map[cacheKey]string{}}
+	return &Renderer{style: style, cache: map[cacheKey]string{}}
 }
 
 // Render returns body rendered and wrapped to width columns, without the
@@ -37,6 +40,10 @@ func New(dark bool) *Renderer {
 // raw text so content is never lost.
 func (r *Renderer) Render(body string, width int) string {
 	width = max(width, 10)
+	if width != r.width {
+		r.width, r.tr = width, nil
+		clear(r.cache)
+	}
 	k := cacheKey{body, width}
 	if s, ok := r.cache[k]; ok {
 		return s
@@ -47,16 +54,14 @@ func (r *Renderer) Render(body string, width int) string {
 }
 
 func (r *Renderer) render(body string, width int) string {
-	tr, ok := r.renderers[width]
-	if !ok {
-		var err error
-		tr, err = glamour.NewTermRenderer(glamour.WithStandardStyle(r.style), glamour.WithWordWrap(width-4))
+	if r.tr == nil {
+		tr, err := glamour.NewTermRenderer(glamour.WithStandardStyle(r.style), glamour.WithWordWrap(width-4))
 		if err != nil {
 			return body
 		}
-		r.renderers[width] = tr
+		r.tr = tr
 	}
-	out, err := tr.Render(body)
+	out, err := r.tr.Render(body)
 	if err != nil {
 		return body
 	}
