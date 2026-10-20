@@ -179,7 +179,8 @@ func (v *View) replace(items []github.PullRequest) {
 		selected = pr.Number
 	}
 	v.prs = items
-	v.cursor = 0
+	// If the selected PR is gone, stay on the same row (clamp fixes the range).
+	v.cursor = min(v.cursor, max(0, len(items)-1))
 	for i, pr := range items {
 		if selected != 0 && pr.Number == selected {
 			v.cursor = i
@@ -232,7 +233,9 @@ func (v *View) handleKey(msg keys.Msg) tea.Cmd {
 func (v *View) refresh() tea.Cmd {
 	v.seq++
 	v.loading, v.loadingMore, v.moreFailed = true, false, false
-	return v.fetch(github.PageRequest{}, false)
+	// Ask for as many rows as are loaded (up to the API maximum) so the rows
+	// the user has paged through survive; zero means the default size.
+	return v.fetch(github.PageRequest{Limit: min(len(v.prs), github.MaxPageSize)}, false)
 }
 
 // maybeLoadMore requests the next page when the selection is near the end of

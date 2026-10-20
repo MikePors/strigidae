@@ -164,6 +164,41 @@ func TestRefreshKeepsSelection(t *testing.T) {
 	}
 }
 
+func TestRefreshKeepsSelectionPastFirstPage(t *testing.T) {
+	c := fakeWith(makePRs(45))
+	v := loadedView(t, c, nil)
+	deliver(t, v, press(v, "G"))
+	press(v, "G")
+	if len(v.prs) != 45 || v.cursor != 44 {
+		t.Fatalf("setup: prs=%d cursor=%d", len(v.prs), v.cursor)
+	}
+	want := v.prs[v.cursor].Number
+
+	deliver(t, v, press(v, "R"))
+	calls := c.Calls()
+	if got := calls[len(calls)-1].Page.Limit; got != 45 {
+		t.Errorf("refresh limit = %d, want 45", got)
+	}
+	if len(v.prs) != 45 || v.prs[v.cursor].Number != want {
+		t.Errorf("after refresh: prs=%d selected #%d, want 45 rows and #%d", len(v.prs), v.prs[v.cursor].Number, want)
+	}
+}
+
+func TestRefreshSelectionGone(t *testing.T) {
+	c := fakeWith(makePRs(10))
+	v := loadedView(t, c, nil)
+	for range 4 {
+		press(v, "j")
+	}
+	// The selected PR disappears from the list; the row index is kept.
+	c.SetPullRequests(testRepo, makePRs(10)[:3])
+	press(v, "R")
+	v.Update(prsLoadedMsg{repo: testRepo, seq: v.seq, page: github.Page[github.PullRequest]{Items: makePRs(3)}})
+	if v.cursor != 2 {
+		t.Errorf("cursor = %d, want 2 (clamped)", v.cursor)
+	}
+}
+
 func TestLoadError(t *testing.T) {
 	c := fakeWith(makePRs(3))
 	boom := errors.New("boom")
