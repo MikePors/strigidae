@@ -334,12 +334,26 @@ func TestGolden(t *testing.T) {
 			deliver(t, v, v.Init())
 			return v
 		}, 40, 8},
+		{"tiny", func(t *testing.T) *View {
+			return loadedView(t, fakeWith(goldenPRs()), nil)
+		}, 12, 3},
+		{"error_tiny", func(t *testing.T) *View {
+			c := fakeWith(nil)
+			c.SetError(fake.MethodListPullRequests, fmt.Errorf("list pull requests: %w", github.ErrNotFound))
+			v := newView(c, nil)
+			deliver(t, v, v.Init())
+			return v
+		}, 20, 2},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			v := tt.setup(t)
 			out := v.Render(tt.width, tt.height)
-			for i, line := range strings.Split(out, "\n") {
+			lines := strings.Split(out, "\n")
+			if len(lines) > tt.height {
+				t.Errorf("%d lines, max %d", len(lines), tt.height)
+			}
+			for i, line := range lines {
 				if w := ansi.StringWidth(line); w > tt.width {
 					t.Errorf("line %d is %d columns wide, max %d: %q", i, w, tt.width, line)
 				}

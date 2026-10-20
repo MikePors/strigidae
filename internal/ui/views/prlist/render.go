@@ -29,18 +29,30 @@ func (v *View) Render(width, height int) string {
 	v.width, v.height = width, height
 	v.clamp()
 
+	var out string
 	switch {
 	case len(v.prs) == 0 && v.loading:
-		return v.message(width, v.th.Muted.Render(fmt.Sprintf("Loading pull requests in %s...", v.repo)))
+		out = v.th.Muted.Render(fmt.Sprintf("Loading pull requests in %s...", v.repo))
 	case len(v.prs) == 0 && v.err != nil:
-		return v.errorState(width)
+		out = v.errorState(width)
 	case len(v.prs) == 0:
-		return v.message(width, v.th.Muted.Render(fmt.Sprintf("no open pull requests in %s", v.repo)))
+		out = v.th.Muted.Render(fmt.Sprintf("no open pull requests in %s", v.repo))
+	default:
+		out = v.table(width, height)
 	}
-	return v.table(width, height)
+	return fit(out, width, height)
 }
 
-func (v *View) message(width int, s string) string { return ansi.Truncate(s, width, "…") }
+// fit clips s to at most height lines of width columns, however narrow the
+// terminal: layouts have minimum widths that can exceed what we are given.
+func fit(s string, width, height int) string {
+	lines := strings.Split(s, "\n")
+	lines = lines[:min(len(lines), height)]
+	for i, l := range lines {
+		lines[i] = ansi.Truncate(l, width, "")
+	}
+	return strings.Join(lines, "\n")
+}
 
 func (v *View) errorState(width int) string {
 	head := v.th.PRList.ChangesRequested.Render("Could not load pull requests")
