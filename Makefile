@@ -4,13 +4,17 @@ LDFLAGS := -X github.com/MikePors/strigidae/internal/version.Version=$(VERSION)
 # Each tool lives in its own module under tools/ so their dependency graphs never conflict.
 tool = go tool -modfile=tools/$(1)/go.mod $(1)
 
-.PHONY: build test lint fmt fmt-check tidy tidy-check vuln actionlint check run clean
+.PHONY: build test golden lint fmt fmt-check tidy tidy-check vuln actionlint update-tools check run clean
 
 build:
 	go build -ldflags "$(LDFLAGS)" -o $(BIN) ./cmd/strig
 
 test:
 	go test -race ./...
+
+# Regenerate golden files; review the diff before committing.
+golden:
+	UPDATE_GOLDEN=1 go test ./...
 
 lint:
 	$(call tool,golangci-lint) run ./...
@@ -34,6 +38,10 @@ vuln:
 
 actionlint:
 	$(call tool,actionlint)
+
+# Bump every pinned dev tool to its latest release.
+update-tools:
+	for d in tools/*/; do (cd $$d && go get tool && go mod tidy) || exit 1; done
 
 # Everything CI runs. Must pass before opening a PR.
 check: fmt-check lint test tidy-check vuln actionlint build

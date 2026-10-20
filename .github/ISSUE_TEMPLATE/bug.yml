@@ -36,5 +36,5 @@ body:
     id: logs
     attributes:
       label: Logs
-      description: Relevant lines from `~/.local/state/strig/strig.log`. Check that nothing sensitive is included.
+      description: Relevant lines from the log file (`strig --log-path` prints where it is). Check that nothing sensitive is included.
       render: text
