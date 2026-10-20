@@ -320,8 +320,8 @@ func TestClean(t *testing.T) {
 		{"esc\x1b[31mred", "esc [31mred"},
 		{"c1\u009bcsi", "c1 csi"},
 		{"del\x7fchar", "del char"},
-		{"rtl‮evil", "rtl evil"},
-		{"iso⁦late⁩d", "iso late d"},
+		{"rtl\u202eevil", "rtl evil"},
+		{"iso\u2066late\u2069d", "iso late d"},
 		{"unicode ✓ ok", "unicode ✓ ok"},
 	}
 	for _, tt := range tests {

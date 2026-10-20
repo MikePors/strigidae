@@ -77,9 +77,12 @@ func TestInferKnownHosts(t *testing.T) {
 		wantHosts []string // set when an UnknownHostError is expected
 	}{
 		{"known origin", map[string]string{"origin": "git@github.com:o/r.git"}, Remote{"github.com", github.Repo{Owner: "o", Name: "r"}}, nil},
-		{"gitlab upstream falls back to github origin",
+		{
+			"gitlab upstream falls back to github origin",
 			map[string]string{"upstream": "git@gitlab.com:o/r.git", "origin": "git@github.com:me/r.git"},
-			Remote{"github.com", github.Repo{Owner: "me", Name: "r"}}, nil},
+			Remote{"github.com", github.Repo{Owner: "me", Name: "r"}},
+			nil,
+		},
 		{"ssh alias only", map[string]string{"origin": "github-work:acme/app.git"}, Remote{}, []string{"github-work"}},
 		{"both unknown", map[string]string{"upstream": "git@gitlab.com:o/r.git", "origin": "github-work:acme/app.git"}, Remote{}, []string{"gitlab.com", "github-work"}},
 		{"enterprise host", map[string]string{"origin": "https://ghe.example.com/o/r"}, Remote{"ghe.example.com", github.Repo{Owner: "o", Name: "r"}}, nil},

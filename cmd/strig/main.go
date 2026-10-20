@@ -31,8 +31,8 @@ import (
 // handling and repository inference without a checkout, the network or a
 // terminal.
 type deps struct {
-	getwd     func() (string, error)
-	runner    gitrepo.Runner
+	getwd  func() (string, error)
+	runner gitrepo.Runner
 	// knownHost reports whether host is a GitHub host gh can talk to.
 	knownHost func(host string) bool
 	newClient func(host string) (github.Client, error)
