@@ -1,0 +1,24 @@
+open #7 Add retry policy to sync client
+alice · main ← feat/retry · changes requested · [enhancement] [sync] · reviewers: bob, team core
+╭─ Files ────────────────────╮╭─ Overview ─────────────────────────────────────────────────────────╮
+│> Overview       ╭─ Go to file ─────────────────────────────────────────────────╮                 │
+│  M …rnal/sync/cl│> retry▏                                                      │                 │
+│  A …rnal/sync/re│> internal/sync/retry.go                                      │                 │
+│  D …rnal/sync/le│  docs/design/a-very-long-directory-name/retry-policy-and-b…  │nt so            │
+│  R …y-and-backof╰──────────────────────────────────────────────────────────────╯le run. It       │
+│  M README.md          +2 -1││   replaces the ad-hoc loop in  sync.go  with a small, well-        │
+│                            ││   tested helper.                                                   │
+│                            ││                                                                    │
+│                            ││   ### What changed                                                 │
+│                            ││                                                                    │
+│                            ││   • Added  Retry  with exponential backoff and jitter              │
+│                            ││   • Moved the timeout handling into the helper                     │
+│                            ││   • Deleted the legacy  retryForever  function                     │
+│                            ││                                                                    │
+│                            ││   ### Example                                                      │
+│                            ││                                                                    │
+│                            ││     err := Retry(ctx, 5, func() error {                            │
+│                            ││         return client.Sync(ctx)                                    │
+│                            ││     })                                                             │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
