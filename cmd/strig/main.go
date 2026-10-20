@@ -11,7 +11,6 @@ import (
 	"log/slog"
 	"os"
 	"slices"
-	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	cliBrowser "github.com/cli/browser"
@@ -133,7 +132,7 @@ func resolveTarget(repoFlag string, stderr io.Writer, d deps) (gitrepo.Remote, i
 	case err == nil:
 		return remote, 0
 	case errors.As(err, &unknown):
-		_, _ = fmt.Fprintf(stderr, "strig: remote host %q isn't a GitHub host gh is signed in to; pass -R owner/repo or run gh auth login --hostname <host>\n", strings.Join(unknown.Hosts, `", "`)) // best effort
+		_, _ = fmt.Fprintf(stderr, "strig: remote host %s isn't a GitHub host gh is signed in to; pass -R owner/repo or run gh auth login --hostname <host>\n", unknown.QuotedHosts()) // best effort
 	case errors.Is(err, gitrepo.ErrNotCheckout):
 		_, _ = fmt.Fprintln(stderr, "strig: run strig inside a GitHub repository checkout, or pass -R owner/repo") // best effort
 	case errors.Is(err, gitrepo.ErrNoGitHubRemote):

@@ -158,6 +158,10 @@ func TestRunRepoSelection(t *testing.T) {
 			wantCode: 1, wantStderr: `remote host "github-work" isn't a GitHub host gh is signed in to; pass -R owner/repo or run gh auth login --hostname <host>`,
 		},
 		{
+			name: "two unknown hosts are quoted individually", remotes: map[string]string{"upstream": "git@gitlab.com:o/r.git", "origin": "github-work:acme/app.git"}, checkout: true,
+			wantCode: 1, wantStderr: `remote host "gitlab.com", "github-work" isn't a GitHub host`,
+		},
+		{
 			name: "-R overrides inference", args: []string{"-R", "o/r"}, remotes: map[string]string{"origin": origin}, checkout: true,
 			wantRepo: "o/r", wantHost: "", wantClient: true,
 		},

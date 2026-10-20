@@ -28,6 +28,10 @@ func TestParseURL(t *testing.T) {
 		{"https://user:tok@ghe.example.com/o/r.git", Remote{"ghe.example.com", repo("o", "r")}, false},
 		{"git://github.com/o/r.git", Remote{"github.com", repo("o", "r")}, false},
 		{"  https://github.com/o/r.git\n", Remote{"github.com", repo("o", "r")}, false},
+		{"https://GitHub.com/o/r", Remote{"github.com", repo("o", "r")}, false},
+		{"https://github.com:443/o/r.git", Remote{"github.com", repo("o", "r")}, false},
+		{"git@ssh.github.com:o/r.git", Remote{"github.com", repo("o", "r")}, false},
+		{"git@GitHub.com:o/r.git", Remote{"github.com", repo("o", "r")}, false},
 		{"", Remote{}, true},
 		{"/home/me/repo", Remote{}, true},
 		{"../repo", Remote{}, true},
@@ -65,6 +69,14 @@ func fakeGit(toplevel bool, remotes map[string]string) Runner {
 			return "", errors.New("no such remote")
 		}
 		return "", errors.New("unexpected git call")
+	}
+}
+
+func TestUnknownHostErrorQuotesEachHost(t *testing.T) {
+	err := &UnknownHostError{Hosts: []string{"gitlab.com", "github-work"}}
+	want := `remote host "gitlab.com", "github-work" is not a known GitHub host`
+	if got := err.Error(); got != want {
+		t.Errorf("Error() = %q, want %q", got, want)
 	}
 }
 

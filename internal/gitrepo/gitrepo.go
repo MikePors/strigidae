@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/url"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/MikePors/strigidae/internal/github"
@@ -87,7 +88,16 @@ type UnknownHostError struct {
 
 // Error implements error.
 func (e *UnknownHostError) Error() string {
-	return fmt.Sprintf("remote host %q is not a known GitHub host", strings.Join(e.Hosts, `", "`))
+	return fmt.Sprintf("remote host %s is not a known GitHub host", e.QuotedHosts())
+}
+
+// QuotedHosts returns the hosts individually quoted and comma-separated.
+func (e *UnknownHostError) QuotedHosts() string {
+	q := make([]string, len(e.Hosts))
+	for i, h := range e.Hosts {
+		q[i] = strconv.Quote(h)
+	}
+	return strings.Join(q, ", ")
 }
 
 // ParseURL parses a git remote URL into a host and repository. It accepts
@@ -103,7 +113,7 @@ func ParseURL(raw string) (Remote, error) {
 	if err != nil || host == "" {
 		return Remote{}, fmt.Errorf("parse remote %q: want host and owner/repo", raw)
 	}
-	return Remote{Host: host, Repo: repo}, nil
+	return Remote{Host: normalizeHost(host), Repo: repo}, nil
 }
 
 func splitURL(raw string) (host, path string, err error) {
@@ -123,16 +133,20 @@ func splitURL(raw string) (host, path string, err error) {
 		return "", "", err
 	}
 	switch u.Scheme {
-	case "ssh", "git":
-		host = u.Hostname() // the port is the SSH port, not the web host's
-	case "https", "http":
-		host = u.Host
+	case "ssh", "git", "https", "http":
+		host = u.Hostname() // any port is a transport detail, not part of the host
 	default:
 		return "", "", fmt.Errorf("unsupported scheme %q", u.Scheme)
 	}
-	// GitHub serves SSH over 443 from this alias.
-	if host == "ssh.github.com" {
-		host = "github.com"
-	}
 	return host, u.Path, nil
+}
+
+// normalizeHost lowercases host and maps GitHub's SSH-over-443 alias to the
+// web host, so every URL form of one host compares equal.
+func normalizeHost(host string) string {
+	host = strings.ToLower(host)
+	if host == "ssh.github.com" {
+		return "github.com"
+	}
+	return host
 }
