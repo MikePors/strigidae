@@ -46,6 +46,7 @@ internal/golden/        golden-file test helper
 internal/ui/            app shell: root model, the View interface, navigation and status messages, status bar, command line
 internal/ui/keys/       keymap registry and multi-key sequence handling
 internal/ui/theme/      Lip Gloss styles; every colour lives here
+internal/ui/termtext/   sanitising of untrusted text (Clean, CleanBlock); imports no other ui package
 internal/ui/components/ reusable widgets (PR table, markdown pane, thread, …)
 internal/ui/views/<v>/  one package per screen: prlist, prdetail, diff, dashboard, …
 ```
@@ -90,6 +91,7 @@ These rules are enforced by `depguard` in `.golangci.yml`; `make lint` fails on 
 - **Embedded bubbles components** (viewport, list, …): drive them through their methods (`ScrollDown`, `GotoTop`, …) in response to `keys.Msg`; never forward a `keys.Msg` to their `Update`.
 - **Text inputs capture keys.** A view with a focused text input (filter, command line, reply box) implements `ui.KeyCapturer`; while it captures, it receives every key raw and no global bindings or sequences fire. `esc` must always release capture, and every capturing component needs a test proving it.
 - **Sizing**: views receive the space they may draw in and must not draw outside it. Handle `tea.WindowSizeMsg` everywhere.
+- **Untrusted text.** Everything that comes from GitHub or git (titles, names, labels, paths, branch names, markdown bodies, diff content) is attacker-controlled and can carry terminal escape sequences. Pass it through `internal/ui/termtext` (`Clean` for single-line, `CleanBlock` before markdown rendering) before it reaches the screen, and test with a hostile fixture.
 - **Styling**: no inline colours or ad-hoc `lipgloss.NewStyle()` in views; add a named style to `internal/ui/theme`.
 - **Performance**: large diffs must stay smooth. Render only the visible window, and cache expensive work (syntax highlighting, markdown rendering) keyed by content and width.
 

@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/ui/termtext"
 )
 
 const (
@@ -128,12 +129,12 @@ func (l layout) row(num, title, author, age, review, comments string) string {
 }
 
 func (v *View) row(l layout, pr github.PullRequest, selected bool, width int) string {
-	title := clean(pr.Title)
+	title := termtext.Clean(pr.Title)
 	if pr.Draft {
 		title = draftPrefix + title
 	}
 	title = ansi.Truncate(title, l.title, "…")
-	author := ansi.Truncate(clean(pr.Author), l.author, "…")
+	author := ansi.Truncate(termtext.Clean(pr.Author), l.author, "…")
 	num := fmt.Sprintf("#%d", pr.Number)
 	age := relativeAge(v.now(), pr.UpdatedAt)
 	rv, rvStyle := v.reviewMark(pr.ReviewDecision)

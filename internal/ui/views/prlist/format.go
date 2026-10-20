@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"unicode"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -26,18 +25,6 @@ func padLeft(s string, w int) string {
 		return strings.Repeat(" ", n) + s
 	}
 	return s
-}
-
-// clean replaces control characters (C0, DEL, C1) and bidi controls with
-// spaces, so one pull request stays on one row and a hostile title can't steer
-// the terminal or reorder the row.
-func clean(s string) string {
-	return strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) || unicode.Is(unicode.Bidi_Control, r) {
-			return ' '
-		}
-		return r
-	}, s)
 }
 
 // relativeAge formats how long ago t was: "now", "5m", "3h", "2d", "4mo", "2y".

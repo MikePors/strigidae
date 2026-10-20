@@ -313,20 +313,15 @@ func TestNavigation(t *testing.T) {
 	}
 }
 
-func TestClean(t *testing.T) {
-	tests := []struct{ in, want string }{
-		{"plain title", "plain title"},
-		{"tab\there\nnewline", "tab here newline"},
-		{"esc\x1b[31mred", "esc [31mred"},
-		{"c1\u009bcsi", "c1 csi"},
-		{"del\x7fchar", "del char"},
-		{"rtl\u202eevil", "rtl evil"},
-		{"iso\u2066late\u2069d", "iso late d"},
-		{"unicode ✓ ok", "unicode ✓ ok"},
-	}
-	for _, tt := range tests {
-		if got := clean(tt.in); got != tt.want {
-			t.Errorf("clean(%q) = %q, want %q", tt.in, got, tt.want)
+func TestHostileTextIsNeutralised(t *testing.T) {
+	prs := makePRs(1)
+	prs[0].Title = "evil\x1b]52;c;aGk=\x07\x1b[2J title\u202e\u009b"
+	prs[0].Author = "a\x1b[31muthor"
+	v := loadedView(t, fakeWith(prs), nil)
+	out := ansi.Strip(v.Render(80, 6))
+	for _, r := range out {
+		if r != '\n' && (r < ' ' || (r >= 0x7f && r <= 0x9f) || r == '\u202e') {
+			t.Fatalf("control rune %q reached the screen: %q", r, out)
 		}
 	}
 }
