@@ -1,9 +1,9 @@
 version: 2
 updates:
   - package-ecosystem: gomod
-    directories:
-      - /
-      - /tools/*
+    # Dev tools under tools/ are updated by .github/workflows/update-tools.yml,
+    # because Dependabot doesn't support go.mod's tool directive.
+    directory: /
     schedule:
       interval: weekly
     groups:
