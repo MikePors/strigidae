@@ -94,6 +94,7 @@ type Model struct {
 	maxW    int   // widest code line, in cells
 
 	cache map[int][]Span // highlighted rows, by row index; reset per file
+	saved *position      // position kept while a message replaces the file
 
 	w, h   int
 	top    int // first visible row
@@ -120,30 +121,46 @@ func (m *Model) SetTheme(th theme.Theme) {
 
 // SetFile shows f (nil clears the pane). Passing the file already shown is a
 // no-op. Passing a different *diff.File with the same path (a re-parsed
-// refresh) rebuilds the rows but keeps the cursor, top and horizontal offset,
-// clamped to the new file. A different path resets them.
+// refresh) rebuilds the rows and re-anchors the cursor on the same diff line
+// (matching kind and line numbers, else the nearest line), keeping its place in
+// the window and the horizontal offset. A different path resets them.
 func (m *Model) SetFile(f *diff.File) {
 	if f != nil && f == m.file && m.msg == "" {
 		return
 	}
-	// A refresh re-parses the diff, giving a new pointer for the same file:
-	// keep the position (clamped) so the reviewer does not lose their place.
-	same := f != nil && m.file != nil && m.msg == "" && f.Path() == m.file.Path()
-	cursor, top, xoff := m.cursor, m.top, m.xoff
+	// A refresh re-parses the diff, giving a new pointer for the same file
+	// (possibly with a message shown in between): put the cursor back on the
+	// same diff line so the reviewer does not lose their place.
+	var prev *position
+	switch {
+	case f == nil:
+	case m.file != nil && f.Path() == m.file.Path():
+		p := m.capture()
+		prev = &p
+	case m.file == nil && m.saved != nil && m.saved.path == f.Path():
+		prev = m.saved
+	}
+	m.saved = nil
 	m.file, m.msg = f, ""
 	m.reset()
 	if f == nil || f.Binary || len(f.Hunks) == 0 {
 		return
 	}
 	m.build(f)
-	if same {
-		m.cursor, m.top, m.xoff = cursor, top, xoff
+	if prev != nil {
+		m.restore(*prev)
 	}
 	m.clamp()
 }
 
 // SetMessage shows a message instead of a diff (for example while loading).
+// The position in the file being replaced is remembered, so a following
+// SetFile for the same path (the refresh finishing) restores it.
 func (m *Model) SetMessage(msg string) {
+	if m.file != nil {
+		p := m.capture()
+		m.saved = &p
+	}
 	m.file, m.msg = nil, msg
 	m.reset()
 }

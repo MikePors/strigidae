@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/x/ansi"
 
@@ -26,10 +27,10 @@ const hostileDiff = "diff --git \"a/x\\033[2J\" \"b/y\\033]0;t\\007\"\n" +
 	"--- a/h.go\n" +
 	"+++ b/h.go\n" +
 	"@@ -1,2 +1,2 @@ func f() { // \x1b]52;c;cHduZWQ=\x07\x1b[2J \u009b31m \u202e\ttab\n" +
-	" ctx \x1b[2J\u009d\x07\n" +
+	" ctx \x1b[2J\u009d\x07 caf\xe9 \x9b[2J\xc3\n" +
 	"-old\x1b]0;x\x1b\\ \t del\n" +
 	"+new\u202e\u0085 \x1bP$q\x1b\\ add\n" +
-	"@@ -9 +9 @@ \x1b[31m\n" +
+	"@@ -9 +9 @@ \x1b[31m sec\x9b\xff\n" +
 	"-a\n" +
 	"+b\n" +
 	"\\ No newline \x1b[2J\n" +
@@ -40,6 +41,9 @@ const hostileDiff = "diff --git \"a/x\\033[2J\" \"b/y\\033]0;t\\007\"\n" +
 
 func assertSafe(t *testing.T, label, out string) {
 	t.Helper()
+	if !utf8.ValidString(out) {
+		t.Errorf("%s: output is not valid UTF-8: %q", label, out)
+	}
 	for _, r := range out {
 		if r == '\n' {
 			continue
@@ -78,6 +82,27 @@ func TestHostileContentIsSanitised(t *testing.T) {
 	assertSafe(t, "message", m.Render(80, 4))
 	if out := m.Render(80, 4); !strings.Contains(out, "hello") {
 		t.Errorf("message lost: %q", out)
+	}
+}
+
+func TestInvalidUTF8(t *testing.T) {
+	got, w := displayText("caf\xe9 \x9b[2J")
+	if got != "caf· ·[2J" || w != 9 {
+		t.Errorf("displayText = %q, %d", got, w)
+	}
+	h := diff.Hunk{OldStart: 1, NewStart: 1, NewLines: 2, Lines: []diff.Line{
+		{Kind: diff.Add, New: 1, Text: "caf\xe9"},
+		{Kind: diff.Add, New: 2, Text: "\x9b[2J\xff\xfe end"},
+	}}
+	f := &diff.File{NewPath: "bad.txt", Status: diff.Added, Hunks: []diff.Hunk{h}}
+	m := New(theme.New(true))
+	m.SetFile(f)
+	out := m.Render(40, 5)
+	assertSafe(t, "styled", ansi.Strip(out))
+	for i, r := range strings.Split(out, "\n") {
+		if w := ansi.StringWidth(r); w != 40 {
+			t.Errorf("row %d is %d cells wide, want 40", i, w)
+		}
 	}
 }
 

@@ -3,6 +3,7 @@ package diffview
 import (
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/rivo/uniseg"
@@ -33,6 +34,9 @@ func displayText(s string) (string, int) {
 	if isPlainASCII(s) {
 		return s, len(s)
 	}
+	if !utf8.ValidString(s) {
+		s = replaceInvalid(s)
+	}
 	var b strings.Builder
 	b.Grow(len(s) + 8)
 	col := 0
@@ -58,6 +62,23 @@ func displayText(s string) (string, int) {
 		col += clusterWidth(c)
 	}
 	return b.String(), col
+}
+
+// replaceInvalid turns every invalid UTF-8 byte into a visible dot. Without
+// this a stray byte such as 0x9B (an 8-bit CSI) would reach the terminal.
+func replaceInvalid(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); {
+		r, size := utf8.DecodeRuneInString(s[i:])
+		if r == utf8.RuneError && size == 1 {
+			b.WriteRune('·')
+		} else {
+			b.WriteString(s[i : i+size])
+		}
+		i += size
+	}
+	return b.String()
 }
 
 func isPlainASCII(s string) bool {
