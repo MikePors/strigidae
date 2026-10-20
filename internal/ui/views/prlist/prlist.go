@@ -91,7 +91,8 @@ func New(client github.Client, repo github.Repo, th theme.Theme, opts Options) *
 }
 
 // openInBrowser discards the launcher's output: it must not touch the screen
-// the TUI owns.
+// the TUI owns. This covers a configured launcher; the default fallback writes
+// to cli/browser's globals, which cmd/strig silences at startup.
 func openInBrowser(url string) error {
 	return browser.New("", io.Discard, io.Discard).Browse(url)
 }

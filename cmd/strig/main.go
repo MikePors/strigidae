@@ -11,6 +11,7 @@ import (
 	"os"
 
 	tea "charm.land/bubbletea/v2"
+	cliBrowser "github.com/cli/browser"
 
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/github/api"
@@ -146,6 +147,7 @@ func runTUI(client github.Client, repo github.Repo, stderr io.Writer) error {
 	logger, closeLog := openLog(stderr)
 	defer closeLog()
 	logging.Install(logger)
+	silenceBrowser()
 	logger.Info("starting", "version", version.String(), "repo", repo.String())
 
 	th := theme.Default()
@@ -156,6 +158,15 @@ func runTUI(client github.Client, repo github.Repo, stderr io.Writer) error {
 	}
 	logger.Info("exiting")
 	return nil
+}
+
+// silenceBrowser stops browser launchers writing to the terminal the TUI owns.
+// When no launcher is configured, go-gh falls back to cli/browser, which wires
+// xdg-open and friends to these package globals (os.Stdout/os.Stderr by
+// default) regardless of the writers given to browser.New.
+func silenceBrowser() {
+	cliBrowser.Stdout = io.Discard
+	cliBrowser.Stderr = io.Discard
 }
 
 func openLog(stderr io.Writer) (*slog.Logger, func()) {

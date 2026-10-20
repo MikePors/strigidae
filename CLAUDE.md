@@ -96,7 +96,8 @@ These rules are enforced by `depguard` in `.golangci.yml`; `make lint` fails on 
 ### Logging
 
 - `log/slog` to a file under `$XDG_STATE_HOME/strig/` (fallback `~/.local/state/strig/`); `strig --log-path` prints it. **Never** write to stdout or stderr while the TUI is running; it corrupts the screen.
-- At startup the standard library's default loggers (`log`, `slog`) are redirected to the log file, so a dependency that logs can't corrupt the screen. That's the one allowed global mutation besides build-time values.
+- At startup the standard library's default loggers (`log`, `slog`) are redirected to the log file, so a dependency that logs can't corrupt the screen. That's one of the two allowed global mutations besides build-time values.
+- The other: at startup `cmd/strig` sets `github.com/cli/browser`'s `Stdout` and `Stderr` to `io.Discard`, so browser launchers such as `xdg-open` (used by `o`) can't write to the screen.
 - Never log tokens, auth headers, or full API response bodies.
 
 ## Keybindings

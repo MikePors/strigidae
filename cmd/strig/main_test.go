@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	cliBrowser "github.com/cli/browser"
+
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/github/fake"
 )
@@ -82,6 +84,18 @@ func TestRunPositionalArgument(t *testing.T) {
 	}
 	if !h.started.IsZero() {
 		t.Error("TUI started despite the stray argument")
+	}
+}
+
+func TestSilenceBrowser(t *testing.T) {
+	oldOut, oldErr := cliBrowser.Stdout, cliBrowser.Stderr
+	t.Cleanup(func() { cliBrowser.Stdout, cliBrowser.Stderr = oldOut, oldErr })
+	var out, errOut bytes.Buffer
+	cliBrowser.Stdout, cliBrowser.Stderr = &out, &errOut
+
+	silenceBrowser()
+	if cliBrowser.Stdout != io.Discard || cliBrowser.Stderr != io.Discard {
+		t.Fatal("browser output not discarded")
 	}
 }
 
