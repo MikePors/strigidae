@@ -4,7 +4,7 @@ alice · main ← feat/retry · changes requested · [enhancement] [sync] · rev
 │> Overview       ╭─ Go to file ─────────────────────────────────────────────────╮                 │
 │  M …rnal/sync/cl│> retry▏                                                      │                 │
 │  A …rnal/sync/re│> internal/sync/retry.go                                      │                 │
-│  D …rnal/sync/le│  docs/design/a-very-long-directory-name/retry-policy-and-b…  │nt so            │
+│  D …rnal/sync/le│  …gn/a-very-long-directory-name/retry-policy-and-backoff.md  │nt so            │
 │  R …y-and-backof╰──────────────────────────────────────────────────────────────╯le run. It       │
 │  M README.md          +2 -1││   replaces the ad-hoc loop in  sync.go  with a small, well-        │
 │                            ││   tested helper.                                                   │

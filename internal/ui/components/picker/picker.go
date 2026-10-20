@@ -127,13 +127,20 @@ func (m *Model) Render(width, height int) string {
 	rows := min(max(len(m.matches), 1), min(height-4, 12))
 
 	lines := make([]string, 0, rows+2)
-	lines = append(lines, m.th.Title.Render("> ")+m.th.Normal.Render(string(m.query))+m.th.Muted.Render("▏"))
+	q := string(m.query)
+	if over := ansi.StringWidth(q) - (inner - 3); over > 0 {
+		q = ansi.TruncateLeft(q, over+1, "…") // keep the tail of a long query visible
+	}
+	lines = append(lines, m.th.Title.Render("> ")+m.th.Normal.Render(q)+m.th.Muted.Render("▏"))
 	if len(m.matches) == 0 {
 		lines = append(lines, m.th.Muted.Render("no matches"))
 	}
 	start := min(max(0, m.cursor-rows+1), max(0, len(m.matches)-rows))
 	for i := start; i < len(m.matches) && i < start+rows; i++ {
-		label := ansi.Truncate(m.items[m.matches[i]], inner-4, "…")
+		label := m.items[m.matches[i]]
+		if over := ansi.StringWidth(label) - (inner - 4); over > 0 {
+			label = ansi.TruncateLeft(label, over+1, "…") // keep the file name visible
+		}
 		if i == m.cursor {
 			lines = append(lines, m.th.OverlayItemFocus.Render(pad("> "+label, inner-2)))
 		} else {
