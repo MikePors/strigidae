@@ -1,0 +1,28 @@
+{
+  "data": {
+    "repository": {
+      "pullRequests": {
+        "totalCount": 3,
+        "pageInfo": {"hasNextPage": false, "endCursor": "Y3Vyc29yOnYyOpHOAAAAAw=="},
+        "nodes": [
+          {
+            "id": "PR_kwDOExample03",
+            "number": 24,
+            "title": "build(deps): bump the actions group",
+            "url": "https://github.com/MikePors/strigidae/pull/24",
+            "isDraft": false,
+            "state": "OPEN",
+            "createdAt": "2026-10-10T07:00:00Z",
+            "updatedAt": "2026-10-10T07:05:00Z",
+            "reviewDecision": "REVIEW_REQUIRED",
+            "baseRefName": "main",
+            "headRefName": "dependabot/github_actions/actions-1c0c2ed584",
+            "author": {"login": "dependabot[bot]"},
+            "commentCount": {"totalCount": 1},
+            "repository": {"nameWithOwner": "MikePors/strigidae"}
+          }
+        ]
+      }
+    }
+  }
+}

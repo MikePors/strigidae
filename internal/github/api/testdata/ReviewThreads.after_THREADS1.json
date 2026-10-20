@@ -1,0 +1,39 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "reviewThreads": {
+          "totalCount": 3,
+          "pageInfo": {"hasNextPage": false, "endCursor": "THREADS2"},
+          "nodes": [
+            {
+              "id": "PRRT_kwDOExample03",
+              "isResolved": false,
+              "isOutdated": true,
+              "path": "README.md",
+              "line": null,
+              "originalLine": 1,
+              "startLine": null,
+              "originalStartLine": null,
+              "diffSide": "RIGHT",
+              "resolvedBy": null,
+              "comments": {
+                "nodes": [
+                  {
+                    "id": "PRRC_kwDOExample04",
+                    "url": "https://github.com/MikePors/strigidae/pull/27#discussion_r4",
+                    "body": "Typo.",
+                    "diffHunk": "@@ -1 +1 @@\n-# strigdae\n+# strigidae\n",
+                    "createdAt": "2026-10-18T13:20:00Z",
+                    "author": {"login": "octocat"},
+                    "reactionGroups": []
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

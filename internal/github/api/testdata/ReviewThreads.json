@@ -1,0 +1,76 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "reviewThreads": {
+          "totalCount": 3,
+          "pageInfo": {"hasNextPage": true, "endCursor": "THREADS1"},
+          "nodes": [
+            {
+              "id": "PRRT_kwDOExample01",
+              "isResolved": false,
+              "isOutdated": false,
+              "path": "internal/github/client.go",
+              "line": 12,
+              "originalLine": 12,
+              "startLine": 10,
+              "originalStartLine": 10,
+              "diffSide": "RIGHT",
+              "resolvedBy": null,
+              "comments": {
+                "nodes": [
+                  {
+                    "id": "PRRC_kwDOExample01",
+                    "url": "https://github.com/MikePors/strigidae/pull/27#discussion_r1",
+                    "body": "Should this take a context?",
+                    "diffHunk": "@@ -0,0 +1,20 @@\n+package github\n",
+                    "createdAt": "2026-10-18T13:05:00Z",
+                    "author": {"login": "octocat"},
+                    "reactionGroups": [
+                      {"content": "EYES", "viewerHasReacted": true, "reactors": {"totalCount": 1}},
+                      {"content": "ROCKET", "viewerHasReacted": false, "reactors": {"totalCount": 0}}
+                    ]
+                  },
+                  {
+                    "id": "PRRC_kwDOExample02",
+                    "url": "https://github.com/MikePors/strigidae/pull/27#discussion_r2",
+                    "body": "Yes, fixed.",
+                    "diffHunk": "@@ -0,0 +1,20 @@\n+package github\n",
+                    "createdAt": "2026-10-18T14:00:00Z",
+                    "author": {"login": "MikePors"},
+                    "reactionGroups": []
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRRT_kwDOExample02",
+              "isResolved": true,
+              "isOutdated": true,
+              "path": "go.mod",
+              "line": null,
+              "originalLine": 5,
+              "startLine": null,
+              "originalStartLine": null,
+              "diffSide": "LEFT",
+              "resolvedBy": {"login": "MikePors"},
+              "comments": {
+                "nodes": [
+                  {
+                    "id": "PRRC_kwDOExample03",
+                    "url": "https://github.com/MikePors/strigidae/pull/27#discussion_r3",
+                    "body": "Pin this version.",
+                    "diffHunk": "@@ -3,3 +3,3 @@\n-go 1.26\n",
+                    "createdAt": "2026-10-18T13:10:00Z",
+                    "author": null,
+                    "reactionGroups": []
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
