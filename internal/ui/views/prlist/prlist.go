@@ -16,6 +16,7 @@ import (
 	"github.com/MikePors/strigidae/internal/ui/keys"
 	"github.com/MikePors/strigidae/internal/ui/termtext"
 	"github.com/MikePors/strigidae/internal/ui/theme"
+	"github.com/MikePors/strigidae/internal/ui/views/workspace"
 )
 
 const (
@@ -263,15 +264,19 @@ func (v *View) maybeLoadMore() tea.Cmd {
 	return v.fetch(github.PageRequest{After: v.next}, true)
 }
 
-// openSelected is the hook for opening the PR workspace. Once that view
-// exists, replace the body with:
-//
-//	return ui.Push(workspace.New(v.client, pr, v.th))
+// openSelected pushes the PR workspace for the selected pull request. It
+// hands over the list's theme, clock and browser opener so the workspace looks
+// and behaves like its parent (and tests stay deterministic).
 func (v *View) openSelected() tea.Cmd {
-	if _, ok := v.selected(); !ok {
+	pr, ok := v.selected()
+	if !ok {
 		return nil
 	}
-	return ui.Info("PR workspace arrives with #7")
+	return ui.Push(workspace.New(v.client, v.repo, pr.Number,
+		workspace.WithTheme(v.th),
+		workspace.WithClock(v.now),
+		workspace.WithOpener(v.open),
+	))
 }
 
 func (v *View) browseSelected() tea.Cmd {
