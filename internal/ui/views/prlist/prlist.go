@@ -13,6 +13,7 @@ import (
 
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/ui"
+	"github.com/MikePors/strigidae/internal/ui/components/scroll"
 	"github.com/MikePors/strigidae/internal/ui/keys"
 	"github.com/MikePors/strigidae/internal/ui/termtext"
 	"github.com/MikePors/strigidae/internal/ui/theme"
@@ -64,7 +65,7 @@ type View struct {
 	err         error  // the last failed load, cleared by the next success
 	moreFailed  bool   // the last next-page load failed; no auto-retry until R
 
-	cursor, top   int
+	win           scroll.Window // cursor and top row over prs
 	width, height int
 }
 
@@ -138,7 +139,7 @@ func (v *View) Update(msg tea.Msg) (ui.View, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		v.width, v.height = msg.Width, msg.Height
-		v.clamp()
+		v.win.SetSize(v.listHeight())
 		return v, nil
 	case ui.ThemeMsg:
 		v.th = msg.Theme
@@ -172,7 +173,7 @@ func (v *View) loaded(msg prsLoadedMsg) tea.Cmd {
 	} else {
 		v.replace(msg.page.Items)
 	}
-	v.clamp()
+	v.win.SetRows(len(v.prs))
 	return v.maybeLoadMore()
 }
 
@@ -184,42 +185,41 @@ func (v *View) replace(items []github.PullRequest) {
 		selected = pr.Number
 	}
 	v.prs = items
-	// If the selected PR is gone, stay on the same row (clamp fixes the range).
-	v.cursor = min(v.cursor, max(0, len(items)-1))
+	// If the selected PR is gone, stay on the same row (the window clamps it).
+	v.win.SetRows(len(items))
 	for i, pr := range items {
 		if selected != 0 && pr.Number == selected {
-			v.cursor = i
+			v.win.Restore(i, v.win.Top(), 0)
 			break
 		}
 	}
 }
 
 func (v *View) selected() (github.PullRequest, bool) {
-	if v.cursor < 0 || v.cursor >= len(v.prs) {
+	if v.win.Cursor() >= len(v.prs) {
 		return github.PullRequest{}, false
 	}
-	return v.prs[v.cursor], true
+	return v.prs[v.win.Cursor()], true
 }
 
 func (v *View) handleKey(msg keys.Msg) tea.Cmd {
-	page := max(1, v.listHeight())
 	switch {
 	case key.Matches(msg, v.km.Down):
-		v.cursor++
+		v.win.Down(1)
 	case key.Matches(msg, v.km.Up):
-		v.cursor--
+		v.win.Up(1)
 	case key.Matches(msg, v.km.Top):
-		v.cursor = 0
+		v.win.GotoTop()
 	case key.Matches(msg, v.km.Bottom):
-		v.cursor = len(v.prs) - 1
+		v.win.GotoBottom()
 	case key.Matches(msg, v.km.HalfDown):
-		v.cursor += page / 2
+		v.win.HalfPageDown()
 	case key.Matches(msg, v.km.HalfUp):
-		v.cursor -= page / 2
+		v.win.HalfPageUp()
 	case key.Matches(msg, v.km.PageDown):
-		v.cursor += page
+		v.win.PageDown()
 	case key.Matches(msg, v.km.PageUp):
-		v.cursor -= page
+		v.win.PageUp()
 	case key.Matches(msg, v.km.Select):
 		return v.openSelected()
 	case key.Matches(msg, v.km.Open):
@@ -229,7 +229,6 @@ func (v *View) handleKey(msg keys.Msg) tea.Cmd {
 	default:
 		return nil
 	}
-	v.clamp()
 	return v.maybeLoadMore()
 }
 
@@ -250,7 +249,7 @@ func (v *View) refresh() tea.Cmd {
 // maybeLoadMore requests the next page when the selection is near the end of
 // what is loaded.
 func (v *View) maybeLoadMore() tea.Cmd {
-	if v.next == "" || v.loading || v.moreFailed || v.loadingMore || v.cursor < len(v.prs)-1-loadMoreMargin {
+	if v.next == "" || v.loading || v.moreFailed || v.loadingMore || v.win.Cursor() < len(v.prs)-1-loadMoreMargin {
 		return nil
 	}
 	v.loadingMore = true
@@ -290,19 +289,3 @@ func (v *View) browseSelected() tea.Cmd {
 }
 
 func (v *View) listHeight() int { return max(0, v.height-1) } // minus the header row
-
-// clamp keeps the cursor in range and the window scrolled to show it.
-func (v *View) clamp() {
-	v.cursor = min(max(v.cursor, 0), max(0, len(v.prs)-1))
-	h := v.listHeight()
-	if h == 0 {
-		return
-	}
-	if v.cursor < v.top {
-		v.top = v.cursor
-	}
-	if v.cursor >= v.top+h {
-		v.top = v.cursor - h + 1
-	}
-	v.top = min(max(v.top, 0), max(0, len(v.prs)-h))
-}

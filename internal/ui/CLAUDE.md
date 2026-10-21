@@ -14,6 +14,7 @@ Rules for the app shell, components and views. The root `CLAUDE.md` still applie
 - **Loading and lifecycle.** A view that loads data implements `ui.Loader`; the status bar spinner follows the top view. A view revealed by `:q` gets `ui.Resumer.Resumed()` and may refresh.
 - **Embedded bubbles components** (viewport, list, …): drive them through their methods (`ScrollDown`, `GotoTop`, …) in response to `keys.Msg`; never forward a `keys.Msg` to their `Update`.
 - **Text inputs capture keys.** A view with a focused text input (filter, command line, reply box) implements `ui.KeyCapturer`; while it captures, it receives every key raw and no global bindings or sequences fire. `esc` must always release capture, and every capturing component needs a test proving it.
+- **Scrolling lists.** Any view or component with a cursor in a scrolling list uses `internal/ui/components/scroll.Window` and never re-implements clamping or follow logic.
 - **Sizing**: views receive the space they may draw in and must not draw outside it. Handle `tea.WindowSizeMsg` everywhere.
 - **Untrusted text.** Pass all GitHub/git text through `internal/ui/termtext` before it reaches the screen: `Clean` for single-line text, `CleanBlock` before markdown rendering. Test with a hostile fixture (escape sequences, C1 controls, bidi overrides, invalid UTF-8).
 - **Styling**: no inline colours or ad-hoc `lipgloss.NewStyle()` in views or components; add a named style to `internal/ui/theme`.
