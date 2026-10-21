@@ -54,6 +54,57 @@ func TestOpen(t *testing.T) {
 	}
 }
 
+func TestStart(t *testing.T) {
+	dir := t.TempDir()
+	blocker := filepath.Join(dir, "file")
+	if err := os.WriteFile(blocker, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	home := func() (string, error) { return dir, nil }
+	tests := []struct {
+		name     string
+		env      map[string]string
+		home     func() (string, error)
+		wantFile string // log file that should receive the line; "" means discarded
+		wantErr  string // prefix of the returned error; "" means no error
+	}{
+		{
+			name: "opens the file", env: map[string]string{"XDG_STATE_HOME": dir}, home: home,
+			wantFile: filepath.Join(dir, "strig", "strig.log"),
+		},
+		{
+			name: "no home", home: func() (string, error) { return "", errors.New("none") },
+			wantErr: "find home directory: none",
+		},
+		{
+			name: "unwritable directory", env: map[string]string{"XDG_STATE_HOME": blocker}, home: home,
+			wantErr: "create log directory: ",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// The logger and close must be usable whether or not Start failed.
+			l, closeLog, err := Start(func(k string) string { return tt.env[k] }, tt.home)
+			l.Info("hello")
+			closeLog()
+
+			switch {
+			case tt.wantErr == "" && err != nil:
+				t.Errorf("unexpected error %v", err)
+			case tt.wantErr != "" && (err == nil || !strings.HasPrefix(err.Error(), tt.wantErr)):
+				t.Errorf("err = %v, want prefix %q", err, tt.wantErr)
+			}
+			if tt.wantFile == "" {
+				return
+			}
+			b, err := os.ReadFile(tt.wantFile)
+			if err != nil || !strings.Contains(string(b), `msg=hello`) {
+				t.Errorf("log file missing line: %q, %v", b, err)
+			}
+		})
+	}
+}
+
 func TestInstall(t *testing.T) {
 	prevSlog, prevOut, prevFlags := slog.Default(), log.Writer(), log.Flags()
 	t.Cleanup(func() {
