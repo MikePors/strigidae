@@ -59,34 +59,32 @@ func TestRowLayout(t *testing.T) {
 	}
 }
 
-func TestVerticalMovement(t *testing.T) {
+// The movement rules live in the scroll package; these prove every exported
+// method is wired to the right one.
+func TestMovementDelegates(t *testing.T) {
 	tests := []struct {
 		name       string
 		do         func(m *Model)
 		wantCursor int
 		wantTop    int
 	}{
-		{"down", func(m *Model) { m.CursorDown(3) }, 3, 0},
-		{"up clamps", func(m *Model) { m.CursorUp(5) }, 0, 0},
-		{"down follows with scroll", func(m *Model) { m.CursorDown(8) }, 8, 3},
-		{"bottom", func(m *Model) { m.GotoBottom() }, totalRows - 1, totalRows - 6},
-		{"bottom then top", func(m *Model) { m.GotoBottom(); m.GotoTop() }, 0, 0},
-		{"down past end clamps", func(m *Model) { m.CursorDown(1000) }, totalRows - 1, totalRows - 6},
-		{"half page", func(m *Model) { m.HalfPageDown() }, 3, 3},
-		{"page", func(m *Model) { m.PageDown() }, 6, 6},
-		{"page up after page", func(m *Model) { m.PageDown(); m.PageUp() }, 0, 0},
-		{"half up clamps", func(m *Model) { m.HalfPageUp() }, 0, 0},
-		{"scroll leaves cursor in view", func(m *Model) { m.ScrollDown(4) }, 4, 4},
-		{"scroll keeps visible cursor", func(m *Model) { m.CursorDown(5); m.ScrollDown(2) }, 5, 2},
-		{"scroll up", func(m *Model) { m.CursorDown(8); m.ScrollUp(1) }, 7, 2},
-		{"scroll down clamps", func(m *Model) { m.ScrollDown(1000) }, totalRows - 6, totalRows - 6},
+		{"CursorDown", func(m *Model) { m.CursorDown(8) }, 8, 3},
+		{"CursorUp", func(m *Model) { m.CursorDown(8); m.CursorUp(2) }, 6, 3},
+		{"GotoBottom", func(m *Model) { m.GotoBottom() }, totalRows - 1, totalRows - 6},
+		{"GotoTop", func(m *Model) { m.GotoBottom(); m.GotoTop() }, 0, 0},
+		{"HalfPageDown", func(m *Model) { m.HalfPageDown() }, 3, 3},
+		{"HalfPageUp", func(m *Model) { m.PageDown(); m.HalfPageUp() }, 3, 3},
+		{"PageDown", func(m *Model) { m.PageDown() }, 6, 6},
+		{"PageUp", func(m *Model) { m.PageDown(); m.PageUp() }, 0, 0},
+		{"ScrollDown pulls the cursor", func(m *Model) { m.ScrollDown(4) }, 4, 4},
+		{"ScrollUp", func(m *Model) { m.GotoBottom(); m.ScrollUp(3) }, totalRows - 4, totalRows - 9},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := newModel(t, 80, 6)
 			tt.do(m)
-			if m.cursor != tt.wantCursor || m.top != tt.wantTop {
-				t.Errorf("cursor/top = %d/%d, want %d/%d", m.cursor, m.top, tt.wantCursor, tt.wantTop)
+			if m.win.Cursor() != tt.wantCursor || m.Top() != tt.wantTop {
+				t.Errorf("cursor/top = %d/%d, want %d/%d", m.win.Cursor(), m.Top(), tt.wantCursor, tt.wantTop)
 			}
 		})
 	}
@@ -96,49 +94,17 @@ func TestResizeKeepsCursorVisible(t *testing.T) {
 	m := newModel(t, 80, 10)
 	m.CursorDown(9)
 	m.SetSize(80, 4)
-	if m.cursor < m.top || m.cursor >= m.top+4 {
-		t.Errorf("cursor %d outside [%d,%d)", m.cursor, m.top, m.top+4)
+	if m.win.Cursor() < m.win.Top() || m.win.Cursor() >= m.win.Top()+4 {
+		t.Errorf("cursor %d outside [%d,%d)", m.win.Cursor(), m.win.Top(), m.win.Top()+4)
 	}
 }
 
-func TestHunkNavigation(t *testing.T) {
-	m := newModel(t, 80, 6)
-	m.NextHunk()
-	if m.cursor != hunk2Row || m.top != hunk2Row {
-		t.Errorf("next: cursor/top = %d/%d", m.cursor, m.top)
-	}
-	m.NextHunk() // last hunk: no-op
-	if m.cursor != hunk2Row {
-		t.Errorf("next on last hunk moved to %d", m.cursor)
-	}
-	m.CursorDown(3)
-	m.PrevHunk() // inside hunk 2: goes to its header
-	if m.cursor != hunk2Row {
-		t.Errorf("prev inside hunk: %d", m.cursor)
-	}
-	m.PrevHunk()
-	if m.cursor != 0 {
-		t.Errorf("prev: %d", m.cursor)
-	}
-	m.PrevHunk() // first hunk: no-op
-	if m.cursor != 0 {
-		t.Errorf("prev on first hunk moved to %d", m.cursor)
-	}
-}
-
-func TestHorizontalScrollBounds(t *testing.T) {
+// The code area, not the whole pane, is the horizontal view.
+func TestHorizontalScrollUsesCodeWidth(t *testing.T) {
 	m := newModel(t, 60, 8)
-	maxX := m.maxX()
+	maxX := m.maxW - m.codeW()
 	if maxX <= 0 {
-		t.Fatalf("expected a line wider than the pane, maxX = %d", maxX)
-	}
-	m.ScrollLeft(5)
-	if m.XOffset() != 0 {
-		t.Errorf("left of 0: %d", m.XOffset())
-	}
-	m.ScrollRight(4)
-	if m.XOffset() != 4 {
-		t.Errorf("right 4: %d", m.XOffset())
+		t.Fatalf("expected a line wider than the code area, maxX = %d", maxX)
 	}
 	m.ScrollRight(10000)
 	if m.XOffset() != maxX {
@@ -148,9 +114,44 @@ func TestHorizontalScrollBounds(t *testing.T) {
 	if want := maxX - m.codeW()/2; m.XOffset() != want {
 		t.Errorf("half left: %d, want %d", m.XOffset(), want)
 	}
+	m.ScrollLeft(10000)
+	m.HalfScrollRight()
+	if m.XOffset() != m.codeW()/2 {
+		t.Errorf("half right: %d, want %d", m.XOffset(), m.codeW()/2)
+	}
+	m.ScrollRight(3)
+	m.ScrollLeft(1)
+	if m.XOffset() != m.codeW()/2+2 {
+		t.Errorf("right/left: %d", m.XOffset())
+	}
 	m.SetSize(200, 8) // everything fits: no scrolling possible
-	if m.XOffset() != 0 || m.maxX() != 0 {
-		t.Errorf("wide pane: x=%d maxX=%d", m.XOffset(), m.maxX())
+	if m.XOffset() != 0 {
+		t.Errorf("wide pane: x=%d", m.XOffset())
+	}
+}
+
+func TestHunkNavigation(t *testing.T) {
+	m := newModel(t, 80, 6)
+	m.NextHunk()
+	if m.win.Cursor() != hunk2Row || m.win.Top() != hunk2Row {
+		t.Errorf("next: cursor/top = %d/%d", m.win.Cursor(), m.win.Top())
+	}
+	m.NextHunk() // last hunk: no-op
+	if m.win.Cursor() != hunk2Row {
+		t.Errorf("next on last hunk moved to %d", m.win.Cursor())
+	}
+	m.CursorDown(3)
+	m.PrevHunk() // inside hunk 2: goes to its header
+	if m.win.Cursor() != hunk2Row {
+		t.Errorf("prev inside hunk: %d", m.win.Cursor())
+	}
+	m.PrevHunk()
+	if m.win.Cursor() != 0 {
+		t.Errorf("prev: %d", m.win.Cursor())
+	}
+	m.PrevHunk() // first hunk: no-op
+	if m.win.Cursor() != 0 {
+		t.Errorf("prev on first hunk moved to %d", m.win.Cursor())
 	}
 }
 
@@ -190,12 +191,12 @@ func TestSetFileSameFileKeepsPosition(t *testing.T) {
 	f := m.file
 	m.CursorDown(7)
 	m.SetFile(f)
-	if m.cursor != 7 {
-		t.Errorf("cursor reset to %d", m.cursor)
+	if m.win.Cursor() != 7 {
+		t.Errorf("cursor reset to %d", m.win.Cursor())
 	}
 	m.SetFile(fixture(t, "pkg/new.go"))
-	if m.cursor != 0 {
-		t.Errorf("different path should reset cursor, got %d", m.cursor)
+	if m.win.Cursor() != 0 {
+		t.Errorf("different path should reset cursor, got %d", m.win.Cursor())
 	}
 }
 

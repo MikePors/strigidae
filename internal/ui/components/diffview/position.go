@@ -21,16 +21,16 @@ type position struct {
 }
 
 func (m *Model) capture() position {
-	p := position{path: m.file.Path(), xoff: m.xoff}
+	p := position{path: m.file.Path(), xoff: m.win.XOffset()}
 	if len(m.rows) == 0 {
 		return p
 	}
-	i := m.cursor
+	i := m.win.Cursor()
 	if r := m.rows[i]; r.line != nil && r.line.Kind == diff.NoNewline && i > 0 {
 		i-- // markers have no numbers; anchor to the line they belong to
 	}
 	p.a = m.anchorAt(i)
-	p.off = m.cursor - m.top
+	p.off = m.win.Cursor() - m.win.Top()
 	p.ok = true
 	return p
 }
@@ -49,9 +49,8 @@ func (m *Model) restore(p position) {
 	if !p.ok || len(m.rows) == 0 {
 		return
 	}
-	m.cursor = m.find(p.a)
-	m.top = m.cursor - p.off
-	m.xoff = p.xoff
+	row := m.find(p.a)
+	m.win.Restore(row, row-p.off, p.xoff)
 }
 
 func lineKey(oldNo, newNo int) int {

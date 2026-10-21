@@ -68,7 +68,7 @@ func newStyleSet(th theme.Theme) styleSet {
 func (m *Model) renderRow(i int) string {
 	r := m.rows[i]
 	cur := 0
-	if i == m.cursor {
+	if i == m.win.Cursor() {
 		cur = 1
 	}
 	if r.line == nil {
@@ -93,7 +93,7 @@ func (m *Model) renderRow(i int) string {
 	if r.line.Kind == diff.NoNewline {
 		spans = []Span{{Text: r.text, Class: classNoNewline}}
 	}
-	visible, used := window(spans, m.xoff, codeW)
+	visible, used := window(spans, m.win.XOffset(), codeW)
 
 	var b strings.Builder
 	b.WriteString(v.gutter.Render(gutter))

@@ -152,11 +152,11 @@ func TestSetFileKeepsPositionAcrossReparse(t *testing.T) {
 	m.SetSize(60, 6)
 	m.CursorDown(15)
 	m.ScrollRight(5)
-	cursor, top, xoff := m.cursor, m.top, m.xoff
+	cursor, top, xoff := m.win.Cursor(), m.win.Top(), m.win.XOffset()
 
 	m.SetFile(d2.File("server.go"))
-	if m.cursor != cursor || m.top != top || m.xoff != xoff {
-		t.Errorf("position after reparse = %d/%d/%d, want %d/%d/%d", m.cursor, m.top, m.xoff, cursor, top, xoff)
+	if m.win.Cursor() != cursor || m.win.Top() != top || m.win.XOffset() != xoff {
+		t.Errorf("position after reparse = %d/%d/%d, want %d/%d/%d", m.win.Cursor(), m.win.Top(), m.win.XOffset(), cursor, top, xoff)
 	}
 	if got, ok := m.Cursor(); !ok || got.Old != 32 {
 		t.Errorf("cursor line after reparse: %+v %v", got, ok)
@@ -166,14 +166,14 @@ func TestSetFileKeepsPositionAcrossReparse(t *testing.T) {
 	small := *d2.File("server.go")
 	small.Hunks = small.Hunks[:1]
 	m.SetFile(&small)
-	if m.cursor >= len(m.rows) || m.top > m.maxTop() || m.cursor < m.top || m.cursor >= m.top+6 {
-		t.Errorf("not clamped: cursor %d top %d rows %d", m.cursor, m.top, len(m.rows))
+	if m.win.Cursor() >= len(m.rows) || m.win.Top() > m.win.MaxTop() || m.win.Cursor() < m.win.Top() || m.win.Cursor() >= m.win.Top()+6 {
+		t.Errorf("not clamped: cursor %d top %d rows %d", m.win.Cursor(), m.win.Top(), len(m.rows))
 	}
 
 	// A different path resets.
 	m.SetFile(d2.File("pkg/new.go"))
 	m.SetFile(d1.File("server.go"))
-	if m.cursor != 0 || m.top != 0 || m.xoff != 0 {
-		t.Errorf("different path should reset, got %d/%d/%d", m.cursor, m.top, m.xoff)
+	if m.win.Cursor() != 0 || m.win.Top() != 0 || m.win.XOffset() != 0 {
+		t.Errorf("different path should reset, got %d/%d/%d", m.win.Cursor(), m.win.Top(), m.win.XOffset())
 	}
 }

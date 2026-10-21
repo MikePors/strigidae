@@ -38,11 +38,11 @@ func TestReparseReanchorsOnSameLine(t *testing.T) {
 	if !ok || c.Kind != diff.Delete || c.Old != 2 || c.Text != "b" {
 		t.Errorf("after rows moved: %+v ok=%v", c, ok)
 	}
-	if m.cursor != 4 {
-		t.Errorf("cursor row = %d, want 4", m.cursor)
+	if m.win.Cursor() != 4 {
+		t.Errorf("cursor row = %d, want 4", m.win.Cursor())
 	}
-	if m.cursor < m.top || m.cursor >= m.top+4 {
-		t.Errorf("cursor %d not visible from top %d", m.cursor, m.top)
+	if m.win.Cursor() < m.win.Top() || m.win.Cursor() >= m.win.Top()+4 {
+		t.Errorf("cursor %d not visible from top %d", m.win.Cursor(), m.win.Top())
 	}
 
 	m.SetFile(parseFile(t, v3))
@@ -59,8 +59,8 @@ func TestReparseKeepsHeaderAndMarkerAnchors(t *testing.T) {
 	m.SetSize(60, 10)
 	m.NextHunk()
 	m.SetFile(parseFile(t, withMarker))
-	if m.cursor != 5 {
-		t.Errorf("header anchor: cursor = %d", m.cursor)
+	if m.win.Cursor() != 5 {
+		t.Errorf("header anchor: cursor = %d", m.win.Cursor())
 	}
 	m.GotoTop()
 	m.CursorDown(3) // the marker row
@@ -97,8 +97,8 @@ func TestMessageKeepsSavedPosition(t *testing.T) {
 	m.SetMessage("Loading diff...")
 	other := &diff.File{NewPath: "g", OldPath: "g", Hunks: parseFile(t, v1).Hunks}
 	m.SetFile(other)
-	if m.cursor != 0 {
-		t.Errorf("different path should start at 0, got %d", m.cursor)
+	if m.win.Cursor() != 0 {
+		t.Errorf("different path should start at 0, got %d", m.win.Cursor())
 	}
 	// And an explicit clear forgets the saved position.
 	m.SetFile(parseFile(t, v2))
@@ -106,8 +106,8 @@ func TestMessageKeepsSavedPosition(t *testing.T) {
 	m.SetMessage("x")
 	m.SetFile(nil)
 	m.SetFile(parseFile(t, v2))
-	if m.cursor != 0 {
-		t.Errorf("SetFile(nil) should drop the saved position, got %d", m.cursor)
+	if m.win.Cursor() != 0 {
+		t.Errorf("SetFile(nil) should drop the saved position, got %d", m.win.Cursor())
 	}
 }
 

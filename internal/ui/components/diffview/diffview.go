@@ -33,6 +33,7 @@ import (
 
 	"github.com/MikePors/strigidae/internal/diff"
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/ui/components/scroll"
 	"github.com/MikePors/strigidae/internal/ui/theme"
 )
 
@@ -96,10 +97,9 @@ type Model struct {
 	cache map[int][]Span // highlighted rows, by row index; reset per file
 	saved *position      // position kept while a message replaces the file
 
-	w, h   int
-	top    int // first visible row
-	cursor int // row index
-	xoff   int // horizontal scroll, in cells
+	w, h int
+
+	win scroll.Window // cursor, top row and horizontal offset
 }
 
 // New returns an empty diff pane.
@@ -147,10 +147,10 @@ func (m *Model) SetFile(f *diff.File) {
 		return
 	}
 	m.build(f)
+	m.sync()
 	if prev != nil {
 		m.restore(*prev)
 	}
-	m.clamp()
 }
 
 // SetMessage shows a message instead of a diff (for example while loading).
@@ -183,7 +183,9 @@ func TooLargeMessage() string {
 func (m *Model) reset() {
 	m.rows, m.hunkRow = nil, nil
 	m.cache = map[int][]Span{}
-	m.top, m.cursor, m.xoff, m.maxW, m.numW = 0, 0, 0, 0, 0
+	m.win.Reset()
+	m.maxW, m.numW = 0, 0
+	m.sync()
 }
 
 func (m *Model) build(f *diff.File) {
@@ -211,7 +213,7 @@ func (m *Model) build(f *diff.File) {
 // SetSize sets the drawing area. Scroll positions are re-clamped.
 func (m *Model) SetSize(w, h int) {
 	m.w, m.h = max(w, 0), max(h, 0)
-	m.clamp()
+	m.sync()
 }
 
 // Size returns the current drawing area.
@@ -223,86 +225,54 @@ func (m *Model) gutterW() int { return 2*m.numW + 4 }
 
 func (m *Model) codeW() int { return max(m.w-m.gutterW(), 0) }
 
-func (m *Model) maxTop() int { return max(len(m.rows)-m.h, 0) }
-
-func (m *Model) maxX() int { return max(m.maxW-m.codeW(), 0) }
-
-func (m *Model) clamp() {
-	if len(m.rows) == 0 {
-		m.top, m.cursor, m.xoff = 0, 0, 0
-		return
-	}
-	m.cursor = min(max(m.cursor, 0), len(m.rows)-1)
-	m.top = min(max(m.top, 0), m.maxTop())
-	m.xoff = min(max(m.xoff, 0), m.maxX())
-	m.follow()
-}
-
-// follow scrolls the minimum needed to keep the cursor visible.
-func (m *Model) follow() {
-	if m.h <= 0 {
-		return
-	}
-	if m.cursor < m.top {
-		m.top = m.cursor
-	}
-	if m.cursor >= m.top+m.h {
-		m.top = m.cursor - m.h + 1
-	}
+// sync pushes the diff's row count and widths into the scroll window.
+func (m *Model) sync() {
+	m.win.SetRows(len(m.rows))
+	m.win.SetSize(m.h)
+	m.win.SetWidths(m.maxW, m.codeW())
 }
 
 // --- vertical movement: cursor follows, view follows the cursor ---
 
 // CursorDown moves the cursor down n rows, scrolling to keep it visible.
-func (m *Model) CursorDown(n int) { m.cursor += n; m.clamp() }
+func (m *Model) CursorDown(n int) { m.win.Down(n) }
 
 // CursorUp moves the cursor up n rows, scrolling to keep it visible.
-func (m *Model) CursorUp(n int) { m.cursor -= n; m.clamp() }
+func (m *Model) CursorUp(n int) { m.win.Up(n) }
 
 // GotoTop moves the cursor to the first row.
-func (m *Model) GotoTop() { m.cursor = 0; m.clamp() }
+func (m *Model) GotoTop() { m.win.GotoTop() }
 
 // GotoBottom moves the cursor to the last row.
-func (m *Model) GotoBottom() { m.cursor = len(m.rows) - 1; m.clamp() }
+func (m *Model) GotoBottom() { m.win.GotoBottom() }
 
 // --- viewport movement: view and cursor move together, as in vim ---
 
 // ScrollDown scrolls the view down n rows without moving the cursor, unless
 // the cursor would leave the view, in which case it is pulled along.
-func (m *Model) ScrollDown(n int) { m.scrollBy(n) }
+func (m *Model) ScrollDown(n int) { m.win.ScrollDown(n) }
 
 // ScrollUp is the opposite of ScrollDown.
-func (m *Model) ScrollUp(n int) { m.scrollBy(-n) }
-
-func (m *Model) scrollBy(n int) {
-	m.top = min(max(m.top+n, 0), m.maxTop())
-	m.cursor = min(max(m.cursor, m.top), max(m.top+m.h-1, m.top))
-	m.clamp()
-}
+func (m *Model) ScrollUp(n int) { m.win.ScrollUp(n) }
 
 // HalfPageDown moves the view and the cursor down half a screen.
-func (m *Model) HalfPageDown() { m.shift(max(m.h/2, 1)) }
+func (m *Model) HalfPageDown() { m.win.HalfPageDown() }
 
 // HalfPageUp moves the view and the cursor up half a screen.
-func (m *Model) HalfPageUp() { m.shift(-max(m.h/2, 1)) }
+func (m *Model) HalfPageUp() { m.win.HalfPageUp() }
 
 // PageDown moves the view and the cursor down a full screen.
-func (m *Model) PageDown() { m.shift(max(m.h, 1)) }
+func (m *Model) PageDown() { m.win.PageDown() }
 
 // PageUp moves the view and the cursor up a full screen.
-func (m *Model) PageUp() { m.shift(-max(m.h, 1)) }
+func (m *Model) PageUp() { m.win.PageUp() }
 
-func (m *Model) shift(n int) {
-	m.top = min(max(m.top+n, 0), m.maxTop())
-	m.cursor += n
-	m.clamp()
-}
-
-// NextHunk moves the cursor to the next hunk header (no-op on the last hunk).
+// NextHunk moves the cursor to the next hunk header (no-op on the last hunk),
+// putting the header at the top of the view.
 func (m *Model) NextHunk() {
 	for _, r := range m.hunkRow {
-		if r > m.cursor {
-			m.jumpTo(r)
+		if r > m.win.Cursor() {
+			m.win.JumpTo(r)
 			return
 		}
 	}
@@ -312,46 +282,40 @@ func (m *Model) NextHunk() {
 // current hunk's own header when the cursor is inside the hunk.
 func (m *Model) PrevHunk() {
 	for i := len(m.hunkRow) - 1; i >= 0; i-- {
-		if m.hunkRow[i] < m.cursor {
-			m.jumpTo(m.hunkRow[i])
+		if m.hunkRow[i] < m.win.Cursor() {
+			m.win.JumpTo(m.hunkRow[i])
 			return
 		}
 	}
 }
 
-// jumpTo puts the cursor on row r and the row at the top of the view.
-func (m *Model) jumpTo(r int) {
-	m.cursor, m.top = r, r
-	m.clamp()
-}
-
 // --- horizontal scrolling ---
 
 // ScrollRight shifts the code area n cells to the right (reveals later text).
-func (m *Model) ScrollRight(n int) { m.xoff += n; m.clamp() }
+func (m *Model) ScrollRight(n int) { m.win.Right(n) }
 
 // ScrollLeft shifts the code area n cells to the left.
-func (m *Model) ScrollLeft(n int) { m.xoff -= n; m.clamp() }
+func (m *Model) ScrollLeft(n int) { m.win.Left(n) }
 
 // HalfScrollRight scrolls right by half the code area.
-func (m *Model) HalfScrollRight() { m.ScrollRight(max(m.codeW()/2, 1)) }
+func (m *Model) HalfScrollRight() { m.win.HalfRight() }
 
 // HalfScrollLeft scrolls left by half the code area.
-func (m *Model) HalfScrollLeft() { m.ScrollLeft(max(m.codeW()/2, 1)) }
+func (m *Model) HalfScrollLeft() { m.win.HalfLeft() }
 
 // XOffset returns the horizontal scroll in cells.
-func (m *Model) XOffset() int { return m.xoff }
+func (m *Model) XOffset() int { return m.win.XOffset() }
 
 // Top returns the index of the first visible row (hunk headers count as rows).
-func (m *Model) Top() int { return m.top }
+func (m *Model) Top() int { return m.win.Top() }
 
 // Cursor describes the diff line under the cursor. ok is false when there is
 // no file, or the cursor is on a hunk header or a "no newline" marker.
 func (m *Model) Cursor() (c CursorLine, ok bool) {
-	if m.file == nil || m.cursor >= len(m.rows) {
+	if m.file == nil || m.win.Cursor() >= len(m.rows) {
 		return CursorLine{}, false
 	}
-	r := m.rows[m.cursor]
+	r := m.rows[m.win.Cursor()]
 	if r.line == nil || r.line.Kind == diff.NoNewline {
 		return CursorLine{}, false
 	}
@@ -375,9 +339,9 @@ func (m *Model) Render(w, h int) string {
 	if len(m.rows) == 0 {
 		return m.renderMessage()
 	}
-	end := min(m.top+m.h, len(m.rows))
-	lines := make([]string, 0, end-m.top)
-	for i := m.top; i < end; i++ {
+	end := min(m.win.Top()+m.h, len(m.rows))
+	lines := make([]string, 0, end-m.win.Top())
+	for i := m.win.Top(); i < end; i++ {
 		lines = append(lines, m.renderRow(i))
 	}
 	return strings.Join(lines, "\n")
