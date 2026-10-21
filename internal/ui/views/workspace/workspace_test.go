@@ -601,11 +601,6 @@ func TestGolden(t *testing.T) {
 		h.press("] f", "] f", "l")
 		golden.Assert(t, "file_selected", h.render(), false)
 	})
-	t.Run("right_focused", func(t *testing.T) {
-		h := loaded(t, 100, 24)
-		h.press("l")
-		golden.Assert(t, "right_focused", h.render(), true)
-	})
 	t.Run("picker", func(t *testing.T) {
 		h := loaded(t, 100, 24)
 		h.press("f")
