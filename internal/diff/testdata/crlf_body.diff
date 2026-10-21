@@ -1,0 +1,8 @@
+diff --git a/win.txt b/win.txt
+index 1..2 100644
+--- a/win.txt
++++ b/win.txt
+@@ -1,2 +1,2 @@
+ one
+-two
++three

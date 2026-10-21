@@ -1,0 +1,406 @@
+// Package diffview renders the unified diff of ONE file: old and new line
+// number gutters, add/delete colouring, syntax highlighting, a cursor line,
+// vertical and horizontal scrolling.
+//
+// It is driven by its host through methods, never through key messages. A
+// workspace maps keys to methods like this:
+//
+//	j / k          CursorDown(1) / CursorUp(1)
+//	g g / G        GotoTop() / GotoBottom()
+//	ctrl+d / ctrl+u HalfPageDown() / HalfPageUp()
+//	ctrl+f / ctrl+b PageDown() / PageUp()
+//	] h / [ h      NextHunk() / PrevHunk()
+//	z h / z l      ScrollLeft(4) / ScrollRight(4)
+//	z H / z L      HalfScrollLeft() / HalfScrollRight()
+//
+// Usage:
+//
+//	dv := diffview.New(theme.Default())
+//	dv.SetFile(parsed.File("main.go"))
+//	out := dv.Render(width, height)
+//	if c, ok := dv.Cursor(); ok { /* comment on c.Path line c.New or c.Old */ }
+//
+// Only the visible rows are ever styled or highlighted, and highlighted rows
+// are cached, so scrolling a 5k-line file never re-lexes it.
+package diffview
+
+import (
+	"errors"
+	"strconv"
+	"strings"
+
+	"github.com/charmbracelet/x/ansi"
+
+	"github.com/MikePors/strigidae/internal/diff"
+	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/ui/components/scroll"
+	"github.com/MikePors/strigidae/internal/ui/theme"
+)
+
+// Side says which side of the diff a cursor line belongs to, in the sense
+// GitHub uses for review comments.
+type Side int
+
+// Sides.
+const (
+	// SideRight is the new file: added and unchanged lines.
+	SideRight Side = iota
+	// SideLeft is the old file: deleted lines.
+	SideLeft
+)
+
+// CursorLine describes the diff line under the cursor.
+type CursorLine struct {
+	Path     string // the file's current path (old path for deleted files)
+	Hunk     int    // index into File.Hunks
+	Kind     diff.LineKind
+	Old, New int // line numbers; 0 on the side where the line does not exist
+	Side     Side
+	Text     string
+}
+
+// Number returns the line number on the cursor's side.
+func (c CursorLine) Number() int {
+	if c.Side == SideLeft {
+		return c.Old
+	}
+	return c.New
+}
+
+// Option configures New.
+type Option func(*Model)
+
+// WithHighlighter replaces the default Chroma highlighter (used by tests to
+// count calls or to keep output free of lexer details).
+func WithHighlighter(h Highlighter) Option { return func(m *Model) { m.highlight = h } }
+
+// row is one display row: a hunk header (line == nil) or a diff line.
+type row struct {
+	hunk int
+	line *diff.Line
+	text string // display text: tabs expanded, controls replaced
+}
+
+// Model is the diff pane. Create it with New. It is not a tea.Model.
+type Model struct {
+	th        theme.Theme
+	highlight Highlighter
+	styles    styleSet
+
+	file    *diff.File
+	msg     string // when set, shown instead of the diff
+	rows    []row
+	hunkRow []int // row index of each hunk header
+	numW    int   // width of one line-number column
+	maxW    int   // widest code line, in cells
+
+	cache map[int][]Span // highlighted rows, by row index; reset per file
+	saved *position      // position kept while a message replaces the file
+
+	w, h int
+
+	win scroll.Window // cursor, top row and horizontal offset
+}
+
+// New returns an empty diff pane.
+func New(th theme.Theme, opts ...Option) *Model {
+	m := &Model{th: th, highlight: ChromaHighlighter(), cache: map[int][]Span{}}
+	for _, o := range opts {
+		o(m)
+	}
+	m.styles = newStyleSet(th)
+	return m
+}
+
+// SetTheme swaps the theme. The highlight cache holds token classes, not
+// colours, so it stays valid.
+func (m *Model) SetTheme(th theme.Theme) {
+	m.th = th
+	m.styles = newStyleSet(th)
+}
+
+// SetFile shows f (nil clears the pane). Passing the file already shown is a
+// no-op. Passing a different *diff.File with the same path (a re-parsed
+// refresh) rebuilds the rows and re-anchors the cursor on the same diff line
+// (matching kind and line numbers, else the nearest line), keeping its place in
+// the window and the horizontal offset. A different path resets them.
+func (m *Model) SetFile(f *diff.File) {
+	if f != nil && f == m.file && m.msg == "" {
+		return
+	}
+	// A refresh re-parses the diff, giving a new pointer for the same file
+	// (possibly with a message shown in between): put the cursor back on the
+	// same diff line so the reviewer does not lose their place.
+	var prev *position
+	switch {
+	case f == nil:
+	case m.file != nil && f.Path() == m.file.Path():
+		p := m.capture()
+		prev = &p
+	case m.file == nil && m.saved != nil && m.saved.path == f.Path():
+		prev = m.saved
+	}
+	m.saved = nil
+	m.file, m.msg = f, ""
+	m.reset()
+	if f == nil || f.Binary || len(f.Hunks) == 0 {
+		return
+	}
+	m.build(f)
+	m.sync()
+	if prev != nil {
+		m.restore(*prev)
+	}
+}
+
+// SetMessage shows a message instead of a diff (for example while loading).
+// The position in the file being replaced is remembered, so a following
+// SetFile for the same path (the refresh finishing) restores it.
+func (m *Model) SetMessage(msg string) {
+	if m.file != nil {
+		p := m.capture()
+		m.saved = &p
+	}
+	m.file, m.msg = nil, msg
+	m.reset()
+}
+
+// SetDiffError shows the message for a failed diff load; it recognises
+// github.ErrDiffTooLarge.
+func (m *Model) SetDiffError(err error) {
+	if errors.Is(err, github.ErrDiffTooLarge) {
+		m.SetMessage(TooLargeMessage())
+		return
+	}
+	m.SetMessage("Could not load the diff: " + err.Error())
+}
+
+// TooLargeMessage is the text shown when GitHub refuses to serve the diff.
+func TooLargeMessage() string {
+	return "This diff is too large to load through the GitHub API.\nOpen the pull request in the browser to view it."
+}
+
+func (m *Model) reset() {
+	m.rows, m.hunkRow = nil, nil
+	m.cache = map[int][]Span{}
+	m.win.Reset()
+	m.maxW, m.numW = 0, 0
+	m.sync()
+}
+
+func (m *Model) build(f *diff.File) {
+	total := 0
+	for _, h := range f.Hunks {
+		total += len(h.Lines) + 1
+	}
+	m.rows = make([]row, 0, total)
+	maxNum := 0
+	for hi := range f.Hunks {
+		h := &f.Hunks[hi]
+		m.hunkRow = append(m.hunkRow, len(m.rows))
+		m.rows = append(m.rows, row{hunk: hi})
+		maxNum = max(maxNum, h.OldStart+h.OldLines, h.NewStart+h.NewLines)
+		for li := range h.Lines {
+			l := &h.Lines[li]
+			text, w := displayText(l.Text)
+			m.maxW = max(m.maxW, w)
+			m.rows = append(m.rows, row{hunk: hi, line: l, text: text})
+		}
+	}
+	m.numW = max(len(strconv.Itoa(maxNum)), 3)
+}
+
+// SetSize sets the drawing area. Scroll positions are re-clamped.
+func (m *Model) SetSize(w, h int) {
+	m.w, m.h = max(w, 0), max(h, 0)
+	m.sync()
+}
+
+// Size returns the current drawing area.
+func (m *Model) Size() (w, h int) { return m.w, m.h }
+
+// gutterW is the fixed width of the non-scrolling left part of a row:
+// cursor mark, old number, new number, change marker.
+func (m *Model) gutterW() int { return 2*m.numW + 4 }
+
+func (m *Model) codeW() int { return max(m.w-m.gutterW(), 0) }
+
+// sync pushes the diff's row count and widths into the scroll window.
+func (m *Model) sync() {
+	m.win.SetRows(len(m.rows))
+	m.win.SetSize(m.h)
+	m.win.SetWidths(m.maxW, m.codeW())
+}
+
+// --- vertical movement: cursor follows, view follows the cursor ---
+
+// CursorDown moves the cursor down n rows, scrolling to keep it visible.
+func (m *Model) CursorDown(n int) { m.win.Down(n) }
+
+// CursorUp moves the cursor up n rows, scrolling to keep it visible.
+func (m *Model) CursorUp(n int) { m.win.Up(n) }
+
+// GotoTop moves the cursor to the first row.
+func (m *Model) GotoTop() { m.win.GotoTop() }
+
+// GotoBottom moves the cursor to the last row.
+func (m *Model) GotoBottom() { m.win.GotoBottom() }
+
+// --- viewport movement: view and cursor move together, as in vim ---
+
+// ScrollDown scrolls the view down n rows without moving the cursor, unless
+// the cursor would leave the view, in which case it is pulled along.
+func (m *Model) ScrollDown(n int) { m.win.ScrollDown(n) }
+
+// ScrollUp is the opposite of ScrollDown.
+func (m *Model) ScrollUp(n int) { m.win.ScrollUp(n) }
+
+// HalfPageDown moves the view and the cursor down half a screen.
+func (m *Model) HalfPageDown() { m.win.HalfPageDown() }
+
+// HalfPageUp moves the view and the cursor up half a screen.
+func (m *Model) HalfPageUp() { m.win.HalfPageUp() }
+
+// PageDown moves the view and the cursor down a full screen.
+func (m *Model) PageDown() { m.win.PageDown() }
+
+// PageUp moves the view and the cursor up a full screen.
+func (m *Model) PageUp() { m.win.PageUp() }
+
+// NextHunk moves the cursor to the next hunk header (no-op on the last hunk),
+// putting the header at the top of the view.
+func (m *Model) NextHunk() {
+	for _, r := range m.hunkRow {
+		if r > m.win.Cursor() {
+			m.win.JumpTo(r)
+			return
+		}
+	}
+}
+
+// PrevHunk moves the cursor to the closest hunk header above it, which is the
+// current hunk's own header when the cursor is inside the hunk.
+func (m *Model) PrevHunk() {
+	for i := len(m.hunkRow) - 1; i >= 0; i-- {
+		if m.hunkRow[i] < m.win.Cursor() {
+			m.win.JumpTo(m.hunkRow[i])
+			return
+		}
+	}
+}
+
+// --- horizontal scrolling ---
+
+// ScrollRight shifts the code area n cells to the right (reveals later text).
+func (m *Model) ScrollRight(n int) { m.win.Right(n) }
+
+// ScrollLeft shifts the code area n cells to the left.
+func (m *Model) ScrollLeft(n int) { m.win.Left(n) }
+
+// HalfScrollRight scrolls right by half the code area.
+func (m *Model) HalfScrollRight() { m.win.HalfRight() }
+
+// HalfScrollLeft scrolls left by half the code area.
+func (m *Model) HalfScrollLeft() { m.win.HalfLeft() }
+
+// XOffset returns the horizontal scroll in cells.
+func (m *Model) XOffset() int { return m.win.XOffset() }
+
+// Top returns the index of the first visible row (hunk headers count as rows).
+func (m *Model) Top() int { return m.win.Top() }
+
+// Cursor describes the diff line under the cursor. ok is false when there is
+// no file, or the cursor is on a hunk header or a "no newline" marker.
+func (m *Model) Cursor() (c CursorLine, ok bool) {
+	if m.file == nil || m.win.Cursor() >= len(m.rows) {
+		return CursorLine{}, false
+	}
+	r := m.rows[m.win.Cursor()]
+	if r.line == nil || r.line.Kind == diff.NoNewline {
+		return CursorLine{}, false
+	}
+	c = CursorLine{
+		Path: m.file.Path(), Hunk: r.hunk, Kind: r.line.Kind,
+		Old: r.line.Old, New: r.line.New, Text: r.line.Text,
+	}
+	if r.line.Kind == diff.Delete {
+		c.Side = SideLeft
+	}
+	return c, true
+}
+
+// Render draws the pane in a w x h area. It is SetSize followed by the render,
+// so hosts can call it from their own Render(width, height).
+func (m *Model) Render(w, h int) string {
+	m.SetSize(w, h)
+	if m.w == 0 || m.h == 0 {
+		return ""
+	}
+	if len(m.rows) == 0 {
+		return m.renderMessage()
+	}
+	end := min(m.win.Top()+m.h, len(m.rows))
+	lines := make([]string, 0, end-m.win.Top())
+	for i := m.win.Top(); i < end; i++ {
+		lines = append(lines, m.renderRow(i))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (m *Model) renderMessage() string {
+	lines := m.messageLines()
+	var out []string
+	for _, l := range lines {
+		l, _ = displayText(l)
+		out = append(out, strings.Split(ansi.Wrap(l, m.w, ""), "\n")...)
+	}
+	if len(out) > m.h {
+		out = out[:m.h]
+	}
+	for i, l := range out {
+		out[i] = m.th.Muted.Render(l)
+	}
+	// Anything built from diff content (paths, modes, errors) is untrusted.
+	return strings.Join(out, "\n")
+}
+
+func (m *Model) messageLines() []string {
+	switch {
+	case m.msg != "":
+		return strings.Split(m.msg, "\n")
+	case m.file == nil:
+		return []string{"No file selected."}
+	}
+	f := m.file
+	var out []string
+	if f.Binary {
+		out = append(out, "Binary file: contents not shown.")
+	}
+	switch f.Status {
+	case diff.Renamed:
+		out = append(out, "Renamed: "+f.OldPath+" -> "+f.NewPath+similarity(f))
+	case diff.Copied:
+		out = append(out, "Copied: "+f.OldPath+" -> "+f.NewPath+similarity(f))
+	}
+	if f.ModeChanged() {
+		out = append(out, "Mode changed: "+f.OldMode+" -> "+f.NewMode)
+	}
+	if len(out) == 0 {
+		switch f.Status {
+		case diff.Added:
+			out = append(out, "Empty file added.")
+		case diff.Deleted:
+			out = append(out, "Empty file deleted.")
+		default:
+			out = append(out, "No changes to show.")
+		}
+	}
+	return out
+}
+
+func similarity(f *diff.File) string {
+	if f.Similarity <= 0 {
+		return ""
+	}
+	return " (" + strconv.Itoa(f.Similarity) + "% similar)"
+}

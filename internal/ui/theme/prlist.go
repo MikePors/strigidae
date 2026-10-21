@@ -21,17 +21,17 @@ type PRListStyles struct {
 }
 
 func newPRListStyles(c func(light, dark string) color.Color) PRListStyles {
-	muted := lipgloss.NewStyle().Foreground(c("#6b6b7b", "#8b8b9b"))
+	muted := lipgloss.NewStyle().Foreground(c(mutedLight, mutedDark))
 	return PRListStyles{
 		Header:           muted.Bold(true),
-		Selected:         lipgloss.NewStyle().Bold(true).Foreground(c("#ffffff", "#1a1a22")).Background(c("#5f3dc4", "#b197fc")),
-		Number:           lipgloss.NewStyle().Foreground(c("#b8590a", "#ffc078")),
+		Selected:         lipgloss.NewStyle().Bold(true).Foreground(c(onAccentLight, onAccentDark)).Background(c(violetLight, violetDark)),
+		Number:           lipgloss.NewStyle().Foreground(c(orangeLight, orangeDark)),
 		Author:           muted,
 		Age:              muted,
 		Draft:            muted.Italic(true),
-		Approved:         lipgloss.NewStyle().Foreground(c("#1f7a3d", "#8ce99a")),
-		ChangesRequested: lipgloss.NewStyle().Foreground(c("#c92a2a", "#ff8787")),
-		ReviewRequired:   lipgloss.NewStyle().Foreground(c("#b8590a", "#ffc078")),
+		Approved:         lipgloss.NewStyle().Foreground(c(greenLight, greenDark)),
+		ChangesRequested: lipgloss.NewStyle().Foreground(c(redLight, redDark)),
+		ReviewRequired:   lipgloss.NewStyle().Foreground(c(orangeLight, orangeDark)),
 		Comments:         muted,
 	}
 }
