@@ -66,17 +66,17 @@ func New(isDark bool) Theme {
 		return ld(lipgloss.Color(light), lipgloss.Color(dark))
 	}
 
-	bar := lipgloss.NewStyle().Background(c("#e4e4ea", "#2b2b36")).Foreground(c("#3c3c4a", "#c9c9d6"))
-	accent := c("#5f3dc4", "#b197fc")
-	warm := c("#b8590a", "#ffc078")
-	muted := c("#6b6b7b", "#8b8b9b")
+	bar := lipgloss.NewStyle().Background(c(barBgLight, barBgDark)).Foreground(c(barFgLight, barFgDark))
+	accent := c(violetLight, violetDark)
+	warm := c(orangeLight, orangeDark)
+	muted := c(mutedLight, mutedDark)
 
 	return Theme{
 		StatusBar:     bar,
-		StatusContext: bar.Bold(true).Foreground(c("#ffffff", "#1a1a22")).Background(accent),
+		StatusContext: bar.Bold(true).Foreground(c(onAccentLight, onAccentDark)).Background(accent),
 		StatusPending: bar.Bold(true).Foreground(warm),
-		StatusInfo:    bar.Foreground(c("#1f7a3d", "#8ce99a")),
-		StatusError:   bar.Bold(true).Foreground(c("#c92a2a", "#ff8787")),
+		StatusInfo:    bar.Foreground(c(greenLight, greenDark)),
+		StatusError:   bar.Bold(true).Foreground(c(redLight, redDark)),
 		StatusHint:    bar.Foreground(muted),
 		StatusCommand: bar.Bold(true),
 		Spinner:       bar.Foreground(accent),
@@ -89,27 +89,27 @@ func New(isDark bool) Theme {
 		Title:    lipgloss.NewStyle().Bold(true).Foreground(accent),
 		Normal:   lipgloss.NewStyle(),
 		Muted:    lipgloss.NewStyle().Foreground(muted),
-		Selected: lipgloss.NewStyle().Bold(true).Foreground(c("#5f3dc4", "#d0bfff")),
+		Selected: lipgloss.NewStyle().Bold(true).Foreground(c(violetLight, violetPaleDark)),
 
 		// --- Diff pane ---
 		DiffContext:      lipgloss.NewStyle(),
-		DiffAdd:          lipgloss.NewStyle().Background(c("#e6ffec", "#12261e")),
-		DiffDelete:       lipgloss.NewStyle().Background(c("#ffebe9", "#2d1517")),
-		DiffCursor:       lipgloss.NewStyle().Background(c("#dde1f5", "#33364d")),
+		DiffAdd:          lipgloss.NewStyle().Background(c(addBgLight, addBgDark)),
+		DiffDelete:       lipgloss.NewStyle().Background(c(deleteBgLight, deleteBgDark)),
+		DiffCursor:       lipgloss.NewStyle().Background(c(cursorBgLight, cursorBgDark)),
 		DiffGutter:       lipgloss.NewStyle().Foreground(muted),
-		DiffGutterAdd:    lipgloss.NewStyle().Foreground(c("#1f7a3d", "#8ce99a")).Background(c("#ccffd8", "#17382a")),
-		DiffGutterDelete: lipgloss.NewStyle().Foreground(c("#c92a2a", "#ff8787")).Background(c("#ffd7d5", "#42191d")),
-		DiffHunk:         lipgloss.NewStyle().Foreground(c("#0b6e99", "#74c0fc")).Background(c("#ddf4ff", "#1b2a3a")),
-		DiffHunkCursor:   lipgloss.NewStyle().Bold(true).Foreground(c("#0b6e99", "#74c0fc")).Background(c("#c5e4f5", "#2c4560")),
+		DiffGutterAdd:    lipgloss.NewStyle().Foreground(c(greenLight, greenDark)).Background(c(addGutterBgLight, addGutterBgDark)),
+		DiffGutterDelete: lipgloss.NewStyle().Foreground(c(redLight, redDark)).Background(c(deleteGutterBgLight, deleteGutterBgDark)),
+		DiffHunk:         lipgloss.NewStyle().Foreground(c(blueLight, blueDark)).Background(c(hunkBgLight, hunkBgDark)),
+		DiffHunkCursor:   lipgloss.NewStyle().Bold(true).Foreground(c(blueLight, blueDark)).Background(c(hunkCursorBgLight, hunkCursorBgDark)),
 		DiffNoNewline:    lipgloss.NewStyle().Italic(true).Foreground(muted),
 		Syntax: Syntax{
-			Keyword:  lipgloss.NewStyle().Foreground(c("#a626a4", "#da77f2")),
-			String:   lipgloss.NewStyle().Foreground(c("#2f7d32", "#a9e34b")),
+			Keyword:  lipgloss.NewStyle().Foreground(c(purpleLight, purpleDark)),
+			String:   lipgloss.NewStyle().Foreground(c(greenDeepLight, limeDark)),
 			Comment:  lipgloss.NewStyle().Italic(true).Foreground(muted),
-			Number:   lipgloss.NewStyle().Foreground(c("#b8590a", "#ffa94d")),
-			Function: lipgloss.NewStyle().Foreground(c("#1c62b9", "#74c0fc")),
-			Type:     lipgloss.NewStyle().Foreground(c("#0a7f8f", "#66d9e8")),
-			Operator: lipgloss.NewStyle().Foreground(c("#8a5a00", "#ffd43b")),
+			Number:   lipgloss.NewStyle().Foreground(c(orangeLight, orangeStrongDark)),
+			Function: lipgloss.NewStyle().Foreground(c(blueDeepLight, blueDark)),
+			Type:     lipgloss.NewStyle().Foreground(c(tealLight, tealDark)),
+			Operator: lipgloss.NewStyle().Foreground(c(goldLight, goldDark)),
 		},
 		// --- end diff pane ---
 
