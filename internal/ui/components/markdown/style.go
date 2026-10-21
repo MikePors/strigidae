@@ -2,6 +2,7 @@ package markdown
 
 import (
 	"image/color"
+	"strings"
 
 	"charm.land/glamour/v2/ansi"
 
@@ -12,8 +13,9 @@ func ptr[T any](v T) *T { return &v }
 
 // styleConfig builds the Glamour style from the theme's roles, so Markdown
 // follows the palette like every other pane. Layout (margins, list indents,
-// bullets) is Glamour's usual; colours and emphasis are ours. Headings carry
-// no "#" markers: level shows through colour and weight instead.
+// bullets) is Glamour's usual; colours and emphasis are ours. Headings keep
+// their "#" markers, drawn in the muted role, with the text in the level's
+// colour.
 func styleConfig(th theme.Theme) ansi.StyleConfig {
 	r := th.Roles
 	col := func(c color.Color) *string { return ptr(theme.HexString(c)) }
@@ -21,8 +23,11 @@ func styleConfig(th theme.Theme) ansi.StyleConfig {
 	accent, link := col(r.Accent), col(r.Link)
 	bold := ptr(true)
 
-	heading := func(c *string) ansi.StyleBlock {
-		return ansi.StyleBlock{StylePrimitive: ansi.StylePrimitive{Color: c, Bold: bold}}
+	// The marker is pre-styled (muted) inside the prefix, so it keeps its own
+	// colour while the heading text takes the block's.
+	heading := func(level int, c *string) ansi.StyleBlock {
+		marker := th.HeadingMarker.Render(strings.Repeat("#", level) + " ")
+		return ansi.StyleBlock{StylePrimitive: ansi.StylePrimitive{Prefix: marker, Color: c, Bold: bold}}
 	}
 	return ansi.StyleConfig{
 		Document: ansi.StyleBlock{
@@ -40,11 +45,11 @@ func styleConfig(th theme.Theme) ansi.StyleConfig {
 		H1: ansi.StyleBlock{StylePrimitive: ansi.StylePrimitive{
 			Prefix: " ", Suffix: " ", Color: col(r.OnAccent), BackgroundColor: accent, Bold: bold,
 		}},
-		H2: heading(accent),
-		H3: heading(accent),
-		H4: heading(col(r.Info)),
-		H5: heading(col(r.Info)),
-		H6: ansi.StyleBlock{StylePrimitive: ansi.StylePrimitive{Color: muted, Bold: bold}},
+		H2: heading(2, accent),
+		H3: heading(3, accent),
+		H4: heading(4, col(r.Info)),
+		H5: heading(5, col(r.Info)),
+		H6: heading(6, text),
 
 		Strikethrough:  ansi.StylePrimitive{CrossedOut: bold},
 		Emph:           ansi.StylePrimitive{Italic: bold},

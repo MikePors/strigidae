@@ -2,26 +2,26 @@ open #7 Add retry policy to sync client
 alice · main ← feat/retry · changes requested · [enhancement] [sync] · reviewers: bob, team core
 ╭─ Files ────────────────────╮╭─ Overview ─────────────────────────────────────────────────────────╮
 │> Overview                  ││ Description                                                        │
-│  M …rnal/sync/client.go +25││   Summary                                                          │
+│  M …rnal/sync/client.go +25││   ## Summary                                                       │
 │  A …rnal/sync/retry.go +214││                                                                    │
 │  D …rnal/sync/legacy.go -90││   This change adds a retry policy to the sync client so            │
 │  R …y-and-backoff.md +12 -3││   transient network failures no longer abort a whole run. It       │
 │  M README.md          +2 -1││   replaces the ad-hoc loop in  sync.go  with a small, well-        │
 │                            ││   tested helper.                                                   │
 │                            ││                                                                    │
-│                            ││   What changed                                                     │
+│                            ││   ### What changed                                                 │
 │                            ││                                                                    │
 │                            ││   • Added  Retry  with exponential backoff and jitter              │
 │                            ││   • Moved the timeout handling into the helper                     │
 │                            ││   • Deleted the legacy  retryForever  function                     │
 │                            ││                                                                    │
-│                            ││   Example                                                          │
+│                            ││   ### Example                                                      │
 │                            ││                                                                    │
 │                            ││     err := Retry(ctx, 5, func() error {                            │
 │                            ││         return client.Sync(ctx)                                    │
 │                            ││     })                                                             │
 │                            ││                                                                    │
-│                            ││   Notes                                                            │
+│                            ││   ### Notes                                                        │
 │                            ││                                                                    │
 │                            ││   The backoff starts at 100ms and doubles up to a cap of           │
 │                            ││   10s. See the design doc for why jitter matters when many         │

@@ -2,19 +2,19 @@ open #7 Add retry policy to sync client
 alice · main ← feat/retry · changes requested · [enhancemen…
 ╭─ Overview ───────────────────────────────────────────────╮
 │ Description                                              │
-│   Summary                                                │
+│   ## Summary                                             │
 │                                                          │
 │   This change adds a retry policy to the sync            │
 │   client so transient network failures no longer         │
 │   abort a whole run. It replaces the ad-hoc loop         │
 │   in  sync.go  with a small, well-tested helper.         │
 │                                                          │
-│   What changed                                           │
+│   ### What changed                                       │
 │                                                          │
 │   • Added  Retry  with exponential backoff and           │
 │   jitter                                                 │
 │   • Moved the timeout handling into the helper           │
 │   • Deleted the legacy  retryForever  function           │
 │                                                          │
-│   Example                                                │
+│   ### Example                                            │
 ╰──────────────────────────────────────────────────────────╯
