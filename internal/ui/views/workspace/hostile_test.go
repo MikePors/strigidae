@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/MikePors/strigidae/internal/diff"
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/github/fake"
 	"github.com/MikePors/strigidae/internal/ui"
@@ -22,20 +23,49 @@ import (
 const hostile = "evil\x1b[2J\x1b]0;pwned\x07\x1b]8;;http://evil.test\x07link\x1b]8;;\x07" +
 	"\x1b]52;c;aGk=\x07\u009b31m\u0090dcs\u009c\u202eevil\u2066x\u2069\rafter\xff\xfe\x00end"
 
+// refs are HTML character references that Glamour decodes into real escape
+// sequences and bidi controls unless its output is cleaned.
+const refs = "&#x1b;[2J &#x1b;]52;c;aGk=&#x07; &#x202e;gnp.exe &rlm; &lrm; &#27;[2J &#7;"
+
+// refsBody exercises the references in text, inline HTML, a code span, a
+// fenced block, link text and a heading.
+const refsBody = "\n\n" + refs + "\n\n<span>&#x1b;]0;t&#x07;</span>\n\n`&#x1b;]52;c;aGk=&#x07;`\n\n" +
+	"```\n&#x1b;[2J &#x202e;\n```\n\n[&#x1b;[2J](http://x/)\n\n# &#x1b;]0;h&#x07;"
+
+var (
+	hostileGoPath  = "dir/" + hostile + ".go"
+	hostileOldPath = "old/" + hostile + ".md"
+	hostileNewPath = "ren/" + hostile + ".md"
+)
+
+// hostileDiff is a diff whose paths, mode lines, section text and code lines
+// all carry hostile text, plus a rename with hostile old and new names.
+func hostileDiff() string {
+	return "diff --git a/" + hostileGoPath + " b/" + hostileGoPath + "\n" +
+		"old mode 100644\nnew mode 100755\n" +
+		"--- a/" + hostileGoPath + "\n+++ b/" + hostileGoPath + "\n" +
+		"@@ -1,1 +1,1 @@ section " + hostile + "\n" +
+		"-old " + hostile + refs + "\n+new " + hostile + refs + "\n" +
+		"diff --git a/" + hostileOldPath + " b/" + hostileNewPath + "\n" +
+		"similarity index 100%\nrename from " + hostileOldPath + "\nrename to " + hostileNewPath + "\n"
+}
+
 func hostileDetail() github.PullRequestDetail {
 	d := testDetail()
 	d.Title = "title " + hostile
 	d.Author = "author" + hostile
 	d.HeadRef = "head" + hostile
 	d.BaseRef = "base" + hostile
-	d.Body = "# body " + hostile + "\n\n[click](http://x)\x1b[31m red\r\n" + hostile
+	d.Body = "# body " + hostile + "\n\n[click](http://x)\x1b[31m red\r\n" + hostile + refsBody
 	d.Labels = []github.Label{{Name: "label" + hostile}}
 	d.ReviewRequests = []github.Reviewer{{Name: "rev" + hostile}, {Name: "team" + hostile, IsTeam: true}}
-	d.Files = append(d.Files, github.ChangedFile{Path: "dir/" + hostile + ".go", Additions: 1, Change: github.FileAdded})
-	d.Comments = []github.IssueComment{{Author: "c" + hostile, CreatedAt: testNow.Add(-time.Hour), Body: hostile}}
+	d.Files = append(d.Files,
+		github.ChangedFile{Path: hostileGoPath, Additions: 1, Deletions: 1, Change: github.FileModified},
+		github.ChangedFile{Path: hostileNewPath, Change: github.FileRenamed})
+	d.Comments = []github.IssueComment{{Author: "c" + hostile, CreatedAt: testNow.Add(-time.Hour), Body: hostile + refsBody}}
 	d.Reviews = []github.Review{
-		{Author: "r" + hostile, State: github.ReviewApproved, SubmittedAt: testNow.Add(-time.Hour), Body: hostile},
-		{Author: "p" + hostile, State: github.ReviewPending, Body: hostile},
+		{Author: "r" + hostile, State: github.ReviewApproved, SubmittedAt: testNow.Add(-time.Hour), Body: hostile + refsBody},
+		{Author: "p" + hostile, State: github.ReviewPending, Body: hostile + refsBody},
 	}
 	return d
 }
@@ -73,7 +103,10 @@ func TestHostileTextNeverReachesTheScreen(t *testing.T) {
 	c := fake.New()
 	d := hostileDetail()
 	c.SetPullRequest(d)
-	c.SetDiff(testRepo, 7, readDiff(t))
+	c.SetDiff(testRepo, 7, hostileDiff())
+	if parsed, err := diff.Parse(hostileDiff()); err != nil || parsed.File(hostileGoPath) == nil || parsed.File(hostileNewPath) == nil {
+		t.Fatalf("setup: the hostile diff must parse so its content reaches the pane (err=%v)", err)
+	}
 	h := newHarness(t, 140, 40)
 	h.client = c
 	h.v.client = c
@@ -83,20 +116,40 @@ func TestHostileTextNeverReachesTheScreen(t *testing.T) {
 	h.press("l", "G")
 	assertTame(t, "overview conversation", h.render())
 
-	h.press("h", "G") // the hostile file name is last
+	h.press("h", "G") // the renamed hostile file is last
+	assertTame(t, "renamed file selected", h.render())
+	if out := ansi.Strip(h.render()); !strings.Contains(out, "Renamed:") {
+		t.Errorf("the rename line should reach the pane:\n%s", out)
+	}
+	h.press("k") // the hostile modified file, with hostile hunk content
 	assertTame(t, "file selected", h.render())
 	if !strings.Contains(h.v.rightTitle(), "dir/evil") {
 		t.Errorf("hostile path was dropped, not cleaned: %q", h.v.rightTitle())
 	}
+	if out := ansi.Strip(h.render()); !strings.Contains(out, "old evil") || !strings.Contains(out, "new evil") {
+		t.Errorf("hostile code lines should show, cleaned:\n%s", out)
+	}
+	h.press("j", "j", "j") // the hostile diff lines under the cursor, too
+	assertTame(t, "cursor in hostile hunk", h.render())
 
 	h.press("f")
 	h.typ("evil")
 	assertTame(t, "picker", h.render())
 	h.send(keyEsc())
 
-	// Narrow terminal and the picker over it.
+	// Narrow terminal, then the picker open over it.
 	h.send(sizeMsg(60, 20))
 	assertTame(t, "narrow", h.render())
+	h.press("f")
+	h.typ("evil")
+	if !h.v.CapturesKeys() {
+		t.Fatal("setup: picker should be open")
+	}
+	out := h.render()
+	assertTame(t, "narrow with picker", out)
+	if !strings.Contains(ansi.Strip(out), "Go to file") {
+		t.Errorf("the picker should be drawn over the narrow layout:\n%s", ansi.Strip(out))
+	}
 }
 
 func TestHostileErrorsAreCleaned(t *testing.T) {
@@ -140,4 +193,15 @@ func TestHostileDiffError(t *testing.T) {
 	h.run(h.v.Init())
 	h.press("] f")
 	assertTame(t, "diff error", h.render())
+
+	var status string
+	for _, m := range h.msgs {
+		if e, ok := m.(ui.ErrorMsg); ok {
+			status = e.Err.Error()
+		}
+	}
+	if !strings.Contains(status, "bad") {
+		t.Fatalf("the diff failure should reach the status bar, got %q", status)
+	}
+	assertTame(t, "diff error on the status bar", status)
 }
