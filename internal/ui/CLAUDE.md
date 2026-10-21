@@ -79,14 +79,19 @@ Adding a binding or command: make sure it doesn't collide with the tables above 
 
 Colour flows through three layers, each built only from the one below (details in the `internal/ui/theme` package doc):
 
-1. **Palette**: the 24 Base24 slots plus a light/dark variant (`theme/palette.go`; built-ins in `theme/palettes.go`). The only place hex values exist.
-2. **Roles**: what strig means by a colour (`text`, `muted`, `accent`, `added`, diff tints, syntax tokens, …), derived from slots in `theme/roles.go`, the only file that reads slots. A theme may override any role with an exact colour; overrides apply after derivation, then a contrast guard nudges unreadable foregrounds.
-3. **Styles**: the named Lip Gloss styles on `theme.Theme`, built from roles only. Markdown (Glamour) and code (Chroma) styles are generated from the same roles.
+1. **Palette**: the 24 Base24 slots plus a light/dark variant (`theme/palette.go`; built-ins in `theme/palettes.go`). The only place colour values exist. The slots are unexported; only `roles.go` reads them.
+2. **Roles**: what strig means by a colour (`text`, `muted`, `accent`, `added`, diff tints, syntax tokens, …), derived from slots in `theme/roles.go`. A theme may override any role with an exact colour; overrides are used as written, and only derived roles go through the contrast guard (a failing override is logged).
+3. **Styles**: the named Lip Gloss styles on `theme.Theme`, built from roles only. Markdown (Glamour) and code (Chroma) styles are generated from the same roles, and the diff and Markdown share one token-to-role mapping (`theme.ClassOf`).
 
-Rules (tests in `theme/enforce_test.go` fail on violations):
+What `theme/enforce_test.go` checks (over every non-test file in `internal/ui`, with the rules proven on snippets):
 
-- A `#rrggbb` literal appears only in `theme/palettes.go`.
-- Styles never read palette slots; only `roles.go` does.
+- no `#rgb`/`#rrggbb`/`#rrggbbaa` string literal, `lipgloss.Color`/`ANSIColor`, `ansi.IndexedColor`, or `color.RGBA`-style literal outside the palette files;
+- no named colour constants (`lipgloss.Red`, `color.Black`, …);
+- no palette slot (`Base0x`, `.Slot`, `.colors`) outside `roles.go` and the palette files.
+
+Rules for you:
+
 - A new UI element uses an existing role. If none fits, add a role with a default derivation from slots (and a line in the role table in `docs/themes.md` once #45 adds it).
 - Never add palette slots, ANSI indices or raw colours to styles, views or components.
-- Caches of rendered output (markdown, highlighting) include `Theme.ID`, or hold theme-independent data (token classes).
+- Caches of rendered output (markdown, highlighting) include `Theme.ID` (a fingerprint of the final roles), or hold theme-independent data (token classes).
+- Chroma's style registry is a global map read by Glamour without a lock. Register styles (`ChromaStyleName`) and run Glamour only on the UI goroutine, never in a `tea.Cmd`.
