@@ -34,6 +34,33 @@ type Theme struct {
 	Muted    lipgloss.Style // de-emphasised text
 	Selected lipgloss.Style // the highlighted row in a list
 
+	// IsDark reports whether this is the dark variant; renderers that need a
+	// fixed palette (Glamour) pick theirs from it instead of auto-detecting.
+	IsDark bool
+
+	// --- PR workspace ---
+	PaneBorder       lipgloss.Style // frame of an unfocused pane
+	PaneBorderFocus  lipgloss.Style // frame of the focused pane
+	PaneTitle        lipgloss.Style // title in an unfocused pane's top edge
+	PaneTitleFocus   lipgloss.Style // title in the focused pane's top edge
+	FileAdded        lipgloss.Style // change-type marker and +N counts
+	FileDeleted      lipgloss.Style // change-type marker and -N counts
+	FileModified     lipgloss.Style // change-type marker for modified, renamed and other files
+	StateOpen        lipgloss.Style // PR state badges
+	StateDraft       lipgloss.Style
+	StateMerged      lipgloss.Style
+	StateClosed      lipgloss.Style
+	Author           lipgloss.Style // comment and PR authors
+	Pending          lipgloss.Style // pending (draft) review marker
+	ErrorText        lipgloss.Style // inline error messages in content areas
+	SectionHeading   lipgloss.Style // "Description" / "Conversation" headings
+	OverlayBorder    lipgloss.Style // title text on the frame of popups such as the file picker
+	OverlayBox       lipgloss.Style // rounded frame around a popup
+	StrongText       lipgloss.Style // bold body text, e.g. a PR title
+	OverlayItem      lipgloss.Style // unselected row in a popup
+	OverlayItemFocus lipgloss.Style // selected row in a popup
+	// --- end PR workspace ---
+
 	// --- Diff pane (diffview) ---
 	DiffContext      lipgloss.Style // code on unchanged lines
 	DiffAdd          lipgloss.Style // code on added lines (carries the row background)
@@ -70,6 +97,8 @@ func New(isDark bool) Theme {
 	accent := c(violetLight, violetDark)
 	warm := c(orangeLight, orangeDark)
 	muted := c(mutedLight, mutedDark)
+	green := c(greenLight, greenDark)
+	red := c(redLight, redDark)
 
 	return Theme{
 		StatusBar:     bar,
@@ -90,6 +119,30 @@ func New(isDark bool) Theme {
 		Normal:   lipgloss.NewStyle(),
 		Muted:    lipgloss.NewStyle().Foreground(muted),
 		Selected: lipgloss.NewStyle().Bold(true).Foreground(c(violetLight, violetPaleDark)),
+		IsDark:   isDark,
+
+		// --- PR workspace ---
+		PaneBorder:       lipgloss.NewStyle().Foreground(muted),
+		PaneBorderFocus:  lipgloss.NewStyle().Foreground(accent),
+		PaneTitle:        lipgloss.NewStyle().Foreground(muted),
+		PaneTitleFocus:   lipgloss.NewStyle().Bold(true).Foreground(c(onAccentLight, onAccentDark)).Background(accent),
+		FileAdded:        lipgloss.NewStyle().Foreground(green),
+		FileDeleted:      lipgloss.NewStyle().Foreground(red),
+		FileModified:     lipgloss.NewStyle().Foreground(warm),
+		StateOpen:        lipgloss.NewStyle().Bold(true).Foreground(green),
+		StateDraft:       lipgloss.NewStyle().Bold(true).Foreground(muted),
+		StateMerged:      lipgloss.NewStyle().Bold(true).Foreground(accent),
+		StateClosed:      lipgloss.NewStyle().Bold(true).Foreground(red),
+		Author:           lipgloss.NewStyle().Bold(true),
+		Pending:          lipgloss.NewStyle().Bold(true).Foreground(warm),
+		ErrorText:        lipgloss.NewStyle().Bold(true).Foreground(red),
+		SectionHeading:   lipgloss.NewStyle().Bold(true).Foreground(accent),
+		OverlayBorder:    lipgloss.NewStyle().Foreground(accent),
+		OverlayBox:       lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(accent),
+		StrongText:       lipgloss.NewStyle().Bold(true),
+		OverlayItem:      lipgloss.NewStyle(),
+		OverlayItemFocus: lipgloss.NewStyle().Bold(true).Foreground(c(violetLight, violetPaleDark)).Reverse(true),
+		// --- end PR workspace ---
 
 		// --- Diff pane ---
 		DiffContext:      lipgloss.NewStyle(),

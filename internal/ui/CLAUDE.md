@@ -71,6 +71,6 @@ Adding a binding or command: make sure it doesn't collide with the tables above 
 
 ## Rendering tests
 
-- **Golden files** via `internal/golden`: compare `Render(w, h)` output at a fixed size against `testdata/*.golden`. Regenerate with `make golden` (`UPDATE_GOLDEN=1 go test ./...`) and **read the `.golden` diff before committing**. Strip ANSI codes (`x/ansi`) unless the test is about styling.
+- **Golden files** via `internal/golden`: compare `Render(w, h)` output at a fixed size against `testdata/*.golden`. Regenerate with `make golden` (`UPDATE_GOLDEN=1 go test ./...`) and **read the `.golden` diff before committing**. Whole-screen goldens always strip ANSI codes (`x/ansi`). A test about styling (focus borders, selection, colours) asserts specific elements against strings produced by the theme's own styles (for example `th.PaneBorderFocus.Render("╭")`) and never stores escape codes in a golden, so a palette change cannot break it.
 - **Deterministic rendering**: tests must not depend on the terminal. Use a fixed theme and fixed Glamour style (never auto-detected light/dark), fixed widths, and an injected clock for relative times.
 - Cover each view's main states: loading, empty, error, populated, and narrow widths.

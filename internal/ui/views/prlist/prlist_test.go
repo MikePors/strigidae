@@ -323,14 +323,24 @@ func TestOpenInBrowser(t *testing.T) {
 	}
 }
 
-func TestEnterShowsInfo(t *testing.T) {
-	v := loadedView(t, fakeWith(makePRs(2)), nil)
+func TestEnterPushesWorkspace(t *testing.T) {
+	v := loadedView(t, fakeWith(makePRs(3)), nil)
+	press(v, "j") // second row is PR #2
 	cmd := press(v, "enter")
 	if cmd == nil {
 		t.Fatal("enter should produce a command")
 	}
-	if diff := cmp.Diff(ui.InfoMsg{Text: "PR workspace arrives with #7"}, cmd()); diff != "" {
-		t.Errorf("(-want +got):\n%s", diff)
+	push, ok := cmd().(ui.PushMsg)
+	if !ok {
+		t.Fatalf("enter produced %T, want ui.PushMsg", cmd())
+	}
+	if got := push.View.Title(); got != "#2" {
+		t.Errorf("pushed view title = %q, want #2", got)
+	}
+
+	empty := loadedView(t, fakeWith(nil), nil)
+	if cmd := press(empty, "enter"); cmd != nil {
+		t.Error("enter on an empty list should do nothing")
 	}
 }
 

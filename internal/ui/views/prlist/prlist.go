@@ -16,6 +16,7 @@ import (
 	"github.com/MikePors/strigidae/internal/ui/keys"
 	"github.com/MikePors/strigidae/internal/ui/termtext"
 	"github.com/MikePors/strigidae/internal/ui/theme"
+	"github.com/MikePors/strigidae/internal/ui/views/workspace"
 )
 
 const (
@@ -108,13 +109,6 @@ func (v *View) Title() string { return v.repoName() }
 // repoName is the repository name made safe to draw (it can come from -R).
 func (v *View) repoName() string { return termtext.Clean(v.repo.String()) }
 
-// safeError is an error whose text is safe to draw: API and launcher errors
-// can embed attacker-controlled text. It keeps the chain for errors.Is/As.
-type safeError struct{ err error }
-
-func (e safeError) Error() string { return termtext.Clean(e.err.Error()) }
-func (e safeError) Unwrap() error { return e.err }
-
 // ShortHelp implements ui.View.
 func (v *View) ShortHelp() []key.Binding {
 	return []key.Binding{v.km.Select, v.km.Open, v.km.Refresh}
@@ -169,7 +163,7 @@ func (v *View) loaded(msg prsLoadedMsg) tea.Cmd {
 		v.err = msg.err
 		v.moreFailed = msg.more // stop auto-paging until R
 
-		return ui.Error(safeError{fmt.Errorf("load pull requests in %s: %w", v.repo, msg.err)})
+		return ui.Error(termtext.SafeError(fmt.Errorf("load pull requests in %s: %w", v.repo, msg.err)))
 	}
 	v.err = nil
 	v.next = msg.page.Next
@@ -263,15 +257,19 @@ func (v *View) maybeLoadMore() tea.Cmd {
 	return v.fetch(github.PageRequest{After: v.next}, true)
 }
 
-// openSelected is the hook for opening the PR workspace. Once that view
-// exists, replace the body with:
-//
-//	return ui.Push(workspace.New(v.client, pr, v.th))
+// openSelected pushes the PR workspace for the selected pull request. It
+// hands over the list's theme, clock and browser opener so the workspace looks
+// and behaves like its parent (and tests stay deterministic).
 func (v *View) openSelected() tea.Cmd {
-	if _, ok := v.selected(); !ok {
+	pr, ok := v.selected()
+	if !ok {
 		return nil
 	}
-	return ui.Info("PR workspace arrives with #7")
+	return ui.Push(workspace.New(v.client, v.repo, pr.Number,
+		workspace.WithTheme(v.th),
+		workspace.WithClock(v.now),
+		workspace.WithOpener(v.open),
+	))
 }
 
 func (v *View) browseSelected() tea.Cmd {
@@ -285,7 +283,7 @@ func (v *View) browseSelected() tea.Cmd {
 			return ui.ErrorMsg{Err: fmt.Errorf("pull request #%d has no URL", pr.Number)}
 		}
 		if err := open(url); err != nil {
-			return ui.ErrorMsg{Err: safeError{fmt.Errorf("open #%d in browser: %w", pr.Number, err)}}
+			return ui.ErrorMsg{Err: termtext.SafeError(fmt.Errorf("open #%d in browser: %w", pr.Number, err))}
 		}
 		return ui.InfoMsg{Text: fmt.Sprintf("opened #%d in browser", pr.Number)}
 	}

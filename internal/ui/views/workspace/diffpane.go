@@ -1,0 +1,135 @@
+package workspace
+
+import (
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/ui/components/diffview"
+	"github.com/MikePors/strigidae/internal/ui/keys"
+	"github.com/MikePors/strigidae/internal/ui/theme"
+)
+
+// hScrollStep is how many columns `z h` / `z l` scroll.
+const hScrollStep = 4
+
+// diffBindings are the diff pane's own keys; the movement keys come from
+// keys.Global.
+type diffBindings struct {
+	NextHunk, PrevHunk              key.Binding
+	ScrollLeft, ScrollRight         key.Binding
+	HalfScrollLeft, HalfScrollRight key.Binding
+}
+
+func defaultDiffBindings() diffBindings {
+	b := func(k, helpKey, desc string) key.Binding {
+		return key.NewBinding(key.WithKeys(k), key.WithHelp(helpKey, desc))
+	}
+	return diffBindings{
+		NextHunk:        b("] h", "]h", "next hunk"),
+		PrevHunk:        b("[ h", "[h", "previous hunk"),
+		ScrollLeft:      b("z h", "zh", "scroll left"),
+		ScrollRight:     b("z l", "zl", "scroll right"),
+		HalfScrollLeft:  b("z H", "zH", "scroll half a screen left"),
+		HalfScrollRight: b("z L", "zL", "scroll half a screen right"),
+	}
+}
+
+// diffPane adapts diffview.Model to FilePane: it resolves the selected file in
+// the parsed diff and maps keys to diffview's methods.
+type diffPane struct {
+	dv   *diffview.Model
+	km   keys.Global
+	bind diffBindings
+
+	state   DiffState
+	file    github.ChangedFile
+	hasFile bool
+}
+
+var _ FilePane = (*diffPane)(nil)
+
+func newDiffPane(th theme.Theme) *diffPane {
+	return &diffPane{dv: diffview.New(th), km: keys.DefaultGlobal(), bind: defaultDiffBindings()}
+}
+
+func (p *diffPane) SetTheme(th theme.Theme) { p.dv.SetTheme(th) }
+
+func (p *diffPane) SetSize(w, h int) { p.dv.SetSize(w, h) }
+
+func (p *diffPane) SetDiff(d DiffState) {
+	p.state = d
+	p.show()
+}
+
+func (p *diffPane) SetFile(f github.ChangedFile) {
+	p.file, p.hasFile = f, true
+	p.show()
+}
+
+// show points the diff component at what the pane should display now.
+// diffview ignores a repeated *diff.File and keeps its position when the same
+// path is re-parsed, so calling this on every change is cheap and safe.
+func (p *diffPane) show() {
+	switch {
+	case p.state.Err != nil:
+		p.dv.SetDiffError(p.state.Err)
+	case p.state.Parsed == nil:
+		p.dv.SetMessage("Loading diff…")
+	case !p.hasFile:
+		p.dv.SetFile(nil)
+	default:
+		f := p.state.Parsed.File(p.file.Path)
+		if f == nil {
+			msg := "No diff available for this file."
+			if p.state.ParseErr != nil {
+				msg += "\nThe diff could not be fully parsed: " + p.state.ParseErr.Error()
+			}
+			p.dv.SetMessage(msg)
+			return
+		}
+		p.dv.SetFile(f)
+	}
+}
+
+func (p *diffPane) Update(msg keys.Msg) tea.Cmd {
+	dv := p.dv
+	switch {
+	case key.Matches(msg, p.km.Down):
+		dv.CursorDown(1)
+	case key.Matches(msg, p.km.Up):
+		dv.CursorUp(1)
+	case key.Matches(msg, p.km.Top):
+		dv.GotoTop()
+	case key.Matches(msg, p.km.Bottom):
+		dv.GotoBottom()
+	case key.Matches(msg, p.km.HalfDown):
+		dv.HalfPageDown()
+	case key.Matches(msg, p.km.HalfUp):
+		dv.HalfPageUp()
+	case key.Matches(msg, p.km.PageDown):
+		dv.PageDown()
+	case key.Matches(msg, p.km.PageUp):
+		dv.PageUp()
+	case key.Matches(msg, p.bind.NextHunk):
+		dv.NextHunk()
+	case key.Matches(msg, p.bind.PrevHunk):
+		dv.PrevHunk()
+	case key.Matches(msg, p.bind.ScrollLeft):
+		dv.ScrollLeft(hScrollStep)
+	case key.Matches(msg, p.bind.ScrollRight):
+		dv.ScrollRight(hScrollStep)
+	case key.Matches(msg, p.bind.HalfScrollLeft):
+		dv.HalfScrollLeft()
+	case key.Matches(msg, p.bind.HalfScrollRight):
+		dv.HalfScrollRight()
+	}
+	return nil
+}
+
+func (p *diffPane) Render(width, height int) string { return p.dv.Render(width, height) }
+
+func (p *diffPane) FullHelp() [][]key.Binding {
+	b := p.bind
+	return [][]key.Binding{{b.NextHunk, b.PrevHunk}, {b.ScrollLeft, b.ScrollRight, b.HalfScrollLeft, b.HalfScrollRight}}
+}
