@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/MikePors/strigidae/internal/ui/components/scroll"
 	"github.com/MikePors/strigidae/internal/ui/theme"
 )
 
@@ -40,8 +41,8 @@ type Model struct {
 	title   string
 	items   []string
 	query   []rune
-	matches []int // indexes into items
-	cursor  int   // index into matches
+	matches []int         // indexes into items
+	win     scroll.Window // cursor and top row over matches
 }
 
 // New returns a picker over items.
@@ -67,11 +68,11 @@ func (m *Model) Update(msg tea.KeyPressMsg) Result {
 		if len(m.matches) == 0 {
 			return Result{Outcome: Open}
 		}
-		return Result{Outcome: Chosen, Index: m.matches[m.cursor]}
+		return Result{Outcome: Chosen, Index: m.matches[m.win.Cursor()]}
 	case "up", "ctrl+p":
-		m.cursor = max(0, m.cursor-1)
+		m.win.Up(1)
 	case "down", "ctrl+n":
-		m.cursor = max(0, min(len(m.matches)-1, m.cursor+1))
+		m.win.Down(1)
 	case "backspace":
 		if n := len(m.query); n > 0 {
 			m.query = m.query[:n-1]
@@ -97,7 +98,8 @@ func (m *Model) refilter() {
 			m.matches = append(m.matches, i)
 		}
 	}
-	m.cursor = 0
+	m.win.Reset()
+	m.win.SetRows(len(m.matches))
 }
 
 func subsequence(s, q string) bool {
@@ -134,13 +136,13 @@ func (m *Model) Render(width, height int) string {
 	if len(m.matches) == 0 {
 		lines = append(lines, m.th.Muted.Render("no matches"))
 	}
-	start := min(max(0, m.cursor-rows+1), max(0, len(m.matches)-rows))
-	for i := start; i < len(m.matches) && i < start+rows; i++ {
+	m.win.SetSize(rows)
+	for i := m.win.Top(); i < len(m.matches) && i < m.win.Top()+rows; i++ {
 		label := m.items[m.matches[i]]
 		if over := ansi.StringWidth(label) - (inner - 4); over > 0 {
 			label = ansi.TruncateLeft(label, over+1, "…") // keep the file name visible
 		}
-		if i == m.cursor {
+		if i == m.win.Cursor() {
 			lines = append(lines, m.th.OverlayItemFocus.Render(pad("> "+label, inner-2)))
 		} else {
 			lines = append(lines, m.th.OverlayItem.Render("  "+label))
