@@ -152,7 +152,7 @@ func TestDiffPaneStates(t *testing.T) {
 	t.Run("loading", func(t *testing.T) {
 		h := newHarness(t, 100, 24)
 		h.v.Init()
-		h.send(prLoadedMsg{repo: testRepo, number: 7, seq: h.v.seq, detail: testDetail()})
+		h.send(prLoadedMsg{owner: h.v, repo: testRepo, number: 7, seq: h.v.seq, detail: testDetail()})
 		h.press("] f")
 		golden.Assert(t, "diff_loading", h.render(), false)
 	})
@@ -175,8 +175,9 @@ func TestDiffPaneStates(t *testing.T) {
 		h.client.SetDiff(testRepo, 7, "diff --git a/x b/x\n@@ -1,2 +1,2 @@\n+only one line\n")
 		h.run(h.v.Init())
 		h.press("] f")
-		if !strings.Contains(ansi.Strip(h.render()), "Could not load the diff") {
-			t.Error("a diff that fails to parse should show an error in the pane")
+		out := ansi.Strip(h.render())
+		if !strings.Contains(out, "No diff available for this file.") || !strings.Contains(out, "could not be fully parsed") {
+			t.Errorf("a file missing from a partly parsed diff should say why:\n%s", out)
 		}
 	})
 }

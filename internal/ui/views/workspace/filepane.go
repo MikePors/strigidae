@@ -10,16 +10,22 @@ import (
 	"github.com/MikePors/strigidae/internal/ui/theme"
 )
 
-// DiffState is the workspace's raw diff and where loading it stands.
+// DiffState is the workspace's diff and where loading it stands.
 type DiffState struct {
 	// Raw is the unified diff of the whole pull request. On a refresh it keeps
-	// the previous text while Loading is set.
+	// the previous text while Loading is set, and after a failed refresh.
 	Raw string
-	// Parsed is Raw parsed by internal/diff, done in the load command. It is
-	// nil until a load succeeds.
+	// Parsed is Raw parsed by internal/diff, done in the load command. It is nil
+	// until a load gets as far as parsing. When ParseErr is set it holds the
+	// files parsed before the problem: look files up in it as usual and treat a
+	// missing one as "no diff available".
 	Parsed *diff.Diff
-	// Err is why the diff could not be loaded, for example
-	// github.ErrDiffTooLarge. Raw is empty then.
+	// ParseErr is why Raw could not be parsed completely. The workspace reports
+	// it once on the status bar; Parsed is still usable.
+	ParseErr error
+	// Err is why the diff could not be loaded at all, for example
+	// github.ErrDiffTooLarge. Raw and Parsed are empty then. A failed refresh
+	// does not set it: the previous diff is kept instead.
 	Err error
 	// Loading is set while a (re)load is in flight.
 	Loading bool

@@ -81,7 +81,11 @@ func (p *diffPane) show() {
 	default:
 		f := p.state.Parsed.File(p.file.Path)
 		if f == nil {
-			p.dv.SetMessage("No diff available for this file.")
+			msg := "No diff available for this file."
+			if p.state.ParseErr != nil {
+				msg += "\nThe diff could not be fully parsed: " + p.state.ParseErr.Error()
+			}
+			p.dv.SetMessage(msg)
 			return
 		}
 		p.dv.SetFile(f)

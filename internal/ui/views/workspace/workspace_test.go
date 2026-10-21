@@ -264,22 +264,22 @@ func TestStaleResultsIgnored(t *testing.T) {
 	other.Title = "stale"
 	cur := h.v.seq
 	for name, msg := range map[string]prLoadedMsg{
-		"old seq":      {repo: testRepo, number: 7, seq: cur - 1, detail: other},
-		"other number": {repo: testRepo, number: 8, seq: cur, detail: other},
-		"other repo":   {repo: github.Repo{Owner: "x", Name: "y"}, number: 7, seq: cur, detail: other},
+		"old seq":      {owner: h.v, repo: testRepo, number: 7, seq: cur - 1, detail: other},
+		"other number": {owner: h.v, repo: testRepo, number: 8, seq: cur, detail: other},
+		"other repo":   {owner: h.v, repo: github.Repo{Owner: "x", Name: "y"}, number: 7, seq: cur, detail: other},
 	} {
 		h.send(msg)
 		if h.v.detail.Title == "stale" {
 			t.Errorf("%s: stale result applied", name)
 		}
 	}
-	h.send(diffLoadedMsg{repo: testRepo, number: 7, seq: cur - 1, raw: "stale"})
+	h.send(diffLoadedMsg{owner: h.v, repo: testRepo, number: 7, seq: cur - 1, raw: "stale"})
 	if h.v.diff.Raw == "stale" {
 		t.Error("stale diff applied")
 	}
 	h.press("R")
 	prev := h.v.seq - 1
-	h.send(prLoadedMsg{repo: testRepo, number: 7, seq: prev, detail: other})
+	h.send(prLoadedMsg{owner: h.v, repo: testRepo, number: 7, seq: prev, detail: other})
 	if h.v.detail.Title == "stale" {
 		t.Error("result of a superseded request applied")
 	}

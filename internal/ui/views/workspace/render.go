@@ -75,7 +75,7 @@ func (v *View) Render(width, height int) string {
 		return v.renderFailure()
 	case v.detail == nil:
 		return v.th.Title.Render(v.Title()) + "\n" +
-			v.th.Muted.Render(fmt.Sprintf("Loading %s#%d…", v.repo, v.number))
+			v.th.Muted.Render(termtext.Clean(fmt.Sprintf("Loading %s#%d…", v.repo, v.number)))
 	}
 
 	filesW, rightW := v.paneWidths()

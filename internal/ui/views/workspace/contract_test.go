@@ -44,7 +44,7 @@ func TestPickerChoosesByPathAcrossRefresh(t *testing.T) {
 	// A refresh lands while the picker is open, with a new file sorted first.
 	d := testDetail()
 	d.Files = append([]github.ChangedFile{{Path: "aaa/new.go", Additions: 1, Change: github.FileAdded}}, d.Files...)
-	h.send(prLoadedMsg{repo: testRepo, number: 7, seq: h.v.seq, detail: d})
+	h.send(prLoadedMsg{owner: h.v, repo: testRepo, number: 7, seq: h.v.seq, detail: d})
 	h.send(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if got := h.v.selectedPath(); got != "internal/sync/legacy.go" {
 		t.Errorf("picker selected %q, want legacy.go", got)
@@ -95,11 +95,11 @@ func TestSetFileOnChangedMetadata(t *testing.T) {
 	}
 	d := testDetail()
 	d.Files[0].Additions = 99
-	h.send(prLoadedMsg{repo: testRepo, number: 7, seq: h.v.seq, detail: d})
+	h.send(prLoadedMsg{owner: h.v, repo: testRepo, number: 7, seq: h.v.seq, detail: d})
 	if len(p.files) != 2 || p.files[1].Additions != 99 || p.files[1].Path != p.files[0].Path {
 		t.Errorf("pane did not get the new metadata: %+v", p.files)
 	}
-	h.send(prLoadedMsg{repo: testRepo, number: 7, seq: h.v.seq, detail: d})
+	h.send(prLoadedMsg{owner: h.v, repo: testRepo, number: 7, seq: h.v.seq, detail: d})
 	if len(p.files) != 2 {
 		t.Errorf("unchanged file repeated: %+v", p.files)
 	}
