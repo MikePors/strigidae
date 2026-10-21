@@ -114,7 +114,7 @@ func (v *View) renderFailure() string {
 	}
 	return head + "\n" +
 		v.th.ErrorText.Render("Could not load the pull request.") + "\n" +
-		v.th.Normal.Render(ansi.Wrap(safeError{v.err}.Error(), max(1, v.width), "")) + "\n" +
+		v.th.Normal.Render(ansi.Wrap(termtext.SafeError(v.err).Error(), max(1, v.width), "")) + "\n" +
 		v.th.Muted.Render("Press R to retry.")
 }
 

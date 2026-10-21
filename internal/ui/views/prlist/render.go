@@ -57,7 +57,7 @@ func fit(s string, width, height int) string {
 
 func (v *View) errorState(width int) string {
 	head := v.th.PRList.ChangesRequested.Render("Could not load pull requests")
-	body := ansi.Wrap(safeError{v.err}.Error(), width, "")
+	body := ansi.Wrap(termtext.SafeError(v.err).Error(), width, "")
 	return head + "\n" + body + "\n\n" + v.th.Muted.Render("Press R to retry.")
 }
 

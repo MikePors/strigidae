@@ -109,13 +109,6 @@ func (v *View) Title() string { return v.repoName() }
 // repoName is the repository name made safe to draw (it can come from -R).
 func (v *View) repoName() string { return termtext.Clean(v.repo.String()) }
 
-// safeError is an error whose text is safe to draw: API and launcher errors
-// can embed attacker-controlled text. It keeps the chain for errors.Is/As.
-type safeError struct{ err error }
-
-func (e safeError) Error() string { return termtext.Clean(e.err.Error()) }
-func (e safeError) Unwrap() error { return e.err }
-
 // ShortHelp implements ui.View.
 func (v *View) ShortHelp() []key.Binding {
 	return []key.Binding{v.km.Select, v.km.Open, v.km.Refresh}
@@ -170,7 +163,7 @@ func (v *View) loaded(msg prsLoadedMsg) tea.Cmd {
 		v.err = msg.err
 		v.moreFailed = msg.more // stop auto-paging until R
 
-		return ui.Error(safeError{fmt.Errorf("load pull requests in %s: %w", v.repo, msg.err)})
+		return ui.Error(termtext.SafeError(fmt.Errorf("load pull requests in %s: %w", v.repo, msg.err)))
 	}
 	v.err = nil
 	v.next = msg.page.Next
@@ -290,7 +283,7 @@ func (v *View) browseSelected() tea.Cmd {
 			return ui.ErrorMsg{Err: fmt.Errorf("pull request #%d has no URL", pr.Number)}
 		}
 		if err := open(url); err != nil {
-			return ui.ErrorMsg{Err: safeError{fmt.Errorf("open #%d in browser: %w", pr.Number, err)}}
+			return ui.ErrorMsg{Err: termtext.SafeError(fmt.Errorf("open #%d in browser: %w", pr.Number, err))}
 		}
 		return ui.InfoMsg{Text: fmt.Sprintf("opened #%d in browser", pr.Number)}
 	}
