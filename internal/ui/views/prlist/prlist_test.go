@@ -482,26 +482,39 @@ func TestGolden(t *testing.T) {
 }
 
 func TestPagingKeysAtTheEnds(t *testing.T) {
+	j8 := []string{"j", "j", "j", "j", "j", "j", "j", "j"}
+	up4 := []string{"G", "k", "k", "k", "k"}
 	tests := []struct {
-		name  string
-		start string // key that places the cursor first
-		key   string
-		want  int
+		name    string
+		start   []string
+		key     string
+		want    int
+		wantTop int
 	}{
-		{"ctrl+u at top", "g g", "ctrl+u", 0},
-		{"ctrl+b at top", "g g", "ctrl+b", 0},
-		{"ctrl+d at bottom", "G", "ctrl+d", 24},
-		{"ctrl+f at bottom", "G", "ctrl+f", 24},
-		{"ctrl+d from top", "g g", "ctrl+d", 5},
-		{"ctrl+b from bottom", "G", "ctrl+b", 13},
+		{"ctrl+u at top", []string{"g g"}, "ctrl+u", 0, 0},
+		{"ctrl+b at top", []string{"g g"}, "ctrl+b", 0, 0},
+		{"ctrl+d at bottom", []string{"G"}, "ctrl+d", 24, 14},
+		{"ctrl+f at bottom", []string{"G"}, "ctrl+f", 24, 14},
+		{"ctrl+d from top", []string{"g g"}, "ctrl+d", 5, 5},
+		{"ctrl+b from bottom", []string{"G"}, "ctrl+b", 13, 3},
+		{"ctrl+u from bottom", []string{"G"}, "ctrl+u", 19, 9},
+		{"ctrl+d mid-list", j8, "ctrl+d", 13, 5},
+		{"ctrl+f mid-list", j8, "ctrl+f", 19, 11},
+		{"ctrl+u mid-list", up4, "ctrl+u", 15, 9},
+		{"ctrl+b mid-list", up4, "ctrl+b", 9, 3},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			v := loadedView(t, fakeWith(makePRs(25)), nil) // window shows 11 rows
-			press(v, tt.start)
+			for _, k := range tt.start {
+				press(v, k)
+			}
 			press(v, tt.key)
 			if got := v.win.Cursor(); got != tt.want {
 				t.Errorf("cursor = %d, want %d", got, tt.want)
+			}
+			if got := v.win.Top(); got != tt.wantTop {
+				t.Errorf("top = %d, want %d", got, tt.wantTop)
 			}
 		})
 	}
@@ -510,7 +523,8 @@ func TestPagingKeysAtTheEnds(t *testing.T) {
 func TestPagingNearTheEndLoadsMore(t *testing.T) {
 	for _, k := range []string{"ctrl+d", "ctrl+f"} {
 		t.Run(k, func(t *testing.T) {
-			v := loadedView(t, fakeWith(makePRs(45)), nil) // 30 loaded, 11 visible
+			c := fakeWith(makePRs(45))
+			v := loadedView(t, c, nil) // 30 loaded, 11 visible
 			var cmd tea.Cmd
 			for i := 0; i < 10 && cmd == nil; i++ {
 				cmd = press(v, k)
@@ -520,6 +534,22 @@ func TestPagingNearTheEndLoadsMore(t *testing.T) {
 			}
 			if cmd == nil || !v.Loading() {
 				t.Fatalf("%s into the margin should load the next page", k)
+			}
+			cursor, top := v.win.Cursor(), v.win.Top()
+			deliver(t, v, cmd)
+			if len(v.prs) != 45 {
+				t.Fatalf("rows after next page = %d, want 45", len(v.prs))
+			}
+			calls := c.Calls()
+			if calls[len(calls)-1].Page.After == "" {
+				t.Errorf("last call = %+v, want a next-page fetch", calls[len(calls)-1])
+			}
+			if v.win.Cursor() != cursor || v.win.Top() != top {
+				t.Errorf("append moved the window: cursor %d->%d top %d->%d", cursor, v.win.Cursor(), top, v.win.Top())
+			}
+			press(v, "G")
+			if got := v.win.Cursor(); got != 44 {
+				t.Errorf("G after append: cursor = %d, want 44 (window must know the new row count)", got)
 			}
 		})
 	}
