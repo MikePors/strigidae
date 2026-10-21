@@ -4,6 +4,7 @@ package logging
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -33,6 +34,22 @@ func Open(path string) (*slog.Logger, *os.File, error) {
 		return nil, nil, fmt.Errorf("open log file: %w", err)
 	}
 	return slog.New(slog.NewTextHandler(f, nil)), f, nil
+}
+
+// Start opens the log file at Path(getenv, home) and returns a logger writing
+// to it and a func that closes the file. Logging is never fatal: if the file
+// can't be opened, Start returns the error along with a logger that discards
+// everything and a no-op close, so the logger and close are always usable.
+func Start(getenv func(string) string, home func() (string, error)) (*slog.Logger, func(), error) {
+	path, err := Path(getenv, home)
+	if err == nil {
+		var l *slog.Logger
+		var f *os.File
+		if l, f, err = Open(path); err == nil {
+			return l, func() { _ = f.Close() }, nil
+		}
+	}
+	return slog.New(slog.NewTextHandler(io.Discard, nil)), func() {}, err
 }
 
 // Install routes the standard library's default loggers to l, so a
