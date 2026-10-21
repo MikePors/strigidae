@@ -87,7 +87,7 @@ func New(root View, th theme.Theme, opts Options) *Model {
 		tick:    opts.Tick,
 		seqWait: opts.SeqTimeout,
 		msgTTL:  opts.MessageTTL,
-		cmdline: newCommandLine(),
+		cmdline: newCommandLine(th),
 		spin:    spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(th.Spinner)),
 	}
 }
@@ -116,6 +116,7 @@ func (m *Model) update(msg tea.Msg) tea.Cmd {
 		return m.broadcast(m.sizeMsg())
 	case tea.BackgroundColorMsg:
 		m.th = theme.New(msg.IsDark())
+		m.cmdline.setTheme(m.th)
 		m.spin.Style = m.th.Spinner
 		return m.broadcast(ThemeMsg{Theme: m.th})
 	case tea.KeyPressMsg:
