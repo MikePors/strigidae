@@ -95,3 +95,5 @@ Rules for you:
 - Never add palette slots, ANSI indices or raw colours to styles, views or components.
 - Caches of rendered output (markdown, highlighting) include `Theme.ID` (a fingerprint of the final roles), or hold theme-independent data (token classes).
 - Chroma's style registry is a global map read by Glamour without a lock. Register styles (`ChromaStyleName`) and run Glamour only on the UI goroutine, never in a `tea.Cmd`.
+- Tests that render Markdown or register Chroma styles don't use `t.Parallel` (the registry is unlocked; see the line above).
+- Bubbles widgets that ship default styles (`textinput`, `help`, `list`, …) get their styles set from the theme. Never keep `DefaultStyles()` or `DefaultDarkStyles()`; the AST check can't see those.
