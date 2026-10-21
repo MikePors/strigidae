@@ -10,6 +10,7 @@ import (
 
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/ui/components/markdown"
+	"github.com/MikePors/strigidae/internal/ui/termtext"
 	"github.com/MikePors/strigidae/internal/ui/theme"
 )
 
@@ -53,7 +54,7 @@ func (o *overview) ensure(th theme.Theme, md *markdown.Renderer, d *github.PullR
 	if strings.TrimSpace(d.Body) == "" {
 		add(th.Muted.Render("No description provided."))
 	} else {
-		add(md.Render(d.Body, width))
+		add(md.Render(termtext.CleanBlock(d.Body), width))
 	}
 	add("")
 
@@ -66,7 +67,7 @@ func (o *overview) ensure(th theme.Theme, md *markdown.Renderer, d *github.PullR
 	for _, it := range items {
 		add(it.header(th, now))
 		if strings.TrimSpace(it.body) != "" {
-			add(md.Render(it.body, width))
+			add(md.Render(termtext.CleanBlock(it.body), width))
 		}
 		add("")
 	}
@@ -106,9 +107,9 @@ type entry struct {
 
 func (e entry) header(th theme.Theme, now time.Time) string {
 	if e.pending {
-		return th.Author.Render(e.author) + " " + th.Pending.Render("PENDING "+e.action+" (draft, not submitted)")
+		return th.Author.Render(termtext.Clean(e.author)) + " " + th.Pending.Render("PENDING "+e.action+" (draft, not submitted)")
 	}
-	return th.Author.Render(e.author) + " " + e.action + th.Muted.Render(" · "+relTime(now, e.at))
+	return th.Author.Render(termtext.Clean(e.author)) + " " + e.action + th.Muted.Render(" · "+relTime(now, e.at))
 }
 
 // conversation merges comments and review summaries chronologically. Pending

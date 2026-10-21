@@ -15,11 +15,14 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/cli/go-gh/v2/pkg/browser"
 
+	"github.com/MikePors/strigidae/internal/diff"
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/ui"
 	"github.com/MikePors/strigidae/internal/ui/components/markdown"
 	"github.com/MikePors/strigidae/internal/ui/components/picker"
+	"github.com/MikePors/strigidae/internal/ui/components/scroll"
 	"github.com/MikePors/strigidae/internal/ui/keys"
+	"github.com/MikePors/strigidae/internal/ui/termtext"
 	"github.com/MikePors/strigidae/internal/ui/theme"
 )
 
@@ -47,6 +50,7 @@ type (
 		number int
 		seq    int
 		raw    string
+		parsed *diff.Diff // parsed in the command, so Update stays cheap
 		err    error
 	}
 )
@@ -116,14 +120,14 @@ type View struct {
 	err         error // load failure while there is nothing to show
 	notFound    bool
 
-	sel      int // 0 is Overview, i is Files[i-1]
-	filesTop int // first visible row of the Files list
-	focus    pane
-	ov       overview
-	picker   *picker.Model // non-nil while the file picker is open
+	fw     scroll.Window // Files pane: row 0 is Overview, row i is Files[i-1]
+	focus  pane
+	ov     overview
+	picker *picker.Model // non-nil while the file picker is open
 	// pickerItems are the paths the picker was built from; a choice is
 	// resolved by path because a refresh may replace the file list meanwhile.
 	pickerItems []string
+	pickerPaths []string           // raw paths, parallel to pickerItems
 	paneFile    github.ChangedFile // last value given to filePane.SetFile
 	paneW       int                // size last given to filePane.SetSize
 	paneH       int
@@ -155,7 +159,7 @@ func New(client github.Client, repo github.Repo, number int, opts ...Option) *Vi
 	v.md = markdown.New(v.th.IsDark)
 	v.ov = newOverview()
 	if v.filePane == nil {
-		v.filePane = &placeholderPane{}
+		v.filePane = newDiffPane(v.th)
 	}
 	v.filePane.SetTheme(v.th)
 	return v
@@ -164,6 +168,13 @@ func New(client github.Client, repo github.Repo, number int, opts ...Option) *Vi
 func openInBrowser(url string) error {
 	return browser.New("", io.Discard, io.Discard).Browse(url)
 }
+
+// safeError is an error whose text is safe to draw: API errors can carry
+// attacker-controlled text, so it is cleaned when displayed.
+type safeError struct{ err error }
+
+func (e safeError) Error() string { return termtext.Clean(e.err.Error()) }
+func (e safeError) Unwrap() error { return e.err }
 
 // Title implements ui.View.
 func (v *View) Title() string { return fmt.Sprintf("#%d", v.number) }
@@ -211,7 +222,14 @@ func (v *View) load() tea.Cmd {
 		},
 		func() tea.Msg {
 			raw, err := client.GetDiff(context.Background(), repo, number)
-			return diffLoadedMsg{repo: repo, number: number, seq: seq, raw: raw, err: err}
+			if err != nil {
+				return diffLoadedMsg{repo: repo, number: number, seq: seq, err: err}
+			}
+			parsed, err := diff.Parse(raw)
+			if err != nil {
+				err = fmt.Errorf("parse diff of %s#%d: %w", repo, number, err)
+			}
+			return diffLoadedMsg{repo: repo, number: number, seq: seq, raw: raw, parsed: parsed, err: err}
 		},
 	)
 }
@@ -258,15 +276,16 @@ func (v *View) prLoaded(msg prLoadedMsg) tea.Cmd {
 		if v.detail == nil {
 			v.err, v.notFound = msg.err, errors.Is(msg.err, github.ErrNotFound)
 		}
-		return ui.Error(msg.err)
+		return ui.Error(safeError{msg.err})
 	}
 	prev := v.selectedPath()
 	v.detail, v.err, v.notFound = &msg.detail, nil, false
-	v.sel = 0
+	v.fw.SetRows(v.entries())
+	v.fw.GotoTop()
 	if prev != "" {
 		for i, f := range msg.detail.Files {
 			if f.Path == prev {
-				v.sel = i + 1
+				v.setSel(i + 1)
 			}
 		}
 	}
@@ -278,16 +297,16 @@ func (v *View) prLoaded(msg prLoadedMsg) tea.Cmd {
 
 func (v *View) diffLoaded(msg diffLoadedMsg) tea.Cmd {
 	v.diffPending = false
-	if msg.err != nil && v.diff.Raw != "" && !errors.Is(msg.err, github.ErrDiffTooLarge) {
+	if msg.err != nil && v.diff.Parsed != nil && !errors.Is(msg.err, github.ErrDiffTooLarge) {
 		v.diff.Loading = false // keep the loaded diff; the error goes to the status bar
 	} else {
-		v.diff = DiffState{Raw: msg.raw, Err: msg.err}
+		v.diff = DiffState{Raw: msg.raw, Parsed: msg.parsed, Err: msg.err}
 	}
 	v.filePane.SetDiff(v.diff)
 	// A diff that is merely too large is shown in the diff pane, not as a
 	// transient error.
 	if msg.err != nil && !errors.Is(msg.err, github.ErrDiffTooLarge) {
-		return ui.Error(msg.err)
+		return ui.Error(safeError{msg.err})
 	}
 	return nil
 }
@@ -303,16 +322,22 @@ func (v *View) files() []github.ChangedFile {
 // entries is the number of rows in the Files pane: Overview plus the files.
 func (v *View) entries() int { return 1 + len(v.files()) }
 
+// sel is the selected Files row: 0 is Overview, i is Files[i-1].
+func (v *View) sel() int { return v.fw.Cursor() }
+
+// setSel moves the selection to row i, scrolling the Files list to show it.
+func (v *View) setSel(i int) { v.fw.Restore(i, v.fw.Top(), 0) }
+
 func (v *View) selectedPath() string {
-	if v.sel > 0 && v.sel <= len(v.files()) {
-		return v.files()[v.sel-1].Path
+	if s := v.sel(); s > 0 && s <= len(v.files()) {
+		return v.files()[s-1].Path
 	}
 	return ""
 }
 
 func (v *View) selectionChanged() {
-	if v.sel > 0 && v.sel <= len(v.files()) {
-		f := v.files()[v.sel-1]
+	if s := v.sel(); s > 0 && s <= len(v.files()) {
+		f := v.files()[s-1]
 		if f != v.paneFile {
 			v.paneFile = f
 			v.filePane.SetFile(f)
@@ -321,12 +346,11 @@ func (v *View) selectionChanged() {
 }
 
 func (v *View) selectEntry(i int) {
-	i = min(max(i, 0), v.entries()-1)
-	if i == v.sel {
-		return
+	prev := v.sel()
+	v.setSel(i)
+	if v.sel() != prev {
+		v.selectionChanged()
 	}
-	v.sel = i
-	v.selectionChanged()
 	v.layout()
 }
 
@@ -361,10 +385,10 @@ func (v *View) handleKey(msg keys.Msg) tea.Cmd {
 
 // stepFile moves to the next or previous file. It never lands on Overview.
 func (v *View) stepFile(delta int) {
-	if len(v.files()) == 0 || (v.sel == 0 && delta < 0) {
+	if len(v.files()) == 0 || (v.sel() == 0 && delta < 0) {
 		return
 	}
-	v.selectEntry(min(max(v.sel+delta, 1), len(v.files())))
+	v.selectEntry(min(max(v.sel()+delta, 1), len(v.files())))
 }
 
 func (v *View) openBrowser() tea.Cmd {
@@ -374,7 +398,7 @@ func (v *View) openBrowser() tea.Cmd {
 	url, open := v.detail.URL, v.open
 	return func() tea.Msg {
 		if err := open(url); err != nil {
-			return ui.ErrorMsg{Err: fmt.Errorf("open %s in browser: %w", url, err)}
+			return ui.ErrorMsg{Err: safeError{fmt.Errorf("open %s in browser: %w", termtext.Clean(url), err)}}
 		}
 		return nil
 	}
@@ -382,32 +406,35 @@ func (v *View) openBrowser() tea.Cmd {
 
 // filesKey moves the selection in the Files pane.
 func (v *View) filesKey(msg keys.Msg) {
-	page := max(1, v.panesHeight()-2)
+	prev := v.sel()
 	switch {
 	case key.Matches(msg, v.km.Down):
-		v.selectEntry(v.sel + 1)
+		v.fw.Down(1)
 	case key.Matches(msg, v.km.Up):
-		v.selectEntry(v.sel - 1)
+		v.fw.Up(1)
 	case key.Matches(msg, v.km.Top):
-		v.selectEntry(0)
+		v.fw.GotoTop()
 	case key.Matches(msg, v.km.Bottom):
-		v.selectEntry(v.entries() - 1)
+		v.fw.GotoBottom()
 	case key.Matches(msg, v.km.HalfDown):
-		v.selectEntry(v.sel + page/2)
+		v.fw.HalfPageDown()
 	case key.Matches(msg, v.km.HalfUp):
-		v.selectEntry(v.sel - page/2)
+		v.fw.HalfPageUp()
 	case key.Matches(msg, v.km.PageDown):
-		v.selectEntry(v.sel + page)
+		v.fw.PageDown()
 	case key.Matches(msg, v.km.PageUp):
-		v.selectEntry(v.sel - page)
+		v.fw.PageUp()
 	case key.Matches(msg, v.km.Select):
 		v.focus = paneRight
+	}
+	if v.sel() != prev {
+		v.selectionChanged()
 	}
 }
 
 // rightKey scrolls the Overview, or hands the key to the file pane.
 func (v *View) rightKey(msg keys.Msg) tea.Cmd {
-	if v.sel > 0 {
+	if v.sel() > 0 {
 		return v.filePane.Update(msg)
 	}
 	vp := &v.ov.vp
@@ -433,7 +460,7 @@ func (v *View) rightKey(msg keys.Msg) tea.Cmd {
 }
 
 func (v *View) jumpSection(delta int) {
-	if v.sel != 0 || v.detail == nil {
+	if v.sel() != 0 || v.detail == nil {
 		return
 	}
 	v.ov.jump(delta)
@@ -445,10 +472,12 @@ func (v *View) openPicker() {
 		return
 	}
 	items := make([]string, len(files))
+	paths := make([]string, len(files))
 	for i, f := range files {
-		items[i] = f.Path
+		items[i] = termtext.Clean(f.Path)
+		paths[i] = f.Path
 	}
-	v.pickerItems = items
+	v.pickerItems, v.pickerPaths = items, paths
 	v.picker = picker.New(v.th, "Go to file", items)
 }
 
@@ -460,7 +489,7 @@ func (v *View) pickerKey(msg tea.KeyPressMsg) {
 		v.picker = nil
 	case picker.Chosen:
 		v.picker = nil
-		path := v.pickerItems[res.Index]
+		path := v.pickerPaths[res.Index]
 		for i, f := range v.files() {
 			if f.Path == path {
 				v.selectEntry(i + 1)

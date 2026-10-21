@@ -3,11 +3,13 @@ package workspace
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/MikePors/strigidae/internal/github"
@@ -93,11 +95,20 @@ type harness struct {
 	msgs   []tea.Msg // ui messages emitted by commands
 }
 
+func readDiff(t *testing.T) string {
+	t.Helper()
+	b, err := os.ReadFile("testdata/pr.diff")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
 func newHarness(t *testing.T, w, h int) *harness {
 	t.Helper()
 	c := fake.New()
 	c.SetPullRequest(testDetail())
-	c.SetDiff(testRepo, 7, "diff --git a/x b/x\n")
+	c.SetDiff(testRepo, 7, readDiff(t))
 	hs := &harness{t: t, client: c}
 	hs.v = New(c, testRepo, 7,
 		WithClock(func() time.Time { return testNow }),
@@ -276,8 +287,8 @@ func TestStaleResultsIgnored(t *testing.T) {
 
 func TestFocusAndFileNavigation(t *testing.T) {
 	h := loaded(t, 100, 30)
-	if h.v.focus != paneFiles || h.v.sel != 0 {
-		t.Fatalf("initial focus=%v sel=%d", h.v.focus, h.v.sel)
+	if h.v.focus != paneFiles || h.v.sel() != 0 {
+		t.Fatalf("initial focus=%v sel=%d", h.v.focus, h.v.sel())
 	}
 	h.press("l")
 	if h.v.focus != paneRight {
@@ -289,28 +300,28 @@ func TestFocusAndFileNavigation(t *testing.T) {
 	}
 
 	h.press("j", "j")
-	if h.v.sel != 2 {
-		t.Errorf("j j: sel = %d", h.v.sel)
+	if h.v.sel() != 2 {
+		t.Errorf("j j: sel = %d", h.v.sel())
 	}
 	h.press("k")
-	if h.v.sel != 1 {
-		t.Errorf("k: sel = %d", h.v.sel)
+	if h.v.sel() != 1 {
+		t.Errorf("k: sel = %d", h.v.sel())
 	}
 	h.press("G")
-	if h.v.sel != 5 {
-		t.Errorf("G: sel = %d", h.v.sel)
+	if h.v.sel() != 5 {
+		t.Errorf("G: sel = %d", h.v.sel())
 	}
 	h.press("j")
-	if h.v.sel != 5 {
-		t.Errorf("j past the end: sel = %d", h.v.sel)
+	if h.v.sel() != 5 {
+		t.Errorf("j past the end: sel = %d", h.v.sel())
 	}
 	h.press("g g")
-	if h.v.sel != 0 {
-		t.Errorf("g g: sel = %d", h.v.sel)
+	if h.v.sel() != 0 {
+		t.Errorf("g g: sel = %d", h.v.sel())
 	}
 	h.press("ctrl+f")
-	if h.v.sel != 5 {
-		t.Errorf("ctrl+f: sel = %d", h.v.sel)
+	if h.v.sel() != 5 {
+		t.Errorf("ctrl+f: sel = %d", h.v.sel())
 	}
 
 	// enter in the Files pane focuses the right pane.
@@ -321,32 +332,32 @@ func TestFocusAndFileNavigation(t *testing.T) {
 
 	// ] f and [ f work from either pane and never land on Overview.
 	h.press("g g") // scrolls the overview, selection unchanged
-	if h.v.sel != 5 {
-		t.Errorf("g g in the right pane moved the selection to %d", h.v.sel)
+	if h.v.sel() != 5 {
+		t.Errorf("g g in the right pane moved the selection to %d", h.v.sel())
 	}
 	h.press("[ f")
-	if h.v.sel != 4 {
-		t.Errorf("[ f: sel = %d", h.v.sel)
+	if h.v.sel() != 4 {
+		t.Errorf("[ f: sel = %d", h.v.sel())
 	}
 	h.press("h", "g g", "[ f")
-	if h.v.sel != 0 {
-		t.Errorf("[ f from Overview should stay: sel = %d", h.v.sel)
+	if h.v.sel() != 0 {
+		t.Errorf("[ f from Overview should stay: sel = %d", h.v.sel())
 	}
 	h.press("] f")
-	if h.v.sel != 1 {
-		t.Errorf("] f from Overview: sel = %d", h.v.sel)
+	if h.v.sel() != 1 {
+		t.Errorf("] f from Overview: sel = %d", h.v.sel())
 	}
 	h.press("l", "] f", "] f", "] f", "] f", "] f")
-	if h.v.sel != 5 {
-		t.Errorf("] f clamps at the last file: sel = %d", h.v.sel)
+	if h.v.sel() != 5 {
+		t.Errorf("] f clamps at the last file: sel = %d", h.v.sel())
 	}
 }
 
 func TestFilePaneFollowsSelection(t *testing.T) {
 	h := loaded(t, 100, 30)
 	h.press("j")
-	if !strings.Contains(h.render(), "diff view arrives with #8") {
-		t.Error("selecting a file should show the placeholder")
+	if !strings.Contains(ansi.Strip(h.render()), "func (c *Client) Sync") {
+		t.Error("selecting a file should show its diff")
 	}
 	if got := h.v.rightTitle(); got != "internal/sync/client.go" {
 		t.Errorf("right pane title = %q", got)
@@ -516,8 +527,8 @@ func TestCapturerReleasesOnEsc(t *testing.T) {
 	for _, k := range []string{"]", "f"} {
 		step(tea.KeyPressMsg{Code: rune(k[0]), Text: k})
 	}
-	if h.v.sel != 1 {
-		t.Fatalf("] f through the root: sel = %d", h.v.sel)
+	if h.v.sel() != 1 {
+		t.Fatalf("] f through the root: sel = %d", h.v.sel())
 	}
 	step(tea.KeyPressMsg{Code: 'f', Text: "f"})
 	if !h.v.CapturesKeys() {
@@ -587,7 +598,7 @@ func TestGolden(t *testing.T) {
 	})
 	t.Run("file_selected", func(t *testing.T) {
 		h := loaded(t, 100, 24)
-		h.press("] f", "] f")
+		h.press("] f", "] f", "l")
 		golden.Assert(t, "file_selected", h.render(), false)
 	})
 	t.Run("right_focused", func(t *testing.T) {
@@ -632,7 +643,7 @@ func TestGolden(t *testing.T) {
 		d.Body, d.Files, d.Comments, d.Reviews = "", nil, nil, nil
 		c := fake.New()
 		c.SetPullRequest(d)
-		c.SetDiff(testRepo, 7, "")
+		c.SetDiff(testRepo, 7, readDiff(t))
 		v := New(c, testRepo, 7, WithClock(func() time.Time { return testNow }), WithTheme(theme.New(true)))
 		h := &harness{t: t, v: v, client: c}
 		h.send(tea.WindowSizeMsg{Width: 80, Height: 12})

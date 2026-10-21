@@ -1,0 +1,24 @@
+open #7 Add retry policy to sync client
+alice · main ← feat/retry · changes requested · [enhancement] [sync] · reviewers: bob, team core
+╭─ Files ────────────────────╮╭─ internal/sync/client.go ──────────────────────────────────────────╮
+│  Overview                  ││Could not load the diff: connection reset                           │
+│> M …rnal/sync/client.go +25││                                                                    │
+│  A …rnal/sync/retry.go +214││                                                                    │
+│  D …rnal/sync/legacy.go -90││                                                                    │
+│  R …y-and-backoff.md +12 -3││                                                                    │
+│  M README.md          +2 -1││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯

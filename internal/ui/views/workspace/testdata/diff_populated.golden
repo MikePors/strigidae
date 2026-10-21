@@ -1,0 +1,24 @@
+open #7 Add retry policy to sync client
+alice · main ← feat/retry · changes requested · [enhancement] [sync] · reviewers: bob, team core
+╭─ Files ────────────────────╮╭─ internal/sync/client.go ──────────────────────────────────────────╮
+│  Overview                  ││ @@ -10,8 +10,10 @@ import (                                        │
+│> M …rnal/sync/client.go +25││  10  10      "context"                                             │
+│  A …rnal/sync/retry.go +214││> 11  11      "time"                                                │
+│  D …rnal/sync/legacy.go -90││  12  12  )                                                         │
+│  R …y-and-backoff.md +12 -3││  13  13                                                            │
+│  M README.md          +2 -1││  14     -func (c *Client) Sync(ctx context.Context) error {        │
+│                            ││  15     -    return c.retryForever(ctx, c.sync)                    │
+│                            ││      14 +func (c *Client) Sync(ctx context.Context) error {        │
+│                            ││      15 +    return Retry(ctx, 5, func() error {                   │
+│                            ││      16 +        return c.sync(ctx)                                │
+│                            ││      17 +    })                                                    │
+│                            ││  16  18  }                                                         │
+│                            ││  17  19                                                            │
+│                            ││ @@ -40,5 +42,7 @@ func (c *Client) sync(ctx context.Context) error │
+│                            ││  40  42      if err := c.conn.Ping(ctx); err != nil {              │
+│                            ││  41  43          return err                                        │
+│                            ││  42  44      }                                                     │
+│                            ││      45 +    // A very long comment line that only fits in the pane│
+│                            ││      46 +    c.last = time.Now()                                   │
+│                            ││  43  47      return c.push(ctx)                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯

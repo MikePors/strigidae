@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/ui/termtext"
 )
 
 // Layout constants.
@@ -42,15 +43,8 @@ func (v *View) layout() {
 	if rightW > 0 {
 		v.ov.ensure(v.th, v.md, v.detail, v.now(), max(1, rightW-4), h)
 	}
-	if filesW > 0 {
-		if v.sel < v.filesTop {
-			v.filesTop = v.sel
-		}
-		if h > 0 && v.sel >= v.filesTop+h {
-			v.filesTop = v.sel - h + 1
-		}
-		v.filesTop = max(0, min(v.filesTop, v.entries()-h))
-	}
+	v.fw.SetRows(v.entries())
+	v.fw.SetSize(h)
 }
 
 // sizeFilePane tells the file pane its inner size, also while it is hidden in
@@ -115,24 +109,24 @@ func (v *View) renderFailure() string {
 	head := v.th.Title.Render(v.Title())
 	if v.notFound {
 		return head + "\n" +
-			v.th.ErrorText.Render(fmt.Sprintf("Pull request %s#%d was not found.", v.repo, v.number)) + "\n" +
+			v.th.ErrorText.Render(termtext.Clean(fmt.Sprintf("Pull request %s#%d was not found.", v.repo, v.number))) + "\n" +
 			v.th.Muted.Render("It may not exist, or you may lack access. Press R to retry.")
 	}
 	return head + "\n" +
 		v.th.ErrorText.Render("Could not load the pull request.") + "\n" +
-		v.th.Normal.Render(v.err.Error()) + "\n" +
+		v.th.Normal.Render(ansi.Wrap(safeError{v.err}.Error(), max(1, v.width), "")) + "\n" +
 		v.th.Muted.Render("Press R to retry.")
 }
 
 func (v *View) renderHeader(width int) []string {
 	d := v.detail
 	badge := v.stateBadge()
-	line1 := badge + " " + v.th.Title.Render(fmt.Sprintf("#%d", d.Number)) + " " + v.th.StrongText.Render(d.Title)
+	line1 := badge + " " + v.th.Title.Render(fmt.Sprintf("#%d", d.Number)) + " " + v.th.StrongText.Render(termtext.Clean(d.Title))
 
 	sep := v.th.Muted.Render(" · ")
 	parts := []string{
-		v.th.Author.Render(d.Author),
-		v.th.Muted.Render(d.BaseRef + " ← " + d.HeadRef),
+		v.th.Author.Render(termtext.Clean(d.Author)),
+		v.th.Muted.Render(termtext.Clean(d.BaseRef) + " ← " + termtext.Clean(d.HeadRef)),
 	}
 	switch d.ReviewDecision {
 	case github.ReviewDecisionApproved:
@@ -146,16 +140,16 @@ func (v *View) renderHeader(width int) []string {
 	if len(d.Labels) > 0 {
 		names := make([]string, len(d.Labels))
 		for i, l := range d.Labels {
-			names[i] = "[" + l.Name + "]"
+			names[i] = "[" + termtext.Clean(l.Name) + "]"
 		}
 		parts = append(parts, v.th.Normal.Render(strings.Join(names, " ")))
 	}
 	if len(d.ReviewRequests) > 0 {
 		names := make([]string, len(d.ReviewRequests))
 		for i, r := range d.ReviewRequests {
-			names[i] = r.Name
+			names[i] = termtext.Clean(r.Name)
 			if r.IsTeam {
-				names[i] = "team " + r.Name
+				names[i] = "team " + names[i]
 			}
 		}
 		parts = append(parts, v.th.Muted.Render("reviewers: "+strings.Join(names, ", ")))
@@ -180,7 +174,7 @@ func (v *View) stateBadge() string {
 
 func (v *View) rightTitle() string {
 	if p := v.selectedPath(); p != "" {
-		return p
+		return termtext.Clean(p)
 	}
 	return "Overview"
 }
@@ -189,8 +183,9 @@ func (v *View) rightTitle() string {
 func (v *View) fileRows(width, height int) []string {
 	files := v.files()
 	var rows []string
-	for i := v.filesTop; i < v.entries() && len(rows) < height; i++ {
-		selected := i == v.sel
+	v.fw.SetSize(height)
+	for i := v.fw.Top(); i < v.entries() && len(rows) < height; i++ {
+		selected := i == v.sel()
 		if i == 0 {
 			rows = append(rows, v.overviewRow(selected))
 			continue
@@ -217,7 +212,7 @@ func (v *View) fileRow(f github.ChangedFile, width int, selected bool) string {
 	}
 	counts = strings.TrimSpace(counts)
 	pathW := max(4, width-2-2-1-ansi.StringWidth(counts))
-	path := f.Path
+	path := termtext.Clean(f.Path)
 	if over := ansi.StringWidth(path) - pathW; over > 0 {
 		path = ansi.TruncateLeft(path, over+1, "…") // +1: the ellipsis takes a cell
 	}
@@ -266,7 +261,7 @@ func changeMarker(c github.FileChangeType) string {
 
 // rightRows renders the right pane's content.
 func (v *View) rightRows(width, height int) []string {
-	if v.sel > 0 {
+	if v.sel() > 0 {
 		return strings.Split(v.filePane.Render(width, height), "\n")
 	}
 	lines := strings.Split(v.ov.vp.View(), "\n")

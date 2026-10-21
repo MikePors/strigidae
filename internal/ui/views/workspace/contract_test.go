@@ -87,7 +87,7 @@ func (p *stubPane) FullHelp() [][]key.Binding {
 
 func TestSetFileOnChangedMetadata(t *testing.T) {
 	h := loaded(t, 100, 30)
-	p := &recordPane{placeholderPane: placeholderPane{th: theme.New(true)}}
+	p := &recordPane{}
 	h.v.filePane = p
 	h.press("j")
 	if len(p.files) != 1 {
@@ -106,7 +106,7 @@ func TestSetFileOnChangedMetadata(t *testing.T) {
 }
 
 type recordPane struct {
-	placeholderPane
+	stubPane
 	files []github.ChangedFile
 }
 
@@ -115,7 +115,7 @@ func (p *recordPane) SetFile(f github.ChangedFile) { p.files = append(p.files, f
 func TestFilePaneContractThroughRoot(t *testing.T) {
 	c := fake.New()
 	c.SetPullRequest(testDetail())
-	c.SetDiff(testRepo, 7, "diff")
+	c.SetDiff(testRepo, 7, readDiff(t))
 	p := &stubPane{}
 	v := New(c, testRepo, 7, WithTheme(theme.New(true)), WithFilePane(p))
 	noTick := func(time.Duration, func(time.Time) tea.Msg) tea.Cmd { return nil }
