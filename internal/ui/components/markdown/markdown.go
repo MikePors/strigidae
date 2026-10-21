@@ -7,6 +7,8 @@ import (
 
 	"charm.land/glamour/v2"
 	"charm.land/glamour/v2/styles"
+
+	"github.com/MikePors/strigidae/internal/ui/termtext"
 )
 
 type cacheKey struct {
@@ -48,7 +50,9 @@ func (r *Renderer) Render(body string, width int) string {
 	if s, ok := r.cache[k]; ok {
 		return s
 	}
-	s := r.render(body, width)
+	// Glamour decodes HTML character references (&#x1b;, &rlm;, ...) into real
+	// control and bidi runes, after any input sanitising, so clean the output.
+	s := termtext.CleanStyled(r.render(body, width))
 	r.cache[k] = s
 	return s
 }
