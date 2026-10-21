@@ -1,13 +1,18 @@
 package theme
 
 import (
+	"fmt"
+	"hash/fnv"
 	"image/color"
+	"log/slog"
+	"math"
 	"strings"
 )
 
 // Roles are what strig means by a colour. Each has a default derivation from
 // palette slots (deriveRoles, the only code that reads slots), and a theme may
-// override any role with an exact colour. Styles are built from roles only.
+// override any role with an exact colour (used as written, never adjusted).
+// Styles are built from roles only.
 type Roles struct {
 	// Surfaces and text.
 	Background color.Color // base of every tint; the page the palette was designed for
@@ -49,20 +54,43 @@ type Roles struct {
 	SynEscape   color.Color // string escapes and regular expressions
 }
 
-// Tint ratios: how much of the role shows through a row background.
-const (
-	tintRow    = 0.12
-	tintGutter = 0.24
-	tintHunk   = 0.10
-	tintCursor = 0.22
-)
+// tintParams say how a tint is made from a role: how far the background's
+// lightness moves toward the role's, and how much of the role's chroma it
+// keeps (see tint).
+type tintParams struct{ lightMix, chroma float64 }
 
-// deriveRoles computes every role from the palette, then applies overrides
-// (non-nil fields of ov), then runs the contrast guard.
+// tintSet holds the parameters for each tint. They differ per variant because
+// the same blend reads very differently on a dark and a light background.
+type tintSet struct{ row, gutter, hunk, hunkCursor tintParams }
+
+func tintsFor(v Variant) tintSet {
+	// Fitted so the built-in palettes reproduce the earlier hand-picked row
+	// colours closely: deep green and red on dark, pastel mint and pink on
+	// light, with the same hunk-header shades.
+	if v == Light {
+		return tintSet{
+			row:        tintParams{0.07, 0.20},
+			gutter:     tintParams{0.14, 0.40},
+			hunk:       tintParams{0.09, 0.27},
+			hunkCursor: tintParams{0.20, 0.38},
+		}
+	}
+	return tintSet{
+		row:        tintParams{0.03, 0.24},
+		gutter:     tintParams{0.12, 0.38},
+		hunk:       tintParams{0.10, 0.31},
+		hunkCursor: tintParams{0.29, 0.49},
+	}
+}
+
+// deriveRoles computes every role from the palette and applies the overrides
+// (non-nil fields of ov). The contrast guard then adjusts only the roles that
+// were derived: an override is used exactly as written, and a warning is
+// logged if it is hard to read.
 func deriveRoles(p Palette, ov Roles) Roles {
 	r := defaultRoles(p)
-	r.override(ov)
-	r.guard()
+	r.override(ov, tintsFor(p.Variant))
+	r.guard(ov.set())
 	return r
 }
 
@@ -96,17 +124,20 @@ func defaultRoles(p Palette) Roles {
 		SynVariable: s(Base08),
 		SynEscape:   s(Base0C),
 	}
-	r.deriveTints()
+	r.deriveTints(tintsFor(p.Variant))
 	return r
 }
 
-func (r *Roles) deriveTints() {
-	r.AddedTint = blend(r.Background, r.Added, tintRow)
-	r.AddedGutterTint = blend(r.Background, r.Added, tintGutter)
-	r.RemovedTint = blend(r.Background, r.Removed, tintRow)
-	r.RemovedGutterTint = blend(r.Background, r.Removed, tintGutter)
-	r.HunkTint = blend(r.Background, r.Info, tintHunk)
-	r.HunkCursorTint = blend(r.Background, r.Info, tintCursor)
+func (r *Roles) deriveTints(t tintSet) {
+	mk := func(role color.Color, p tintParams) color.Color {
+		return tint(r.Background, role, p.lightMix, p.chroma)
+	}
+	r.AddedTint = mk(r.Added, t.row)
+	r.AddedGutterTint = mk(r.Added, t.gutter)
+	r.RemovedTint = mk(r.Removed, t.row)
+	r.RemovedGutterTint = mk(r.Removed, t.gutter)
+	r.HunkTint = mk(r.Info, t.hunk)
+	r.HunkCursorTint = mk(r.Info, t.hunkCursor)
 }
 
 // fields lists every role by name, for overriding, guarding and tests.
@@ -150,10 +181,21 @@ type roleField struct {
 	c    *color.Color
 }
 
+// set returns the names of the roles r overrides (its non-nil fields).
+func (r Roles) set() map[string]bool {
+	out := map[string]bool{}
+	for _, f := range r.fields() {
+		if *f.c != nil {
+			out[f.name] = true
+		}
+	}
+	return out
+}
+
 // override replaces every role ov sets. Tints that ov does not set are
 // recomputed from the final roles, so overriding Added also recolours the
 // added-line tint.
-func (r *Roles) override(ov Roles) {
+func (r *Roles) override(ov Roles, t tintSet) {
 	ovf := ov.fields()
 	for i, f := range r.fields() {
 		if *ovf[i].c != nil {
@@ -161,7 +203,7 @@ func (r *Roles) override(ov Roles) {
 		}
 	}
 	derived := *r
-	derived.deriveTints()
+	derived.deriveTints(t)
 	df := derived.fields()
 	for i, f := range r.fields() {
 		if strings.HasSuffix(f.name, "-tint") && *ovf[i].c == nil {
@@ -177,22 +219,65 @@ const (
 	minAccentContrast = 3.0
 )
 
-// guard nudges foreground roles that are unreadable on the colours they are
-// drawn over. A role that already passes is untouched, so a sound palette
-// comes out exactly as derived.
-func (r *Roles) guard() {
+// guard nudges derived foreground roles that are unreadable on the colours
+// they are drawn over. A role that already passes is untouched, so a sound
+// palette comes out exactly as derived. A role in overridden is never
+// changed: it is the theme author's exact choice, so a failing one is only
+// logged.
+func (r *Roles) guard(overridden map[string]bool) {
+	check := func(name string, fg *color.Color, floor float64, bgs ...color.Color) {
+		worst := math.Inf(1)
+		for _, bg := range bgs {
+			worst = math.Min(worst, contrast(*fg, bg))
+		}
+		if worst >= floor {
+			return
+		}
+		if overridden[name] {
+			slog.Warn("theme role is hard to read", "role", name, "contrast", math.Round(worst*100)/100, "want", floor)
+			return
+		}
+		for _, bg := range bgs {
+			*fg = nudge(*fg, bg, floor)
+		}
+	}
 	// Text sits on the page and on the status bar.
-	for _, bg := range []color.Color{r.Background, r.Surface} {
-		r.Text = nudge(r.Text, bg, minTextContrast)
-		r.Muted = nudge(r.Muted, bg, minAccentContrast)
-	}
-	for _, c := range []*color.Color{
-		&r.Accent, &r.AccentStrong, &r.Info, &r.Link, &r.Warning, &r.Error, &r.Success,
-		&r.Added, &r.Removed,
-		&r.SynKeyword, &r.SynString, &r.SynComment, &r.SynNumber, &r.SynFunction,
-		&r.SynType, &r.SynOperator, &r.SynVariable, &r.SynEscape,
+	check("text", &r.Text, minTextContrast, r.Background, r.Surface)
+	check("muted", &r.Muted, minAccentContrast, r.Background, r.Surface)
+	for _, f := range []roleField{
+		{"accent", &r.Accent},
+		{"accent-strong", &r.AccentStrong},
+		{"info", &r.Info},
+		{"link", &r.Link},
+		{"warning", &r.Warning},
+		{"error", &r.Error},
+		{"success", &r.Success},
+		{"added", &r.Added},
+		{"removed", &r.Removed},
+		{"syn-keyword", &r.SynKeyword},
+		{"syn-string", &r.SynString},
+		{"syn-comment", &r.SynComment},
+		{"syn-number", &r.SynNumber},
+		{"syn-function", &r.SynFunction},
+		{"syn-type", &r.SynType},
+		{"syn-operator", &r.SynOperator},
+		{"syn-variable", &r.SynVariable},
+		{"syn-escape", &r.SynEscape},
 	} {
-		*c = nudge(*c, r.Background, minAccentContrast)
+		check(f.name, f.c, minAccentContrast, r.Background)
 	}
-	r.OnAccent = nudge(r.OnAccent, r.Accent, minAccentContrast)
+	check("on-accent", &r.OnAccent, minAccentContrast, r.Accent)
+}
+
+// fingerprint identifies the final roles and the variant. Every style and the
+// generated Chroma style are functions of them, so it is the identity
+// rendered-output caches key on. extra carries anything else that affects
+// rendering, such as a named syntax style.
+func (r *Roles) fingerprint(v Variant, extra string) string {
+	h := fnv.New64a()
+	_, _ = fmt.Fprintf(h, "%d|%s", v, extra)
+	for _, f := range r.fields() {
+		_, _ = h.Write([]byte(HexString(*f.c)))
+	}
+	return fmt.Sprintf("%016x", h.Sum64())
 }

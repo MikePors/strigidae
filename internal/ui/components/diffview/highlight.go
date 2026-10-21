@@ -5,23 +5,28 @@ import (
 
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/lexers"
+
+	"github.com/MikePors/strigidae/internal/ui/theme"
 )
 
-// Class is a coarse token category. Highlighters report classes rather than
-// colours, so cached results stay valid when the theme changes.
-type Class int
+// Class is a coarse token category (the theme's SyntaxClass). Highlighters
+// report classes rather than colours, so cached results stay valid when the
+// theme changes.
+type Class = theme.SyntaxClass
 
 // Token classes.
 const (
-	ClassPlain Class = iota
-	ClassKeyword
-	ClassString
-	ClassComment
-	ClassNumber
-	ClassFunction
-	ClassType
-	ClassOperator
-	numClasses
+	ClassPlain    = theme.ClassPlain
+	ClassKeyword  = theme.ClassKeyword
+	ClassString   = theme.ClassString
+	ClassComment  = theme.ClassComment
+	ClassNumber   = theme.ClassNumber
+	ClassFunction = theme.ClassFunction
+	ClassType     = theme.ClassType
+	ClassOperator = theme.ClassOperator
+	ClassVariable = theme.ClassVariable
+	ClassEscape   = theme.ClassEscape
+	numClasses    = int(theme.NumSyntaxClasses)
 )
 
 // Span is a run of text with one token class.
@@ -95,24 +100,6 @@ func plain(text string) []Span {
 	return []Span{{Text: text}}
 }
 
-func classify(t chroma.TokenType) Class {
-	switch {
-	case t == chroma.KeywordType:
-		return ClassType
-	case t.InCategory(chroma.Keyword), t == chroma.OperatorWord:
-		return ClassKeyword
-	case t.InSubCategory(chroma.LiteralString):
-		return ClassString
-	case t.InCategory(chroma.Comment):
-		return ClassComment
-	case t.InSubCategory(chroma.LiteralNumber):
-		return ClassNumber
-	case t == chroma.NameFunction, t == chroma.NameFunctionMagic, t == chroma.NameBuiltin, t == chroma.NameDecorator:
-		return ClassFunction
-	case t == chroma.NameClass, t == chroma.NameNamespace, t == chroma.NameException:
-		return ClassType
-	case t.InCategory(chroma.Operator):
-		return ClassOperator
-	}
-	return ClassPlain
-}
+// classify maps a token type to a class through the theme's mapping, the same
+// one Markdown code blocks use, so both panes colour code identically.
+func classify(t chroma.TokenType) Class { return theme.ClassOf(t) }

@@ -12,7 +12,7 @@ import (
 )
 
 // classNoNewline styles the text of "\ No newline" marker rows.
-const classNoNewline = numClasses
+const classNoNewline = Class(numClasses)
 
 // Line-kind indexes into the style set.
 const (
@@ -41,12 +41,12 @@ func newStyleSet(th theme.Theme) styleSet {
 	cursorBG := th.DiffCursor.GetBackground()
 	bases := [numKinds]lipgloss.Style{th.DiffContext, th.DiffAdd, th.DiffDelete}
 	gutters := [numKinds]lipgloss.Style{th.DiffGutter, th.DiffGutterAdd, th.DiffGutterDelete}
-	syn := th.Syntax
-	fg := [numClasses + 1]lipgloss.Style{
-		ClassPlain: lipgloss.NewStyle(), ClassKeyword: syn.Keyword, ClassString: syn.String,
-		ClassComment: syn.Comment, ClassNumber: syn.Number, ClassFunction: syn.Function,
-		ClassType: syn.Type, ClassOperator: syn.Operator, classNoNewline: th.DiffNoNewline,
+	var fg [numClasses + 1]lipgloss.Style
+	for c := range Class(numClasses) {
+		fg[c] = th.Syntax.For(c)
 	}
+	fg[ClassPlain] = lipgloss.NewStyle()
+	fg[classNoNewline] = th.DiffNoNewline
 	for cur := range 2 {
 		for k := range numKinds {
 			base, gut := bases[k], gutters[k]

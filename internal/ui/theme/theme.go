@@ -8,8 +8,8 @@
 //  2. Roles: what strig means by a colour (text, muted, accent, added,
 //     tints, syntax tokens, ...). deriveRoles in roles.go is the only code
 //     that reads palette slots. A theme may override any role with an exact
-//     colour; overrides apply after the default derivation, and a contrast
-//     guard then nudges foregrounds that would be unreadable.
+//     colour, used as written. A contrast guard nudges derived foregrounds
+//     that would be unreadable; a failing override is only logged.
 //  3. Styles: the named Lip Gloss styles on Theme, built from roles only.
 //
 // Views and components never call lipgloss.NewStyle with colours; they take a
@@ -35,7 +35,12 @@ type Theme struct {
 	StatusError   lipgloss.Style // transient error message
 	StatusHint    lipgloss.Style // short key hints shown when idle
 	StatusCommand lipgloss.Style // command line row
+	CommandPrompt lipgloss.Style // the ":" before typed text
+	CommandText   lipgloss.Style // text typed on the command line, and its cursor
+	CommandHint   lipgloss.Style // placeholder and completion hint on the command line
 	Spinner       lipgloss.Style // loading spinner glyph
+
+	HeadingMarker lipgloss.Style // the "#" marks before Markdown headings
 
 	// Help overlay.
 	HelpTitle   lipgloss.Style
@@ -51,7 +56,8 @@ type Theme struct {
 
 	// IsDark reports whether the palette is the dark variant.
 	IsDark bool
-	// ID identifies the palette's contents; renderer caches include it.
+	// ID fingerprints the final roles and the variant, so any change to a
+	// role, including an override, changes it. Renderer caches include it.
 	ID string
 	// Roles are the colours the styles were built from. Renderers with their
 	// own style systems (Markdown) read them; views use the named styles.
@@ -130,7 +136,12 @@ func newTheme(p Palette, r Roles) Theme {
 		StatusError:   bar.Bold(true).Foreground(r.Error),
 		StatusHint:    bar.Foreground(r.Muted),
 		StatusCommand: bar.Bold(true),
+		CommandPrompt: bar.Bold(true).Foreground(r.Accent),
+		CommandText:   bar.Foreground(r.Text),
+		CommandHint:   bar.Foreground(r.Muted),
 		Spinner:       bar.Foreground(r.Accent),
+
+		HeadingMarker: fg(r.Muted),
 
 		HelpTitle:   bold(r.Accent),
 		HelpSection: lipgloss.NewStyle().Bold(true).Underline(true),
@@ -142,7 +153,7 @@ func newTheme(p Palette, r Roles) Theme {
 		Muted:    fg(r.Muted),
 		Selected: bold(r.AccentStrong),
 		IsDark:   p.Variant == Dark,
-		ID:       p.ID(),
+		ID:       r.fingerprint(p.Variant, ""),
 		Roles:    r,
 
 		// --- PR workspace ---
