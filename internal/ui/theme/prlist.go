@@ -20,18 +20,19 @@ type PRListStyles struct {
 	Comments         lipgloss.Style
 }
 
-func newPRListStyles(c func(light, dark string) color.Color) PRListStyles {
-	muted := lipgloss.NewStyle().Foreground(c(mutedLight, mutedDark))
+func newPRListStyles(r Roles) PRListStyles {
+	fg := func(c color.Color) lipgloss.Style { return lipgloss.NewStyle().Foreground(c) }
+	muted := fg(r.Muted)
 	return PRListStyles{
 		Header:           muted.Bold(true),
-		Selected:         lipgloss.NewStyle().Bold(true).Foreground(c(onAccentLight, onAccentDark)).Background(c(violetLight, violetDark)),
-		Number:           lipgloss.NewStyle().Foreground(c(orangeLight, orangeDark)),
+		Selected:         lipgloss.NewStyle().Bold(true).Foreground(r.OnAccent).Background(r.Accent),
+		Number:           fg(r.Warning),
 		Author:           muted,
 		Age:              muted,
 		Draft:            muted.Italic(true),
-		Approved:         lipgloss.NewStyle().Foreground(c(greenLight, greenDark)),
-		ChangesRequested: lipgloss.NewStyle().Foreground(c(redLight, redDark)),
-		ReviewRequired:   lipgloss.NewStyle().Foreground(c(orangeLight, orangeDark)),
+		Approved:         fg(r.Success),
+		ChangesRequested: fg(r.Error),
+		ReviewRequired:   fg(r.Warning),
 		Comments:         muted,
 	}
 }

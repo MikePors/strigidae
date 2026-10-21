@@ -1,7 +1,22 @@
 // Package theme holds every colour and named Lip Gloss style used by the UI.
 //
+// Colour flows through three layers, each built only from the one below:
+//
+//  1. A Palette: the 24 slots of Base24 plus a light/dark Variant. Palettes
+//     are the only place hex values exist (palettes.go); FromBase16 and
+//     FromANSI map other colour schemes into one.
+//  2. Roles: what strig means by a colour (text, muted, accent, added,
+//     tints, syntax tokens, ...). deriveRoles in roles.go is the only code
+//     that reads palette slots. A theme may override any role with an exact
+//     colour; overrides apply after the default derivation, and a contrast
+//     guard then nudges foregrounds that would be unreadable.
+//  3. Styles: the named Lip Gloss styles on Theme, built from roles only.
+//
 // Views and components never call lipgloss.NewStyle with colours; they take a
-// Theme and use its named styles. To add a style, add a field here.
+// Theme and use its named styles. To add a style, add a field here and build
+// it from an existing role; if no role fits, add one with a default
+// derivation. Syntax highlighting colours follow the same path: a Chroma
+// style is generated from the syntax roles.
 package theme
 
 import (
@@ -34,9 +49,13 @@ type Theme struct {
 	Muted    lipgloss.Style // de-emphasised text
 	Selected lipgloss.Style // the highlighted row in a list
 
-	// IsDark reports whether this is the dark variant; renderers that need a
-	// fixed palette (Glamour) pick theirs from it instead of auto-detecting.
+	// IsDark reports whether the palette is the dark variant.
 	IsDark bool
+	// ID identifies the palette's contents; renderer caches include it.
+	ID string
+	// Roles are the colours the styles were built from. Renderers with their
+	// own style systems (Markdown) read them; views use the named styles.
+	Roles Roles
 
 	// --- PR workspace ---
 	PaneBorder       lipgloss.Style // frame of an unfocused pane
@@ -78,94 +97,91 @@ type Theme struct {
 	PRList PRListStyles // pull request tables
 }
 
-// Syntax holds the foreground-only styles for highlighted code tokens.
-type Syntax struct {
-	Keyword, String, Comment, Number, Function, Type, Operator lipgloss.Style
+// Default returns the default theme for a dark terminal background.
+func Default() Theme { return FromPalette(builtinDark) }
+
+// New builds the built-in theme for a dark or light terminal background.
+func New(isDark bool) Theme {
+	if isDark {
+		return FromPalette(builtinDark)
+	}
+	return FromPalette(builtinLight)
 }
 
-// Default returns the default theme for a dark terminal background.
-func Default() Theme { return New(true) }
+// FromPalette builds a theme from a palette with default roles.
+func FromPalette(p Palette) Theme { return FromPaletteWithOverrides(p, Roles{}) }
 
-// New builds the default theme for a dark or light terminal background.
-func New(isDark bool) Theme {
-	ld := lipgloss.LightDark(isDark)
-	c := func(light, dark string) color.Color {
-		return ld(lipgloss.Color(light), lipgloss.Color(dark))
-	}
+// FromPaletteWithOverrides builds a theme from a palette, replacing every
+// role that ov sets (non-nil fields) with its exact colour.
+func FromPaletteWithOverrides(p Palette, ov Roles) Theme {
+	return newTheme(p, deriveRoles(p, ov))
+}
 
-	bar := lipgloss.NewStyle().Background(c(barBgLight, barBgDark)).Foreground(c(barFgLight, barFgDark))
-	accent := c(violetLight, violetDark)
-	warm := c(orangeLight, orangeDark)
-	muted := c(mutedLight, mutedDark)
-	green := c(greenLight, greenDark)
-	red := c(redLight, redDark)
+func newTheme(p Palette, r Roles) Theme {
+	bar := lipgloss.NewStyle().Background(r.Surface).Foreground(r.Text)
+	fg := func(c color.Color) lipgloss.Style { return lipgloss.NewStyle().Foreground(c) }
+	bold := func(c color.Color) lipgloss.Style { return fg(c).Bold(true) }
 
 	return Theme{
 		StatusBar:     bar,
-		StatusContext: bar.Bold(true).Foreground(c(onAccentLight, onAccentDark)).Background(accent),
-		StatusPending: bar.Bold(true).Foreground(warm),
-		StatusInfo:    bar.Foreground(c(greenLight, greenDark)),
-		StatusError:   bar.Bold(true).Foreground(c(redLight, redDark)),
-		StatusHint:    bar.Foreground(muted),
+		StatusContext: bar.Bold(true).Foreground(r.OnAccent).Background(r.Accent),
+		StatusPending: bar.Bold(true).Foreground(r.Warning),
+		StatusInfo:    bar.Foreground(r.Success),
+		StatusError:   bar.Bold(true).Foreground(r.Error),
+		StatusHint:    bar.Foreground(r.Muted),
 		StatusCommand: bar.Bold(true),
-		Spinner:       bar.Foreground(accent),
+		Spinner:       bar.Foreground(r.Accent),
 
-		HelpTitle:   lipgloss.NewStyle().Bold(true).Foreground(accent),
+		HelpTitle:   bold(r.Accent),
 		HelpSection: lipgloss.NewStyle().Bold(true).Underline(true),
-		HelpKey:     lipgloss.NewStyle().Foreground(warm),
+		HelpKey:     fg(r.Warning),
 		HelpDesc:    lipgloss.NewStyle(),
 
-		Title:    lipgloss.NewStyle().Bold(true).Foreground(accent),
+		Title:    bold(r.Accent),
 		Normal:   lipgloss.NewStyle(),
-		Muted:    lipgloss.NewStyle().Foreground(muted),
-		Selected: lipgloss.NewStyle().Bold(true).Foreground(c(violetLight, violetPaleDark)),
-		IsDark:   isDark,
+		Muted:    fg(r.Muted),
+		Selected: bold(r.AccentStrong),
+		IsDark:   p.Variant == Dark,
+		ID:       p.ID(),
+		Roles:    r,
 
 		// --- PR workspace ---
-		PaneBorder:       lipgloss.NewStyle().Foreground(muted),
-		PaneBorderFocus:  lipgloss.NewStyle().Foreground(accent),
-		PaneTitle:        lipgloss.NewStyle().Foreground(muted),
-		PaneTitleFocus:   lipgloss.NewStyle().Bold(true).Foreground(c(onAccentLight, onAccentDark)).Background(accent),
-		FileAdded:        lipgloss.NewStyle().Foreground(green),
-		FileDeleted:      lipgloss.NewStyle().Foreground(red),
-		FileModified:     lipgloss.NewStyle().Foreground(warm),
-		StateOpen:        lipgloss.NewStyle().Bold(true).Foreground(green),
-		StateDraft:       lipgloss.NewStyle().Bold(true).Foreground(muted),
-		StateMerged:      lipgloss.NewStyle().Bold(true).Foreground(accent),
-		StateClosed:      lipgloss.NewStyle().Bold(true).Foreground(red),
+		PaneBorder:       fg(r.Muted),
+		PaneBorderFocus:  fg(r.Accent),
+		PaneTitle:        fg(r.Muted),
+		PaneTitleFocus:   bold(r.OnAccent).Background(r.Accent),
+		FileAdded:        fg(r.Added),
+		FileDeleted:      fg(r.Removed),
+		FileModified:     fg(r.Warning),
+		StateOpen:        bold(r.Success),
+		StateDraft:       bold(r.Muted),
+		StateMerged:      bold(r.Accent),
+		StateClosed:      bold(r.Error),
 		Author:           lipgloss.NewStyle().Bold(true),
-		Pending:          lipgloss.NewStyle().Bold(true).Foreground(warm),
-		ErrorText:        lipgloss.NewStyle().Bold(true).Foreground(red),
-		SectionHeading:   lipgloss.NewStyle().Bold(true).Foreground(accent),
-		OverlayBorder:    lipgloss.NewStyle().Foreground(accent),
-		OverlayBox:       lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(accent),
+		Pending:          bold(r.Warning),
+		ErrorText:        bold(r.Error),
+		SectionHeading:   bold(r.Accent),
+		OverlayBorder:    fg(r.Accent),
+		OverlayBox:       lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(r.Accent),
 		StrongText:       lipgloss.NewStyle().Bold(true),
 		OverlayItem:      lipgloss.NewStyle(),
-		OverlayItemFocus: lipgloss.NewStyle().Bold(true).Foreground(c(violetLight, violetPaleDark)).Reverse(true),
+		OverlayItemFocus: bold(r.AccentStrong).Reverse(true),
 		// --- end PR workspace ---
 
 		// --- Diff pane ---
 		DiffContext:      lipgloss.NewStyle(),
-		DiffAdd:          lipgloss.NewStyle().Background(c(addBgLight, addBgDark)),
-		DiffDelete:       lipgloss.NewStyle().Background(c(deleteBgLight, deleteBgDark)),
-		DiffCursor:       lipgloss.NewStyle().Background(c(cursorBgLight, cursorBgDark)),
-		DiffGutter:       lipgloss.NewStyle().Foreground(muted),
-		DiffGutterAdd:    lipgloss.NewStyle().Foreground(c(greenLight, greenDark)).Background(c(addGutterBgLight, addGutterBgDark)),
-		DiffGutterDelete: lipgloss.NewStyle().Foreground(c(redLight, redDark)).Background(c(deleteGutterBgLight, deleteGutterBgDark)),
-		DiffHunk:         lipgloss.NewStyle().Foreground(c(blueLight, blueDark)).Background(c(hunkBgLight, hunkBgDark)),
-		DiffHunkCursor:   lipgloss.NewStyle().Bold(true).Foreground(c(blueLight, blueDark)).Background(c(hunkCursorBgLight, hunkCursorBgDark)),
-		DiffNoNewline:    lipgloss.NewStyle().Italic(true).Foreground(muted),
-		Syntax: Syntax{
-			Keyword:  lipgloss.NewStyle().Foreground(c(purpleLight, purpleDark)),
-			String:   lipgloss.NewStyle().Foreground(c(greenDeepLight, limeDark)),
-			Comment:  lipgloss.NewStyle().Italic(true).Foreground(muted),
-			Number:   lipgloss.NewStyle().Foreground(c(orangeLight, orangeStrongDark)),
-			Function: lipgloss.NewStyle().Foreground(c(blueDeepLight, blueDark)),
-			Type:     lipgloss.NewStyle().Foreground(c(tealLight, tealDark)),
-			Operator: lipgloss.NewStyle().Foreground(c(goldLight, goldDark)),
-		},
+		DiffAdd:          lipgloss.NewStyle().Background(r.AddedTint),
+		DiffDelete:       lipgloss.NewStyle().Background(r.RemovedTint),
+		DiffCursor:       lipgloss.NewStyle().Background(r.Selection),
+		DiffGutter:       fg(r.Muted),
+		DiffGutterAdd:    fg(r.Added).Background(r.AddedGutterTint),
+		DiffGutterDelete: fg(r.Removed).Background(r.RemovedGutterTint),
+		DiffHunk:         fg(r.Info).Background(r.HunkTint),
+		DiffHunkCursor:   bold(r.Info).Background(r.HunkCursorTint),
+		DiffNoNewline:    fg(r.Muted).Italic(true),
+		Syntax:           newSyntax(r),
 		// --- end diff pane ---
 
-		PRList: newPRListStyles(c),
+		PRList: newPRListStyles(r),
 	}
 }
