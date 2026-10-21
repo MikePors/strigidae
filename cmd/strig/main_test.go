@@ -48,8 +48,8 @@ func newHarness(remotes map[string]string, checkout bool, clientErr error) harne
 			}
 			return fake.New(), nil
 		},
-		start: func(_ github.Client, repo github.Repo, _ io.Writer) error {
-			*h.started = repo
+		start: func(a app, _ io.Writer) error {
+			*h.started = a.repo
 			return nil
 		},
 	}

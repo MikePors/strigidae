@@ -113,7 +113,7 @@ func ParseURL(raw string) (Remote, error) {
 	if err != nil || host == "" {
 		return Remote{}, fmt.Errorf("parse remote %q: want host and owner/repo", raw)
 	}
-	return Remote{Host: normalizeHost(host), Repo: repo}, nil
+	return Remote{Host: github.NormalizeHost(host), Repo: repo}, nil
 }
 
 func splitURL(raw string) (host, path string, err error) {
@@ -139,14 +139,4 @@ func splitURL(raw string) (host, path string, err error) {
 		return "", "", fmt.Errorf("unsupported scheme %q", u.Scheme)
 	}
 	return host, u.Path, nil
-}
-
-// normalizeHost lowercases host and maps GitHub's SSH-over-443 alias to the
-// web host, so every URL form of one host compares equal.
-func normalizeHost(host string) string {
-	host = strings.ToLower(host)
-	if host == "ssh.github.com" {
-		return "github.com"
-	}
-	return host
 }
