@@ -9,13 +9,13 @@ alice · main ← feat/retry · changes requested · [enhancement] [sync] · rev
 │  M README.md          +2 -1││   replaces the ad-hoc loop in  sync.go  with a small, well-        │
 │                            ││   tested helper.                                                   │
 │                            ││                                                                    │
-│                            ││   ### What changed                                                 │
+│                            ││   What changed                                                     │
 │                            ││                                                                    │
 │                            ││   • Added  Retry  with exponential backoff and jitter              │
 │                            ││   • Moved the timeout handling into the helper                     │
 │                            ││   • Deleted the legacy  retryForever  function                     │
 │                            ││                                                                    │
-│                            ││   ### Example                                                      │
+│                            ││   Example                                                          │
 │                            ││                                                                    │
 │                            ││     err := Retry(ctx, 5, func() error {                            │
 │                            ││         return client.Sync(ctx)                                    │

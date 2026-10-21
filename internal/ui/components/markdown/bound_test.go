@@ -1,9 +1,13 @@
 package markdown
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/MikePors/strigidae/internal/ui/theme"
+)
 
 func TestCacheStaysBoundedAcrossResizes(t *testing.T) {
-	r := New(true)
+	r := New(theme.New(true))
 	for w := 20; w < 120; w++ {
 		r.Render("# Title\n\ntext", w)
 		r.Render("other body", w)

@@ -7,6 +7,8 @@ import (
 	"unicode"
 
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/MikePors/strigidae/internal/ui/theme"
 )
 
 var (
@@ -29,7 +31,7 @@ func TestCharacterReferencesCannotInjectControls(t *testing.T) {
 	}
 	for name, md := range payloads {
 		t.Run(name, func(t *testing.T) {
-			out := New(true).Render(md, 60)
+			out := New(theme.New(true)).Render(md, 60)
 			rest := sgr.ReplaceAllString(osc8.ReplaceAllString(out, ""), "")
 			if strings.ContainsRune(rest, 0x1b) {
 				t.Errorf("non-SGR escape in output: %q", rest)
