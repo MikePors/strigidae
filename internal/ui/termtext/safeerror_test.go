@@ -9,7 +9,7 @@ import (
 var errSentinel = errors.New("sentinel")
 
 func TestSafeError(t *testing.T) {
-	err := SafeError(fmt.Errorf("load\x1b]52;c;aGk=\x07 failed‮: %w", errSentinel))
+	err := SafeError(fmt.Errorf("load\x1b]52;c;aGk=\x07 failed\u202e: %w", errSentinel))
 	if got, want := err.Error(), "load ]52;c;aGk=  failed : sentinel"; got != want {
 		t.Errorf("Error() = %q, want %q", got, want)
 	}
