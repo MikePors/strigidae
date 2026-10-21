@@ -74,3 +74,19 @@ Adding a binding or command: make sure it doesn't collide with the tables above 
 - **Golden files** via `internal/golden`: compare `Render(w, h)` output at a fixed size against `testdata/*.golden`. Regenerate with `make golden` (`UPDATE_GOLDEN=1 go test ./...`) and **read the `.golden` diff before committing**. Whole-screen goldens always strip ANSI codes (`x/ansi`). A test about styling (focus borders, selection, colours) asserts specific elements against strings produced by the theme's own styles (for example `th.PaneBorderFocus.Render("╭")`) and never stores escape codes in a golden, so a palette change cannot break it.
 - **Deterministic rendering**: tests must not depend on the terminal. Use a fixed theme and fixed Glamour style (never auto-detected light/dark), fixed widths, and an injected clock for relative times.
 - Cover each view's main states: loading, empty, error, populated, and narrow widths.
+
+## Theming
+
+Colour flows through three layers, each built only from the one below (details in the `internal/ui/theme` package doc):
+
+1. **Palette**: the 24 Base24 slots plus a light/dark variant (`theme/palette.go`; built-ins in `theme/palettes.go`). The only place hex values exist.
+2. **Roles**: what strig means by a colour (`text`, `muted`, `accent`, `added`, diff tints, syntax tokens, …), derived from slots in `theme/roles.go`, the only file that reads slots. A theme may override any role with an exact colour; overrides apply after derivation, then a contrast guard nudges unreadable foregrounds.
+3. **Styles**: the named Lip Gloss styles on `theme.Theme`, built from roles only. Markdown (Glamour) and code (Chroma) styles are generated from the same roles.
+
+Rules (tests in `theme/enforce_test.go` fail on violations):
+
+- A `#rrggbb` literal appears only in `theme/palettes.go`.
+- Styles never read palette slots; only `roles.go` does.
+- A new UI element uses an existing role. If none fits, add a role with a default derivation from slots (and a line in the role table in `docs/themes.md` once #45 adds it).
+- Never add palette slots, ANSI indices or raw colours to styles, views or components.
+- Caches of rendered output (markdown, highlighting) include `Theme.ID`, or hold theme-independent data (token classes).
