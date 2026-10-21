@@ -151,9 +151,11 @@ func (o oklch) color() color.Color {
 	)
 }
 
-// tint makes a row-background colour from a role: the base's lightness moves
-// toward the role's by lightMix, and the result takes the role's hue with
-// chromaScale times its chroma, so a green tint stays green on any base.
+// tint makes a row-background colour from a role. The model is OKLCH: the
+// result's lightness is the base's plus lightMix of the way to the role's
+// (base L + lightMix*dL), its chroma is chromaScale times the role's, and its
+// hue is the role's, so a green tint stays green on any base and keeps its
+// saturation, which an sRGB blend would grey out.
 func tint(base, role color.Color, lightMix, chromaScale float64) color.Color {
 	b, r := toOKLCH(base), toOKLCH(role)
 	return oklch{l: b.l + (r.l-b.l)*lightMix, c: r.c * chromaScale, h: r.h}.color()

@@ -114,24 +114,40 @@ func newSyntax(r Roles) Syntax {
 // For returns the style for class c.
 func (s Syntax) For(c SyntaxClass) lipgloss.Style { return s.byClass[c] }
 
-// newChromaStyle generates a Chroma style from the syntax roles: every entry
-// of tokenClasses takes its class's colour. The few entries with no class
-// (plain text, errors, diff markup) come from other roles.
-func newChromaStyle(name string, r Roles) *chroma.Style {
+// chromaMarkup holds the entries that do not follow the class mapping: errors
+// and diff markup, which only Chroma (code blocks) knows about.
+func chromaMarkup(r Roles) map[chroma.TokenType]string {
 	c := HexString
-	entries := chroma.StyleEntries{
-		chroma.Text:              c(r.Text),
-		chroma.Punctuation:       c(r.Text),
-		chroma.Name:              c(r.Text),
+	return map[chroma.TokenType]string{
 		chroma.Error:             c(r.Error),
+		chroma.GenericError:      c(r.Error),
 		chroma.GenericDeleted:    c(r.Removed),
 		chroma.GenericInserted:   c(r.Added),
 		chroma.GenericEmph:       "italic",
 		chroma.GenericStrong:     "bold",
 		chroma.GenericSubheading: c(r.Accent),
 	}
-	for tok, class := range tokenClasses {
-		entry := c(r.syntaxColour(class))
+}
+
+// newChromaStyle generates a Chroma style from the syntax roles. It emits an
+// entry for every standard token type, taking the colour of ClassOf(type)'s
+// role (plain tokens get the text role), so Chroma's own inheritance never
+// decides a colour and the result matches the diff pane. It sets foregrounds
+// only: no token gets a background, and there is no Background entry, which
+// Chroma would otherwise apply to every token.
+func newChromaStyle(name string, r Roles) *chroma.Style {
+	markup := chromaMarkup(r)
+	entries := chroma.StyleEntries{}
+	for tok := range chroma.StandardTypes {
+		if tok == chroma.Background {
+			continue
+		}
+		if e, ok := markup[tok]; ok {
+			entries[tok] = e
+			continue
+		}
+		class := ClassOf(tok)
+		entry := HexString(r.syntaxColour(class))
 		if class == ClassComment {
 			entry += " italic"
 		}

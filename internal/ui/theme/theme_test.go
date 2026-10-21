@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"image/color"
 	"log/slog"
+	"math"
 	"reflect"
 	"strings"
 	"testing"
@@ -128,6 +129,35 @@ func TestFromANSI(t *testing.T) {
 	}
 }
 
+func TestFromANSIMutedShade(t *testing.T) {
+	_, _, ansi := ansiFixture()
+	blended := func(bg, fg color.Color) string { return HexString(blend(bg, fg, 0.45)) }
+	tests := []struct {
+		name      string
+		bg, fg    string
+		bright    string
+		wantBlend bool
+	}{
+		{"distinct bright black is used", "#101010", "#e0e0e0", "#555555", false},
+		// Solarized Dark: color8 is the background.
+		{"bright black equals the background", "#002b36", "#839496", "#002b36", true},
+		{"bright black equals the foreground", "#101010", "#e0e0e0", "#e0e0e0", true},
+		{"bright black almost the background", "#101010", "#e0e0e0", "#121212", true},
+	}
+	for _, tc := range tests {
+		a := ansi
+		a[8] = hex(tc.bright)
+		p := mustPalette(t)(FromANSI("term", hex(tc.bg), hex(tc.fg), a))
+		want := tc.bright
+		if tc.wantBlend {
+			want = blended(hex(tc.bg), hex(tc.fg))
+		}
+		if got := HexString(p.colors[Base03]); got != want {
+			t.Errorf("%s: base03 = %s, want %s", tc.name, got, want)
+		}
+	}
+}
+
 func TestFromANSIVariant(t *testing.T) {
 	_, _, ansi := ansiFixture()
 	tests := []struct {
@@ -220,6 +250,17 @@ func TestBuiltinPalettesPassGuard(t *testing.T) {
 	}
 }
 
+// TestBuiltinPalettesGuardQuietly pins that the built-in themes trigger no
+// contrast-guard warnings.
+func TestBuiltinPalettesGuardQuietly(t *testing.T) {
+	buf := captureLog(t)
+	New(true)
+	New(false)
+	if buf.Len() != 0 {
+		t.Errorf("built-in themes logged: %s", buf.String())
+	}
+}
+
 func colorHexes(r Roles) map[string]string {
 	out := map[string]string{}
 	for _, f := range r.fields() {
@@ -228,9 +269,19 @@ func colorHexes(r Roles) map[string]string {
 	return out
 }
 
-// TestBuiltinTintsMatchTheEarlierLook checks the derived diff tints stay close
-// to the hand-picked colours they replaced.
+// deltaEOK is the Euclidean distance between two colours in OKLab.
+func deltaEOK(a, b color.Color) float64 {
+	oa, ob := toOKLCH(a), toOKLCH(b)
+	da := oa.c*math.Cos(oa.h) - ob.c*math.Cos(ob.h)
+	db := oa.c*math.Sin(oa.h) - ob.c*math.Sin(ob.h)
+	return math.Sqrt((oa.l-ob.l)*(oa.l-ob.l) + da*da + db*db)
+}
+
+// TestBuiltinTintsMatchTheEarlierLook checks the derived diff tints stay
+// within a small perceptual distance (OKLab delta E) of the hand-picked
+// colours they replaced.
 func TestBuiltinTintsMatchTheEarlierLook(t *testing.T) {
+	const maxDeltaE = 0.02
 	old := map[string]map[string]string{
 		"strig-dark": {
 			"added-tint": "#12261e", "added-gutter-tint": "#17382a",
@@ -243,6 +294,7 @@ func TestBuiltinTintsMatchTheEarlierLook(t *testing.T) {
 			"hunk-tint": "#ddf4ff", "hunk-cursor-tint": "#c5e4f5",
 		},
 	}
+	n := 0
 	for _, p := range []Palette{builtinDark, builtinLight} {
 		r := deriveRoles(p, Roles{})
 		for _, f := range r.fields() {
@@ -250,15 +302,16 @@ func TestBuiltinTintsMatchTheEarlierLook(t *testing.T) {
 			if !ok {
 				continue
 			}
-			gr, gg, gb := rgb8(*f.c)
-			wr, wg, wb := rgb8(hex(want))
-			for _, d := range []int{int(gr) - int(wr), int(gg) - int(wg), int(gb) - int(wb)} {
-				if d > 14 || d < -14 {
-					t.Errorf("%s %s = %s, want within 14 per channel of %s", p.Name, f.name, HexString(*f.c), want)
-					break
-				}
+			n++
+			d := deltaEOK(*f.c, hex(want))
+			t.Logf("%s %-20s %s vs %s: dE_OK = %.4f", p.Name, f.name, HexString(*f.c), want, d)
+			if d > maxDeltaE {
+				t.Errorf("%s %s = %s, dE_OK %.4f from %s, want at most %.2f", p.Name, f.name, HexString(*f.c), d, want, maxDeltaE)
 			}
 		}
+	}
+	if n != 12 {
+		t.Errorf("compared %d tints, want 12", n)
 	}
 }
 
@@ -499,21 +552,41 @@ func TestNothingIsHardcoded(t *testing.T) {
 }
 
 // TestChromaStyleFollowsClasses proves the diff and Markdown share one
-// mapping: every token type in the mapping gets, from the generated Chroma
-// style, the colour of the role its class resolves to.
+// mapping for every Chroma token type, not just the listed ones: Chroma's own
+// inheritance must never decide a colour. Plain tokens are the text role in
+// the Chroma style and unset in the diff (the pane's own colour). The few
+// markup entries (errors, diff markup) are the only exceptions, and no token
+// has a background.
 func TestChromaStyleFollowsClasses(t *testing.T) {
-	th := New(true)
-	st := newChromaStyle("t", th.Roles)
-	for tok, class := range tokenClasses {
-		if ClassOf(tok) != class {
-			t.Errorf("ClassOf(%v) = %d, want %d", tok, ClassOf(tok), class)
+	for _, th := range []Theme{New(true), New(false)} {
+		st := newChromaStyle("t", th.Roles)
+		markup := chromaMarkup(th.Roles)
+		checked := 0
+		for tok := range chroma.StandardTypes {
+			entry := st.Get(tok)
+			if entry.Background.IsSet() {
+				t.Errorf("%s: token %v has a background %s", th.ID, tok, entry.Background)
+			}
+			if _, ok := markup[tok]; ok || tok == chroma.Background {
+				continue
+			}
+			class := ClassOf(tok)
+			want := HexString(th.Roles.syntaxColour(class))
+			if got := entry.Colour.String(); got != want {
+				t.Errorf("%s: token %v (class %d): chroma colour %s, want %s", th.ID, tok, class, got, want)
+			}
+			diffFg := styleColors(th.Syntax.For(class))[0]
+			if class == ClassPlain {
+				if diffFg != "" {
+					t.Errorf("token %v is plain but its diff style sets %s", tok, diffFg)
+				}
+			} else if diffFg != want {
+				t.Errorf("%s: token %v (class %d): diff colour %s, want %s", th.ID, tok, class, diffFg, want)
+			}
+			checked++
 		}
-		want := HexString(th.Roles.syntaxColour(class))
-		if got := st.Get(tok).Colour.String(); got != want {
-			t.Errorf("token %v (class %d): chroma colour %s, role colour %s", tok, class, got, want)
-		}
-		if got := styleColors(th.Syntax.For(class))[0]; got != want {
-			t.Errorf("token %v (class %d): diff style colour %s, role colour %s", tok, class, got, want)
+		if checked < 50 {
+			t.Errorf("only %d token types checked", checked)
 		}
 	}
 }

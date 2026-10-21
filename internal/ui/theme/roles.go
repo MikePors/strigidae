@@ -70,14 +70,14 @@ func tintsFor(v Variant) tintSet {
 	if v == Light {
 		return tintSet{
 			row:        tintParams{0.07, 0.20},
-			gutter:     tintParams{0.14, 0.40},
+			gutter:     tintParams{0.085, 0.52},
 			hunk:       tintParams{0.09, 0.27},
 			hunkCursor: tintParams{0.20, 0.38},
 		}
 	}
 	return tintSet{
 		row:        tintParams{0.03, 0.24},
-		gutter:     tintParams{0.12, 0.38},
+		gutter:     tintParams{0.13, 0.38},
 		hunk:       tintParams{0.10, 0.31},
 		hunkCursor: tintParams{0.29, 0.49},
 	}

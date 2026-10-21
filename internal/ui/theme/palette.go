@@ -99,13 +99,18 @@ func FromBase16(name string, v Variant, base16 [16]color.Color) (Palette, error)
 	return p, nil
 }
 
+// minDistinctContrast is how far a colour must be from the background and the
+// foreground (as a WCAG contrast ratio) to count as a distinct shade.
+const minDistinctContrast = 1.1
+
 // FromANSI builds a Base24 palette from a terminal's colours: its background,
 // foreground and the 16 ANSI colours (black, red, green, yellow, blue,
 // magenta, cyan, white, then the bright versions). Normal colours become the
 // accents, bright colours base12-base17, and bright black (the colour most
-// terminal themes use for comments) base03. ANSI has no other intermediate
-// shades or orange, so the shades blend the background toward the foreground
-// and orange blends red with yellow. The variant follows whether black or
+// terminal themes use for comments) base03, unless it is the same as the
+// background or foreground, as in Solarized, where it is blended like the
+// other shades. ANSI has no intermediate shades or orange, so the shades blend
+// the background toward the foreground and orange blends red with yellow. The variant follows whether black or
 // white reads better on the background. It returns an error naming a missing
 // (nil) input.
 func FromANSI(name string, bg, fg color.Color, ansi [16]color.Color) (Palette, error) {
@@ -133,7 +138,10 @@ func FromANSI(name string, bg, fg color.Color, ansi [16]color.Color) (Palette, e
 	p.colors[Base00] = bg
 	p.colors[Base01] = blend(bg, fg, 0.12)
 	p.colors[Base02] = blend(bg, fg, 0.25)
-	p.colors[Base03] = ansi[8]
+	p.colors[Base03] = blend(bg, fg, 0.45)
+	if contrast(ansi[8], bg) >= minDistinctContrast && contrast(ansi[8], fg) >= minDistinctContrast {
+		p.colors[Base03] = ansi[8]
+	}
 	p.colors[Base04] = blend(bg, fg, 0.7)
 	p.colors[Base05] = fg
 	p.colors[Base06] = blend(fg, far, 0.5)
