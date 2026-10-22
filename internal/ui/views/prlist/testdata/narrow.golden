@@ -1,9 +1,9 @@
-   #  TITLE             UPD  RV  CMT
-> #8  Add a really q…   now  ✓     4
-  #7  [draft] WIP: r…    1h        0
-  #6  Change number 6    2h  ✗   99+
-  #5  [draft] Draft …    3h  ?     0
-  #2  Change number 2    6h        0
-  #1  Change number 1    7h        0
-  #4  Change number 4    2d        0
-  #3  Change number 3   3mo        0
+   #  TITLE              UPD  CI  RV
+> #8  Add a really qu…   now  ✓   ✓ 
+  #7  [draft] WIP: re…    1h  ●     
+  #6  Change number 6     2h  ✗   ✗ 
+  #5  [draft] Draft w…    3h      ? 
+  #2  Change number 2     6h        
+  #1  Change number 1     7h        
+  #4  Change number 4     2d        
+  #3  Change number 3    3mo        

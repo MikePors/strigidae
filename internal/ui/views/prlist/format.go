@@ -69,3 +69,19 @@ func (v *View) reviewMark(d github.ReviewDecision) (string, lipgloss.Style) {
 		return "", st.Comments
 	}
 }
+
+// checksMark returns the one-column glyph and style for the head commit's
+// check state; no checks gives a blank.
+func (v *View) checksMark(c github.CheckState) (string, lipgloss.Style) {
+	st := v.th.PRList
+	switch c {
+	case github.ChecksPassing:
+		return "✓", st.ChecksPassing
+	case github.ChecksFailing:
+		return "✗", st.ChecksFailing
+	case github.ChecksRunning:
+		return "●", st.ChecksRunning
+	default:
+		return "", st.Comments
+	}
+}

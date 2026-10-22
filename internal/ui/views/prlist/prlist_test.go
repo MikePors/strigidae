@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/google/go-cmp/cmp"
 
@@ -410,6 +411,9 @@ func goldenPRs() []github.PullRequest {
 	prs[0].Author = "someone-with-a-long-name"
 	prs[0].ReviewDecision = github.ReviewDecisionApproved
 	prs[0].CommentCount = 4
+	prs[0].Checks = github.ChecksPassing
+	prs[1].Checks = github.ChecksRunning
+	prs[2].Checks = github.ChecksFailing
 	prs[1].Draft = true
 	prs[1].Title = "WIP: rework the parser"
 	prs[1].CommentCount = 0
@@ -440,6 +444,9 @@ func TestGolden(t *testing.T) {
 			press(v, "G")
 			return v
 		}, 80, 8},
+		{"medium", func(t *testing.T) *View {
+			return loadedView(t, fakeWith(goldenPRs()), nil)
+		}, 56, 10},
 		{"narrow", func(t *testing.T) *View {
 			return loadedView(t, fakeWith(goldenPRs()), nil)
 		}, 36, 10},
@@ -550,6 +557,32 @@ func TestPagingNearTheEndLoadsMore(t *testing.T) {
 			press(v, "G")
 			if got := v.win.Cursor(); got != 44 {
 				t.Errorf("G after append: cursor = %d, want 44 (window must know the new row count)", got)
+			}
+		})
+	}
+}
+
+func TestChecksMark(t *testing.T) {
+	th := theme.Default()
+	v := newView(fakeWith(nil), nil)
+	tests := []struct {
+		state github.CheckState
+		glyph string
+		style lipgloss.Style
+	}{
+		{github.ChecksPassing, "✓", th.PRList.ChecksPassing},
+		{github.ChecksFailing, "✗", th.PRList.ChecksFailing},
+		{github.ChecksRunning, "●", th.PRList.ChecksRunning},
+		{github.ChecksNone, "", th.PRList.Comments},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.state), func(t *testing.T) {
+			glyph, style := v.checksMark(tt.state)
+			if glyph != tt.glyph {
+				t.Errorf("glyph = %q, want %q", glyph, tt.glyph)
+			}
+			if got, want := style.Render("x"), tt.style.Render("x"); got != want {
+				t.Errorf("style renders %q, want %q", got, want)
 			}
 		})
 	}

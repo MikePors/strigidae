@@ -19,6 +19,7 @@ const pullRequestFields = `
 fragment PullRequestFields on PullRequest {
   id number title url isDraft state createdAt updatedAt reviewDecision
   baseRefName headRefName headRefOid
+  statusCheckRollup { state }
   author { login }
   commentCount: comments { totalCount }
   repository { nameWithOwner }
