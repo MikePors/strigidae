@@ -1,25 +1,25 @@
 >@@ -1,9 +1,10 @@                                                               
-   1   1  package server                                                        
+   1   1   package server                                                       
    2   2                                                                        
-   3   3  import (                                                              
-   4   4      "fmt"                                                             
-       5 +    "log"                                                             
-   5   6      "net/http"                                                        
-   6   7  )                                                                     
+   3   3   import (                                                             
+   4   4       "fmt"                                                            
+       5  +    "log"                                                            
+   5   6       "net/http"                                                       
+   6   7   )                                                                    
    7   8                                                                        
-   8     -// Serve starts the HTTP server on the given address and blocks until 
-       9 +// Serve starts the HTTP server on the given address and blocks until 
-   9  10  func Serve(addr string) error {                                       
+   8      -// Serve starts the HTTP server on the given address and blocks until
+       9  +// Serve starts the HTTP server on the given address and blocks until
+   9  10   func Serve(addr string) error {                                      
  @@ -30,8 +31,9 @@ func handler(w http.ResponseWriter, r *http.Request) {       
-  30  31      switch r.Method {                                                 
-  31  32      case "GET":                                                       
-  32     -        fmt.Fprintln(w, "hello")                                      
-  33     -        return                                                        
-      33 +        log.Println("GET", r.URL.Path)                                
-      34 +        fmt.Fprintln(w, "こんにちは, world")                          
-  34  35      default:                                                          
-  35  36          http.Error(w, "nope", 405)                                    
-  36  37      }                                                                 
-      38 +    // done                                                           
-  37  39  }                                                                     
-         \No newline at end of file                                             
+  30  31       switch r.Method {                                                
+  31  32       case "GET":                                                      
+  32      -        fmt.Fprintln(w, "hello")                                     
+  33      -        return                                                       
+      33  +        log.Println("GET", r.URL.Path)                               
+      34  +        fmt.Fprintln(w, "こんにちは, world")                         
+  34  35       default:                                                         
+  35  36           http.Error(w, "nope", 405)                                   
+  36  37       }                                                                
+      38  +    // done                                                          
+  37  39   }                                                                    
+          \No newline at end of file                                            

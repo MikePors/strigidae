@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/x/ansi"
 
@@ -129,7 +130,7 @@ func TestDiffLookupByOldPathAndRename(t *testing.T) {
 
 func TestDiffPaneLookupFallsBackToOldPath(t *testing.T) {
 	// A ChangedFile reporting the old path of a renamed file still finds it.
-	p := newDiffPane(theme.New(true))
+	p := newDiffPane(theme.New(true), func() time.Time { return testNow })
 	d := loaded(t, 100, 24)
 	p.SetDiff(d.v.diff)
 	p.SetFile(github.ChangedFile{Path: "docs/old-name.md", Change: github.FileRenamed})
@@ -142,7 +143,7 @@ func TestDiffPaneLookupFallsBackToOldPath(t *testing.T) {
 func TestDiffPaneStates(t *testing.T) {
 	t.Run("unknown file", func(t *testing.T) {
 		h := loaded(t, 100, 24)
-		p := newDiffPane(theme.New(true))
+		p := newDiffPane(theme.New(true), func() time.Time { return testNow })
 		p.SetDiff(h.v.diff)
 		p.SetFile(github.ChangedFile{Path: "nope.go"})
 		if out := ansi.Strip(p.Render(60, 5)); !strings.Contains(out, "No diff available") {

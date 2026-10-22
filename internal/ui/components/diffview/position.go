@@ -17,7 +17,12 @@ type position struct {
 	a    anchor
 	off  int // cursor row minus top row
 	xoff int
-	ok   bool // false when the file had no rows to anchor to
+	ok   bool // false when there was no diff row to anchor to
+
+	// thread and toff say where in a thread's rows the cursor was, so it can
+	// go back there when the thread is still shown.
+	thread string
+	toff   int
 }
 
 func (m *Model) capture() position {
@@ -26,11 +31,20 @@ func (m *Model) capture() position {
 		return p
 	}
 	i := m.win.Cursor()
+	p.off = m.win.Cursor() - m.win.Top()
+	if r := m.rows[i]; r.tr != nil {
+		p.thread, p.toff = m.fthreads[r.tr.t].ID, r.tr.i
+	}
+	for i > 0 && m.rows[i].tr != nil {
+		i-- // a thread row: anchor to the diff row it follows
+	}
 	if r := m.rows[i]; r.line != nil && r.line.Kind == diff.NoNewline && i > 0 {
 		i-- // markers have no numbers; anchor to the line they belong to
 	}
+	if r := m.rows[i]; r.tr != nil || r.msg {
+		return p // no diff row to anchor to
+	}
 	p.a = m.anchorAt(i)
-	p.off = m.win.Cursor() - m.win.Top()
 	p.ok = true
 	return p
 }
@@ -46,10 +60,19 @@ func (m *Model) anchorAt(i int) anchor {
 
 // restore puts the cursor back on the row matching p, or on the nearest one.
 func (m *Model) restore(p position) {
-	if !p.ok || len(m.rows) == 0 {
+	if len(m.rows) == 0 {
 		return
 	}
-	row := m.find(p.a)
+	row := -1
+	if p.thread != "" {
+		row = m.threadRowFor(p.thread, p.toff)
+	}
+	if row < 0 {
+		if !p.ok {
+			return
+		}
+		row = m.find(p.a)
+	}
 	m.win.Restore(row, row-p.off, p.xoff)
 }
 
@@ -75,7 +98,7 @@ func (m *Model) find(a anchor) int {
 		var dist int
 		switch {
 		case a.header:
-			if r.line != nil {
+			if r.line != nil || r.tr != nil || r.msg {
 				continue
 			}
 			h := m.file.Hunks[r.hunk]
@@ -84,7 +107,7 @@ func (m *Model) find(a anchor) int {
 			}
 			dist = abs(lineKey(h.OldStart, h.NewStart) - lineKey(a.hunkOld, a.hunkNew))
 		default:
-			if r.line == nil || r.line.Kind == diff.NoNewline {
+			if r.line == nil || r.line.Kind == diff.NoNewline { // also skips thread rows
 				continue
 			}
 			if r.line.Kind == a.kind && r.line.Old == a.old && r.line.New == a.new {

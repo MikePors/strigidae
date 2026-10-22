@@ -1,15 +1,12 @@
 open #7 Add retry policy to sync client
 alice · main ← feat/retry · changes requested · [enhancement] [sync] · reviewers: bob, team core
 ╭─ Files ────────────────────╮╭─ Overview ─────────────────────────────────────────────────────────╮
-│> Overview                  ││   making the policy configurable.                                  │
-│  M …rnal/sync/client.go +25││                                                                    │
-│  A …rnal/sync/retry.go +214││   1. Review the helper first                                       │
-│  D …rnal/sync/legacy.go -90││   2. Then the call sites                                           │
-│  R …y-and-backoff.md +12 -3││   3. Finally the removed code                                      │
-│  M README.md          +2 -1││                                                                    │
-│                            ││ Conversation (5)                                                   │
-│                            ││ bob commented · 2d ago                                             │
-│                            ││   Thanks! Could you add a test for the jitter bounds?              │
+│> Overview                  ││   2. Then the call sites                                           │
+│  M …rnal/sync/client.go +25││   3. Finally the removed code                                      │
+│  A …rnal/sync/retry.go +214││                                                                    │
+│  D …rnal/sync/legacy.go -90││ Conversation (5)                                                   │
+│  R …y-and-backoff.md +12 -3││ bob commented · 2d ago                                             │
+│  M README.md          +2 -1││   Thanks! Could you add a test for the jitter bounds?              │
 │                            ││                                                                    │
 │                            ││ carol requested changes · 1d ago                                   │
 │                            ││   The cap should be configurable.                                  │
@@ -21,4 +18,7 @@ alice · main ← feat/retry · changes requested · [enhancement] [sync] · rev
 │                            ││                                                                    │
 │                            ││ me PENDING review (draft, not submitted)                           │
 │                            ││   Draft: looks good overall, nit on naming.                        │
+│                            ││                                                                    │
+│                            ││ Review threads (0)                                                 │
+│                            ││ No review threads.                                                 │
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯

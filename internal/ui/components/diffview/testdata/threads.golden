@@ -1,0 +1,40 @@
+>@@ -1,9 +1,10 @@                                                     
+   1   1   package server                                             
+   2   2 ○                                                            
+           ▸ carol 1 comment · 2d ago [resolved] — Blank line please. 
+   3   3   import (                                                   
+   4   4       "fmt"                                                  
+       5 ●+    "log"                                                  
+           ▾ alice 2 comments · 1h ago                                
+           │ alice · 3h ago  👍 2                                     
+           │   Do we need log here?                                   
+           │                                                          
+           │ bob · 1h ago  👍 2                                       
+           │   Yes, for  Serve .                                      
+   5   6       "net/http"                                             
+   6   7   )                                                          
+   7   8                                                              
+   8      -// Serve starts the HTTP server on the given address and bl
+       9  +// Serve starts the HTTP server on the given address and bl
+   9  10   func Serve(addr string) error {                            
+ @@ -30,8 +31,9 @@ func handler(w http.ResponseWriter, r *http.Request
+  30  31       switch r.Method {                                      
+  31  32       case "GET":                                            
+  32     ●-        fmt.Fprintln(w, "hello")                           
+           ▾ dave 1 comment · 2h ago                                  
+           │ dave · 2h ago  👍 2                                      
+           │   Why drop the return?                                   
+  33      -        return                                             
+      33  +        log.Println("GET", r.URL.Path)                     
+      34  +        fmt.Fprintln(w, "こんにちは, world")               
+  34  35       default:                                               
+  35  36           http.Error(w, "nope", 405)                         
+  36  37       }                                                      
+      38  +    // done                                                
+  37  39   }                                                          
+          \No newline at end of file                                  
+           ▾ server.go:4 erin 1 comment · 3d ago [outdated]           
+           │ erin · 3d ago  👍 2                                      
+           │   Old thought.                                           
+           ▾ server.go:999 frank 1 comment · 1h ago                   
+           │ frank · 1h ago  👍 2                                     

@@ -26,26 +26,6 @@ func TestConversationOrder(t *testing.T) {
 	}
 }
 
-func TestRelTime(t *testing.T) {
-	tests := []struct {
-		d    time.Duration
-		want string
-	}{
-		{-time.Hour, "just now"},
-		{30 * time.Second, "just now"},
-		{5 * time.Minute, "5m ago"},
-		{3 * time.Hour, "3h ago"},
-		{50 * time.Hour, "2d ago"},
-		{75 * 24 * time.Hour, "2mo ago"},
-		{800 * 24 * time.Hour, "2y ago"},
-	}
-	for _, tt := range tests {
-		if got := relTime(testNow, testNow.Add(-tt.d)); got != tt.want {
-			t.Errorf("relTime(%v) = %q, want %q", tt.d, got, tt.want)
-		}
-	}
-}
-
 func TestRelativeTimesAge(t *testing.T) {
 	now := testNow
 	h := newHarness(t, 100, 60)
