@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -42,20 +43,33 @@ var (
 // Parse validates data, read from the file named path (used only in errors).
 // Empty data yields Default.
 func Parse(path string, data []byte) (Config, error) {
+	if len(data) > MaxFileSize {
+		return Config{}, &Error{Path: path, Msg: fmt.Sprintf("config file is too large (limit %d bytes)", MaxFileSize)}
+	}
+	dec := yaml.NewDecoder(bytes.NewReader(data))
 	var doc yaml.Node
-	if err := yaml.Unmarshal(data, &doc); err != nil && !errors.Is(err, io.EOF) {
-		line := 0
-		if m := yamlLine.FindStringSubmatch(err.Error()); m != nil {
-			line, _ = strconv.Atoi(m[1])
+	if err := dec.Decode(&doc); err != nil {
+		if errors.Is(err, io.EOF) {
+			return Default(), nil
 		}
-		msg := strings.TrimPrefix(err.Error(), "yaml: ")
-		return Config{}, &Error{Path: path, Line: line, Msg: "invalid YAML: " + msg}
+		return Config{}, syntaxError(path, err)
+	}
+	var second yaml.Node
+	switch err := dec.Decode(&second); {
+	case err == nil:
+		return Config{}, &Error{Path: path, Line: second.Line, Msg: "the config file must contain a single YAML document"}
+	case !errors.Is(err, io.EOF):
+		return Config{}, syntaxError(path, err)
 	}
 	if len(doc.Content) == 0 {
 		return Default(), nil
 	}
 
 	p := &parser{path: path}
+	p.rejectAliases(&doc)
+	if p.err != nil {
+		return Config{}, p.err
+	}
 	var c Config
 	p.mapping(doc.Content[0], "the config file", func(key string, v *yaml.Node) {
 		topLevel[key](p, v, &c)
@@ -67,6 +81,36 @@ func Parse(path string, data []byte) (Config, error) {
 		c.Tabs = Default().Tabs
 	}
 	return c, nil
+}
+
+// MaxFileSize is the largest config file strig will read.
+const MaxFileSize = 1 << 20
+
+// syntaxError converts a yaml.v3 error. The library reports the line of the
+// construct it was parsing, which for block-structure mistakes can be the line
+// where the enclosing block starts rather than the offending line.
+func syntaxError(path string, err error) *Error {
+	msg := strings.TrimPrefix(err.Error(), "yaml: ")
+	line := 0
+	if m := yamlLine.FindStringSubmatch(msg); m != nil {
+		line, _ = strconv.Atoi(m[1])
+		msg = strings.Replace(msg, m[0]+": ", "", 1)
+	}
+	return &Error{Path: path, Line: line, Msg: "invalid YAML: " + msg}
+}
+
+// rejectAliases fails on anchors, aliases and merge keys anywhere in n.
+func (p *parser) rejectAliases(n *yaml.Node) {
+	if p.err != nil {
+		return
+	}
+	if n.Kind == yaml.AliasNode || n.Anchor != "" || n.Tag == "!!merge" {
+		p.fail(n, "YAML aliases and merge keys are not supported")
+		return
+	}
+	for _, c := range n.Content {
+		p.rejectAliases(c)
+	}
 }
 
 // parser records the first error; callers check err once at the end.
@@ -118,11 +162,12 @@ func (p *parser) mapping(n *yaml.Node, what string, each func(key string, v *yam
 }
 
 func (p *parser) str(n *yaml.Node, what string) string {
-	if n.Kind != yaml.ScalarNode || n.Tag != "!!str" || strings.TrimSpace(n.Value) == "" {
-		p.fail(n, "%s must be a non-empty string", what)
+	v := strings.TrimSpace(n.Value)
+	if n.Kind != yaml.ScalarNode || n.Tag == "!!null" || v == "" {
+		p.fail(n, "%s must be a non-empty text value", what)
 		return ""
 	}
-	return n.Value
+	return v
 }
 
 func (p *parser) tabs(n *yaml.Node, c *Config) {
@@ -183,11 +228,17 @@ func (p *parser) sections(n *yaml.Node) []Section {
 		return nil
 	}
 	var out []Section
+	names := map[string]bool{}
 	for _, sn := range n.Content {
 		s := p.section(sn)
 		if p.err != nil {
 			return nil
 		}
+		if names[s.Name] {
+			p.fail(sn, "duplicate section name %q in this tab", s.Name)
+			return nil
+		}
+		names[s.Name] = true
 		out = append(out, s)
 	}
 	return out
@@ -209,7 +260,7 @@ func (p *parser) section(n *yaml.Node) Section {
 			}
 		case "limit":
 			lim, err := strconv.Atoi(v.Value)
-			if v.Kind != yaml.ScalarNode || err != nil || lim < 1 || lim > MaxLimit {
+			if v.Kind != yaml.ScalarNode || v.Tag != "!!int" || err != nil || lim < 1 || lim > MaxLimit {
 				p.fail(v, "limit must be a whole number from 1 to %d", MaxLimit)
 				return
 			}

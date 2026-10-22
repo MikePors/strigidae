@@ -6,6 +6,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -56,10 +57,16 @@ func Path(getenv func(string) string, home func() (string, error)) (string, erro
 // unless mustExist is set (the user named the file explicitly, so a typo
 // shouldn't silently fall back). Problems in the file are returned as *Error.
 func Load(path string, mustExist bool) (Config, error) {
-	data, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if errors.Is(err, fs.ErrNotExist) && !mustExist {
 		return Default(), nil
 	}
+	if err != nil {
+		return Config{}, fmt.Errorf("read config: %w", err)
+	}
+	defer func() { _ = f.Close() }() // read-only
+	// One byte over the limit is enough for Parse to refuse the file.
+	data, err := io.ReadAll(io.LimitReader(f, MaxFileSize+1))
 	if err != nil {
 		return Config{}, fmt.Errorf("read config: %w", err)
 	}

@@ -10,7 +10,19 @@ starts, with the file, line and problem, for example:
 
     strig: /home/me/.config/strig/config.yml:7: unknown key "limt" in a section (valid keys: name, query, limit, sort, order)
 
-Unknown keys are errors so typos don't pass silently. A commented example is in
+Unknown keys are errors so typos don't pass silently.
+
+Other rules:
+
+- The file must be a single YAML document and at most 1 MiB.
+- YAML anchors, aliases (`*name`) and merge keys (`<<`) are not supported and
+  are errors.
+- `name`, `user` and `query` accept any plain text value, so `user: 12345`
+  works; they are trimmed of surrounding spaces. `limit` must be an unquoted
+  integer.
+- Tab names must be unique, and section names must be unique within a tab.
+- For YAML syntax errors the line comes from the YAML parser and can point at
+  the start of the enclosing block rather than the exact line of the mistake. A commented example is in
 [`config.example.yml`](config.example.yml).
 
 ## Shape

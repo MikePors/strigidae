@@ -30,7 +30,7 @@ go install github.com/MikePors/strigidae/cmd/strig@latest
 
 ## Configuration
 
-strig reads an optional YAML config (tabs and the search queries behind their sections) from `~/.config/strig/config.yml`; `--config <path>` overrides it. See [docs/config.md](docs/config.md) and [docs/config.example.yml](docs/config.example.yml).
+strig reads an optional YAML config (tabs and the search queries behind their sections) from `$XDG_CONFIG_HOME/strig/config.yml` (default `~/.config/strig/config.yml`); `--config <path>` overrides it and `strig --config-path` prints the location in use. See [docs/config.md](docs/config.md) and [docs/config.example.yml](docs/config.example.yml).
 
 ## License
 

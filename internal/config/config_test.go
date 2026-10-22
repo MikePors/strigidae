@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -36,6 +37,16 @@ func TestParseValid(t *testing.T) {
 				{Name: "Me", User: "@me", Sections: defaultsFor("@me")},
 				{Name: "Alice", User: "alice", Sections: defaultsFor("alice")},
 			}},
+		},
+		{
+			"numeric scalars are text",
+			"tabs:\n  - name: 2024\n    user: 12345\n",
+			Config{Tabs: []Tab{{Name: "2024", User: "12345", Sections: defaultsFor("12345")}}},
+		},
+		{
+			"names are trimmed",
+			"tabs:\n  - name: '  Me  '\n",
+			Config{Tabs: []Tab{{Name: "Me", User: "@me", Sections: defaultsFor("@me")}}},
 		},
 		{
 			"custom sections with options and {user}",
@@ -76,8 +87,21 @@ func TestParseErrors(t *testing.T) {
 		yaml string
 		want string
 	}{
-		{"malformed YAML", "tabs:\n  - name: Me\n   user: x\n", "c.yml:1: invalid YAML: line 1: did not find expected '-' indicator"},
-		{"unclosed bracket", "tabs: [\n", "c.yml:1: invalid YAML: line 1: did not find expected node content"},
+		{"malformed YAML", "tabs:\n  - name: Me\n   user: x\n", "c.yml:1: invalid YAML: did not find expected '-' indicator"},
+		// yaml.v3 reports the line of the construct it was parsing, so for the
+		// unclosed flow list on line 3 it says line 2, the enclosing block. The line is approximate.
+		{"syntax error after line 3", "tabs:\n  - name: A\n    sections: [\n      {name: S}\n    other: 1\n", "c.yml:2: invalid YAML: did not find expected ',' or ']'"},
+		{"multiple documents", "tabs:\n  - name: A\n---\ntabz: 1\n", "c.yml:3: the config file must contain a single YAML document"},
+		{"empty first document", "---\n---\ntabs: []\n", "c.yml:2: the config file must contain a single YAML document"},
+		{"anchor", "tabs:\n  - &t {name: A}\n", "c.yml:2: YAML aliases and merge keys are not supported"},
+		{"alias", "tabs:\n  - &t {name: A}\n  - *t\n", "c.yml:2: YAML aliases and merge keys are not supported"},
+		{"merge key", "tabs:\n  - <<: {name: A}\n", "c.yml:2: YAML aliases and merge keys are not supported"},
+		{"quoted limit", "tabs:\n  - name: A\n    sections:\n      - {name: S, query: q, limit: '5'}\n", "c.yml:4: limit must be a whole number from 1 to 100"},
+		{"null name", "tabs:\n  - name:\n", "c.yml:2: tab name must be a non-empty text value"},
+		{"too large", "# " + strings.Repeat("x", MaxFileSize) + "\n", "c.yml: config file is too large (limit 1048576 bytes)"},
+		{"duplicate section", "tabs:\n  - name: A\n    sections:\n      - {name: S, query: q}\n      - {name: ' S ', query: r}\n", `c.yml:5: duplicate section name "S" in this tab`},
+		{"duplicate tab after trimming", "tabs:\n  - name: A\n  - name: ' A'\n", `c.yml:3: duplicate tab name "A"`},
+		{"unclosed bracket", "tabs: [\n", "c.yml:1: invalid YAML: did not find expected node content"},
 		{"not a mapping", "- a\n", "c.yml:1: the config file must be a mapping of keys to values"},
 		{"unknown top-level key", "tabz: []\n", `c.yml:1: unknown key "tabz" in the config file (valid keys: tabs)`},
 		{"unknown tab key", "tabs:\n  - name: Me\n    usr: a\n", `c.yml:3: unknown key "usr" in a tab (valid keys: name, user, sections)`},
