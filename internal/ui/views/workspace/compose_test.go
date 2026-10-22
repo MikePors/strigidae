@@ -310,14 +310,26 @@ func TestReplyWithZeroOneAndSeveralThreads(t *testing.T) {
 	}
 }
 
-func TestReplyOutsideTheDiffDoesNothing(t *testing.T) {
+func TestReplyInOverviewDoesNothing(t *testing.T) {
 	c := newComposer(t)
 	c.body = "x"
 	c.press("r") // Overview selected
-	c.onThread()
-	c.press("h", "r") // diff selected but the Files pane has focus
 	if len(c.openedOn) != 0 || len(c.msgs) != 0 {
 		t.Errorf("opened %v, msgs %v", c.openedOn, c.msgs)
+	}
+}
+
+func TestReplyWorksFromTheFilesPane(t *testing.T) {
+	c := newComposer(t)
+	c.onThread()
+	c.body = "from the files pane"
+	c.press("h", "r") // the diff cursor stays on the thread
+	if c.v.focus != paneFiles || len(c.openedOn) != 1 {
+		t.Fatalf("focus %v, editor opened %d times", c.v.focus, len(c.openedOn))
+	}
+	conf, ok := c.lastConfirm()
+	if !ok || !strings.HasPrefix(conf.Text, "Post reply to internal/sync/client.go:12?") {
+		t.Errorf("confirmation = %q (%v)", conf.Text, ok)
 	}
 }
 

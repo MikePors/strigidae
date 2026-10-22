@@ -72,7 +72,7 @@ func (v *View) composeMine(owner *View, repo github.Repo, number, seq int) bool 
 
 // reply starts a reply to the thread under the diff cursor.
 func (v *View) reply() tea.Cmd {
-	if v.sel() == 0 || v.focus != paneRight {
+	if v.sel() == 0 {
 		return nil
 	}
 	switch ts := v.filePane.FocusedThreads(); len(ts) {
