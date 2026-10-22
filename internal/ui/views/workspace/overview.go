@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/ui/components/comment"
 	"github.com/MikePors/strigidae/internal/ui/components/markdown"
 	"github.com/MikePors/strigidae/internal/ui/components/thread"
 	"github.com/MikePors/strigidae/internal/ui/termtext"
@@ -67,9 +68,9 @@ func (o *overview) ensure(th theme.Theme, md *markdown.Renderer, d *github.PullR
 		add(th.Muted.Render("No comments yet."))
 	}
 	for _, it := range items {
-		add(it.header(th, now))
-		if strings.TrimSpace(it.body) != "" {
-			add(md.Render(termtext.CleanBlock(it.body), width))
+		add(comment.Header(th, now, it.comment))
+		if body := comment.Body(th, md, it.comment, width); body != "" {
+			add(body)
 		}
 		add("")
 	}
@@ -129,18 +130,8 @@ type threadsView struct {
 
 // entry is one item of the conversation: a top-level comment or a review.
 type entry struct {
-	author  string
+	comment comment.Comment
 	at      time.Time
-	action  string
-	body    string
-	pending bool
-}
-
-func (e entry) header(th theme.Theme, now time.Time) string {
-	if e.pending {
-		return th.Author.Render(termtext.Clean(e.author)) + " " + th.Pending.Render("PENDING "+e.action+" (draft, not submitted)")
-	}
-	return th.Author.Render(termtext.Clean(e.author)) + " " + e.action + th.Muted.Render(" · "+thread.RelTime(now, e.at))
 }
 
 // conversation merges comments and review summaries chronologically. Pending
@@ -149,21 +140,21 @@ func (e entry) header(th theme.Theme, now time.Time) string {
 func conversation(d *github.PullRequestDetail) []entry {
 	var out []entry
 	for _, c := range d.Comments {
-		out = append(out, entry{author: c.Author, at: c.CreatedAt, action: "commented", body: c.Body})
+		out = append(out, entry{at: c.CreatedAt, comment: comment.Comment{Author: c.Author, Action: "commented", At: c.CreatedAt, Body: c.Body, Reactions: c.Reactions}})
 	}
 	for _, r := range d.Reviews {
-		e := entry{author: r.Author, at: r.SubmittedAt, action: reviewAction(r.State), body: r.Body}
+		e := entry{at: r.SubmittedAt, comment: comment.Comment{Author: r.Author, Action: reviewAction(r.State), At: r.SubmittedAt, Body: r.Body}}
 		switch {
 		case r.State == github.ReviewPending || r.SubmittedAt.IsZero():
-			e.pending, e.action = true, "review"
+			e.comment.Pending, e.comment.Action, e.comment.At = true, "review", time.Time{}
 		case r.State == github.ReviewCommented && strings.TrimSpace(r.Body) == "":
 			continue
 		}
 		out = append(out, e)
 	}
 	slices.SortStableFunc(out, func(a, b entry) int {
-		if a.pending != b.pending {
-			if a.pending {
+		if a.comment.Pending != b.comment.Pending {
+			if a.comment.Pending {
 				return 1
 			}
 			return -1

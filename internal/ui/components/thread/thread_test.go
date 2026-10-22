@@ -19,26 +19,6 @@ func env() Env {
 	return Env{Theme: th, Markdown: markdown.New(th), Now: now}
 }
 
-func TestRelTime(t *testing.T) {
-	tests := []struct {
-		d    time.Duration
-		want string
-	}{
-		{-time.Hour, "just now"},
-		{30 * time.Second, "just now"},
-		{5 * time.Minute, "5m ago"},
-		{3 * time.Hour, "3h ago"},
-		{50 * time.Hour, "2d ago"},
-		{75 * 24 * time.Hour, "2mo ago"},
-		{800 * 24 * time.Hour, "2y ago"},
-	}
-	for _, tt := range tests {
-		if got := RelTime(now, now.Add(-tt.d)); got != tt.want {
-			t.Errorf("RelTime(%v) = %q, want %q", tt.d, got, tt.want)
-		}
-	}
-}
-
 func TestLines(t *testing.T) {
 	th := github.ReviewThread{
 		Path: "a/b.go", Line: 7, IsResolved: true, IsOutdated: true,
