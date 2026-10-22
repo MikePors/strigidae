@@ -129,6 +129,9 @@ type Model struct {
 
 	w, h int
 
+	vis bool // a line selection is in progress
+	vbi int  // base row where it started
+
 	win scroll.Window // cursor, top row and horizontal offset
 }
 
@@ -220,6 +223,7 @@ func TooLargeMessage() string {
 
 func (m *Model) reset() {
 	m.bcache = nil
+	m.vis = false // base rows are about to change
 	m.base, m.rows, m.hunkRow = nil, nil, nil
 	m.fthreads, m.attach, m.orphans, m.blocks = nil, nil, nil, nil
 	m.cache = map[int][]Span{}

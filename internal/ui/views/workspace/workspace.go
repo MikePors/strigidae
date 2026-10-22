@@ -141,9 +141,11 @@ func (v *View) Loading() bool {
 	return v.prPending || v.diffPending || v.thrPending || v.review.submitting || v.merge.merging
 }
 
-// CapturesKeys implements ui.KeyCapturer: the file picker owns the keyboard
-// while it is open.
-func (v *View) CapturesKeys() bool { return v.picker != nil || v.review.chooser != nil }
+// CapturesKeys implements ui.KeyCapturer: the file picker, the verdict
+// chooser and a visual-line selection own the keyboard while they are open.
+func (v *View) CapturesKeys() bool {
+	return v.picker != nil || v.review.chooser != nil || v.filePane.VisualActive()
+}
 
 // Init implements ui.View.
 func (v *View) Init() tea.Cmd { return v.load() }
@@ -163,6 +165,7 @@ func (v *View) FullHelp() [][]key.Binding {
 	out := [][]key.Binding{
 		{v.bind.PaneLeft, v.bind.PaneRight, v.bind.NextFile, v.bind.PrevFile, v.bind.FilePicker},
 		{v.bind.NextSection, v.bind.PrevSection, v.bind.Comment, v.bind.Reply, v.bind.Viewed},
+		{v.bind.Visual, v.bind.EditPending, v.bind.DeletePending},
 	}
 	return append(out, v.filePane.FullHelp()...)
 }
@@ -220,9 +223,17 @@ func (v *View) Update(msg tea.Msg) (ui.View, tea.Cmd) {
 			return v, nil
 		}
 		return v, v.posted(msg)
+	case pendingDeletedMsg:
+		if msg.owner != v || msg.repo != v.repo || msg.number != v.number {
+			return v, nil
+		}
+		return v, v.pendingDeleted(msg)
 	case keys.Msg:
 		return v, v.handleKey(msg)
 	case tea.KeyPressMsg:
+		if v.filePane.VisualActive() {
+			return v, v.visualKey(msg)
+		}
 		if v.review.chooser != nil {
 			return v, v.review.chooserKey(msg, v.reviewEnv())
 		}

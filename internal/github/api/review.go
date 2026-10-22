@@ -19,7 +19,7 @@ query ` + opReviewStatus + `($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
       id headRefOid
-      reviews(first: 10, states: PENDING) { nodes { id body comments { totalCount } } }
+      reviews(first: 10, states: PENDING) { nodes { id body commit { oid } comments { totalCount } } }
     }
   }
 }`
@@ -51,6 +51,7 @@ func (c *Client) GetReviewStatus(ctx context.Context, repo github.Repo, number i
 					Nodes []struct {
 						ID       string
 						Body     string
+						Commit   *struct{ Oid string }
 						Comments struct{ TotalCount int }
 					}
 				}
@@ -70,6 +71,9 @@ func (c *Client) GetReviewStatus(ctx context.Context, repo github.Repo, number i
 	if len(pr.Reviews.Nodes) > 0 {
 		n := pr.Reviews.Nodes[0]
 		st.Pending = &github.PendingReview{ID: n.ID, Body: n.Body, CommentCount: n.Comments.TotalCount}
+		if n.Commit != nil {
+			st.Pending.CommitOID = n.Commit.Oid
+		}
 	}
 	return st, nil
 }

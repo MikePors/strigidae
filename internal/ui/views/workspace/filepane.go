@@ -31,6 +31,14 @@ type DiffState struct {
 	Loading bool
 }
 
+// LineRange is the lines of a file a review comment is written on. Start and
+// End are line numbers on Side and are equal for a single line.
+type LineRange struct {
+	Path       string
+	Side       github.DiffSide
+	Start, End int
+}
+
 // FilePane is the content of the right pane while a file is selected. The
 // diff component plugs in here through WithFilePane.
 //
@@ -71,6 +79,20 @@ type FilePane interface {
 	// whose rows it is in, or those on the line it is on. Panes without
 	// threads return nil.
 	FocusedThreads() []github.ReviewThread
+	// CommentRange returns the lines a new comment would go on: the visual
+	// selection, else the cursor line. ok is false when the cursor is not on a
+	// diff line. Panes without lines return false.
+	CommentRange() (r LineRange, ok bool)
+	// VisualStart begins a line selection at the cursor, reporting false when
+	// it cannot (no diff line under the cursor).
+	VisualStart() bool
+	// VisualActive reports whether a line selection is in progress.
+	VisualActive() bool
+	// VisualMove extends the selection by delta lines; a refused move (outside
+	// one hunk or one side) leaves it unchanged and returns the reason.
+	VisualMove(delta int) (refusal string)
+	// VisualEnd leaves the line selection.
+	VisualEnd()
 	// Update handles a key while the right pane has focus.
 	Update(msg keys.Msg) tea.Cmd
 	// Render draws the pane in exactly width columns and at most height rows.

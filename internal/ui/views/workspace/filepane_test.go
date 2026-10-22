@@ -24,6 +24,12 @@ type stubPane struct {
 
 func (p *stubPane) SetTheme(theme.Theme) {}
 
+func (p *stubPane) CommentRange() (LineRange, bool) { return LineRange{}, false }
+func (p *stubPane) VisualStart() bool               { return false }
+func (p *stubPane) VisualActive() bool              { return false }
+func (p *stubPane) VisualMove(int) string           { return "" }
+func (p *stubPane) VisualEnd()                      {}
+
 func (p *stubPane) SetDiff(DiffState) {}
 
 func (p *stubPane) SetThreads([]github.ReviewThread)      {}

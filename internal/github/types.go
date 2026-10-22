@@ -277,6 +277,8 @@ type PendingReview struct {
 	Body string
 	// CommentCount is the number of inline comments waiting in it.
 	CommentCount int
+	// CommitOID is the commit the review is anchored to; empty if unknown.
+	CommitOID string
 }
 
 // ReviewStatus is the state a review submission depends on.

@@ -64,7 +64,7 @@ func (c *Client) StartReview(ctx context.Context, in github.StartReviewInput) (g
 		return github.PendingReview{}, fmt.Errorf("start review on %s#%d: user can only have one pending review per pull request", in.Repo, in.Number)
 	}
 	c.nextID++
-	p := github.PendingReview{ID: "fake-pending-review-" + strconv.Itoa(c.nextID)}
+	p := github.PendingReview{ID: "fake-pending-review-" + strconv.Itoa(c.nextID), CommitOID: in.CommitOID}
 	c.pending[key] = p
 	c.started = append(c.started, StartedReview{Repo: in.Repo, Number: in.Number, ReviewID: p.ID, CommitOID: in.CommitOID})
 	return p, nil

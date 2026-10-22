@@ -33,10 +33,23 @@ func WithEditor(e EditFunc) Option { return func(v *View) { v.edit = e } }
 type target struct {
 	threadID string // empty for a top-level comment
 	label    string // "path:line" of the thread, for the confirmation
+	// inline, when set, is a new inline comment for the pending review; the
+	// repo, number and pending review are filled in when it is sent.
+	inline *github.AddThreadInput
+	// commentID, when set, is the pending comment being edited; initial is its
+	// current body, shown when no draft is kept.
+	commentID string
+	initial   string
 }
 
 func (t target) draftKey() string {
-	if t.threadID == "" {
+	switch {
+	case t.inline != nil:
+		in := t.inline
+		return fmt.Sprintf("inline:%s:%s:%d-%d", in.Path, in.Side, in.StartLine, in.Line)
+	case t.commentID != "":
+		return "edit:" + t.commentID
+	case t.threadID == "":
 		return topLevelDraft
 	}
 	return t.threadID
@@ -85,10 +98,11 @@ func (v *View) reply() tea.Cmd {
 	}
 }
 
-// comment starts a top-level comment from the Overview.
+// comment starts a top-level comment from the Overview, or an inline one on a
+// diff line.
 func (v *View) comment() tea.Cmd {
 	if v.sel() != 0 {
-		return nil
+		return v.inlineComment()
 	}
 	return v.compose(target{})
 }
@@ -97,7 +111,11 @@ func (v *View) comment() tea.Cmd {
 func (v *View) compose(tgt target) tea.Cmd {
 	v.cseq++
 	owner, repo, number, seq := v, v.repo, v.number, v.cseq
-	return v.edit(v.drafts[tgt.draftKey()], func(body string, err error) tea.Msg {
+	initial := v.drafts[tgt.draftKey()]
+	if initial == "" {
+		initial = tgt.initial
+	}
+	return v.edit(initial, func(body string, err error) tea.Msg {
 		return editedMsg{owner: owner, repo: repo, number: number, seq: seq, tgt: tgt, body: body, err: err}
 	})
 }
@@ -117,6 +135,10 @@ func (v *View) edited(msg editedMsg) tea.Cmd {
 	}
 	// Kept until the post succeeds, so declining or a failure loses nothing.
 	v.drafts[msg.tgt.draftKey()] = body
+	// Pending comments are private drafts, so they are sent without asking.
+	if msg.tgt.inline != nil || msg.tgt.commentID != "" {
+		return v.pendingCommentSend(msg.tgt, body)
+	}
 	return ui.Confirm(v.question(msg.tgt, body), v.post(msg.tgt, body))
 }
 
@@ -170,14 +192,22 @@ func (v *View) posted(msg postedMsg) tea.Cmd {
 		return nil // the draft stays; the command already reported the error
 	}
 	what, reload := "Comment", v.reloadPR
-	if msg.tgt.threadID != "" {
+	switch {
+	case msg.tgt.threadID != "":
 		what, reload = "Reply", v.reloadThreads
+	case msg.tgt.inline != nil:
+		what, reload = "Pending comment added", v.reloadPendingComments
+	case msg.tgt.commentID != "":
+		what, reload = "Pending comment updated", v.reloadPendingComments
 	}
 	// A newer draft for the same target must survive.
 	if v.drafts[msg.tgt.draftKey()] == msg.body {
 		delete(v.drafts, msg.tgt.draftKey())
 	}
-	return tea.Batch(ui.Info(what+" posted"), reload())
+	if msg.tgt.inline == nil && msg.tgt.commentID == "" {
+		what += " posted"
+	}
+	return tea.Batch(ui.Info(what), reload())
 }
 
 // threadLocation is "path:line" for a thread.

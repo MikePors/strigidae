@@ -90,9 +90,16 @@ func (m *Model) renderRow(i int) string {
 	case diff.Delete:
 		kind = kindDelete
 	}
+	mark := " "
+	switch {
+	case cur == 1:
+		mark = ">"
+	case m.selected(r.bi):
+		mark, cur = markSelected, 1 // the selection takes the cursor tint
+	}
 	v := &m.styles.v[cur][kind]
 
-	gutter := m.gutterText(r.line, r.bi, cur == 1, v)
+	gutter := m.gutterText(r.line, r.bi, mark, v)
 	codeW := m.codeW()
 	if codeW == 0 {
 		return ansi.Truncate(gutter, m.w, "")
@@ -117,11 +124,7 @@ func (m *Model) renderRow(i int) string {
 
 // gutterText is the styled fixed part of a diff row: cursor mark, line
 // numbers, thread marker, change marker.
-func (m *Model) gutterText(l *diff.Line, bi int, cursor bool, v *variant) string {
-	mark := " "
-	if cursor {
-		mark = ">"
-	}
+func (m *Model) gutterText(l *diff.Line, bi int, mark string, v *variant) string {
 	marker := " "
 	switch l.Kind {
 	case diff.Add:

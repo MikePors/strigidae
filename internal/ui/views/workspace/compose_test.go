@@ -357,8 +357,10 @@ func TestCommentInOverviewOnly(t *testing.T) {
 	c.msgs, c.openedOn = nil, nil
 	c.selectFile()
 	c.press("c")
-	if len(c.openedOn) != 0 || len(c.msgs) != 0 {
-		t.Errorf("c in the diff did something: %v %v", c.openedOn, c.msgs)
+	// On a hunk header there is no line to comment on (inline comments have
+	// their own tests in inline_test.go).
+	if len(c.openedOn) != 0 || len(c.infos()) != 1 || !strings.Contains(c.infos()[0], "diff line") {
+		t.Errorf("c on a hunk header: %v %v", c.openedOn, c.msgs)
 	}
 }
 

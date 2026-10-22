@@ -22,6 +22,10 @@ type bindings struct {
 	NextSection, PrevSection key.Binding
 	Comment, Reply           key.Binding
 	Viewed                   key.Binding
+	// Inline comments: V starts a line selection, e and D change the pending
+	// comment at the cursor. The Visual* keys apply while a selection is open.
+	Visual, EditPending, DeletePending key.Binding
+	VisualDown, VisualUp, VisualExit   key.Binding
 }
 
 func defaultBindings() bindings {
@@ -36,9 +40,16 @@ func defaultBindings() bindings {
 		FilePicker:  b("f", "f", "file picker"),
 		NextSection: b("]", "]", "next section (overview)"),
 		PrevSection: b("[", "[", "previous section (overview)"),
-		Comment:     b("c", "c", "new comment on the pull request (overview)"),
+		Comment:     b("c", "c", "new comment: on the pull request (overview) or on the diff line / selection"),
 		Reply:       b("r", "r", "reply to the comment thread at the cursor (diff)"),
 		Viewed:      b("v", "v", "toggle file viewed"),
+
+		Visual:        b("V", "V", "select diff lines for a multi-line comment"),
+		EditPending:   b("e", "e", "edit your pending comment at the cursor (diff)"),
+		DeletePending: b("D", "D", "delete your pending comment at the cursor (diff)"),
+		VisualDown:    key.NewBinding(key.WithKeys("j", "down"), key.WithHelp("j", "extend selection down")),
+		VisualUp:      key.NewBinding(key.WithKeys("k", "up"), key.WithHelp("k", "extend selection up")),
+		VisualExit:    key.NewBinding(key.WithKeys("esc", "V"), key.WithHelp("esc", "leave visual mode")),
 	}
 }
 
@@ -68,6 +79,12 @@ func (v *View) handleKey(msg keys.Msg) tea.Cmd {
 		return v.toggleViewed()
 	case key.Matches(msg, v.bind.Reply):
 		return v.reply()
+	case v.sel() > 0 && key.Matches(msg, v.bind.Visual):
+		return v.startVisual()
+	case key.Matches(msg, v.bind.EditPending):
+		return v.editPending()
+	case key.Matches(msg, v.bind.DeletePending):
+		return v.deletePending()
 	case key.Matches(msg, v.km.Open):
 		return v.openBrowser()
 	case key.Matches(msg, v.km.Refresh):
