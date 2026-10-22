@@ -157,9 +157,9 @@ func TestRefreshKeepsSelection(t *testing.T) {
 	v := loadedView(t, c, nil)
 	press(v, "j")
 	press(v, "j")
-	want := v.prs[v.cursor].Number
+	want := v.prs[v.win.Cursor()].Number
 	deliver(t, v, press(v, "R"))
-	if got := v.prs[v.cursor].Number; got != want {
+	if got := v.prs[v.win.Cursor()].Number; got != want {
 		t.Errorf("selected #%d after refresh, want #%d", got, want)
 	}
 }
@@ -169,18 +169,18 @@ func TestRefreshKeepsSelectionPastFirstPage(t *testing.T) {
 	v := loadedView(t, c, nil)
 	deliver(t, v, press(v, "G"))
 	press(v, "G")
-	if len(v.prs) != 45 || v.cursor != 44 {
-		t.Fatalf("setup: prs=%d cursor=%d", len(v.prs), v.cursor)
+	if len(v.prs) != 45 || v.win.Cursor() != 44 {
+		t.Fatalf("setup: prs=%d cursor=%d", len(v.prs), v.win.Cursor())
 	}
-	want := v.prs[v.cursor].Number
+	want := v.prs[v.win.Cursor()].Number
 
 	deliver(t, v, press(v, "R"))
 	calls := c.Calls()
 	if got := calls[len(calls)-1].Page.Limit; got != 45 {
 		t.Errorf("refresh limit = %d, want 45", got)
 	}
-	if len(v.prs) != 45 || v.prs[v.cursor].Number != want {
-		t.Errorf("after refresh: prs=%d selected #%d, want 45 rows and #%d", len(v.prs), v.prs[v.cursor].Number, want)
+	if len(v.prs) != 45 || v.prs[v.win.Cursor()].Number != want {
+		t.Errorf("after refresh: prs=%d selected #%d, want 45 rows and #%d", len(v.prs), v.prs[v.win.Cursor()].Number, want)
 	}
 }
 
@@ -190,7 +190,7 @@ func TestRefreshCapsAtMaxPageSize(t *testing.T) {
 	for len(v.prs) < 150 {
 		deliver(t, v, press(v, "G"))
 	}
-	v.cursor = 120
+	v.win.Restore(120, 0, 0)
 	deliver(t, v, press(v, "R"))
 	calls := c.Calls()
 	if got := calls[len(calls)-1].Page.Limit; got != github.MaxPageSize {
@@ -198,8 +198,8 @@ func TestRefreshCapsAtMaxPageSize(t *testing.T) {
 	}
 	// Pinned: only the first 100 rows are reloaded and the cursor keeps its
 	// index (clamped), even though that may now be a different PR.
-	if len(v.prs) != 100 || v.cursor != 99 {
-		t.Errorf("after refresh: prs=%d cursor=%d, want 100 and 99", len(v.prs), v.cursor)
+	if len(v.prs) != 100 || v.win.Cursor() != 99 {
+		t.Errorf("after refresh: prs=%d cursor=%d, want 100 and 99", len(v.prs), v.win.Cursor())
 	}
 }
 
@@ -242,8 +242,8 @@ func TestRefreshSelectionGone(t *testing.T) {
 	c.SetPullRequests(testRepo, makePRs(10)[:3])
 	press(v, "R")
 	v.Update(prsLoadedMsg{repo: testRepo, seq: v.seq, page: github.Page[github.PullRequest]{Items: makePRs(3)}})
-	if v.cursor != 2 {
-		t.Errorf("cursor = %d, want 2 (clamped)", v.cursor)
+	if v.win.Cursor() != 2 {
+		t.Errorf("cursor = %d, want 2 (clamped)", v.win.Cursor())
 	}
 }
 
@@ -365,8 +365,8 @@ func TestNavigation(t *testing.T) {
 		for _, k := range tt.keys {
 			press(v, k)
 		}
-		if v.cursor != tt.want {
-			t.Errorf("keys %v: cursor = %d, want %d", tt.keys, v.cursor, tt.want)
+		if v.win.Cursor() != tt.want {
+			t.Errorf("keys %v: cursor = %d, want %d", tt.keys, v.win.Cursor(), tt.want)
 		}
 	}
 }
@@ -477,6 +477,80 @@ func TestGolden(t *testing.T) {
 				}
 			}
 			golden.Assert(t, tt.name, out, false)
+		})
+	}
+}
+
+func TestPagingKeysAtTheEnds(t *testing.T) {
+	j8 := []string{"j", "j", "j", "j", "j", "j", "j", "j"}
+	up4 := []string{"G", "k", "k", "k", "k"}
+	tests := []struct {
+		name    string
+		start   []string
+		key     string
+		want    int
+		wantTop int
+	}{
+		{"ctrl+u at top", []string{"g g"}, "ctrl+u", 0, 0},
+		{"ctrl+b at top", []string{"g g"}, "ctrl+b", 0, 0},
+		{"ctrl+d at bottom", []string{"G"}, "ctrl+d", 24, 14},
+		{"ctrl+f at bottom", []string{"G"}, "ctrl+f", 24, 14},
+		{"ctrl+d from top", []string{"g g"}, "ctrl+d", 5, 5},
+		{"ctrl+b from bottom", []string{"G"}, "ctrl+b", 13, 3},
+		{"ctrl+u from bottom", []string{"G"}, "ctrl+u", 19, 9},
+		{"ctrl+d mid-list", j8, "ctrl+d", 13, 5},
+		{"ctrl+f mid-list", j8, "ctrl+f", 19, 11},
+		{"ctrl+u mid-list", up4, "ctrl+u", 15, 9},
+		{"ctrl+b mid-list", up4, "ctrl+b", 9, 3},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := loadedView(t, fakeWith(makePRs(25)), nil) // window shows 11 rows
+			for _, k := range tt.start {
+				press(v, k)
+			}
+			press(v, tt.key)
+			if got := v.win.Cursor(); got != tt.want {
+				t.Errorf("cursor = %d, want %d", got, tt.want)
+			}
+			if got := v.win.Top(); got != tt.wantTop {
+				t.Errorf("top = %d, want %d", got, tt.wantTop)
+			}
+		})
+	}
+}
+
+func TestPagingNearTheEndLoadsMore(t *testing.T) {
+	for _, k := range []string{"ctrl+d", "ctrl+f"} {
+		t.Run(k, func(t *testing.T) {
+			c := fakeWith(makePRs(45))
+			v := loadedView(t, c, nil) // 30 loaded, 11 visible
+			var cmd tea.Cmd
+			for i := 0; i < 10 && cmd == nil; i++ {
+				cmd = press(v, k)
+				if cmd == nil && v.win.Cursor() >= len(v.prs)-1-loadMoreMargin {
+					t.Fatalf("%s reached cursor %d inside the margin without loading", k, v.win.Cursor())
+				}
+			}
+			if cmd == nil || !v.Loading() {
+				t.Fatalf("%s into the margin should load the next page", k)
+			}
+			cursor, top := v.win.Cursor(), v.win.Top()
+			deliver(t, v, cmd)
+			if len(v.prs) != 45 {
+				t.Fatalf("rows after next page = %d, want 45", len(v.prs))
+			}
+			calls := c.Calls()
+			if calls[len(calls)-1].Page.After == "" {
+				t.Errorf("last call = %+v, want a next-page fetch", calls[len(calls)-1])
+			}
+			if v.win.Cursor() != cursor || v.win.Top() != top {
+				t.Errorf("append moved the window: cursor %d->%d top %d->%d", cursor, v.win.Cursor(), top, v.win.Top())
+			}
+			press(v, "G")
+			if got := v.win.Cursor(); got != 44 {
+				t.Errorf("G after append: cursor = %d, want 44 (window must know the new row count)", got)
+			}
 		})
 	}
 }

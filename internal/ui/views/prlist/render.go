@@ -28,7 +28,8 @@ func (v *View) Render(width, height int) string {
 		return ""
 	}
 	v.width, v.height = width, height
-	v.clamp()
+	v.win.SetRows(len(v.prs))
+	v.win.SetSize(v.listHeight())
 
 	var out string
 	switch {
@@ -101,9 +102,9 @@ func (v *View) table(width, height int) string {
 	lines := make([]string, 0, height)
 	lines = append(lines, v.th.PRList.Header.Render(pad(noMarker+l.row("#", "TITLE", "AUTHOR", "UPD", "RV", "CMT"), width)))
 
-	end := min(len(v.prs), v.top+v.listHeight())
-	for i := v.top; i < end; i++ {
-		lines = append(lines, v.row(l, v.prs[i], i == v.cursor, width))
+	end := min(len(v.prs), v.win.Top()+v.listHeight())
+	for i := v.win.Top(); i < end; i++ {
+		lines = append(lines, v.row(l, v.prs[i], i == v.win.Cursor(), width))
 	}
 	return strings.Join(lines, "\n")
 }
