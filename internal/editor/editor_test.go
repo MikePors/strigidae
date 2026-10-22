@@ -17,17 +17,18 @@ func TestCommandChoice(t *testing.T) {
 	tests := []struct {
 		name string
 		env  map[string]string
-		want []string
+		want string // the editor string handed to the shell
 	}{
-		{"fallback", nil, []string{"vi", "f.md"}},
-		{"editor", map[string]string{"EDITOR": "nano"}, []string{"nano", "f.md"}},
-		{"visual wins", map[string]string{"VISUAL": "hx", "EDITOR": "nano"}, []string{"hx", "f.md"}},
-		{"blank visual falls through", map[string]string{"VISUAL": "  ", "EDITOR": "nano"}, []string{"nano", "f.md"}},
-		{"arguments", map[string]string{"EDITOR": "code  -w"}, []string{"code", "-w", "f.md"}},
+		{"fallback", nil, "vi"},
+		{"editor", map[string]string{"EDITOR": "nano"}, "nano"},
+		{"visual wins", map[string]string{"VISUAL": "hx", "EDITOR": "nano"}, "hx"},
+		{"blank visual falls through", map[string]string{"VISUAL": "  ", "EDITOR": "nano"}, "nano"},
+		{"arguments and quotes", map[string]string{"EDITOR": "vim -c 'set tw=72'"}, "vim -c 'set tw=72'"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if diff := cmp.Diff(tt.want, Command("f.md", env(tt.env)).Args); diff != "" {
+			want := []string{"sh", "-c", tt.want + ` "$@"`, "strig", "f.md"}
+			if diff := cmp.Diff(want, Command("f.md", env(tt.env)).Args); diff != "" {
 				t.Errorf("args (-want +got):\n%s", diff)
 			}
 		})
@@ -63,6 +64,31 @@ func TestSessionRoundTrip(t *testing.T) {
 	}
 	if _, err := os.Stat(s.Path()); !os.IsNotExist(err) {
 		t.Errorf("temporary file not removed: %v", err)
+	}
+}
+
+func TestQuotedEditorAndPathWithSpaces(t *testing.T) {
+	cp, err := exec.LookPath("cp")
+	if err != nil {
+		t.Skip("cp not available")
+	}
+	dir := filepath.Join(t.TempDir(), "with space")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	src := filepath.Join(dir, "src.md")
+	if err := os.WriteFile(src, []byte("quoted"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := New("", env(map[string]string{"VISUAL": `"` + cp + `" "` + src + `"`}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Cmd().Run(); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.Result(); err != nil || got != "quoted" {
+		t.Errorf("Result = %q, %v", got, err)
 	}
 }
 

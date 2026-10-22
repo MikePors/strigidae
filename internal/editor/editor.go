@@ -57,9 +57,9 @@ func (s *Session) Result() (string, error) {
 	return string(b), nil
 }
 
-// Command returns the command that opens path in the user's editor. The
-// editor value is split on spaces, so "code -w" works; quoting is not
-// interpreted.
+// Command returns the command that opens path in the user's editor. Like
+// git, it hands the editor value to the shell with the path as an argument
+// (sh -c '$EDITOR "$@"' strig path), so quoting and paths with spaces work.
 func Command(path string, getenv func(string) string) *exec.Cmd {
 	editor := fallback
 	for _, name := range []string{"VISUAL", "EDITOR"} {
@@ -68,6 +68,5 @@ func Command(path string, getenv func(string) string) *exec.Cmd {
 			break
 		}
 	}
-	fields := strings.Fields(editor)
-	return exec.Command(fields[0], append(fields[1:], path)...)
+	return exec.Command("sh", "-c", editor+` "$@"`, "strig", path)
 }
