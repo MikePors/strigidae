@@ -67,15 +67,8 @@ func TestInlineErrors(t *testing.T) {
 		t.Errorf("no pending review: %v", err)
 	}
 	p, _ := c.StartReview(ctx, github.StartReviewInput{Repo: repo, Number: 7, PullRequestID: "PR1", CommitOID: "abc"})
-	bad := []github.AddThreadInput{
-		{PendingReviewID: p.ID, Path: "a", Line: 1, Side: github.SideRight, Body: " "},
-		{PendingReviewID: p.ID, Path: "a", Line: 0, Side: github.SideRight, Body: "x"},
-		{PendingReviewID: p.ID, Path: "a", Line: 3, Side: github.SideRight, StartLine: 4, StartSide: github.SideRight, Body: "x"},
-	}
-	for i, in := range bad {
-		if err := add(in); err == nil {
-			t.Errorf("case %d: want an error", i)
-		}
+	if err := add(github.AddThreadInput{PendingReviewID: p.ID, Path: "a", Line: 1, Side: github.SideRight, Body: " "}); err == nil {
+		t.Error("an empty body was accepted")
 	}
 	c.SetError(MethodAddReviewThread, errors.New("boom"))
 	if err := add(github.AddThreadInput{PendingReviewID: p.ID, Path: "a", Line: 1, Side: github.SideRight, Body: "x"}); err == nil {
@@ -83,5 +76,32 @@ func TestInlineErrors(t *testing.T) {
 	}
 	if _, err := c.UpdateReviewComment(ctx, "missing", "x"); !errors.Is(err, github.ErrNotFound) {
 		t.Errorf("update missing: %v", err)
+	}
+}
+
+func TestCheckRange(t *testing.T) {
+	r, l := github.SideRight, github.SideLeft
+	tests := []struct {
+		name string
+		in   github.AddThreadInput
+		ok   bool
+	}{
+		{"single line", github.AddThreadInput{Path: "a", Line: 3, Side: r}, true},
+		{"multi-line", github.AddThreadInput{Path: "a", Line: 5, Side: l, StartLine: 3, StartSide: l}, true},
+		{"one-line range", github.AddThreadInput{Path: "a", Line: 3, Side: r, StartLine: 3, StartSide: r}, true},
+		{"no path", github.AddThreadInput{Line: 3, Side: r}, false},
+		{"line zero", github.AddThreadInput{Path: "a", Line: 0, Side: r}, false},
+		{"negative line", github.AddThreadInput{Path: "a", Line: -1, Side: r}, false},
+		{"unknown side", github.AddThreadInput{Path: "a", Line: 3, Side: "MIDDLE"}, false},
+		{"start after line", github.AddThreadInput{Path: "a", Line: 3, Side: r, StartLine: 4, StartSide: r}, false},
+		{"negative start", github.AddThreadInput{Path: "a", Line: 3, Side: r, StartLine: -1, StartSide: r}, false},
+		{"range without a start side", github.AddThreadInput{Path: "a", Line: 5, Side: r, StartLine: 3}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := checkRange(tt.in); (err == nil) != tt.ok {
+				t.Errorf("checkRange = %v, want ok = %v", err, tt.ok)
+			}
+		})
 	}
 }

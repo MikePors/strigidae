@@ -21,9 +21,9 @@ func TestAnchorSingleLine(t *testing.T) {
 		want Range
 		ok   bool
 	}{
-		{"context line is on the new side", 14, Range{Path: "server.go", Hunk: 1, Side: SideRight, Start: 32, End: 32}, true},
-		{"deleted line is on the old side", 15, Range{Path: "server.go", Hunk: 1, Side: SideLeft, Start: 32, End: 32}, true},
-		{"added line is on the new side", 17, Range{Path: "server.go", Hunk: 1, Side: SideRight, Start: 33, End: 33}, true},
+		{"context line is on the new side", 14, Range{Path: "server.go", Side: SideRight, Start: 32, End: 32}, true},
+		{"deleted line is on the old side", 15, Range{Path: "server.go", Side: SideLeft, Start: 32, End: 32}, true},
+		{"added line is on the new side", 17, Range{Path: "server.go", Side: SideRight, Start: 33, End: 33}, true},
 		{"hunk header has none", hunk2Row, Range{}, false},
 	}
 	for _, tt := range tests {
@@ -50,13 +50,13 @@ func TestVisualRanges(t *testing.T) {
 		refusal error
 		endRow  int
 	}{
-		{"context to context stays on the new side", 13, 1, Range{Path: "server.go", Hunk: 1, Side: SideRight, Start: 31, End: 32}, nil, 14},
-		{"deleted lines are on the old side", 15, 1, Range{Path: "server.go", Hunk: 1, Side: SideLeft, Start: 32, End: 33}, nil, 16},
-		{"context with deleted is on the old side", 14, 1, Range{Path: "server.go", Hunk: 1, Side: SideLeft, Start: 31, End: 32}, nil, 15},
-		{"added lines", 17, 1, Range{Path: "server.go", Hunk: 1, Side: SideRight, Start: 33, End: 34}, nil, 18},
-		{"upwards", 16, -1, Range{Path: "server.go", Hunk: 1, Side: SideLeft, Start: 32, End: 33}, nil, 15},
-		{"deleted to added is refused", 16, 1, Range{Path: "server.go", Hunk: 1, Side: SideLeft, Start: 33, End: 33}, ErrMixesSides, 16},
-		{"into the next hunk is refused", 11, 1, Range{Path: "server.go", Hunk: 0, Side: SideRight, Start: 10, End: 10}, ErrCrossesHunk, 11},
+		{"context to context stays on the new side", 13, 1, Range{Path: "server.go", Side: SideRight, Start: 31, End: 32}, nil, 14},
+		{"deleted lines are on the old side", 15, 1, Range{Path: "server.go", Side: SideLeft, Start: 32, End: 33}, nil, 16},
+		{"context with deleted is on the old side", 14, 1, Range{Path: "server.go", Side: SideLeft, Start: 31, End: 32}, nil, 15},
+		{"added lines", 17, 1, Range{Path: "server.go", Side: SideRight, Start: 33, End: 34}, nil, 18},
+		{"upwards", 16, -1, Range{Path: "server.go", Side: SideLeft, Start: 32, End: 33}, nil, 15},
+		{"deleted to added is refused", 16, 1, Range{Path: "server.go", Side: SideLeft, Start: 33, End: 33}, ErrMixesSides, 16},
+		{"into the next hunk is refused", 11, 1, Range{Path: "server.go", Side: SideRight, Start: 10, End: 10}, ErrCrossesHunk, 11},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -112,11 +112,21 @@ func TestVisualRendering(t *testing.T) {
 	if strings.HasPrefix(lines[14], markSelected) || strings.HasPrefix(lines[17], markSelected) {
 		t.Error("rows outside the selection are marked")
 	}
-	// The tint is the cursor row's own style.
-	th := m.th
-	want := th.DiffCursor.GetBackground()
-	if m.styles.v[1][kindDelete].gutter.GetBackground() != want {
-		t.Error("selected rows do not use the cursor tint")
+	// The selected rows are drawn with the cursor tint (the selected variant of
+	// the theme's own styles); a row outside the selection is not.
+	raw := strings.Split(m.Render(80, 30), "\n")
+	sel, plain := &m.styles.v[1][kindDelete], &m.styles.v[0][kindDelete]
+	gutter := func(v *variant, mark string, old int) string {
+		return v.gutter.Render(mark + numCell(old, m.numW) + " " + numCell(0, m.numW) + " ")
+	}
+	if !strings.Contains(raw[15], gutter(sel, markSelected, 32)) {
+		t.Errorf("selected row is not drawn with the selected style: %q", raw[15])
+	}
+	if !strings.Contains(raw[16], gutter(sel, ">", 33)) {
+		t.Errorf("cursor row is not drawn with the selected style: %q", raw[16])
+	}
+	if strings.Contains(raw[15], gutter(plain, " ", 32)) {
+		t.Error("selected row is drawn as an unselected one")
 	}
 }
 
@@ -129,16 +139,16 @@ func TestRangeFor(t *testing.T) {
 		want  Range
 		err   error
 	}{
-		{"one context line is on the new side", []*diff.Line{ln(ctx, 4, 5)}, Range{Path: "f.go", Hunk: 2, Side: SideRight, Start: 5, End: 5}, nil},
-		{"one deleted line is on the old side", []*diff.Line{ln(del, 4, 0)}, Range{Path: "f.go", Hunk: 2, Side: SideLeft, Start: 4, End: 4}, nil},
-		{"context and added lines use new numbers", []*diff.Line{ln(ctx, 4, 5), ln(add, 0, 6), ln(add, 0, 7)}, Range{Path: "f.go", Hunk: 2, Side: SideRight, Start: 5, End: 7}, nil},
-		{"any deleted line makes it the old side", []*diff.Line{ln(ctx, 4, 5), ln(del, 5, 0)}, Range{Path: "f.go", Hunk: 2, Side: SideLeft, Start: 4, End: 5}, nil},
+		{"one context line is on the new side", []*diff.Line{ln(ctx, 4, 5)}, Range{Path: "f.go", Side: SideRight, Start: 5, End: 5}, nil},
+		{"one deleted line is on the old side", []*diff.Line{ln(del, 4, 0)}, Range{Path: "f.go", Side: SideLeft, Start: 4, End: 4}, nil},
+		{"context and added lines use new numbers", []*diff.Line{ln(ctx, 4, 5), ln(add, 0, 6), ln(add, 0, 7)}, Range{Path: "f.go", Side: SideRight, Start: 5, End: 7}, nil},
+		{"any deleted line makes it the old side", []*diff.Line{ln(ctx, 4, 5), ln(del, 5, 0)}, Range{Path: "f.go", Side: SideLeft, Start: 4, End: 5}, nil},
 		{"added with deleted is refused", []*diff.Line{ln(del, 5, 0), ln(add, 0, 6)}, Range{}, ErrMixesSides},
 		{"no lines", nil, Range{}, errNoLines},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := rangeFor("f.go", 2, tt.lines)
+			got, err := rangeFor("f.go", tt.lines)
 			if !errors.Is(err, tt.err) {
 				t.Fatalf("err = %v, want %v", err, tt.err)
 			}
@@ -153,20 +163,20 @@ func TestRangeFor(t *testing.T) {
 // deleted, 17..18 added (see diffview_test.go).
 func TestFurthest(t *testing.T) {
 	tests := []struct {
-		name         string
-		anchor, from int
-		delta        int
-		wantRow      int
-		wantErr      error
+		name    string
+		anchor  int
+		delta   int
+		wantRow int
+		wantErr error
 	}{
-		{"all the way", 13, 13, 2, 15, nil},
-		{"no move", 14, 14, 0, 14, nil},
-		{"stops before mixing sides, partway", 16, 16, 2, 16, ErrMixesSides},
-		{"stops before the added line, after one step", 14, 14, 3, 16, ErrMixesSides},
-		{"stops at the hunk edge", 11, 11, 1, 11, ErrCrossesHunk},
-		{"upwards", 16, 16, -1, 15, nil},
-		{"runs out of rows without an error", 18, 18, 50, 23, nil},
-		{"upwards into the previous hunk", 13, 13, -1, 13, ErrCrossesHunk},
+		{"all the way", 13, 2, 15, nil},
+		{"no move", 14, 0, 14, nil},
+		{"stops before mixing sides, partway", 16, 2, 16, ErrMixesSides},
+		{"stops before the added line, after one step", 14, 3, 16, ErrMixesSides},
+		{"stops at the hunk edge", 11, 1, 11, ErrCrossesHunk},
+		{"upwards", 16, -1, 15, nil},
+		{"runs out of rows without an error", 18, 50, 23, nil},
+		{"upwards into the previous hunk", 13, -1, 13, ErrCrossesHunk},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -175,7 +185,7 @@ func TestFurthest(t *testing.T) {
 			if !m.VisualStart() {
 				t.Fatal("no visual start")
 			}
-			row, err := m.furthest(tt.from, tt.delta)
+			row, err := m.furthest(tt.anchor, tt.delta)
 			if row != tt.wantRow || !errors.Is(err, tt.wantErr) {
 				t.Errorf("furthest = %d, %v; want %d, %v", row, err, tt.wantRow, tt.wantErr)
 			}

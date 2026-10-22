@@ -242,7 +242,7 @@ func TestPostResultAfterNewComposeIsHandled(t *testing.T) {
 
 	// A newer draft for the same target survives the older post.
 	c.drafts(map[string]string{"t-resolved": "newer"})
-	c.send(postedMsg{owner: c.v, repo: testRepo, number: 7, tgt: target{threadID: "t-resolved"}, body: "first"})
+	c.send(postedMsg{origin: c.v.origin(), tgt: target{threadID: "t-resolved"}, body: "first"})
 	if c.v.drafts["t-resolved"] != "newer" {
 		t.Errorf("newer draft deleted: %v", c.v.drafts)
 	}
@@ -333,7 +333,7 @@ func TestReplyWorksFromTheFilesPane(t *testing.T) {
 	}
 }
 
-func TestCommentInOverviewOnly(t *testing.T) {
+func TestTopLevelCommentIsPostedFromTheOverview(t *testing.T) {
 	c := newComposer(t)
 	c.body = "LGTM, one question\nbelow"
 	c.press("l", "c")
