@@ -24,6 +24,10 @@ Or install directly:
 go install github.com/MikePors/strigidae/cmd/strig@latest
 ```
 
+## Clipboard
+
+`:copy-filename` copies the selected file's path using the OSC 52 terminal escape, which also works over SSH. Terminals that ignore OSC 52 copy nothing. Inside tmux, add `set -g set-clipboard on` to `~/.tmux.conf`.
+
 ## License
 
 [MIT](LICENSE)

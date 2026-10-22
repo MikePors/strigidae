@@ -78,3 +78,43 @@ func TestCommanderDeclinedAndPlainViews(t *testing.T) {
 		}
 	})
 }
+
+// copyView is a fake view that owns the command "copy-filename".
+type copyView struct {
+	*fakeView
+	calls int
+}
+
+func (c *copyView) Update(msg tea.Msg) (View, tea.Cmd) {
+	_, cmd := c.fakeView.Update(msg)
+	return c, cmd
+}
+
+func (c *copyView) Command(name, _ string) (tea.Cmd, bool) {
+	if name != "copy-filename" {
+		return nil, false
+	}
+	c.calls++
+	return Info("copied"), true
+}
+
+func TestCopyFilenameRoutedThroughCommandLine(t *testing.T) {
+	below := &copyView{fakeView: newFake("below")}
+	top := &copyView{fakeView: newFake("top")}
+	m := newModel(below)
+	run(m, Push(top))
+
+	run(m, typeCommand(m, "copy-filename"))
+	if top.calls != 1 || below.calls != 0 {
+		t.Errorf("calls: top %d, below %d", top.calls, below.calls)
+	}
+	if m.status.text != "copied" {
+		t.Errorf("status = %q", m.status.text)
+	}
+
+	run(m, Push(newFake("plain")))
+	run(m, typeCommand(m, "copy-filename"))
+	if m.status.text != "not available here: copy-filename" || top.calls != 1 {
+		t.Errorf("status = %q, top calls %d", m.status.text, top.calls)
+	}
+}

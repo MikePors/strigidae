@@ -64,6 +64,7 @@ Commands (`:` then `enter`):
 | `:q`, `:quit` | close the current view; quits strig on the root view |
 | `:qa`, `:qall`, `:quitall` | quit strig |
 | `:approve`, `:request-changes`, `:review` | PR workspace: submit a review verdict (`:review` opens the chooser) |
+| `:copy-filename` | PR workspace: copy the selected file's path to the clipboard (OSC 52; tmux needs `set -g set-clipboard on`) |
 
 **View commands.** The table above is static. A view with commands of its own implements `ui.Commander` (`Command(name, args) (tea.Cmd, handled bool)`) and its names are added to `viewCommands` in `command.go`. The root consults only the top view, and only when the static table has no match, so a command never reaches two views the way a broadcast result would. A listed name the top view declines (or a top view that is not a Commander) gives "not available here: name"; any other name gives "not a command: name". List the view's commands in the table above.
 
