@@ -148,7 +148,7 @@ func TestHostileTextNeverReachesTheScreen(t *testing.T) {
 	if out := ansi.Strip(h.render()); !strings.Contains(out, "old evil") || !strings.Contains(out, "new evil") {
 		t.Errorf("hostile code lines should show, cleaned:\n%s", out)
 	}
-	h.press("l", "] c", "z o", "] c", "z o", "G") // threads: open the resolved one, go to the end
+	h.press("l", ")", "z o", ")", "z o", "G") // threads: open the resolved one, go to the end
 	assertTame(t, "hostile threads", h.render())
 	if out := ansi.Strip(h.render()); !strings.Contains(out, "│ cevil") {
 		t.Errorf("the hostile threads should show, cleaned:\n%s", out)
@@ -221,7 +221,7 @@ func TestHostileDiffError(t *testing.T) {
 	h := newHarness(t, 100, 20)
 	h.client.SetError(fake.MethodGetDiff, errors.New("bad"+hostile))
 	h.run(h.v.Init())
-	h.press("] f")
+	h.press("}")
 	assertTame(t, "diff error", h.render())
 
 	var status string

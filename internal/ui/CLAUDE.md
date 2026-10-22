@@ -28,9 +28,9 @@ Vim-first. All bindings are declared with `bubbles/key` and registered through `
 - control keys: `ctrl+d` (never `ctrl-d`, which silently never matches)
 - shifted letters: the letter itself, `G`, `R`, `N` (not `shift+g`)
 - special keys: `esc`, `enter`, `tab`, `backspace`, `up`, `down`
-- **multi-key sequences are space-separated**: `g g`, `] f`, `g t`. `bubbles/key` only matches single keypresses, so sequences are matched by the sequence matcher in `internal/ui/keys` (pending prefix shown in the status bar, ~500ms timeout). Views just declare them in their bindings; they never track key history themselves.
+- **multi-key sequences are space-separated**: `g g`, `z a`, `g t`. `bubbles/key` only matches single keypresses, so sequences are matched by the sequence matcher in `internal/ui/keys` (pending prefix shown in the status bar, ~500ms timeout). Views just declare them in their bindings; they never track key history themselves.
 
-The help overlay may display sequences compactly (`gg`, `]f`).
+The help overlay may display sequences compactly (`gg`, `za`).
 
 Reserved globally:
 
@@ -50,6 +50,9 @@ Reserved globally:
 | `c` | new comment (top-level, or on the cursor line in a diff) |
 | `r` | reply to the focused comment thread |
 | `:` | command line |
+| `]` / `[` | next / previous chunk of what the pane shows: hunk in a diff, section in the Overview |
+| `}` / `{` | next / previous file |
+| `)` / `(` | next / previous comment thread (diff) |
 
 There is deliberately **no single-key back or quit**: `q` and `ctrl+c` are unbound. `ctrl+o` / `ctrl+i` (back / forward through views) and `tab` are reserved for later; terminals send the same byte for `tab` and `ctrl+i`.
 
@@ -65,7 +68,6 @@ Reserved prefixes:
 | Prefix | Use |
 |---|---|
 | `g …` | goto: `g g` top, `g t` / `g T` next / previous tab |
-| `] x` / `[ x` | next / previous *x*: `f` file, `h` hunk, `c` comment thread, `s` section |
 | `z …` | folds (expand/collapse threads, files) and horizontal scrolling: `z h` / `z l` a few columns, `z H` / `z L` half a screen (as in vim) |
 
 Adding a binding or command: make sure it doesn't collide with the tables above or another binding active in the same view, add it with help text, and **list every new or changed binding in the PR description** so the maintainer can approve it. Any binding an issue marks "TBD" is the maintainer's call; propose one in the PR and ask.

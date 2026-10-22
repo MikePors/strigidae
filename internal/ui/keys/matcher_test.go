@@ -38,10 +38,24 @@ func TestMatcherFeed(t *testing.T) {
 			want:     []Result{{Pending, "g"}, {Matched, "g g"}},
 		},
 		{
-			name:     "bracket sequence",
-			bindings: []key.Binding{bind("] f"), bind("[ c")},
-			keys:     []string{"]", "f", "[", "c"},
-			want:     []Result{{Pending, "]"}, {Matched, "] f"}, {Pending, "["}, {Matched, "[ c"}},
+			name:     "two sequences",
+			bindings: []key.Binding{bind("g t"), bind("z c")},
+			keys:     []string{"g", "t", "z", "c"},
+			want:     []Result{{Pending, "g"}, {Matched, "g t"}, {Pending, "z"}, {Matched, "z c"}},
+		},
+		{
+			name:     "navigation brackets are single keys",
+			bindings: []key.Binding{bind("]"), bind("["), bind("}"), bind("{"), bind(")"), bind("("), bind("g g")},
+			keys:     []string{"]", "[", "}", "{", ")", "(", "]"},
+			want: []Result{
+				{Matched, "]"},
+				{Matched, "["},
+				{Matched, "}"},
+				{Matched, "{"},
+				{Matched, ")"},
+				{Matched, "("},
+				{Matched, "]"},
+			},
 		},
 		{
 			name:     "broken sequence falls back to key alone",

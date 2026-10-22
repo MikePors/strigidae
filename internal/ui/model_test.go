@@ -21,7 +21,7 @@ import (
 // fakeView records what the root sends it.
 type fakeView struct {
 	title   string
-	next    key.Binding // view-specific sequence "] f"
+	next    key.Binding // view-specific sequence "g f"
 	capture bool
 	loading bool
 	resumed int
@@ -32,7 +32,7 @@ type fakeView struct {
 func newFake(title string) *fakeView {
 	return &fakeView{
 		title: title,
-		next:  key.NewBinding(key.WithKeys("] f"), key.WithHelp("]f", "next file")),
+		next:  key.NewBinding(key.WithKeys("g f"), key.WithHelp("gf", "next file")),
 	}
 }
 
@@ -349,9 +349,9 @@ func TestSequences(t *testing.T) {
 	t.Run("view-declared sequence", func(t *testing.T) {
 		v := newFake("v")
 		m := newModel(v)
-		press(m, "]")
+		press(m, "g")
 		press(m, "f")
-		if diff := cmp.Diff([]keys.Msg{{Seq: "] f"}}, v.keyMsgs()); diff != "" {
+		if diff := cmp.Diff([]keys.Msg{{Seq: "g f"}}, v.keyMsgs()); diff != "" {
 			t.Errorf("mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -371,7 +371,7 @@ func TestSequences(t *testing.T) {
 		m := newModel(newFake("v"))
 		stale := press(m, "g")
 		press(m, "g")
-		press(m, "]") // new pending prefix
+		press(m, "g") // new pending prefix
 		run(m, stale)
 		if !m.matcher.Pending() {
 			t.Error("stale timeout cleared a newer prefix")
@@ -582,7 +582,7 @@ func TestStatusBarGolden(t *testing.T) {
 		{"idle", statusBar{crumbs: "strig › screen 2", text: "? help  enter open"}, 60},
 		{"pending_spinner", statusBar{crumbs: "strig", text: "? help", pending: "g", spinner: "⣾"}, 60},
 		{"error", statusBar{crumbs: "strig", text: "load failed: rate limited", kind: statusError}, 60},
-		{"info_narrow", statusBar{crumbs: "strig", text: "a rather long informational message", kind: statusInfo, pending: "]"}, 30},
+		{"info_narrow", statusBar{crumbs: "strig", text: "a rather long informational message", kind: statusInfo, pending: "g"}, 30},
 		{"tiny", statusBar{crumbs: "a very long breadcrumb trail"}, 10},
 		{"long_crumbs_error_pending", statusBar{
 			crumbs:  "owner/repo \u203a #123 Fix the thing \u203a internal/ui/model.go",

@@ -27,7 +27,7 @@ type Result struct {
 	Seq  string
 }
 
-// Matcher resolves multi-key sequences such as "g g" or "] f". Sequences are
+// Matcher resolves multi-key sequences such as "g g" or "z a b". Sequences are
 // written in binding keys as space-separated key names.
 //
 // A Matcher is pure state: it has no clock. The owner starts a timer when

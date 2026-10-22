@@ -1,7 +1,7 @@
 Help  ? / esc to close                                          
                                                                 
 Global                                        v                 
-j        down                                 ]f       next file
+j        down                                 gf       next file
 k        up                                                     
 gg       top                                                    
 G        bottom                                                 
@@ -27,4 +27,4 @@ esc      cancel / clear
 
 
 
- v  ? help  ]f next file                                              
+ v  ? help  gf next file                                              

@@ -29,11 +29,11 @@ func defaultBindings() bindings {
 	return bindings{
 		PaneLeft:    b("h", "h", "focus files pane"),
 		PaneRight:   b("l", "l", "focus right pane"),
-		NextFile:    b("] f", "]f", "next file"),
-		PrevFile:    b("[ f", "[f", "previous file"),
+		NextFile:    b("}", "]f", "next file"),
+		PrevFile:    b("{", "[f", "previous file"),
 		FilePicker:  b("f", "f", "file picker"),
-		NextSection: b("] s", "]s", "next section (overview)"),
-		PrevSection: b("[ s", "[s", "previous section (overview)"),
+		NextSection: b("]", "]s", "next section (overview)"),
+		PrevSection: b("[", "[s", "previous section (overview)"),
 	}
 }
 
@@ -53,9 +53,9 @@ func (v *View) handleKey(msg keys.Msg) tea.Cmd {
 		v.stepFile(-1)
 	case key.Matches(msg, v.bind.FilePicker):
 		v.openPicker()
-	case key.Matches(msg, v.bind.NextSection):
+	case v.sel() == 0 && key.Matches(msg, v.bind.NextSection):
 		v.jumpSection(1)
-	case key.Matches(msg, v.bind.PrevSection):
+	case v.sel() == 0 && key.Matches(msg, v.bind.PrevSection):
 		v.jumpSection(-1)
 	case key.Matches(msg, v.km.Open):
 		return v.openBrowser()
@@ -146,8 +146,10 @@ func (v *View) rightKey(msg keys.Msg) tea.Cmd {
 	return nil
 }
 
+// jumpSection moves the Overview to the next or previous section. ] and [ are
+// sections only on the Overview; on a file they belong to the diff pane.
 func (v *View) jumpSection(delta int) {
-	if v.sel() != 0 || v.detail == nil {
+	if v.detail == nil {
 		return
 	}
 	v.ov.jump(delta)

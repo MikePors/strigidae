@@ -3,7 +3,7 @@
 // so the help overlay can be generated from one source of truth.
 //
 // Multi-key sequences are written as space-separated key names in a binding,
-// for example key.WithKeys("g g") or key.WithKeys("] f"). The root model
+// for example key.WithKeys("g g") or key.WithKeys("g f"). The root model
 // resolves key presses with a Matcher and delivers the result to the active
 // view as a Msg; views test it with key.Matches(msg, binding) and never look
 // at raw key strings.
