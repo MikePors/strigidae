@@ -18,6 +18,7 @@ func TestSubmitReview(t *testing.T) {
 		in      github.SubmitReviewInput
 		wantErr error
 		bad     bool
+		noID    bool
 	}{
 		{name: "approve without body", in: github.SubmitReviewInput{Event: github.ReviewEventApprove}},
 		{name: "comment without body", in: github.SubmitReviewInput{Event: github.ReviewEventComment}, bad: true},
@@ -28,6 +29,8 @@ func TestSubmitReview(t *testing.T) {
 			in:      github.SubmitReviewInput{Event: github.ReviewEventComment, PendingReviewID: "p1"},
 		},
 		{name: "pending gone", in: github.SubmitReviewInput{Event: github.ReviewEventApprove, PendingReviewID: "p1"}, wantErr: github.ErrNotFound},
+		{name: "empty PR ID", in: github.SubmitReviewInput{Event: github.ReviewEventApprove}, noID: true, bad: true},
+		{name: "wrong PR ID", in: github.SubmitReviewInput{Event: github.ReviewEventApprove, PullRequestID: "PR_9"}, bad: true},
 		{name: "unknown event", in: github.SubmitReviewInput{Event: "DISMISS"}, bad: true},
 	}
 	for _, tt := range tests {
@@ -35,6 +38,9 @@ func TestSubmitReview(t *testing.T) {
 			c := seeded()
 			c.SetPendingReview(repo, 1, tt.pending)
 			tt.in.Repo, tt.in.Number = repo, 1
+			if tt.in.PullRequestID == "" && !tt.noID {
+				tt.in.PullRequestID = "PR_1"
+			}
 			err := c.SubmitReview(ctx, tt.in)
 			switch {
 			case tt.wantErr != nil:
@@ -67,11 +73,11 @@ func TestGetReviewStatus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := github.ReviewStatus{HeadSHA: "abc", Pending: &github.PendingReview{ID: "p1", Body: "b", CommentCount: 3}}
+	want := github.ReviewStatus{PullRequestID: "PR_1", HeadSHA: "abc", Pending: &github.PendingReview{ID: "p1", Body: "b", CommentCount: 3}}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("status (-want +got):\n%s", diff)
 	}
-	in := github.SubmitReviewInput{Repo: repo, Number: 1, Event: github.ReviewEventApprove, PendingReviewID: "p1"}
+	in := github.SubmitReviewInput{Repo: repo, Number: 1, PullRequestID: "PR_1", Event: github.ReviewEventApprove, PendingReviewID: "p1"}
 	if err := c.SubmitReview(context.Background(), in); err != nil {
 		t.Fatal(err)
 	}

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"charm.land/bubbles/v2/textinput"
@@ -27,7 +28,8 @@ func commandTable() []commandSpec {
 
 // parseCommand turns a command line (without the ":") into a command. An
 // empty line does nothing. The static table is consulted first; then top, if
-// it is a Commander. A name nobody handles yields an error message.
+// it is a Commander and the name is in viewCommands. A name nobody handles
+// yields an error message.
 func parseCommand(line string, top View) tea.Cmd {
 	line = strings.TrimSpace(line)
 	if line == "" {
@@ -42,14 +44,21 @@ func parseCommand(line string, top View) tea.Cmd {
 			}
 		}
 	}
-	if c, ok := top.(Commander); ok {
-		if cmd, handled := c.Command(name, args); handled {
-			return cmd
+	if slices.Contains(viewCommands, name) {
+		if c, ok := top.(Commander); ok {
+			if cmd, handled := c.Command(name, args); handled {
+				return cmd
+			}
 		}
 		return Error(fmt.Errorf("not available here: %s", name))
 	}
 	return Error(fmt.Errorf("not a command: %s", name))
 }
+
+// viewCommands are the names that views may handle through Commander. The
+// shell keeps the list so it can tell "a command this view lacks" from a
+// typo. Add a name here when a view starts handling it.
+var viewCommands = []string{"approve", "request-changes", "review"}
 
 // commandLine is the ":" prompt drawn in the status bar row. It is the
 // reference pattern for key-capturing input: while active it reports

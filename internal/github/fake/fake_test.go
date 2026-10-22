@@ -23,7 +23,7 @@ func seeded() *fake.Client {
 		prs = append(prs, github.PullRequest{Repo: repo, Number: i, State: github.PRStateOpen, UpdatedAt: time.Unix(int64(1000-i), 0)})
 	}
 	c.SetPullRequests(repo, prs)
-	c.SetPullRequest(github.PullRequestDetail{PullRequest: github.PullRequest{Repo: repo, Number: 1}})
+	c.SetPullRequest(github.PullRequestDetail{PullRequest: github.PullRequest{ID: "PR_1", Repo: repo, Number: 1}})
 	c.SetDiff(repo, 1, "diff")
 	c.SetReviewThreads(repo, 1, []github.ReviewThread{{ID: "t1"}, {ID: "t2"}})
 	return c

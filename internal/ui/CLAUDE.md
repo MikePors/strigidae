@@ -54,7 +54,6 @@ Reserved globally:
 | `]` / `[` | next / previous chunk of what the pane shows: hunk in a diff, section in the Overview |
 | `}` / `{` | next / previous file |
 | `)` / `(` | next / previous comment thread (diff) |
-| `S` | submit a review: opens the verdict chooser (PR workspace; proposed, pending the maintainer's decision) |
 
 There is deliberately **no single-key back or quit**: `q` and `ctrl+c` are unbound. `ctrl+o` / `ctrl+i` (back / forward through views) and `tab` are reserved for later; terminals send the same byte for `tab` and `ctrl+i`.
 
@@ -66,7 +65,7 @@ Commands (`:` then `enter`):
 | `:qa`, `:qall`, `:quitall` | quit strig |
 | `:approve`, `:request-changes`, `:review` | PR workspace: submit a review verdict (`:review` opens the chooser) |
 
-**View commands.** The table above is static. A view with commands of its own implements `ui.Commander` (`Command(name, args) (tea.Cmd, handled bool)`); the root consults only the top view, and only when the static table has no match, so a command never reaches two views the way a broadcast result would. If the top view declines, the status bar says "not available here: name". List the view's commands in the table above.
+**View commands.** The table above is static. A view with commands of its own implements `ui.Commander` (`Command(name, args) (tea.Cmd, handled bool)`) and its names are added to `viewCommands` in `command.go`. The root consults only the top view, and only when the static table has no match, so a command never reaches two views the way a broadcast result would. A listed name the top view declines (or a top view that is not a Commander) gives "not available here: name"; any other name gives "not a command: name". List the view's commands in the table above.
 
 Reserved prefixes:
 

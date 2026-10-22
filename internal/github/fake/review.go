@@ -14,6 +14,7 @@ import (
 type Submission struct {
 	Repo            github.Repo
 	Number          int
+	PullRequestID   string
 	Event           github.ReviewEvent
 	Body            string
 	CommitOID       string
@@ -89,6 +90,11 @@ func (c *Client) SubmitReview(ctx context.Context, in github.SubmitReviewInput) 
 	if !ok {
 		return fmt.Errorf("submit review on %s#%d: unknown event %q", in.Repo, in.Number, in.Event)
 	}
+	// The real API identifies the pull request only by its node ID, so the
+	// fake refuses an empty or wrong one.
+	if in.PullRequestID == "" || in.PullRequestID != d.ID {
+		return fmt.Errorf("submit review on %s#%d: unknown pull request ID %q", in.Repo, in.Number, in.PullRequestID)
+	}
 	var inline int
 	if in.PendingReviewID != "" {
 		p, ok := c.pending[key]
@@ -114,7 +120,7 @@ func (c *Client) SubmitReview(ctx context.Context, in github.SubmitReviewInput) 
 	}
 	c.details[key] = d
 	c.reviews = append(c.reviews, Submission{
-		Repo: in.Repo, Number: in.Number, Event: in.Event, Body: in.Body,
+		Repo: in.Repo, Number: in.Number, PullRequestID: in.PullRequestID, Event: in.Event, Body: in.Body,
 		CommitOID: in.CommitOID, PendingReviewID: in.PendingReviewID,
 	})
 	return nil
