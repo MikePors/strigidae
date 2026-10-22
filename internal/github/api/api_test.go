@@ -165,13 +165,13 @@ func TestListPullRequestsPagination(t *testing.T) {
 		Items: []github.PullRequest{
 			{
 				ID: "PR_kwDOExample01", HeadSHA: sha(1), Repo: repo, Number: 27, Title: "feat(api): add GitHub client layer", Author: "MikePors",
-				State: github.PRStateOpen, Draft: true, CommentCount: 2,
+				State: github.PRStateOpen, Draft: true, CommentCount: 2, Checks: github.ChecksPassing,
 				CreatedAt: mustTime(t, "2026-10-18T09:00:00Z"), UpdatedAt: mustTime(t, "2026-10-19T08:30:00Z"),
 				URL: "https://github.com/MikePors/strigidae/pull/27", HeadRef: "feat/4-github-client", BaseRef: "main",
 			},
 			{
 				ID: "PR_kwDOExample02", HeadSHA: sha(2), Repo: repo, Number: 26, Title: "chore: add issue forms and PR template", Author: "ghost",
-				State: github.PRStateOpen, ReviewDecision: github.ReviewDecisionApproved,
+				State: github.PRStateOpen, ReviewDecision: github.ReviewDecisionApproved, Checks: github.ChecksFailing,
 				CreatedAt: mustTime(t, "2026-10-17T12:00:00Z"), UpdatedAt: mustTime(t, "2026-10-18T10:15:00Z"),
 				URL: "https://github.com/MikePors/strigidae/pull/26", HeadRef: "chore/3-templates", BaseRef: "main",
 			},
@@ -188,7 +188,7 @@ func TestListPullRequestsPagination(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p2.HasMore() || len(p2.Items) != 1 || p2.Items[0].ReviewDecision != github.ReviewDecisionReviewRequired {
+	if p2.HasMore() || len(p2.Items) != 1 || p2.Items[0].ReviewDecision != github.ReviewDecisionReviewRequired || p2.Items[0].Checks != github.ChecksRunning {
 		t.Errorf("unexpected page 2: %+v", p2)
 	}
 
@@ -226,7 +226,7 @@ func TestSearchPullRequests(t *testing.T) {
 	}
 	want := github.PullRequest{
 		ID: "PR_kwDOOther01", HeadSHA: sha(1), Repo: github.Repo{Owner: "octo", Name: "widgets"}, Number: 5, Title: "Fix typo in README", Author: "octocat",
-		State: github.PRStateOpen, ReviewDecision: github.ReviewDecisionChangesRequested, CommentCount: 4,
+		State: github.PRStateOpen, ReviewDecision: github.ReviewDecisionChangesRequested, CommentCount: 4, Checks: github.ChecksRunning,
 		CreatedAt: mustTime(t, "2026-09-01T10:00:00Z"), UpdatedAt: mustTime(t, "2026-09-02T10:00:00Z"),
 		URL: "https://github.com/octo/widgets/pull/5", HeadRef: "fix-typo", BaseRef: "main",
 	}
@@ -245,7 +245,7 @@ func TestGetPullRequest(t *testing.T) {
 	want := github.PullRequestDetail{
 		PullRequest: github.PullRequest{
 			ID: "PR_kwDOExample01", HeadSHA: sha(1), Repo: repo, Number: 27, Title: "feat(api): add GitHub client layer", Author: "MikePors",
-			State: github.PRStateOpen, ReviewDecision: github.ReviewDecisionChangesRequested, CommentCount: 2,
+			State: github.PRStateOpen, ReviewDecision: github.ReviewDecisionChangesRequested, CommentCount: 2, Checks: github.ChecksFailing,
 			CreatedAt: mustTime(t, "2026-10-18T09:00:00Z"), UpdatedAt: mustTime(t, "2026-10-19T08:30:00Z"),
 			URL: "https://github.com/MikePors/strigidae/pull/27", HeadRef: "feat/4-github-client", BaseRef: "main",
 		},

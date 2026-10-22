@@ -38,6 +38,8 @@ type PullRequest struct {
 	State          PRState
 	Draft          bool
 	ReviewDecision ReviewDecision
+	// Checks is the combined check state of the head commit.
+	Checks CheckState
 	// CommentCount counts top-level (conversation) comments only.
 	CommentCount int
 	CreatedAt    time.Time

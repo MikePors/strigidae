@@ -17,6 +17,9 @@ type PRListStyles struct {
 	Approved         lipgloss.Style // review decision glyphs
 	ChangesRequested lipgloss.Style
 	ReviewRequired   lipgloss.Style
+	ChecksPassing    lipgloss.Style // check status glyphs (also used by the PR workspace header)
+	ChecksFailing    lipgloss.Style
+	ChecksRunning    lipgloss.Style
 	Comments         lipgloss.Style
 }
 
@@ -33,6 +36,9 @@ func newPRListStyles(r Roles) PRListStyles {
 		Approved:         fg(r.Success),
 		ChangesRequested: fg(r.Error),
 		ReviewRequired:   fg(r.Warning),
+		ChecksPassing:    fg(r.Added),
+		ChecksFailing:    fg(r.Removed),
+		ChecksRunning:    fg(r.Warning),
 		Comments:         muted,
 	}
 }

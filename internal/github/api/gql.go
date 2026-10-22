@@ -49,9 +49,16 @@ type gqlPullRequest struct {
 	BaseRefName    string
 	HeadRefName    string
 	HeadRefOid     string
-	Author         *gqlActor
-	CommentCount   struct{ TotalCount int }
-	Repository     struct{ NameWithOwner string }
+	Commits        struct {
+		Nodes []struct {
+			Commit struct {
+				StatusCheckRollup *struct{ State string }
+			}
+		}
+	}
+	Author       *gqlActor
+	CommentCount struct{ TotalCount int }
+	Repository   struct{ NameWithOwner string }
 }
 
 type gqlReactionGroup struct {
@@ -151,6 +158,7 @@ func mapPullRequest(n gqlPullRequest) (github.PullRequest, error) {
 		State:          github.PRState(n.State),
 		Draft:          n.IsDraft,
 		ReviewDecision: github.ReviewDecision(n.ReviewDecision),
+		Checks:         mapChecks(n),
 		CommentCount:   n.CommentCount.TotalCount,
 		CreatedAt:      n.CreatedAt,
 		UpdatedAt:      n.UpdatedAt,
@@ -158,6 +166,15 @@ func mapPullRequest(n gqlPullRequest) (github.PullRequest, error) {
 		HeadRef:        n.HeadRefName,
 		BaseRef:        n.BaseRefName,
 	}, nil
+}
+
+// mapChecks reads the rollup of the last commit; no commit or no rollup means
+// the commit has no checks.
+func mapChecks(n gqlPullRequest) github.CheckState {
+	if len(n.Commits.Nodes) == 0 || n.Commits.Nodes[0].Commit.StatusCheckRollup == nil {
+		return github.ChecksNone
+	}
+	return github.CheckStateFromRollup(n.Commits.Nodes[0].Commit.StatusCheckRollup.State)
 }
 
 func mapPullRequests(nodes []gqlPullRequest) ([]github.PullRequest, error) {

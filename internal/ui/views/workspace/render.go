@@ -140,6 +140,15 @@ func (v *View) renderHeader(width int) []string {
 		parts = append(parts, v.th.FileModified.Render("review required"))
 	case github.ReviewDecisionNone:
 	}
+	switch d.Checks {
+	case github.ChecksPassing:
+		parts = append(parts, v.th.PRList.ChecksPassing.Render("✓ checks passing"))
+	case github.ChecksFailing:
+		parts = append(parts, v.th.PRList.ChecksFailing.Render("✗ checks failing"))
+	case github.ChecksRunning:
+		parts = append(parts, v.th.PRList.ChecksRunning.Render("● checks running"))
+	case github.ChecksNone:
+	}
 	if len(d.Labels) > 0 {
 		names := make([]string, len(d.Labels))
 		for i, l := range d.Labels {
