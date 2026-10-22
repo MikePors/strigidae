@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/MikePors/strigidae/internal/config"
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/gitrepo"
 	"github.com/MikePors/strigidae/internal/ui/theme"
@@ -15,10 +16,12 @@ type app struct {
 	client github.Client
 	repo   github.Repo
 	theme  theme.Theme
+	// config holds the tabs and sections the dashboard (#12) will show.
+	config config.Config
 }
 
 // newApp resolves the repository to show and a client for its host.
-func newApp(repoFlag string, d deps) (app, error) {
+func newApp(repoFlag string, cfg config.Config, d deps) (app, error) {
 	target, err := resolveTarget(repoFlag, d)
 	if err != nil {
 		return app{}, err
@@ -30,7 +33,7 @@ func newApp(repoFlag string, d deps) (app, error) {
 	if err != nil {
 		return app{}, err
 	}
-	return app{client: client, repo: target.Repo, theme: theme.Default()}, nil
+	return app{client: client, repo: target.Repo, theme: theme.Default(), config: cfg}, nil
 }
 
 // resolveTarget decides which repository to show: -R if given, else the

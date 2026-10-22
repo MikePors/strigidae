@@ -6,10 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	cliBrowser "github.com/cli/browser"
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/github/fake"
@@ -28,6 +31,9 @@ func newHarness(remotes map[string]string, checkout bool, clientErr error) harne
 	h := harness{clientHost: new(string), started: new(github.Repo)}
 	h.deps = deps{
 		getwd: func() (string, error) { return "/work", nil },
+		// Directories that don't exist, so tests never read a real config.
+		getenv: func(string) string { return "/nonexistent-xdg" },
+		home:   func() (string, error) { return "/nonexistent-home", nil },
 		runner: func(_ context.Context, _ string, args ...string) (string, error) {
 			if args[0] == "rev-parse" {
 				if !checkout {
@@ -108,7 +114,7 @@ func TestRunHelp(t *testing.T) {
 			t.Errorf("%s exit code = %d, want 0", flagName, code)
 		}
 	}
-	for _, want := range []string{"-log-path", "-R owner/repo"} {
+	for _, want := range []string{"-log-path", "-config-path", "-config path", "-R owner/repo"} {
 		if !strings.Contains(stderr.String(), want) {
 			t.Errorf("usage should mention %q: %q", want, stderr.String())
 		}
@@ -218,6 +224,61 @@ func TestRunRepoSelection(t *testing.T) {
 			}
 			if tt.wantRepo == "" && !h.started.IsZero() {
 				t.Errorf("TUI started on %v despite failure", *h.started)
+			}
+		})
+	}
+}
+
+func TestRunConfig(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, body string) string {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	good := write("good.yml", "tabs:\n  - name: Alice\n    user: alice\n")
+	bad := write("bad.yml", "tabs:\n  - name: A\n    usr: x\n")
+	repo := []string{"-R", "o/r"}
+
+	tests := []struct {
+		name       string
+		args       []string
+		wantCode   int
+		wantStdout string
+		wantStderr string
+		wantTabs   []string
+	}{
+		{"config-path default", []string{"--config-path"}, 0, "/nonexistent-xdg/strig/config.yml\n", "", nil},
+		{"config-path honours --config", []string{"--config", good, "--config-path"}, 0, good + "\n", "", nil},
+		{"no file means defaults", repo, 0, "", "", []string{"Me"}},
+		{"valid file", append([]string{"--config", good}, repo...), 0, "", "", []string{"Alice"}},
+		{"explicit missing file", append([]string{"--config", filepath.Join(dir, "nope.yml")}, repo...), 1, "", "no such file", nil},
+		{"invalid file names file, line and key", append([]string{"--config", bad}, repo...), 1, "", bad + `:3: unknown key "usr"`, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newHarness(nil, false, nil)
+			var tabs []string
+			h.deps.start = func(a app, _ io.Writer) error {
+				for _, tab := range a.config.Tabs {
+					tabs = append(tabs, tab.Name)
+				}
+				return nil
+			}
+			var stdout, stderr bytes.Buffer
+			if code := run(tt.args, &stdout, &stderr, h.deps); code != tt.wantCode {
+				t.Errorf("exit code = %d, want %d (stderr: %s)", code, tt.wantCode, stderr.String())
+			}
+			if stdout.String() != tt.wantStdout {
+				t.Errorf("stdout = %q, want %q", stdout.String(), tt.wantStdout)
+			}
+			if !strings.Contains(stderr.String(), tt.wantStderr) {
+				t.Errorf("stderr = %q, want it to contain %q", stderr.String(), tt.wantStderr)
+			}
+			if diff := cmp.Diff(tt.wantTabs, tabs); diff != "" {
+				t.Errorf("tabs (-want +got):\n%s", diff)
 			}
 		})
 	}

@@ -1,0 +1,27 @@
+# Example strig config. Copy to $XDG_CONFIG_HOME/strig/config.yml
+# (default ~/.config/strig/config.yml), or pass --config <path>.
+# See docs/config.md for every key.
+
+tabs:
+  # Your own PRs. With no "user" and no "sections" a tab gets the default
+  # sections for the signed-in user.
+  - name: Me
+
+  # A teammate's tab: the same default sections, with their login in place of
+  # you.
+  - name: Alice
+    user: alice
+
+  # A tab with sections of your own. {user} is replaced by the tab's user
+  # (@me when the tab has none).
+  - name: Team
+    user: bob
+    sections:
+      - name: Needs my review
+        query: is:pr is:open review-requested:@me author:{user}
+        limit: 50
+      - name: Recently merged
+        query: is:pr is:merged author:{user}
+        limit: 10
+        sort: created
+        order: desc
