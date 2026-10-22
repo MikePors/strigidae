@@ -3,7 +3,7 @@ alice · main ← feat/retry · changes requested · [enhancement] [sync] · rev
 ╭─ Files 2/5 viewed ─────────╮╭─ internal/sync/retry.go ───────────────────────────────────────────╮
 │  Overview                  ││>@@ -0,0 +1,14 @@                                                   │
 │  ✓ M …al/sync/client.go +25││       1  +package sync                                             │
-│> ↻ A …al/sync/retry.go +214││       2  +                                                         │
+│> ~ A …al/sync/retry.go +214││       2  +                                                         │
 │    D …al/sync/legacy.go -90││       3  +import "context"                                         │
 │  ✓ R …and-backoff.md +12 -3││       4  +                                                         │
 │    M README.md        +2 -1││       5  +// Retry runs fn with exponential backoff.               │
