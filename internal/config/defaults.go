@@ -22,7 +22,12 @@ const (
 	SortInteractions Sort = "interactions"
 )
 
-var sorts = []Sort{SortUpdated, SortCreated, SortComments, SortReactions, SortInteractions}
+var sortNames = []string{
+	string(SortUpdated), string(SortCreated), string(SortComments),
+	string(SortReactions), string(SortInteractions),
+}
+
+var orderNames = []string{string(OrderAsc), string(OrderDesc)}
 
 // Order is the sort direction.
 type Order string
