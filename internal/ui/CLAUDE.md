@@ -27,6 +27,7 @@ Vim-first. All bindings are declared with `bubbles/key` and registered through `
 **Notation.** Write keys exactly as the code does, because these strings are what the code matches on:
 - control keys: `ctrl+d` (never `ctrl-d`, which silently never matches)
 - shifted letters: the letter itself, `G`, `R`, `N` (not `shift+g`)
+- shifted punctuation: the character itself, `}` (not `shift+]`). This relies on terminals reporting the key's text, which holds while strig requests only the kitty disambiguate flag; enabling more keyboard enhancements must keep `Text` populated
 - special keys: `esc`, `enter`, `tab`, `backspace`, `up`, `down`
 - **multi-key sequences are space-separated**: `g g`, `z a`, `g t`. `bubbles/key` only matches single keypresses, so sequences are matched by the sequence matcher in `internal/ui/keys` (pending prefix shown in the status bar, ~500ms timeout). Views just declare them in their bindings; they never track key history themselves.
 

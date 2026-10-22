@@ -29,11 +29,11 @@ func defaultBindings() bindings {
 	return bindings{
 		PaneLeft:    b("h", "h", "focus files pane"),
 		PaneRight:   b("l", "l", "focus right pane"),
-		NextFile:    b("}", "]f", "next file"),
-		PrevFile:    b("{", "[f", "previous file"),
+		NextFile:    b("}", "}", "next file"),
+		PrevFile:    b("{", "{", "previous file"),
 		FilePicker:  b("f", "f", "file picker"),
-		NextSection: b("]", "]s", "next section (overview)"),
-		PrevSection: b("[", "[s", "previous section (overview)"),
+		NextSection: b("]", "]", "next section (overview)"),
+		PrevSection: b("[", "[", "previous section (overview)"),
 	}
 }
 
@@ -61,6 +61,9 @@ func (v *View) handleKey(msg keys.Msg) tea.Cmd {
 		return v.openBrowser()
 	case key.Matches(msg, v.km.Refresh):
 		return v.load()
+	case v.sel() > 0 && v.diffNav(msg):
+		// Reserved globally: hunk and thread keys work from either pane.
+		return v.filePane.Update(msg)
 	case v.focus == paneFiles:
 		v.filesKey(msg)
 	default:
@@ -153,4 +156,10 @@ func (v *View) jumpSection(delta int) {
 		return
 	}
 	v.ov.jump(delta)
+}
+
+// diffNav reports whether msg is a hunk or thread movement key.
+func (v *View) diffNav(msg keys.Msg) bool {
+	b := v.navBind
+	return key.Matches(msg, b.NextHunk, b.PrevHunk, b.NextThread, b.PrevThread)
 }

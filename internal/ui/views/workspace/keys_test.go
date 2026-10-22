@@ -11,6 +11,13 @@ import (
 	"github.com/MikePors/strigidae/internal/ui/theme"
 )
 
+// The "text" shape is what strig gets today: Bubble Tea v2 pushes only kitty
+// flag 1 (disambiguate), so shifted punctuation arrives as plain text. The
+// "kitty" shape needs flags 4 (alternate keys) and 16 (associated text) as
+// well; with flag 8 (all keys as escape codes) but not 16, Text is empty and
+// String() would be "shift+]", which no binding matches. Enabling more flags
+// later must keep Text populated or rebind.
+//
 // terminalKeys returns the key presses a terminal can produce for a shifted
 // punctuation character: plain text (the legacy encoding, which is what
 // Bubble Tea v2 gets by default) and the kitty encoding that reports the base
@@ -122,13 +129,50 @@ func TestNavigationKeysThroughRoot(t *testing.T) {
 		}
 	})
 
-	t.Run("old sequences do nothing", func(t *testing.T) {
-		h := loaded(t, 100, 24)
-		h.press("l", "] f", "[ f", "] s", "[ s", "] h", "[ h", "] c", "[ c")
-		if h.v.sel() != 0 || h.v.ov.vp.YOffset() != 0 {
-			t.Errorf("an old sequence acted: sel = %d, offset = %d", h.v.sel(), h.v.ov.vp.YOffset())
+	t.Run("old sequences are just two keys", func(t *testing.T) {
+		h := loaded(t, 100, 14)
+		m, _ := rootFor(h)
+		press(m, "l")
+		press(m, "]") // jumps a section at once
+		if h.v.ov.vp.YOffset() != h.v.ov.sections[1] {
+			t.Errorf("]: offset = %d", h.v.ov.vp.YOffset())
+		}
+		press(m, "f") // is the file picker, not "next file"
+		if !h.v.CapturesKeys() || h.v.sel() != 0 {
+			t.Errorf("f after ]: captures = %v, sel = %d", h.v.CapturesKeys(), h.v.sel())
 		}
 	})
+
+	t.Run("hunk keys work from the Files pane", func(t *testing.T) {
+		h := openClientDiff(t, 100, 24)
+		m, _ := rootFor(h)
+		press(m, "h")
+		press(m, "]")
+		press(m, "l")
+		press(m, "j")
+		if !strings.Contains(h.cursorText(), "c.conn.Ping") {
+			t.Errorf("] from the Files pane: cursor on %q", h.cursorText())
+		}
+	})
+}
+
+// TestHelpKeysMatchBindings keeps each help key equal to a real key.
+func TestHelpKeysMatchBindings(t *testing.T) {
+	h := openClientDiff(t, 100, 24)
+	for _, grp := range h.v.FullHelp() {
+		for _, b := range grp {
+			if b.Help().Key == "" {
+				continue
+			}
+			ok := false
+			for _, k := range b.Keys() {
+				ok = ok || strings.ReplaceAll(k, " ", "") == b.Help().Key || k == b.Help().Key
+			}
+			if !ok {
+				t.Errorf("help key %q is not one of %v", b.Help().Key, b.Keys())
+			}
+		}
+	}
 }
 
 // TestNoBracketPrefixSequences proves no binding in the workspace starts a
