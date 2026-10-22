@@ -1,0 +1,24 @@
+open #7 Add retry policy to sync client
+alice · main ← feat/retry · changes requested · [enhancemen…
+╭─ internal/sync/client.go ────────────────────────────────╮
+│>@@ -10,8 +10,10 @@ import (                              │
+│  10  10       "context"                                  │
+│  11  11       "time"                                     │
+│  12  12 ○ )                                              │
+│           ▸ carol 1 comment · 1d ago [resolved] — Nit: u…│
+│  13  13                                                  │
+│  14      -func (c *Client) Sync(ctx context.Context) erro│
+│  15      -    return c.retryForever(ctx, c.sync)         │
+│      14 ●+func (c *Client) Sync(ctx context.Context) erro│
+│           ▾ bob 2 comments · 4h ago                      │
+│           │ bob · 5h ago  ❤️ 1                           │
+│           │   Why retry here?                            │
+│           │                                              │
+│           │ alice · 4h ago  ❤️ 1                         │
+│           │   Handles flaky links.                       │
+│      15  +    return Retry(ctx, 5, func() error {        │
+│      16  +        return c.sync(ctx)                     │
+│      17  +    })                                         │
+│  16  18   }                                              │
+│  17  19                                                  │
+╰──────────────────────────────────────────────────────────╯

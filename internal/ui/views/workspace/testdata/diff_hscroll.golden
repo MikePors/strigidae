@@ -5,20 +5,20 @@ alice · main ← feat/retry · changes requested · [enhancement] [sync] · rev
 │> M …rnal/sync/client.go +25││  11  11                                                            │
 │  A …rnal/sync/retry.go +214││  12  12                                                            │
 │  D …rnal/sync/legacy.go -90││  13  13                                                            │
-│  R …y-and-backoff.md +12 -3││  14     -text.Context) error {                                     │
-│  M README.md          +2 -1││  15     -, c.sync)                                                 │
-│                            ││      14 +text.Context) error {                                     │
-│                            ││      15 +() error {                                                │
-│                            ││      16 +                                                          │
-│                            ││      17 +                                                          │
+│  R …y-and-backoff.md +12 -3││  14      -ntext.Context) error {                                   │
+│  M README.md          +2 -1││  15      -x, c.sync)                                               │
+│                            ││      14  +ntext.Context) error {                                   │
+│                            ││      15  +c() error {                                              │
+│                            ││      16  +                                                         │
+│                            ││      17  +                                                         │
 │                            ││  16  18                                                            │
 │                            ││  17  19                                                            │
 │                            ││ @@ -40,5 +42,7 @@ func (c *Client) sync(ctx context.Context) error │
-│                            ││  40  42  ); err != nil {                                           │
+│                            ││  40  42   x); err != nil {                                         │
 │                            ││  41  43                                                            │
 │                            ││> 42  44                                                            │
-│                            ││      45 +ne that only fits in the pane after scrolling sideways so │
-│                            ││      46 +                                                          │
+│                            ││      45  +ine that only fits in the pane after scrolling sideways s│
+│                            ││      46  +                                                         │
 │                            ││  43  47                                                            │
 │                            ││  44  48                                                            │
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯

@@ -26,6 +26,9 @@ func (m *Model) capture() position {
 		return p
 	}
 	i := m.win.Cursor()
+	for i > 0 && m.rows[i].tr != nil {
+		i-- // a thread row: anchor to the diff row it follows
+	}
 	if r := m.rows[i]; r.line != nil && r.line.Kind == diff.NoNewline && i > 0 {
 		i-- // markers have no numbers; anchor to the line they belong to
 	}
@@ -75,7 +78,7 @@ func (m *Model) find(a anchor) int {
 		var dist int
 		switch {
 		case a.header:
-			if r.line != nil {
+			if r.line != nil || r.tr != nil {
 				continue
 			}
 			h := m.file.Hunks[r.hunk]
@@ -84,7 +87,7 @@ func (m *Model) find(a anchor) int {
 			}
 			dist = abs(lineKey(h.OldStart, h.NewStart) - lineKey(a.hunkOld, a.hunkNew))
 		default:
-			if r.line == nil || r.line.Kind == diff.NoNewline {
+			if r.line == nil || r.line.Kind == diff.NoNewline { // also skips thread rows
 				continue
 			}
 			if r.line.Kind == a.kind && r.line.Old == a.old && r.line.New == a.new {

@@ -58,6 +58,9 @@ type FilePane interface {
 	SetTheme(th theme.Theme)
 	// SetDiff is called when a diff load starts and when it finishes.
 	SetDiff(d DiffState)
+	// SetThreads is called when the pull request's review threads load or
+	// reload; the pane shows the ones on its file.
+	SetThreads(ts []github.ReviewThread)
 	// SetFile is called when the selected file changes, and again when the
 	// same path comes back with different metadata (change type, counts)
 	// after a refresh. A repeat call for the same path keeps cursor and scroll.

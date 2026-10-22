@@ -26,6 +26,8 @@ func (p *stubPane) SetTheme(theme.Theme) {}
 
 func (p *stubPane) SetDiff(DiffState) {}
 
+func (p *stubPane) SetThreads([]github.ReviewThread) {}
+
 func (p *stubPane) SetFile(f github.ChangedFile) { p.files = append(p.files, f.Path) }
 
 func (p *stubPane) SetSize(w, h int) { p.sizes = append(p.sizes, [2]int{w, h}) }

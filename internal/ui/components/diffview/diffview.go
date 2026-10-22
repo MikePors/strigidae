@@ -12,6 +12,8 @@
 //	] h / [ h      NextHunk() / PrevHunk()
 //	z h / z l      ScrollLeft(4) / ScrollRight(4)
 //	z H / z L      HalfScrollLeft() / HalfScrollRight()
+//	z a / z o / z c  ToggleThread() / OpenThread() / CloseThread()
+//	] c / [ c      NextThread() / PrevThread()
 //
 // Usage:
 //
@@ -20,19 +22,24 @@
 //	out := dv.Render(width, height)
 //	if c, ok := dv.Cursor(); ok { /* comment on c.Path line c.New or c.Old */ }
 //
-// Only the visible rows are ever styled or highlighted, and highlighted rows
-// are cached, so scrolling a 5k-line file never re-lexes it.
+// Review threads (SetThreads) are placed under the line they are anchored to
+// and take extra rows: one header row, plus the comments while expanded.
+// Threads that no longer map onto a line of the diff are listed after the last
+// row. Only the visible rows are ever styled or highlighted, and highlighted
+// rows are cached, so scrolling a 5k-line file never re-lexes it.
 package diffview
 
 import (
 	"errors"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MikePors/strigidae/internal/diff"
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/ui/components/markdown"
 	"github.com/MikePors/strigidae/internal/ui/components/scroll"
 	"github.com/MikePors/strigidae/internal/ui/theme"
 )
@@ -74,12 +81,21 @@ type Option func(*Model)
 // count calls or to keep output free of lexer details).
 func WithHighlighter(h Highlighter) Option { return func(m *Model) { m.highlight = h } }
 
-// row is one display row: a hunk header (line == nil) or a diff line.
+// WithClock sets the clock used for the relative times in review threads.
+func WithClock(now func() time.Time) Option { return func(m *Model) { m.now = now } }
+
+// row is one display row: a hunk header (line == nil, tr == nil), a diff line,
+// or one line of a review thread (tr != nil).
 type row struct {
 	hunk int
 	line *diff.Line
 	text string // display text: tabs expanded, controls replaced
+	bi   int    // index in base of this row, or of the row a thread row follows
+	tr   *threadRow
 }
+
+// threadRow places a row inside a thread's block of lines.
+type threadRow struct{ t, i int }
 
 // Model is the diff pane. Create it with New. It is not a tea.Model.
 type Model struct {
@@ -89,12 +105,22 @@ type Model struct {
 
 	file    *diff.File
 	msg     string // when set, shown instead of the diff
+	base    []row  // the diff's own rows; rows is base with thread rows added
 	rows    []row
 	hunkRow []int // row index of each hunk header
-	numW    int   // width of one line-number column
-	maxW    int   // widest code line, in cells
 
-	cache map[int][]Span // highlighted rows, by row index; reset per file
+	now      func() time.Time
+	md       *markdown.Renderer
+	threads  []github.ReviewThread // all of the pull request's threads
+	fthreads []github.ReviewThread // the ones on the shown file
+	attach   map[int][]int         // base row -> indexes in fthreads
+	orphans  []int                 // fthreads that map to no diff line
+	open     map[string]bool       // thread ID -> expanded, once the user chose
+	blocks   [][]string            // rendered lines of each fthreads entry
+	numW     int                   // width of one line-number column
+	maxW     int                   // widest code line, in cells
+
+	cache map[int][]Span // highlighted rows, by base row index; reset per file
 	saved *position      // position kept while a message replaces the file
 
 	w, h int
@@ -104,11 +130,12 @@ type Model struct {
 
 // New returns an empty diff pane.
 func New(th theme.Theme, opts ...Option) *Model {
-	m := &Model{th: th, highlight: ChromaHighlighter(), cache: map[int][]Span{}}
+	m := &Model{th: th, highlight: ChromaHighlighter(), cache: map[int][]Span{}, now: time.Now, open: map[string]bool{}}
 	for _, o := range opts {
 		o(m)
 	}
 	m.styles = newStyleSet(th)
+	m.md = markdown.New(th)
 	return m
 }
 
@@ -117,6 +144,8 @@ func New(th theme.Theme, opts ...Option) *Model {
 func (m *Model) SetTheme(th theme.Theme) {
 	m.th = th
 	m.styles = newStyleSet(th)
+	m.md = markdown.New(th)
+	m.layout()
 }
 
 // SetFile shows f (nil clears the pane). Passing the file already shown is a
@@ -181,7 +210,8 @@ func TooLargeMessage() string {
 }
 
 func (m *Model) reset() {
-	m.rows, m.hunkRow = nil, nil
+	m.base, m.rows, m.hunkRow = nil, nil, nil
+	m.fthreads, m.attach, m.orphans, m.blocks = nil, nil, nil, nil
 	m.cache = map[int][]Span{}
 	m.win.Reset()
 	m.maxW, m.numW = 0, 0
@@ -193,26 +223,32 @@ func (m *Model) build(f *diff.File) {
 	for _, h := range f.Hunks {
 		total += len(h.Lines) + 1
 	}
-	m.rows = make([]row, 0, total)
+	m.base = make([]row, 0, total)
 	maxNum := 0
 	for hi := range f.Hunks {
 		h := &f.Hunks[hi]
-		m.hunkRow = append(m.hunkRow, len(m.rows))
-		m.rows = append(m.rows, row{hunk: hi})
+		m.base = append(m.base, row{hunk: hi, bi: len(m.base)})
 		maxNum = max(maxNum, h.OldStart+h.OldLines, h.NewStart+h.NewLines)
 		for li := range h.Lines {
 			l := &h.Lines[li]
 			text, w := displayText(l.Text)
 			m.maxW = max(m.maxW, w)
-			m.rows = append(m.rows, row{hunk: hi, line: l, text: text})
+			m.base = append(m.base, row{hunk: hi, line: l, text: text, bi: len(m.base)})
 		}
 	}
 	m.numW = max(len(strconv.Itoa(maxNum)), 3)
+	m.placeThreads()
+	m.layout()
 }
 
 // SetSize sets the drawing area. Scroll positions are re-clamped.
 func (m *Model) SetSize(w, h int) {
+	relayout := w != m.w
 	m.w, m.h = max(w, 0), max(h, 0)
+	if relayout {
+		m.layout() // thread text wraps to the width
+		return
+	}
 	m.sync()
 }
 
@@ -220,8 +256,8 @@ func (m *Model) SetSize(w, h int) {
 func (m *Model) Size() (w, h int) { return m.w, m.h }
 
 // gutterW is the fixed width of the non-scrolling left part of a row:
-// cursor mark, old number, new number, change marker.
-func (m *Model) gutterW() int { return 2*m.numW + 4 }
+// cursor mark, old number, new number, thread marker, change marker.
+func (m *Model) gutterW() int { return 2*m.numW + 5 }
 
 func (m *Model) codeW() int { return max(m.w-m.gutterW(), 0) }
 
@@ -230,6 +266,92 @@ func (m *Model) sync() {
 	m.win.SetRows(len(m.rows))
 	m.win.SetSize(m.h)
 	m.win.SetWidths(m.maxW, m.codeW())
+}
+
+// cursorKey identifies the cursor row independently of how many thread rows
+// precede it.
+type cursorKey struct {
+	bi   int
+	tr   threadRow
+	isTr bool
+}
+
+func (m *Model) cursorKey() (cursorKey, bool) {
+	c := m.win.Cursor()
+	if c >= len(m.rows) {
+		return cursorKey{}, false
+	}
+	r := m.rows[c]
+	k := cursorKey{bi: r.bi}
+	if r.tr != nil {
+		k.tr, k.isTr = *r.tr, true
+	}
+	return k, true
+}
+
+// keyRow returns the row for k; a thread row that is gone (a collapsed block
+// is shorter) falls back to the nearest one in its block, then to its line.
+func (m *Model) keyRow(k cursorKey) int {
+	best := -1
+	for i, r := range m.rows {
+		switch {
+		case k.isTr && r.tr != nil && r.tr.t == k.tr.t:
+			if r.tr.i <= k.tr.i {
+				best = i
+			}
+		case !k.isTr && r.tr == nil && r.bi == k.bi:
+			return i
+		}
+	}
+	if best < 0 {
+		for i, r := range m.rows {
+			if r.tr == nil && r.bi == k.bi {
+				return i
+			}
+		}
+		return 0
+	}
+	return best
+}
+
+// layout rebuilds rows from the diff's rows and the threads, keeping the
+// cursor on the same row and at the same place in the view.
+func (m *Model) layout() {
+	k, had := m.cursorKey()
+	off := m.win.Cursor() - m.win.Top()
+	m.rows = m.rows[:0]
+	m.hunkRow = m.hunkRow[:0]
+	m.blocks = make([][]string, len(m.fthreads))
+	for i := range m.fthreads {
+		m.blocks[i] = m.renderBlock(i)
+	}
+	var pending []int
+	flush := func(bi int) {
+		for _, ti := range pending {
+			for li := range m.blocks[ti] {
+				m.rows = append(m.rows, row{bi: bi, tr: &threadRow{t: ti, i: li}})
+			}
+		}
+		pending = pending[:0]
+	}
+	for i, r := range m.base {
+		if r.line == nil {
+			m.hunkRow = append(m.hunkRow, len(m.rows))
+		}
+		m.rows = append(m.rows, r)
+		pending = append(pending, m.attach[i]...)
+		if i+1 < len(m.base) && m.base[i+1].line != nil && m.base[i+1].line.Kind == diff.NoNewline {
+			continue // the marker belongs to this line; threads go after it
+		}
+		flush(i)
+	}
+	pending = append(pending, m.orphans...)
+	flush(len(m.base) - 1)
+	m.sync()
+	if had && len(m.rows) > 0 {
+		c := m.keyRow(k)
+		m.win.Restore(c, c-off, m.win.XOffset())
+	}
 }
 
 // --- vertical movement: cursor follows, view follows the cursor ---

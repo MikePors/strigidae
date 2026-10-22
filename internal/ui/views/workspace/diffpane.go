@@ -1,6 +1,8 @@
 package workspace
 
 import (
+	"time"
+
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 
@@ -17,6 +19,9 @@ const hScrollStep = 4
 // keys.Global.
 type diffBindings struct {
 	NextHunk, PrevHunk              key.Binding
+	NextThread, PrevThread          key.Binding
+	ToggleThread                    key.Binding
+	OpenThread, CloseThread         key.Binding
 	ScrollLeft, ScrollRight         key.Binding
 	HalfScrollLeft, HalfScrollRight key.Binding
 }
@@ -28,6 +33,11 @@ func defaultDiffBindings() diffBindings {
 	return diffBindings{
 		NextHunk:        b("] h", "]h", "next hunk"),
 		PrevHunk:        b("[ h", "[h", "previous hunk"),
+		NextThread:      b("] c", "]c", "next comment thread"),
+		PrevThread:      b("[ c", "[c", "previous comment thread"),
+		ToggleThread:    b("z a", "za", "toggle comment thread (also enter on a marked line)"),
+		OpenThread:      b("z o", "zo", "open comment thread"),
+		CloseThread:     b("z c", "zc", "close comment thread"),
 		ScrollLeft:      b("z h", "zh", "scroll left"),
 		ScrollRight:     b("z l", "zl", "scroll right"),
 		HalfScrollLeft:  b("z H", "zH", "scroll half a screen left"),
@@ -49,11 +59,13 @@ type diffPane struct {
 
 var _ FilePane = (*diffPane)(nil)
 
-func newDiffPane(th theme.Theme) *diffPane {
-	return &diffPane{dv: diffview.New(th), km: keys.DefaultGlobal(), bind: defaultDiffBindings()}
+func newDiffPane(th theme.Theme, now func() time.Time) *diffPane {
+	return &diffPane{dv: diffview.New(th, diffview.WithClock(now)), km: keys.DefaultGlobal(), bind: defaultDiffBindings()}
 }
 
 func (p *diffPane) SetTheme(th theme.Theme) { p.dv.SetTheme(th) }
+
+func (p *diffPane) SetThreads(ts []github.ReviewThread) { p.dv.SetThreads(ts) }
 
 func (p *diffPane) SetSize(w, h int) { p.dv.SetSize(w, h) }
 
@@ -115,6 +127,16 @@ func (p *diffPane) Update(msg keys.Msg) tea.Cmd {
 		dv.NextHunk()
 	case key.Matches(msg, p.bind.PrevHunk):
 		dv.PrevHunk()
+	case key.Matches(msg, p.bind.NextThread):
+		dv.NextThread()
+	case key.Matches(msg, p.bind.PrevThread):
+		dv.PrevThread()
+	case key.Matches(msg, p.bind.ToggleThread), key.Matches(msg, p.km.Select):
+		dv.ToggleThread()
+	case key.Matches(msg, p.bind.OpenThread):
+		dv.OpenThread()
+	case key.Matches(msg, p.bind.CloseThread):
+		dv.CloseThread()
 	case key.Matches(msg, p.bind.ScrollLeft):
 		dv.ScrollLeft(hScrollStep)
 	case key.Matches(msg, p.bind.ScrollRight):
@@ -131,5 +153,5 @@ func (p *diffPane) Render(width, height int) string { return p.dv.Render(width, 
 
 func (p *diffPane) FullHelp() [][]key.Binding {
 	b := p.bind
-	return [][]key.Binding{{b.NextHunk, b.PrevHunk}, {b.ScrollLeft, b.ScrollRight, b.HalfScrollLeft, b.HalfScrollRight}}
+	return [][]key.Binding{{b.NextHunk, b.PrevHunk, b.NextThread, b.PrevThread}, {b.ToggleThread, b.OpenThread, b.CloseThread}, {b.ScrollLeft, b.ScrollRight, b.HalfScrollLeft, b.HalfScrollRight}}
 }

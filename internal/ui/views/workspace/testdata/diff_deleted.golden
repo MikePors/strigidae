@@ -2,10 +2,10 @@ open #7 Add retry policy to sync client
 alice · main ← feat/retry · changes requested · [enhancement] [sync] · reviewers: bob, team core
 ╭─ Files ────────────────────╮╭─ internal/sync/legacy.go ──────────────────────────────────────────╮
 │  Overview                  ││>@@ -1,4 +0,0 @@                                                    │
-│  M …rnal/sync/client.go +25││   1     -package sync                                              │
-│  A …rnal/sync/retry.go +214││   2     -                                                          │
-│> D …rnal/sync/legacy.go -90││   3     -// retryForever is the legacy loop.                       │
-│  R …y-and-backoff.md +12 -3││   4     -func retryForever() {}                                    │
+│  M …rnal/sync/client.go +25││   1      -package sync                                             │
+│  A …rnal/sync/retry.go +214││   2      -                                                         │
+│> D …rnal/sync/legacy.go -90││   3      -// retryForever is the legacy loop.                      │
+│  R …y-and-backoff.md +12 -3││   4      -func retryForever() {}                                   │
 │  M README.md          +2 -1││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │

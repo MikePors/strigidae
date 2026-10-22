@@ -37,12 +37,43 @@ type (
 		parseErr error
 		err      error // the GetDiff failure
 	}
+	threadsLoadedMsg struct {
+		owner   *View
+		repo    github.Repo
+		number  int
+		seq     int
+		threads []github.ReviewThread
+		err     error
+	}
 )
+
+// maxThreadPages bounds the follow-up requests for review threads, so a
+// misbehaving server cannot keep the command running forever.
+const maxThreadPages = 100
+
+// loadThreads fetches every review thread, page by page. Any failure discards
+// the partial result: a half-list would hide threads without saying so.
+func loadThreads(ctx context.Context, c github.Client, repo github.Repo, number int) ([]github.ReviewThread, error) {
+	var all []github.ReviewThread
+	var req github.PageRequest
+	for range maxThreadPages {
+		p, err := c.ListReviewThreads(ctx, repo, number, req)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, p.Items...)
+		if p.Next == "" {
+			return all, nil
+		}
+		req.After = p.Next
+	}
+	return nil, fmt.Errorf("more than %d pages of review threads", maxThreadPages)
+}
 
 // load starts a fresh load of the pull request and its diff.
 func (v *View) load() tea.Cmd {
 	v.seq++
-	v.prPending, v.diffPending = true, true
+	v.prPending, v.diffPending, v.thrPending = true, true, true
 	v.diff.Loading = true
 	v.filePane.SetDiff(v.diff)
 	client, repo, number, seq, owner := v.client, v.repo, v.number, v.seq, v
@@ -61,6 +92,10 @@ func (v *View) load() tea.Cmd {
 			// files before a malformed hunk still show.
 			parsed, perr := diff.Parse(raw)
 			return diffLoadedMsg{owner: owner, repo: repo, number: number, seq: seq, raw: raw, parsed: parsed, parseErr: perr}
+		},
+		func() tea.Msg {
+			ts, err := loadThreads(context.Background(), client, repo, number)
+			return threadsLoadedMsg{owner: owner, repo: repo, number: number, seq: seq, threads: ts, err: err}
 		},
 	)
 }
@@ -93,6 +128,19 @@ func (v *View) prLoaded(msg prLoadedMsg) tea.Cmd {
 	v.fw.Restore(sel, top, 0) // a refresh must not scroll the Files list
 	v.ov.invalidate()
 	v.selectionChanged()
+	v.layout()
+	return nil
+}
+
+func (v *View) threadsLoaded(msg threadsLoadedMsg) tea.Cmd {
+	v.thrPending = false
+	if msg.err != nil {
+		// Keep whatever threads were shown before; the error goes to the status bar.
+		return ui.Error(termtext.SafeError(fmt.Errorf("load review threads: %w", msg.err)))
+	}
+	v.threads = sortThreads(msg.threads)
+	v.filePane.SetThreads(v.threads)
+	v.ov.invalidate()
 	v.layout()
 	return nil
 }

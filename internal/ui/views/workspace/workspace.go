@@ -64,6 +64,8 @@ type View struct {
 	seq         int // latest load request; older results are stale
 	prPending   bool
 	diffPending bool
+	thrPending  bool
+	threads     []github.ReviewThread // sorted by file and line
 	detail      *github.PullRequestDetail
 	diff        DiffState
 	err         error // load failure while there is nothing to show
@@ -108,7 +110,7 @@ func New(client github.Client, repo github.Repo, number int, opts ...Option) *Vi
 	v.md = markdown.New(v.th)
 	v.ov = newOverview()
 	if v.filePane == nil {
-		v.filePane = newDiffPane(v.th)
+		v.filePane = newDiffPane(v.th, func() time.Time { return v.now() })
 	}
 	v.filePane.SetTheme(v.th)
 	return v
@@ -118,7 +120,7 @@ func New(client github.Client, repo github.Repo, number int, opts ...Option) *Vi
 func (v *View) Title() string { return fmt.Sprintf("#%d", v.number) }
 
 // Loading implements ui.Loader.
-func (v *View) Loading() bool { return v.prPending || v.diffPending }
+func (v *View) Loading() bool { return v.prPending || v.diffPending || v.thrPending }
 
 // CapturesKeys implements ui.KeyCapturer: the file picker owns the keyboard
 // while it is open.
@@ -168,6 +170,11 @@ func (v *View) Update(msg tea.Msg) (ui.View, tea.Cmd) {
 			return v, nil
 		}
 		return v, v.diffLoaded(msg)
+	case threadsLoadedMsg:
+		if !v.mine(msg.owner, msg.repo, msg.number, msg.seq) {
+			return v, nil
+		}
+		return v, v.threadsLoaded(msg)
 	case keys.Msg:
 		return v, v.handleKey(msg)
 	case tea.KeyPressMsg:

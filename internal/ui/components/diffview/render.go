@@ -27,6 +27,7 @@ type variant struct {
 	code   [numClasses + 1]lipgloss.Style
 	fill   lipgloss.Style // pads the code area to full width
 	gutter lipgloss.Style
+	thread [2]lipgloss.Style // gutter marker: [0] quiet thread, [1] open thread
 }
 
 // styleSet precomputes every style combination so rendering never builds
@@ -54,6 +55,8 @@ func newStyleSet(th theme.Theme) styleSet {
 				base, gut = base.Background(cursorBG), gut.Background(cursorBG)
 			}
 			v := variant{fill: base, gutter: gut}
+			v.thread[0] = th.Muted.Background(gut.GetBackground())
+			v.thread[1] = th.ThreadMarker.Background(gut.GetBackground())
 			for c := range v.code {
 				v.code[c] = fg[c].Background(base.GetBackground())
 			}
@@ -71,6 +74,9 @@ func (m *Model) renderRow(i int) string {
 	if i == m.win.Cursor() {
 		cur = 1
 	}
+	if r.tr != nil {
+		return m.renderThreadRow(i, r)
+	}
 	if r.line == nil {
 		return m.renderHunk(m.file.Hunks[r.hunk].Header(), cur)
 	}
@@ -83,10 +89,10 @@ func (m *Model) renderRow(i int) string {
 	}
 	v := &m.styles.v[cur][kind]
 
-	gutter := m.gutterText(r.line, cur == 1)
+	gutter := m.gutterText(r.line, r.bi, cur == 1, v)
 	codeW := m.codeW()
 	if codeW == 0 {
-		return ansi.Truncate(v.gutter.Render(gutter), m.w, "")
+		return ansi.Truncate(gutter, m.w, "")
 	}
 
 	spans := m.spansFor(i)
@@ -96,7 +102,7 @@ func (m *Model) renderRow(i int) string {
 	visible, used := window(spans, m.win.XOffset(), codeW)
 
 	var b strings.Builder
-	b.WriteString(v.gutter.Render(gutter))
+	b.WriteString(gutter)
 	for _, sp := range visible {
 		b.WriteString(v.code[sp.Class].Render(sp.Text))
 	}
@@ -106,7 +112,9 @@ func (m *Model) renderRow(i int) string {
 	return b.String()
 }
 
-func (m *Model) gutterText(l *diff.Line, cursor bool) string {
+// gutterText is the styled fixed part of a diff row: cursor mark, line
+// numbers, thread marker, change marker.
+func (m *Model) gutterText(l *diff.Line, bi int, cursor bool, v *variant) string {
 	mark := " "
 	if cursor {
 		mark = ">"
@@ -120,7 +128,16 @@ func (m *Model) gutterText(l *diff.Line, cursor bool) string {
 	case diff.NoNewline:
 		marker = `\`
 	}
-	return mark + numCell(l.Old, m.numW) + " " + numCell(l.New, m.numW) + " " + marker
+	glyph, open := m.threadGlyph(bi)
+	ts := v.gutter
+	if glyph != " " {
+		ts = v.thread[0]
+		if open {
+			ts = v.thread[1]
+		}
+	}
+	return v.gutter.Render(mark+numCell(l.Old, m.numW)+" "+numCell(l.New, m.numW)+" ") +
+		ts.Render(glyph) + v.gutter.Render(marker)
 }
 
 func numCell(n, w int) string {
@@ -144,10 +161,11 @@ func (m *Model) renderHunk(header string, cur int) string {
 
 // spansFor returns the highlighted spans of row i, highlighting on first use.
 func (m *Model) spansFor(i int) []Span {
-	if s, ok := m.cache[i]; ok {
+	bi := m.rows[i].bi
+	if s, ok := m.cache[bi]; ok {
 		return s
 	}
 	s := m.highlight(m.file.Path(), m.rows[i].text)
-	m.cache[i] = s
+	m.cache[bi] = s
 	return s
 }

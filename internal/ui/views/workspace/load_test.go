@@ -36,7 +36,7 @@ func TestLoad(t *testing.T) {
 	for _, c := range h.client.Calls() {
 		calls = append(calls, c.Method)
 	}
-	if diff := cmp.Diff([]string{fake.MethodGetPullRequest, fake.MethodGetDiff}, calls); diff != "" {
+	if diff := cmp.Diff([]string{fake.MethodGetPullRequest, fake.MethodGetDiff, fake.MethodListReviewThreads}, calls); diff != "" {
 		t.Errorf("calls (-want +got):\n%s", diff)
 	}
 }

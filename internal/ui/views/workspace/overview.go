@@ -10,6 +10,7 @@ import (
 
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/ui/components/markdown"
+	"github.com/MikePors/strigidae/internal/ui/components/thread"
 	"github.com/MikePors/strigidae/internal/ui/termtext"
 	"github.com/MikePors/strigidae/internal/ui/theme"
 )
@@ -33,7 +34,7 @@ func (o *overview) invalidate() { o.dirty = true }
 
 // ensure sizes the viewport and rebuilds the content when the data, theme or
 // width changed. Markdown rendering is cached by the renderer.
-func (o *overview) ensure(th theme.Theme, md *markdown.Renderer, d *github.PullRequestDetail, now time.Time, width, height int) {
+func (o *overview) ensure(th theme.Theme, md *markdown.Renderer, d *github.PullRequestDetail, threads []github.ReviewThread, now time.Time, width, height int) {
 	o.vp.SetWidth(width)
 	o.vp.SetHeight(height)
 	minute := now.Truncate(time.Minute)
@@ -69,6 +70,17 @@ func (o *overview) ensure(th theme.Theme, md *markdown.Renderer, d *github.PullR
 		if strings.TrimSpace(it.body) != "" {
 			add(md.Render(termtext.CleanBlock(it.body), width))
 		}
+		add("")
+	}
+
+	o.sections = append(o.sections, line)
+	add(th.SectionHeading.Render(fmt.Sprintf("Review threads (%d)", len(threads))))
+	if len(threads) == 0 {
+		add(th.Muted.Render("No review threads."))
+	}
+	env := thread.Env{Theme: th, Markdown: md, Now: now}
+	for _, t := range threads {
+		add(strings.Join(thread.Lines(env, t, width, thread.Options{Expanded: true, Location: true}), "\n"))
 		add("")
 	}
 
@@ -109,7 +121,7 @@ func (e entry) header(th theme.Theme, now time.Time) string {
 	if e.pending {
 		return th.Author.Render(termtext.Clean(e.author)) + " " + th.Pending.Render("PENDING "+e.action+" (draft, not submitted)")
 	}
-	return th.Author.Render(termtext.Clean(e.author)) + " " + e.action + th.Muted.Render(" · "+relTime(now, e.at))
+	return th.Author.Render(termtext.Clean(e.author)) + " " + e.action + th.Muted.Render(" · "+thread.RelTime(now, e.at))
 }
 
 // conversation merges comments and review summaries chronologically. Pending
@@ -155,21 +167,21 @@ func reviewAction(s github.ReviewState) string {
 	}
 }
 
-// relTime formats t relative to now ("5m ago").
-func relTime(now, t time.Time) string {
-	d := now.Sub(t)
-	switch {
-	case d < time.Minute:
-		return "just now"
-	case d < time.Hour:
-		return fmt.Sprintf("%dm ago", int(d/time.Minute))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh ago", int(d/time.Hour))
-	case d < 30*24*time.Hour:
-		return fmt.Sprintf("%dd ago", int(d/(24*time.Hour)))
-	case d < 365*24*time.Hour:
-		return fmt.Sprintf("%dmo ago", int(d/(30*24*time.Hour)))
-	default:
-		return fmt.Sprintf("%dy ago", int(d/(365*24*time.Hour)))
+// sortThreads orders threads by file, then line, keeping the server's order
+// for threads on the same line. It returns a copy.
+func sortThreads(ts []github.ReviewThread) []github.ReviewThread {
+	out := slices.Clone(ts)
+	line := func(t github.ReviewThread) int {
+		if t.Line > 0 {
+			return t.Line
+		}
+		return t.OriginalLine
 	}
+	slices.SortStableFunc(out, func(a, b github.ReviewThread) int {
+		if c := strings.Compare(a.Path, b.Path); c != 0 {
+			return c
+		}
+		return line(a) - line(b)
+	})
+	return out
 }

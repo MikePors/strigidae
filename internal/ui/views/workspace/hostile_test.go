@@ -70,6 +70,24 @@ func hostileDetail() github.PullRequestDetail {
 	return d
 }
 
+// hostileThreads are review threads whose path, authors and bodies carry
+// hostile text, character references included: one on the hostile file's new
+// line 1, one outdated, one resolved on the deleted line, and one on another file.
+func hostileThreads() []github.ReviewThread {
+	cmt := func(who string) github.ReviewComment {
+		return github.ReviewComment{
+			ID: who, Author: who + hostile, Body: hostile + refsBody, CreatedAt: testNow.Add(-time.Hour),
+			Reactions: []github.ReactionSummary{{Content: "X" + github.ReactionContent(hostile), Count: 2}},
+		}
+	}
+	return []github.ReviewThread{
+		{ID: "h1", Path: hostileGoPath, Line: 1, DiffSide: github.SideRight, Comments: []github.ReviewComment{cmt("a"), cmt("b")}},
+		{ID: "h2", Path: hostileGoPath, OriginalLine: 1, IsOutdated: true, Comments: []github.ReviewComment{cmt("c")}},
+		{ID: "h3", Path: hostileGoPath, Line: 1, DiffSide: github.SideLeft, IsResolved: true, Comments: []github.ReviewComment{cmt("d")}},
+		{ID: "h4", Path: "elsewhere/" + hostile, Line: 3, Comments: []github.ReviewComment{cmt("e")}},
+	}
+}
+
 // styleOnly matches the SGR sequences our own styles emit.
 var styleOnly = regexp.MustCompile(`\x1b\[[0-9;:]*m`)
 
@@ -104,6 +122,7 @@ func TestHostileTextNeverReachesTheScreen(t *testing.T) {
 	d := hostileDetail()
 	c.SetPullRequest(d)
 	c.SetDiff(testRepo, 7, hostileDiff())
+	c.SetReviewThreads(testRepo, 7, hostileThreads())
 	if parsed, err := diff.Parse(hostileDiff()); err != nil || parsed.File(hostileGoPath) == nil || parsed.File(hostileNewPath) == nil {
 		t.Fatalf("setup: the hostile diff must parse so its content reaches the pane (err=%v)", err)
 	}
@@ -129,6 +148,17 @@ func TestHostileTextNeverReachesTheScreen(t *testing.T) {
 	if out := ansi.Strip(h.render()); !strings.Contains(out, "old evil") || !strings.Contains(out, "new evil") {
 		t.Errorf("hostile code lines should show, cleaned:\n%s", out)
 	}
+	h.press("l", "] c", "z o", "] c", "z o", "G") // threads: open the resolved one, go to the end
+	assertTame(t, "hostile threads", h.render())
+	if out := ansi.Strip(h.render()); !strings.Contains(out, "│ cevil") {
+		t.Errorf("the hostile threads should show, cleaned:\n%s", out)
+	}
+	h.press("h", "g g", "l", "G")
+	assertTame(t, "overview with hostile threads", h.render())
+	if out := ansi.Strip(h.render()); !strings.Contains(out, "│ eevil") {
+		t.Errorf("the overview should list the threads:\n%s", out)
+	}
+	h.press("h", "G", "k")
 	h.press("j", "j", "j") // the hostile diff lines under the cursor, too
 	assertTame(t, "cursor in hostile hunk", h.render())
 
