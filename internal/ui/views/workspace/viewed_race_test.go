@@ -139,6 +139,7 @@ func TestRefreshMidToggleKeepsOptimisticMark(t *testing.T) {
 		t.Errorf("after success shown = %q", got)
 	}
 	// Once settled, the next reload shows the server's state again.
+	h.v.seq++ // a reload started after the mutation settled
 	d := testDetail()
 	d.Files[0].Viewed = github.FileDismissed
 	h.reload(d)
@@ -204,6 +205,26 @@ func TestViewedResultForOtherViewIgnored(t *testing.T) {
 				t.Errorf("foreign result changed state to %q", got)
 			}
 		})
+	}
+}
+
+func TestReloadStartedBeforeSettleKeepsMark(t *testing.T) {
+	h := viewedHarness(t, 100, 24, github.FileUnviewed)
+	h.press("j")
+	cmd := h.pressV()
+	h.finish(cmd) // settles at the current load seq
+	// A reload that began before the settle finishes with the old data.
+	h.reload(unviewedDetail())
+	if got := h.stateOf(); got != github.FileViewed {
+		t.Fatalf("stale reload overwrote the settled mark: %q", got)
+	}
+	// A reload started afterwards (a newer seq) shows the server's state.
+	h.v.seq++
+	d := unviewedDetail()
+	d.Files[0].Viewed = github.FileDismissed
+	h.reload(d)
+	if got := h.stateOf(); got != github.FileDismissed {
+		t.Errorf("later reload not shown: %q", got)
 	}
 }
 

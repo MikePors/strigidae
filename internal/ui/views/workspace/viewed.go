@@ -19,6 +19,7 @@ type viewedToggle struct {
 	inflight  bool
 	want      github.ViewedState // latest state the user asked for; shown at once
 	confirmed github.ViewedState // last state known to be on the server
+	settledAt int                // load seq current when the toggle settled
 }
 
 // viewedMsg is the result of one mutation. It is matched on owner, repo,
@@ -122,7 +123,7 @@ func (v *View) viewedDone(msg viewedMsg) tea.Cmd {
 	if t.want != msg.sent && t.want != t.confirmed {
 		return v.sendViewed(msg.path, t.want)
 	}
-	t.inflight = false
+	t.inflight, t.settledAt = false, v.seq
 	return nil
 }
 
@@ -140,17 +141,21 @@ func (v *View) setViewed(path string, state github.ViewedState) {
 // reapplyViewed runs after the detail is replaced by a reload. Files with a
 // toggle in flight or unconfirmed keep their wanted mark, because the reload
 // may have read before the mutation landed; settled entries are dropped so
-// the server's state shows, and so are entries for files that vanished.
-func (v *View) reapplyViewed() {
+// the server's state shows (once the reload started after they settled), and so
+// are entries for files that vanished.
+func (v *View) reapplyViewed(seq int) {
 	present := map[string]bool{}
 	for _, f := range v.files() {
 		present[f.Path] = true
 	}
 	for path, t := range v.viewedState {
+		settled := !t.inflight && t.want == t.confirmed
 		switch {
-		case !present[path], !t.inflight && t.want == t.confirmed:
+		case !present[path], settled && seq > t.settledAt:
 			delete(v.viewedState, path)
 		default:
+			// A settled entry whose reload began before it settled may hold
+			// older server data; t.want equals t.confirmed then.
 			v.setViewed(path, t.want)
 		}
 	}
