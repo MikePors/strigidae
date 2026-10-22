@@ -1,0 +1,16 @@
+{
+  "data": {
+    "node": {
+      "id": "PRRC_kwDOExample21",
+      "url": "https://github.com/MikePors/strigidae/pull/27#discussion_r21",
+      "state": "SUBMITTED",
+      "body": "Consider a clearer name.",
+      "diffHunk": "@@ -1,3 +1,5 @@\n+package github\n",
+      "createdAt": "2026-10-20T09:00:00Z",
+      "viewerCanUpdate": true,
+      "viewerCanDelete": false,
+      "author": {"login": "MikePors"},
+      "reactionGroups": []
+    }
+  }
+}

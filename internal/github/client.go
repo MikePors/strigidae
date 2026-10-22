@@ -52,10 +52,14 @@ type Client interface {
 	// private until the review is submitted. A pending review that no longer
 	// exists yields ErrNotFound.
 	AddReviewThread(ctx context.Context, in AddThreadInput) (ReviewThread, error)
-	// UpdateReviewComment changes the body of a comment of the viewer's pending
-	// review and returns it.
+	// GetReviewComment returns one review comment by node ID, with its current
+	// state (Pending) and what the viewer may do with it. A comment that does
+	// not exist any more yields ErrNotFound.
+	GetReviewComment(ctx context.Context, commentID string) (ReviewComment, error)
+	// UpdateReviewComment changes the body of a comment of the viewer's, pending
+	// or published, and returns it.
 	UpdateReviewComment(ctx context.Context, commentID, body string) (ReviewComment, error)
-	// DeleteReviewComment deletes a comment of the viewer's pending review.
+	// DeleteReviewComment deletes a comment of the viewer's, pending or published.
 	// Deleting a thread's only comment removes the thread.
 	DeleteReviewComment(ctx context.Context, commentID string) error
 }

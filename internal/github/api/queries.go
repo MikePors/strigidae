@@ -32,7 +32,7 @@ const (
 
 	reviewSelection = `id state body submittedAt author { login }`
 
-	reviewCommentSelection = `id url state body diffHunk createdAt author { login } ` + reactionSelection
+	reviewCommentSelection = `id url state body diffHunk createdAt viewerCanUpdate viewerCanDelete author { login } ` + reactionSelection
 )
 
 const listPullRequestsQuery = `

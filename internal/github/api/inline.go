@@ -13,7 +13,13 @@ const (
 	opAddReviewThread     = "AddReviewThread"
 	opUpdateReviewComment = "UpdateReviewComment"
 	opDeleteReviewComment = "DeleteReviewComment"
+	opGetReviewComment    = "GetReviewComment"
 )
+
+const getReviewCommentQuery = `
+query ` + opGetReviewComment + `($id: ID!) {
+  node(id: $id) { ... on PullRequestReviewComment { ` + reviewCommentSelection + ` } }
+}`
 
 // startReviewMutation creates a pending review: without event, GitHub leaves
 // the review in the PENDING state.
@@ -107,4 +113,17 @@ func (c *Client) DeleteReviewComment(ctx context.Context, commentID string) erro
 		return fmt.Errorf("delete review comment: %w", err)
 	}
 	return nil
+}
+
+// GetReviewComment implements github.Client.
+func (c *Client) GetReviewComment(ctx context.Context, commentID string) (github.ReviewComment, error) {
+	var resp struct{ Node *gqlReviewComment }
+	if err := c.query(ctx, getReviewCommentQuery, map[string]any{"id": commentID}, &resp); err != nil {
+		return github.ReviewComment{}, fmt.Errorf("load review comment: %w", err)
+	}
+	// A node of another type matches no fragment and comes back empty.
+	if resp.Node == nil || resp.Node.ID == "" {
+		return github.ReviewComment{}, fmt.Errorf("load review comment: %w", github.ErrNotFound)
+	}
+	return mapReviewComment(*resp.Node), nil
 }

@@ -223,16 +223,16 @@ func (v *View) Update(msg tea.Msg) (ui.View, tea.Cmd) {
 			return v, nil
 		}
 		return v, v.posted(msg)
-	case pendingDeletedMsg:
+	case commentDeletedMsg:
 		if msg.owner != v || msg.repo != v.repo || msg.number != v.number {
 			return v, nil
 		}
-		return v, v.pendingDeleted(msg)
-	case pendingCheckedMsg:
+		return v, v.commentDeleted(msg)
+	case commentCheckedMsg:
 		if msg.owner != v || msg.repo != v.repo || msg.number != v.number {
 			return v, nil
 		}
-		return v, v.pendingChecked(msg)
+		return v, v.commentChecked(msg)
 	case keys.Msg:
 		return v, v.handleKey(msg)
 	case tea.KeyPressMsg:

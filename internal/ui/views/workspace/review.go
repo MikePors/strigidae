@@ -112,13 +112,17 @@ func (v *View) reviewEnv() reviewEnv {
 }
 
 // Command implements ui.Commander: :approve, :request-changes, :review,
-// :merge and :copy-filename.
+// :merge, :copy-filename, :edit-comment and :delete-comment.
 func (v *View) Command(name, args string) (tea.Cmd, bool) {
 	switch name {
 	case "copy-filename":
 		return v.copyFilename(), true
 	case "merge":
 		return v.merge.command(args, v.reviewEnv()), true
+	case "edit-comment":
+		return v.editComment(), true
+	case "delete-comment":
+		return v.deleteComment(), true
 	}
 	return v.review.command(name, v.reviewEnv())
 }

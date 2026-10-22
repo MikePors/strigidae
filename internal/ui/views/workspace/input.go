@@ -45,8 +45,8 @@ func defaultBindings() bindings {
 		Viewed:      b("v", "v", "toggle file viewed"),
 
 		Visual:        b("V", "V", "select diff lines for a multi-line comment"),
-		EditPending:   b("e", "e", "edit your pending comment at the cursor (diff)"),
-		DeletePending: b("D", "D", "delete your pending comment at the cursor (diff)"),
+		EditPending:   b("e", "e", "edit your comment at the cursor (diff; also :edit-comment)"),
+		DeletePending: b("D", "D", "delete your comment at the cursor (diff; also :delete-comment)"),
 		VisualDown:    key.NewBinding(key.WithKeys("j", "down"), key.WithHelp("j", "extend selection down")),
 		VisualUp:      key.NewBinding(key.WithKeys("k", "up"), key.WithHelp("k", "extend selection up")),
 		VisualExit:    key.NewBinding(key.WithKeys("esc", "V"), key.WithHelp("esc", "leave visual mode")),
@@ -82,9 +82,9 @@ func (v *View) handleKey(msg keys.Msg) tea.Cmd {
 	case v.sel() > 0 && key.Matches(msg, v.bind.Visual):
 		return v.startVisual()
 	case key.Matches(msg, v.bind.EditPending):
-		return v.editPending()
+		return v.editComment()
 	case key.Matches(msg, v.bind.DeletePending):
-		return v.deletePending()
+		return v.deleteComment()
 	case key.Matches(msg, v.km.Open):
 		return v.openBrowser()
 	case key.Matches(msg, v.km.Refresh):

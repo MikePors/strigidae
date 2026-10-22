@@ -216,6 +216,10 @@ type ReviewComment struct {
 	// Pending marks a draft comment of the viewer's own pending review, which
 	// nobody else can see yet.
 	Pending bool
+	// ViewerCanUpdate and ViewerCanDelete say whether the viewer may change or
+	// delete the comment: their own, pending or published.
+	ViewerCanUpdate bool
+	ViewerCanDelete bool
 	// DiffHunk is the hunk the comment was made on, useful for outdated threads.
 	DiffHunk  string
 	Reactions []ReactionSummary
@@ -279,9 +283,6 @@ type PendingReview struct {
 	CommentCount int
 	// CommitOID is the commit the review is anchored to; empty if unknown.
 	CommitOID string
-	// CommentIDs are the IDs of its inline comments, as far as the status
-	// query lists them (at most 100; compare with CommentCount).
-	CommentIDs []string
 }
 
 // ReviewStatus is the state a review submission depends on.

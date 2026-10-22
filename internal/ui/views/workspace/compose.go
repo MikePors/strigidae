@@ -135,9 +135,10 @@ func (v *View) edited(msg editedMsg) tea.Cmd {
 	}
 	// Kept until the post succeeds, so declining or a failure loses nothing.
 	v.drafts[msg.tgt.draftKey()] = body
-	// Pending comments are private drafts, so they are sent without asking.
+	// A pending comment is a private draft, so it is sent without asking;
+	// commentSend asks before changing a published one.
 	if msg.tgt.inline != nil || msg.tgt.commentID != "" {
-		return v.pendingCommentSend(msg.tgt, body)
+		return v.commentSend(msg.tgt, body)
 	}
 	return ui.Confirm(v.question(msg.tgt, body), v.post(msg.tgt, body))
 }
@@ -188,7 +189,7 @@ func (v *View) post(tgt target, body string) tea.Cmd {
 }
 
 func (v *View) posted(msg postedMsg) tea.Cmd {
-	if errors.Is(msg.err, errNotPending) {
+	if errors.Is(msg.err, errCommentGone) {
 		// The comment cannot be edited any more, so its draft is useless.
 		delete(v.drafts, msg.tgt.draftKey())
 		return v.reloadPendingComments()
@@ -203,7 +204,7 @@ func (v *View) posted(msg postedMsg) tea.Cmd {
 	case msg.tgt.inline != nil:
 		what, reload = "Pending comment added", v.reloadPendingComments
 	case msg.tgt.commentID != "":
-		what, reload = "Pending comment updated", v.reloadPendingComments
+		what, reload = "Comment updated", v.reloadPendingComments
 	}
 	// A newer draft for the same target must survive.
 	if v.drafts[msg.tgt.draftKey()] == msg.body {

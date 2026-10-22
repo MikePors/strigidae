@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -86,5 +88,32 @@ func TestUpdateAndDeleteReviewComment(t *testing.T) {
 	}
 	if calls[1].Vars["commentId"] != "PRRC_kwDOExample21" {
 		t.Errorf("vars = %v", calls[1].Vars)
+	}
+}
+
+func TestGetReviewComment(t *testing.T) {
+	s := &server{}
+	c := newTestClient(t, s)
+	got, err := c.GetReviewComment(context.Background(), "PRRC_kwDOExample21")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Pending || !got.ViewerCanUpdate || got.ViewerCanDelete || got.Body != "Consider a clearer name." {
+		t.Errorf("comment = %+v", got)
+	}
+	if s.Calls()[0].Vars["id"] != "PRRC_kwDOExample21" {
+		t.Errorf("vars = %v", s.Calls()[0].Vars)
+	}
+}
+
+func TestGetReviewCommentGone(t *testing.T) {
+	s := &server{override: func(_ call, w http.ResponseWriter) bool {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"node":null}}`))
+		return true
+	}}
+	_, err := newTestClient(t, s).GetReviewComment(context.Background(), "gone")
+	if !errors.Is(err, github.ErrNotFound) {
+		t.Errorf("err = %v, want ErrNotFound", err)
 	}
 }

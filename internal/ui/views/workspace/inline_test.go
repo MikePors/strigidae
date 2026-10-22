@@ -363,7 +363,7 @@ func TestEditPendingComment(t *testing.T) {
 	if got := c.pendingThread().Comments[0].Body; got != "second draft" {
 		t.Errorf("body = %q", got)
 	}
-	if diff := cmp.Diff([]string{"Pending comment updated"}, c.infos()); diff != "" {
+	if diff := cmp.Diff([]string{"Comment updated"}, c.infos()); diff != "" {
 		t.Errorf("info (-want +got):\n%s", diff)
 	}
 	if th.ID != c.pendingThread().ID {
@@ -393,17 +393,23 @@ func TestEditPendingEmptyBodyAndUnchanged(t *testing.T) {
 	}
 }
 
-func TestEditAndDeleteOnlyYourPendingComments(t *testing.T) {
+func TestEditAndDeleteOnlyYourComments(t *testing.T) {
 	c := newInliner(t)
-	c.press(")") // a submitted thread
+	c.press(")") // a thread by someone else
 	c.msgs = nil
 	c.press("e")
 	c.press("D")
-	if got := c.infos(); len(got) != 2 || !strings.Contains(got[0], "no pending comment") {
+	if got := c.infos(); len(got) != 2 || got[0] != "no comment of yours here" || got[1] != got[0] {
 		t.Errorf("infos = %v", got)
 	}
 	if len(c.openedOn) != 0 {
-		t.Error("editor opened on a submitted comment")
+		t.Error("editor opened on someone else's comment")
+	}
+	c.v.filePane.(*diffPane).dv.GotoTop() // a hunk header: no thread at all
+	c.msgs = nil
+	c.press("e")
+	if got := c.infos(); len(got) != 1 || got[0] != "no comment of yours here" {
+		t.Errorf("infos on a line without a thread = %v", got)
 	}
 }
 
@@ -428,7 +434,7 @@ func TestDeletePendingComment(t *testing.T) {
 			t.Error("deleted thread still shown")
 		}
 	}
-	if diff := cmp.Diff([]string{"Pending comment deleted"}, c.infos()); diff != "" {
+	if diff := cmp.Diff([]string{"Comment deleted"}, c.infos()); diff != "" {
 		t.Errorf("info (-want +got):\n%s", diff)
 	}
 }
@@ -493,99 +499,282 @@ func (c *inliner) serverBody(id string) string {
 	return ""
 }
 
-func (c *inliner) pendingThreadShown() bool {
-	for _, th := range c.v.threads {
-		for _, cm := range th.Comments {
-			if cm.Pending {
-				return true
-			}
-		}
+// mine returns a published thread by the viewer on new line 10 of client.go.
+func (c *inliner) mine(canUpdate, canDelete bool, comments ...github.ReviewComment) github.ReviewThread {
+	if len(comments) == 0 {
+		comments = []github.ReviewComment{{ID: "c-mine", Author: c.client.Viewer, Body: "published note"}}
 	}
-	return false
+	for i := range comments {
+		comments[i].Author = c.client.Viewer
+		comments[i].ViewerCanUpdate, comments[i].ViewerCanDelete = canUpdate, canDelete
+	}
+	return github.ReviewThread{ID: "t-mine", Path: clientPath, Line: 10, DiffSide: github.SideRight, Comments: comments}
 }
 
-func TestStaleCommentIsNeverEditedOrDeleted(t *testing.T) {
-	stale := func(t *testing.T, failReload bool) (*inliner, string) {
-		c := newInliner(t)
-		id := c.addPending("original").Comments[0].ID
-		c.submitElsewhere()
-		if failReload {
-			c.client.SetError(fake.MethodListReviewThreads, errors.New("boom"))
-			c.press("R")
-			c.client.SetError(fake.MethodListReviewThreads, nil)
+// seed sets the server's threads (the shared ones plus extra) and refreshes the view.
+func (c *inliner) seed(extra ...github.ReviewThread) {
+	c.t.Helper()
+	c.client.SetReviewThreads(testRepo, 7, append(testThreads(), extra...))
+	c.press("R")
+}
+
+// onMine moves the diff cursor onto the thread made by mine.
+func (c *inliner) onMine() {
+	const id = "t-mine"
+	c.t.Helper()
+	dv := c.v.filePane.(*diffPane).dv
+	dv.GotoTop()
+	for range 200 {
+		if ts := dv.ThreadsAtCursor(); len(ts) == 1 && ts[0].ID == id {
+			return
 		}
-		if !c.pendingThreadShown() {
-			t.Fatal("setup: the view should still think the comment is pending")
-		}
-		c.msgs = nil
-		return c, id
+		dv.CursorDown(1)
 	}
-	for _, failReload := range []bool{false, true} {
-		name := map[bool]string{false: "thread list is stale", true: "thread reload failed"}[failReload]
+	c.t.Fatalf("cannot reach thread %s", id)
+}
+
+func (c *inliner) updates() []string { return c.methods(fake.MethodUpdateReviewComment) }
+func (c *inliner) deletes() []string { return c.methods(fake.MethodDeleteReviewComment) }
+
+func TestEditPublishedCommentAsksAfterTheEditor(t *testing.T) {
+	c := newInliner(t)
+	c.seed(c.mine(true, true))
+	c.onMine()
+	c.msgs, c.body = nil, "published, revised"
+	c.press("e")
+	if diff := cmp.Diff([]string{"published note"}, c.openedOn); diff != "" {
+		t.Errorf("editor opened on (-want +got):\n%s", diff)
+	}
+	conf, ok := c.lastConfirm()
+	if !ok || conf.Text != "Update your published comment on "+clientPath+":10?" {
+		t.Fatalf("confirmation = %q (%v)", conf.Text, ok)
+	}
+	if len(c.updates()) != 0 {
+		t.Fatal("updated before the answer")
+	}
+	c.run(conf.OnYes)
+	if got := c.serverBody("c-mine"); got != "published, revised" {
+		t.Errorf("body = %q", got)
+	}
+	if diff := cmp.Diff([]string{"Comment updated"}, c.infos()); diff != "" {
+		t.Errorf("info (-want +got):\n%s", diff)
+	}
+}
+
+func TestDeleteAlwaysAsks(t *testing.T) {
+	t.Run("published", func(t *testing.T) {
+		c := newInliner(t)
+		c.seed(c.mine(true, true))
+		c.onMine()
+		c.msgs = nil
+		c.press("D")
+		conf, ok := c.lastConfirm()
+		if !ok || conf.Text != "Delete your published comment on "+clientPath+":10?" {
+			t.Fatalf("confirmation = %q (%v)", conf.Text, ok)
+		}
+		if len(c.deletes()) != 0 {
+			t.Fatal("deleted before the answer")
+		}
+		c.run(conf.OnYes)
+		if diff := cmp.Diff([]string{"c-mine"}, c.client.DeletedComments()); diff != "" {
+			t.Errorf("deleted (-want +got):\n%s", diff)
+		}
+	})
+	t.Run("pending", func(t *testing.T) { // TestDeletePendingComment covers the details
+		c := newInliner(t)
+		c.addPending("x")
+		c.msgs = nil
+		c.press("D")
+		if conf, ok := c.lastConfirm(); !ok || !strings.HasPrefix(conf.Text, "Delete pending comment on ") {
+			t.Errorf("confirmation = %q (%v)", conf.Text, ok)
+		}
+	})
+}
+
+func TestPendingCommentIsPreferredOverAPublishedOne(t *testing.T) {
+	c := newInliner(t)
+	c.seed(c.mine(true, true,
+		github.ReviewComment{ID: "c-pub", Body: "published"},
+		github.ReviewComment{ID: "c-pend", Body: "draft", Pending: true},
+		github.ReviewComment{ID: "c-pub2", Body: "published later"},
+	))
+	c.client.SetPendingReview(testRepo, 7, &github.PendingReview{ID: "PRR_x", CommitOID: headSHA})
+	c.onMine()
+	c.body = "draft"
+	c.press("e")
+	if diff := cmp.Diff([]string{"draft"}, c.openedOn); diff != "" {
+		t.Errorf("editor opened on (-want +got):\n%s", diff)
+	}
+}
+
+func TestLastChangeableCommentWithoutAPendingOne(t *testing.T) {
+	c := newInliner(t)
+	other := github.ReviewComment{ID: "c-other", Author: "bob", Body: "theirs"}
+	th := c.mine(true, true, github.ReviewComment{ID: "c-first", Body: "first"}, github.ReviewComment{ID: "c-second", Body: "second"})
+	th.Comments = append(th.Comments, other) // the last comment is not the viewer's
+	c.seed(th)
+	c.onMine()
+	c.body = "second"
+	c.press("e")
+	if diff := cmp.Diff([]string{"second"}, c.openedOn); diff != "" {
+		t.Errorf("editor opened on (-want +got):\n%s", diff)
+	}
+}
+
+// TestPendingTurnedPublishedWhileTheEditorIsOpen: fresh state decides, so a
+// comment that was pending when e was pressed is never silently updated once
+// it has been published.
+func TestPendingTurnedPublishedWhileTheEditorIsOpen(t *testing.T) {
+	c := newInliner(t)
+	id := c.addPending("original").Comments[0].ID
+	c.v.edit = func(_ string, done func(string, error) tea.Msg) tea.Cmd {
+		return func() tea.Msg {
+			c.submitElsewhere() // submitted on github.com while the editor is open
+			return done("rewritten", nil)
+		}
+	}
+	c.msgs = nil
+	c.press("e")
+	if len(c.updates()) != 0 {
+		t.Fatal("a published comment was updated without asking")
+	}
+	conf, ok := c.lastConfirm()
+	if !ok || conf.Text != "Update your published comment on "+clientPath+":10?" {
+		t.Fatalf("confirmation = %q (%v)", conf.Text, ok)
+	}
+	c.run(conf.OnYes)
+	if got := c.serverBody(id); got != "rewritten" {
+		t.Errorf("body = %q", got)
+	}
+}
+
+func TestPendingTurnedPublishedBeforeDeleteAsksTheRightQuestion(t *testing.T) {
+	c := newInliner(t)
+	c.addPending("original")
+	c.submitElsewhere() // the view still shows it as pending
+	c.msgs = nil
+	c.press("D")
+	if conf, ok := c.lastConfirm(); !ok || !strings.HasPrefix(conf.Text, "Delete your published comment on ") {
+		t.Errorf("confirmation = %q (%v)", conf.Text, ok)
+	}
+}
+
+func TestGoneOrNoLongerYoursIsRefusedAndRefreshed(t *testing.T) {
+	gone := map[string]func(c *inliner, id string){
+		"deleted elsewhere": func(c *inliner, id string) {
+			if err := c.client.DeleteReviewComment(t.Context(), id); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"no longer yours": func(c *inliner, id string) {
+			c.client.SetReviewThreads(testRepo, 7, append(testThreads(), c.mine(false, false, github.ReviewComment{ID: id, Body: "published note"})))
+		},
+	}
+	for name, change := range gone {
 		t.Run(name+"/edit", func(t *testing.T) {
-			c, id := stale(t, failReload)
-			c.body = "rewritten publicly" // the editor closes, then the check refuses
+			c := newInliner(t)
+			c.seed(c.mine(true, true))
+			c.onMine()
+			c.msgs, c.body = nil, "rewritten"
+			c.v.edit = func(_ string, done func(string, error) tea.Msg) tea.Cmd {
+				return func() tea.Msg {
+					change(c, "c-mine")
+					return done("rewritten", nil)
+				}
+			}
 			c.press("e")
-			if !strings.Contains(c.lastError(), "no longer pending") {
+			if !strings.Contains(c.lastError(), "gone or no longer yours") {
 				t.Errorf("error = %q", c.lastError())
 			}
-			if got := c.methods(fake.MethodUpdateReviewComment); len(got) != 0 {
-				t.Errorf("update sent: %v", got)
-			}
-			if got := c.serverBody(id); got != "original" {
-				t.Errorf("published comment now says %q", got)
+			if _, asked := c.lastConfirm(); asked || len(c.updates()) != 0 {
+				t.Errorf("asked %v, updates %v", asked, c.updates())
 			}
 		})
 		t.Run(name+"/delete", func(t *testing.T) {
-			c, id := stale(t, failReload)
-			c.press("D") // refused before any confirmation is shown
-			if _, asked := c.lastConfirm(); asked {
-				t.Error("asked to delete a comment that is not pending")
-			}
-			if !strings.Contains(c.lastError(), "no longer pending") {
+			c := newInliner(t)
+			c.seed(c.mine(true, true))
+			c.onMine()
+			c.msgs = nil
+			change(c, "c-mine")
+			before := len(c.deletes())
+			c.press("D")
+			if !strings.Contains(c.lastError(), "gone or no longer yours") {
 				t.Errorf("error = %q", c.lastError())
 			}
-			if got := c.methods(fake.MethodDeleteReviewComment); len(got) != 0 {
-				t.Errorf("delete sent: %v", got)
-			}
-			if got := c.serverBody(id); got != "original" {
-				t.Errorf("comment = %q", got)
+			if _, asked := c.lastConfirm(); asked || len(c.deletes()) != before {
+				t.Errorf("asked %v, deletes %v", asked, c.deletes())
 			}
 		})
-	}
-}
-
-func TestStaleEditRefreshesTheView(t *testing.T) {
-	c := newInliner(t)
-	c.addPending("original")
-	c.submitElsewhere()
-	c.body = "x"
-	c.press("e")
-	if c.pendingThreadShown() {
-		t.Error("the refresh did not show the comment as published")
 	}
 }
 
 func TestDeleteRechecksAfterTheAnswer(t *testing.T) {
 	c := newInliner(t)
-	th := c.addPending("original")
+	c.addPending("original")
 	c.msgs = nil
 	c.press("D")
 	conf, ok := c.lastConfirm()
 	if !ok {
 		t.Fatal("no confirmation")
 	}
-	c.submitElsewhere() // while the question is open
-	c.run(conf.OnYes)
-	if got := c.methods(fake.MethodDeleteReviewComment); len(got) != 0 {
-		t.Errorf("delete sent after the review was submitted: %v", got)
+	// Someone deletes it while the question is open.
+	if err := c.client.DeleteReviewComment(t.Context(), c.pendingThread().Comments[0].ID); err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(c.lastError(), "no longer pending") {
+	before := len(c.deletes())
+	c.run(conf.OnYes)
+	if len(c.deletes()) != before {
+		t.Error("delete sent for a comment that is gone")
+	}
+	if !strings.Contains(c.lastError(), "gone or no longer yours") {
 		t.Errorf("error = %q", c.lastError())
 	}
-	if got := c.serverBody(th.Comments[0].ID); got != "original" {
-		t.Errorf("comment = %q", got)
-	}
+}
+
+func TestCommandsBehaveLikeTheKeys(t *testing.T) {
+	t.Run("edit pending", func(t *testing.T) {
+		c := newInliner(t)
+		id := c.addPending("first draft").Comments[0].ID
+		c.openedOn, c.msgs, c.body = nil, nil, "second draft"
+		c.command("edit-comment")
+		if diff := cmp.Diff([]string{"first draft"}, c.openedOn); diff != "" {
+			t.Errorf("editor opened on (-want +got):\n%s", diff)
+		}
+		if _, asked := c.lastConfirm(); asked {
+			t.Error("a pending edit asked for confirmation")
+		}
+		if got := c.serverBody(id); got != "second draft" {
+			t.Errorf("body = %q", got)
+		}
+	})
+	t.Run("edit published", func(t *testing.T) {
+		c := newInliner(t)
+		c.seed(c.mine(true, true))
+		c.onMine()
+		c.msgs, c.body = nil, "revised"
+		c.command("edit-comment")
+		if conf, ok := c.lastConfirm(); !ok || !strings.HasPrefix(conf.Text, "Update your published comment") {
+			t.Errorf("confirmation = %q (%v)", conf.Text, ok)
+		}
+	})
+	t.Run("delete", func(t *testing.T) {
+		c := newInliner(t)
+		c.addPending("x")
+		c.msgs = nil
+		c.command("delete-comment")
+		if conf, ok := c.lastConfirm(); !ok || !strings.HasPrefix(conf.Text, "Delete pending comment on ") {
+			t.Errorf("confirmation = %q (%v)", conf.Text, ok)
+		}
+	})
+	t.Run("in the overview", func(t *testing.T) {
+		c := newInliner(t)
+		c.press("h", "g g") // Files pane, Overview
+		c.msgs = nil
+		c.command("edit-comment")
+		if got := c.infos(); len(got) != 1 || got[0] != "no comment of yours here" {
+			t.Errorf("infos = %v", got)
+		}
+	})
 }
 
 func TestEditAndDeleteRefusedWhileSubmitting(t *testing.T) {

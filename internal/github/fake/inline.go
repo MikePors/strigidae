@@ -17,6 +17,7 @@ const (
 	MethodAddReviewThread     = "AddReviewThread"
 	MethodUpdateReviewComment = "UpdateReviewComment"
 	MethodDeleteReviewComment = "DeleteReviewComment"
+	MethodGetReviewComment    = "GetReviewComment"
 )
 
 // StartedReview is a recorded successful StartReview call.
@@ -97,6 +98,7 @@ func (c *Client) AddReviewThread(ctx context.Context, in github.AddThreadInput) 
 		Line: in.Line, OriginalLine: in.Line, DiffSide: in.Side,
 		Comments: []github.ReviewComment{{
 			ID: "fake-review-comment-" + strconv.Itoa(c.nextID), Author: c.Viewer, Body: in.Body, CreatedAt: c.Now(), Pending: true,
+			ViewerCanUpdate: true, ViewerCanDelete: true,
 		}},
 	}
 	if in.StartLine > 0 {
@@ -142,19 +144,6 @@ func (c *Client) findOwn(id string) (key prKey, ti, ci int, err error) {
 		}
 	}
 	return prKey{}, 0, 0, fmt.Errorf("comment %s: %w", id, github.ErrNotFound)
-}
-
-// pendingIDs lists the IDs of the pending comments of a pull request.
-func (c *Client) pendingIDs(key prKey) []string {
-	var ids []string
-	for _, t := range c.threads[key] {
-		for _, cm := range t.Comments {
-			if cm.Pending {
-				ids = append(ids, cm.ID)
-			}
-		}
-	}
-	return ids
 }
 
 // publishPending marks the pending comments of a pull request as published,
@@ -224,4 +213,24 @@ func (c *Client) DeletedComments() []string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return slices.Clone(c.deleted)
+}
+
+// GetReviewComment implements github.Client. It finds the comment in any
+// pull request's threads; an unknown ID yields ErrNotFound.
+func (c *Client) GetReviewComment(ctx context.Context, commentID string) (github.ReviewComment, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err := c.begin(ctx, Call{Method: MethodGetReviewComment}); err != nil {
+		return github.ReviewComment{}, err
+	}
+	for _, ts := range c.threads {
+		for _, t := range ts {
+			for _, cm := range t.Comments {
+				if cm.ID == commentID {
+					return cloneReviewComment(cm), nil
+				}
+			}
+		}
+	}
+	return github.ReviewComment{}, fmt.Errorf("load review comment %s: %w", commentID, github.ErrNotFound)
 }

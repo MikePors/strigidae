@@ -364,6 +364,8 @@ func (c *Client) ReplyToThread(ctx context.Context, threadID, body string) (gith
 				Author:    c.Viewer,
 				Body:      body,
 				CreatedAt: c.Now(),
+
+				ViewerCanUpdate: true, ViewerCanDelete: true,
 			}
 			// Build a fresh slice so slices handed out earlier are never written to.
 			threads[i].Comments = append(slices.Clip(threads[i].Comments), rc)

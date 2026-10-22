@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"strconv"
 
 	"charm.land/bubbles/v2/key"
@@ -16,46 +15,46 @@ import (
 )
 
 // Inline comments are written on diff lines and collect in the viewer's
-// pending review. They are private drafts, so adding or editing one asks for
-// no confirmation; deleting one does, because its text is lost.
+// pending review. Adding or editing a pending comment asks nothing (private
+// drafts). Deleting any comment, and editing a published one, asks y/N.
 
-// pendingDeletedMsg is the result of deleting a pending comment. Like a post
-// it is identified by owner, repo and number only.
-type pendingDeletedMsg struct {
+// commentDeletedMsg is the result of deleting a comment. Like a post it is
+// identified by owner, repo and number only.
+type commentDeletedMsg struct {
 	owner  *View
 	repo   github.Repo
 	number int
 	err    error
 }
 
-// errNotPending is returned when a comment to change is not in the viewer's
-// pending review any more (submitted, or the review was deleted). GitHub
-// would still let the author change a published comment, so the check is ours.
-var errNotPending = errors.New("that comment is no longer pending; refreshed")
+// errCommentGone is returned when a comment to change does not exist any more
+// or the viewer may no longer change it.
+var errCommentGone = errors.New("that comment is gone or no longer yours; refreshed")
 
-// pendingCheckedMsg is the result of checking that a comment is still pending
-// before asking to delete it.
-type pendingCheckedMsg struct {
-	owner     *View
-	repo      github.Repo
-	number    int
-	commentID string
-	label     string
-	err       error
+// commentCheckedMsg is the result of re-reading a comment before a prompt:
+// either the confirmation to show, or why the action is refused.
+type commentCheckedMsg struct {
+	owner   *View
+	repo    github.Repo
+	number  int
+	confirm ui.ConfirmMsg
+	err     error
 }
 
-// verifyPending re-reads the viewer's pending review and returns errNotPending
-// unless it still holds the comment. A review with more comments than the
-// status lists cannot be checked, which also counts as not verified.
-func verifyPending(ctx context.Context, c github.Client, repo github.Repo, number int, commentID string) error {
-	st, err := c.GetReviewStatus(ctx, repo, number)
-	if err != nil {
-		return fmt.Errorf("check review state: %w", err)
+// freshComment re-reads comment id and returns it, or errCommentGone when it
+// is missing or the viewer may not update (or, with deleting, delete) it. The
+// fresh state, not the one on screen, decides what to ask.
+func freshComment(ctx context.Context, c github.Client, id string, deleting bool) (github.ReviewComment, error) {
+	cm, err := c.GetReviewComment(ctx, id)
+	switch {
+	case errors.Is(err, github.ErrNotFound):
+		return cm, errCommentGone
+	case err != nil:
+		return cm, fmt.Errorf("check comment: %w", err)
+	case deleting && !cm.ViewerCanDelete, !deleting && !cm.ViewerCanUpdate:
+		return cm, errCommentGone
 	}
-	if st.Pending == nil || !slices.Contains(st.Pending.CommentIDs, commentID) {
-		return errNotPending
-	}
-	return nil
+	return cm, nil
 }
 
 // reloadPendingComments refreshes what shows pending comments: the threads in
@@ -124,122 +123,134 @@ func refusal(reason string) tea.Cmd {
 	return ui.Info(reason)
 }
 
-// pendingAtCursor returns the viewer's pending comment under the cursor (the
-// last one of the thread), and the thread it is in.
-func (v *View) pendingAtCursor() (github.ReviewComment, github.ReviewThread, tea.Cmd) {
+// commentAtCursor returns the comment the viewer may change that e/D (or the
+// commands) act on: the last one of the focused thread, preferring pending
+// comments over published ones. When there is none, the command to show why.
+func (v *View) commentAtCursor(deleting bool) (github.ReviewComment, github.ReviewThread, tea.Cmd) {
 	var none github.ReviewComment
-	if v.sel() == 0 {
-		return none, github.ReviewThread{}, nil
+	if blocked := v.review.blocked(v.reviewEnv()); blocked != nil {
+		return none, github.ReviewThread{}, blocked
 	}
-	ts := v.filePane.FocusedThreads()
-	switch len(ts) {
-	case 0:
-		return none, github.ReviewThread{}, ui.Info("no comment thread here")
-	case 1:
-	default:
+	var ts []github.ReviewThread
+	if v.sel() > 0 {
+		ts = v.filePane.FocusedThreads()
+	}
+	if len(ts) > 1 {
 		return none, github.ReviewThread{}, ui.Info("several threads on this line: move onto one")
 	}
+	if len(ts) == 0 {
+		return none, github.ReviewThread{}, ui.Info("no comment of yours here")
+	}
 	t := ts[0]
-	for i := len(t.Comments) - 1; i >= 0; i-- {
-		if t.Comments[i].Pending {
-			return t.Comments[i], t, nil
+	var found, pending *github.ReviewComment
+	for i := range t.Comments {
+		c := &t.Comments[i]
+		if (deleting && !c.ViewerCanDelete) || (!deleting && !c.ViewerCanUpdate) {
+			continue
+		}
+		found = c
+		if c.Pending {
+			pending = c
 		}
 	}
-	return none, t, ui.Info("no pending comment in this thread: only your unsubmitted comments can be changed")
+	if pending != nil {
+		found = pending
+	}
+	if found == nil {
+		return none, t, ui.Info("no comment of yours here")
+	}
+	return *found, t, nil
 }
 
-// editPending opens the editor on the pending comment under the cursor.
-func (v *View) editPending() tea.Cmd {
-	if v.sel() == 0 {
-		return nil
-	}
-	if blocked := v.review.blocked(v.reviewEnv()); blocked != nil {
-		return blocked
-	}
-	c, t, cmd := v.pendingAtCursor()
+// editComment opens the editor on the viewer's comment at the cursor.
+func (v *View) editComment() tea.Cmd {
+	c, t, cmd := v.commentAtCursor(false)
 	if c.ID == "" {
 		return cmd
 	}
 	return v.compose(target{commentID: c.ID, initial: c.Body, label: threadLocation(t)})
 }
 
-// deletePending checks that the pending comment under the cursor is still
-// pending, then asks before deleting it.
-func (v *View) deletePending() tea.Cmd {
-	if v.sel() == 0 {
-		return nil
-	}
-	if blocked := v.review.blocked(v.reviewEnv()); blocked != nil {
-		return blocked
-	}
-	c, t, cmd := v.pendingAtCursor()
+// deleteComment re-reads the comment at the cursor, then asks before deleting
+// it. The question says whether it is pending or published.
+func (v *View) deleteComment() tea.Cmd {
+	c, t, cmd := v.commentAtCursor(true)
 	if c.ID == "" {
 		return cmd
 	}
-	client, repo, number, owner, id, label := v.client, v.repo, v.number, v, c.ID, threadLocation(t)
+	client, repo, number, owner, id, label := v.client, v.repo, v.number, v, c.ID, termtext.Clean(threadLocation(t))
 	return func() tea.Msg {
-		err := verifyPending(context.Background(), client, repo, number, id)
-		return pendingCheckedMsg{owner: owner, repo: repo, number: number, commentID: id, label: label, err: err}
+		res := commentCheckedMsg{owner: owner, repo: repo, number: number}
+		fresh, err := freshComment(context.Background(), client, id, true)
+		if err != nil {
+			res.err = err
+			return res
+		}
+		q := "Delete your published comment on " + label + "?"
+		if fresh.Pending {
+			q = "Delete pending comment on " + label + "?"
+		}
+		res.confirm = ui.ConfirmMsg{Text: q, OnYes: sendDelete(client, owner, repo, number, id)}
+		return res
 	}
 }
 
-// pendingChecked asks for confirmation once the comment is known to be pending.
-func (v *View) pendingChecked(msg pendingCheckedMsg) tea.Cmd {
-	if msg.err != nil {
-		return v.refuseStale(msg.err, "delete pending comment")
-	}
-	client, repo, number, owner, id := v.client, v.repo, v.number, v, msg.commentID
-	del := func() tea.Msg {
-		// Checked again: the answer may have taken a while.
-		err := verifyPending(context.Background(), client, repo, number, id)
+// sendDelete runs when the user confirms: it re-reads the comment once more
+// (the answer may have taken a while), then deletes it.
+func sendDelete(client github.Client, owner *View, repo github.Repo, number int, id string) tea.Cmd {
+	return func() tea.Msg {
+		_, err := freshComment(context.Background(), client, id, true)
 		if err == nil {
 			err = client.DeleteReviewComment(context.Background(), id)
 		}
-		res := pendingDeletedMsg{owner: owner, repo: repo, number: number, err: err}
+		res := commentDeletedMsg{owner: owner, repo: repo, number: number, err: err}
 		if err == nil {
 			return res
 		}
-		shown := ui.ErrorMsg{Err: pendingFailure(err, "delete pending comment")}
+		shown := ui.ErrorMsg{Err: commentFailure(err, "delete comment")}
 		return tea.BatchMsg{func() tea.Msg { return res }, func() tea.Msg { return shown }}
 	}
-	return ui.Confirm("Delete pending comment on "+termtext.Clean(msg.label)+"?", del)
+}
+
+// commentChecked shows the prompt a check produced, or reports the refusal.
+func (v *View) commentChecked(msg commentCheckedMsg) tea.Cmd {
+	if msg.err != nil {
+		return v.refuseStale(msg.err, "check comment")
+	}
+	return ui.Confirm(msg.confirm.Text, msg.confirm.OnYes)
 }
 
 // refuseStale reports a failed check, refreshing when the comment turned out
-// not to be pending any more.
+// to be gone.
 func (v *View) refuseStale(err error, what string) tea.Cmd {
-	e := ui.Error(pendingFailure(err, what))
-	if errors.Is(err, errNotPending) {
+	e := ui.Error(commentFailure(err, what))
+	if errors.Is(err, errCommentGone) {
 		return tea.Batch(e, v.reloadPendingComments())
 	}
 	return e
 }
 
-func pendingFailure(err error, what string) error {
-	if errors.Is(err, errNotPending) {
-		return errNotPending
+func commentFailure(err error, what string) error {
+	if errors.Is(err, errCommentGone) {
+		return errCommentGone
 	}
 	return termtext.SafeError(fmt.Errorf("%s: %w", what, err))
 }
 
-func (v *View) pendingDeleted(msg pendingDeletedMsg) tea.Cmd {
-	if errors.Is(msg.err, errNotPending) {
+func (v *View) commentDeleted(msg commentDeletedMsg) tea.Cmd {
+	if errors.Is(msg.err, errCommentGone) {
 		return v.reloadPendingComments() // the error is already shown
 	}
-	if msg.err != nil && !errors.Is(msg.err, github.ErrNotFound) {
+	if msg.err != nil {
 		return nil
 	}
-	// A comment that is already gone is shown as gone.
-	info := ui.Info("Pending comment deleted")
-	if msg.err != nil {
-		info = nil
-	}
-	return tea.Batch(info, v.reloadPendingComments())
+	return tea.Batch(ui.Info("Comment deleted"), v.reloadPendingComments())
 }
 
-// pendingCommentSend adds a new inline comment to the pending review (creating
-// the review if there is none), or updates one. It runs without confirmation.
-func (v *View) pendingCommentSend(tgt target, body string) tea.Cmd {
+// commentSend adds a new inline comment to the pending review (creating the
+// review if there is none), or updates one. Adding, and updating a pending
+// comment, run without a prompt; updating a published one asks first.
+func (v *View) commentSend(tgt target, body string) tea.Cmd {
 	client, repo, number, owner := v.client, v.repo, v.number, v
 	result := func(err error, what string) tea.Msg {
 		res := postedMsg{owner: owner, repo: repo, number: number, tgt: tgt, body: body, err: err}
@@ -247,8 +258,8 @@ func (v *View) pendingCommentSend(tgt target, body string) tea.Cmd {
 			return res
 		}
 		shown := ui.ErrorMsg{Err: termtext.SafeError(fmt.Errorf("%s: %w; the comment is kept as a draft", what, err))}
-		if errors.Is(err, errNotPending) {
-			shown = ui.ErrorMsg{Err: errNotPending}
+		if errors.Is(err, errCommentGone) {
+			shown = ui.ErrorMsg{Err: errCommentGone}
 		}
 		return tea.BatchMsg{func() tea.Msg { return res }, func() tea.Msg { return shown }}
 	}
@@ -257,13 +268,28 @@ func (v *View) pendingCommentSend(tgt target, body string) tea.Cmd {
 			delete(v.drafts, tgt.draftKey())
 			return ui.Info("comment unchanged")
 		}
+		update := func() error {
+			_, err := client.UpdateReviewComment(context.Background(), tgt.commentID, body)
+			return err
+		}
 		return func() tea.Msg {
-			// The comment may have been submitted while the editor was open.
-			err := verifyPending(context.Background(), client, repo, number, tgt.commentID)
-			if err == nil {
-				_, err = client.UpdateReviewComment(context.Background(), tgt.commentID, body)
+			// Fresh state decides: the comment may have been submitted, changed
+			// hands or been deleted while the editor was open.
+			fresh, err := freshComment(context.Background(), client, tgt.commentID, false)
+			if err != nil {
+				return result(err, "update comment")
 			}
-			return result(err, "update pending comment")
+			if fresh.Pending {
+				return result(update(), "update pending comment")
+			}
+			send := func() tea.Msg {
+				_, err := freshComment(context.Background(), client, tgt.commentID, false)
+				if err == nil {
+					err = update()
+				}
+				return result(err, "update comment")
+			}
+			return ui.ConfirmMsg{Text: "Update your published comment on " + termtext.Clean(tgt.label) + "?", OnYes: send}
 		}
 	}
 	if v.detail == nil || v.diffPending {

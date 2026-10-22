@@ -66,7 +66,6 @@ func (c *Client) GetReviewStatus(ctx context.Context, repo github.Repo, number i
 	}
 	st := github.ReviewStatus{PullRequestID: d.ID, HeadSHA: d.HeadSHA}
 	if p, ok := c.pending[key]; ok {
-		p.CommentIDs = c.pendingIDs(key)
 		st.Pending = &p
 	}
 	return st, nil
