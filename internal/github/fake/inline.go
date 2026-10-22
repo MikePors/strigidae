@@ -167,7 +167,8 @@ func (c *Client) publishPending(key prKey) {
 }
 
 // UpdateReviewComment implements github.Client. Like GitHub it changes the
-// comments the viewer may update (see ViewerCanUpdate), in any state; an empty body is refused.
+// comments the viewer may update (see ViewerCanUpdate), in any state; an empty
+// body is refused.
 func (c *Client) UpdateReviewComment(ctx context.Context, commentID, body string) (github.ReviewComment, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

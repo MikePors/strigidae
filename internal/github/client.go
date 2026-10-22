@@ -56,10 +56,13 @@ type Client interface {
 	// state (Pending) and what the viewer may do with it. A comment that does
 	// not exist any more yields ErrNotFound.
 	GetReviewComment(ctx context.Context, commentID string) (ReviewComment, error)
-	// UpdateReviewComment changes the body of a comment of the viewer's, pending
-	// or published, and returns it.
+	// UpdateReviewComment changes the body of a review comment, pending or
+	// published, and returns it. GitHub decides by permissions (see
+	// ReviewComment.ViewerCanUpdate): the viewer's own comments, and with write
+	// access other people's too.
 	UpdateReviewComment(ctx context.Context, commentID, body string) (ReviewComment, error)
-	// DeleteReviewComment deletes a comment of the viewer's, pending or published.
+	// DeleteReviewComment deletes a review comment, pending or published, under
+	// the same permissions (see ReviewComment.ViewerCanDelete).
 	// Deleting a thread's only comment removes the thread.
 	DeleteReviewComment(ctx context.Context, commentID string) error
 }

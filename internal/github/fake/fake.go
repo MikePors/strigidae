@@ -50,8 +50,9 @@ type Call struct {
 	Page     github.PageRequest
 	ThreadID string
 	Body     string
-	// PullRequestID is also set for SetFileViewed and StartReview, Path for
-	// SetFileViewed and AddReviewThread, and Viewed for SetFileViewed.
+	// PullRequestID, Path and Viewed are set by the methods that take them:
+	// PullRequestID by SetFileViewed, StartReview and MergePullRequest, Path by
+	// SetFileViewed and AddReviewThread, Viewed by SetFileViewed.
 	PullRequestID string
 	Path          string
 	Viewed        bool
