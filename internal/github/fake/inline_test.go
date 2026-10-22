@@ -70,6 +70,10 @@ func TestInlineErrors(t *testing.T) {
 	if err := add(github.AddThreadInput{PendingReviewID: p.ID, Path: "a", Line: 1, Side: github.SideRight, Body: " "}); err == nil {
 		t.Error("an empty body was accepted")
 	}
+	// The cases of checkRange are in TestCheckRange; this keeps its wiring tested.
+	if err := add(github.AddThreadInput{PendingReviewID: p.ID, Path: "a", Line: 0, Side: github.SideRight, Body: "x"}); err == nil {
+		t.Error("a bad range was accepted")
+	}
 	c.SetError(MethodAddReviewThread, errors.New("boom"))
 	if err := add(github.AddThreadInput{PendingReviewID: p.ID, Path: "a", Line: 1, Side: github.SideRight, Body: "x"}); err == nil {
 		t.Error("injected error not returned")
@@ -101,6 +105,42 @@ func TestCheckRange(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := checkRange(tt.in); (err == nil) != tt.ok {
 				t.Errorf("checkRange = %v, want ok = %v", err, tt.ok)
+			}
+		})
+	}
+}
+
+// The fake allows what the can-flags allow, as GitHub does: other people's
+// comments too when the viewer has write access, and not the viewer's own when
+// the flag is false.
+func TestUpdateAndDeleteFollowTheFlags(t *testing.T) {
+	ctx := context.Background()
+	repo := github.Repo{Owner: "acme", Name: "widgets"}
+	comments := []github.ReviewComment{
+		{ID: "own-ok", Author: "me", ViewerCanUpdate: true, ViewerCanDelete: true},
+		{ID: "own-no-update", Author: "me", ViewerCanDelete: true},
+		{ID: "own-no-delete", Author: "me", ViewerCanUpdate: true},
+		{ID: "other", Author: "bob"}, // the fake gives other people's comments the admin flags
+	}
+	tests := []struct {
+		id         string
+		update, rm error
+	}{
+		{"own-ok", nil, nil},
+		{"own-no-update", github.ErrForbidden, nil},
+		{"own-no-delete", nil, github.ErrForbidden},
+		{"other", nil, nil},
+		{"missing", github.ErrNotFound, github.ErrNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.id, func(t *testing.T) {
+			c := New()
+			c.SetReviewThreads(repo, 7, []github.ReviewThread{{ID: "t", Path: "a.go", Line: 1, Comments: comments}})
+			if _, err := c.UpdateReviewComment(ctx, tt.id, "new"); !errors.Is(err, tt.update) {
+				t.Errorf("update err = %v, want %v", err, tt.update)
+			}
+			if err := c.DeleteReviewComment(ctx, tt.id); !errors.Is(err, tt.rm) {
+				t.Errorf("delete err = %v, want %v", err, tt.rm)
 			}
 		})
 	}

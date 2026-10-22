@@ -919,3 +919,38 @@ func TestPickComment(t *testing.T) {
 		})
 	}
 }
+
+// e and D each ask for their own permission: a comment that may be updated but
+// not deleted (and the reverse) is offered by one key only.
+func TestEditAndDeleteUseTheirOwnPermission(t *testing.T) {
+	tests := []struct {
+		name                 string
+		canUpdate, canDelete bool
+		key                  string
+		offered              bool
+	}{
+		{"update only: e edits", true, false, "e", true},
+		{"update only: D finds nothing", true, false, "D", false},
+		{"delete only: D asks", false, true, "D", true},
+		{"delete only: e finds nothing", false, true, "e", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newInliner(t)
+			c.seed(c.mine(tt.canUpdate, tt.canDelete))
+			c.toThread(mineID)
+			c.msgs, c.openedOn, c.body = nil, nil, "x"
+			c.press(tt.key)
+			_, asked := c.lastConfirm()
+			offered := len(c.openedOn) > 0 || asked
+			if offered != tt.offered {
+				t.Errorf("offered = %v (editor %v, asked %v), want %v; infos %v", offered, c.openedOn, asked, tt.offered, c.infos())
+			}
+			if !tt.offered {
+				if diff := cmp.Diff([]string{"no comment of yours here"}, c.infos()); diff != "" {
+					t.Errorf("info (-want +got):\n%s", diff)
+				}
+			}
+		})
+	}
+}

@@ -112,21 +112,26 @@ func TestVisualRendering(t *testing.T) {
 	if strings.HasPrefix(lines[14], markSelected) || strings.HasPrefix(lines[17], markSelected) {
 		t.Error("rows outside the selection are marked")
 	}
-	// The selected rows are drawn with the cursor tint (the selected variant of
-	// the theme's own styles); a row outside the selection is not.
+	// The selected rows get the cursor tint, built here from the theme's own
+	// styles rather than the renderer's precomputed set.
+	th := m.th
+	tint := th.DiffCursor.GetBackground()
+	gutter := func(mark string, old int, selected bool) string {
+		st := th.DiffGutterDelete
+		if selected {
+			st = st.Background(tint)
+		}
+		return st.Render(mark + numCell(old, m.numW) + " " + numCell(0, m.numW) + " ")
+	}
 	raw := strings.Split(m.Render(80, 30), "\n")
-	sel, plain := &m.styles.v[1][kindDelete], &m.styles.v[0][kindDelete]
-	gutter := func(v *variant, mark string, old int) string {
-		return v.gutter.Render(mark + numCell(old, m.numW) + " " + numCell(0, m.numW) + " ")
+	if !strings.Contains(raw[15], gutter(markSelected, 32, true)) {
+		t.Errorf("selected row is not tinted: %q", raw[15])
 	}
-	if !strings.Contains(raw[15], gutter(sel, markSelected, 32)) {
-		t.Errorf("selected row is not drawn with the selected style: %q", raw[15])
+	if !strings.Contains(raw[16], gutter(">", 33, true)) {
+		t.Errorf("cursor row is not tinted: %q", raw[16])
 	}
-	if !strings.Contains(raw[16], gutter(sel, ">", 33)) {
-		t.Errorf("cursor row is not drawn with the selected style: %q", raw[16])
-	}
-	if strings.Contains(raw[15], gutter(plain, " ", 32)) {
-		t.Error("selected row is drawn as an unselected one")
+	if strings.Contains(raw[15], gutter(markSelected, 32, false)) {
+		t.Error("selected row is drawn without the tint")
 	}
 }
 
