@@ -148,7 +148,7 @@ func TestViewedRowsAreStyled(t *testing.T) {
 	if !strings.Contains(out, th.FileAdded.Render("✓")) {
 		t.Error("viewed check is not styled with FileAdded")
 	}
-	if !strings.Contains(out, th.FileModified.Render("↻")) {
+	if !strings.Contains(out, th.FileModified.Render("~")) {
 		t.Error("dismissed mark is not styled with FileModified")
 	}
 	if !strings.Contains(out, open(th.Muted.Render("README.md"))) {

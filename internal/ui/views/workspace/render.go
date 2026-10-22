@@ -256,7 +256,7 @@ func viewedGlyph(s github.ViewedState) string {
 	case github.FileViewed:
 		return "✓"
 	case github.FileDismissed:
-		return "↻"
+		return "~"
 	case github.FileUnviewed:
 	}
 	return " "
