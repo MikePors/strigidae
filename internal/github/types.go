@@ -303,3 +303,28 @@ type SubmitReviewInput struct {
 	// creating a new one.
 	PendingReviewID string
 }
+
+// StartReviewInput describes a new pending review.
+type StartReviewInput struct {
+	Repo          Repo
+	Number        int
+	PullRequestID string
+	// CommitOID is the commit the review's comments are anchored to.
+	CommitOID string
+}
+
+// AddThreadInput describes an inline comment thread to add to a pending
+// review. Line is the last line of the range and StartLine the first one for a
+// multi-line comment (zero for a single line); both are line numbers on the
+// given side of the diff, not positions in it.
+type AddThreadInput struct {
+	Repo            Repo
+	Number          int
+	PendingReviewID string
+	Path            string
+	Line            int
+	Side            DiffSide
+	StartLine       int
+	StartSide       DiffSide
+	Body            string
+}

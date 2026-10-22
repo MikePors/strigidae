@@ -97,6 +97,9 @@ type Client struct {
 	nextID   int
 	merge    map[github.Repo]MergeSettings
 	merges   []Merge
+	added    []github.AddThreadInput
+	started  []StartedReview
+	deleted  []string
 }
 
 var _ github.Client = (*Client)(nil)

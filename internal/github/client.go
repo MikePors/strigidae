@@ -43,4 +43,19 @@ type Client interface {
 	// default commit title and message. GitHub's refusal (failing checks,
 	// conflicts, a moved head) comes back as an error.
 	MergePullRequest(ctx context.Context, in MergeInput) error
+	// StartReview creates the viewer's pending review on in.CommitOID and
+	// returns it. GitHub allows one pending review per user per pull request,
+	// so this fails when one exists; call GetReviewStatus first.
+	StartReview(ctx context.Context, in StartReviewInput) (PendingReview, error)
+	// AddReviewThread adds an inline comment, as a new thread, to the pending
+	// review in.PendingReviewID and returns the thread. The comment stays
+	// private until the review is submitted. A pending review that no longer
+	// exists yields ErrNotFound.
+	AddReviewThread(ctx context.Context, in AddThreadInput) (ReviewThread, error)
+	// UpdateReviewComment changes the body of a comment of the viewer's pending
+	// review and returns it.
+	UpdateReviewComment(ctx context.Context, commentID, body string) (ReviewComment, error)
+	// DeleteReviewComment deletes a comment of the viewer's pending review.
+	// Deleting a thread's only comment removes the thread.
+	DeleteReviewComment(ctx context.Context, commentID string) error
 }
