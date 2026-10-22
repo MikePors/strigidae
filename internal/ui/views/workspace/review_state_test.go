@@ -48,15 +48,15 @@ func TestReviewRefusedWhileDiffLoads(t *testing.T) {
 	c := newReviewer(t)
 	c.v.diffPending = true
 	for _, f := range []func() tea.Cmd{
-		func() tea.Cmd { return c.v.startReview(github.ReviewEventApprove) },
-		c.v.openChooser,
+		func() tea.Cmd { return c.v.review.start(c.v.reviewEnv(), github.ReviewEventApprove) },
+		func() tea.Cmd { return c.v.review.openChooser(c.v.reviewEnv()) },
 	} {
 		msgs := messages(f())
 		if len(msgs) != 1 || msgs[0] != tea.Msg(ui.InfoMsg{Text: "diff not loaded"}) {
 			t.Errorf("msgs = %#v", msgs)
 		}
 	}
-	if c.v.chooser != nil || len(c.openedOn) != 0 {
+	if c.v.review.chooser != nil || len(c.openedOn) != 0 {
 		t.Error("review started")
 	}
 }
@@ -82,11 +82,11 @@ func TestReviewSecondSubmitWhileInFlight(t *testing.T) {
 		t.Error("not loading while submitting")
 	}
 	calls := len(c.client.Calls())
-	got := messages(c.v.startReview(github.ReviewEventApprove))
+	got := messages(c.v.review.start(c.v.reviewEnv(), github.ReviewEventApprove))
 	if len(got) != 1 || got[0] != tea.Msg(ui.InfoMsg{Text: "a review is being submitted"}) {
 		t.Errorf("second start: %#v", got)
 	}
-	got = messages(c.v.openChooser())
+	got = messages(c.v.review.openChooser(c.v.reviewEnv()))
 	if len(got) != 1 || got[0] != tea.Msg(ui.InfoMsg{Text: "a review is being submitted"}) {
 		t.Errorf("chooser: %#v", got)
 	}
@@ -94,7 +94,7 @@ func TestReviewSecondSubmitWhileInFlight(t *testing.T) {
 		t.Error("second review started")
 	}
 	c.run(send) // the first one finishes
-	if c.v.submitting {
+	if c.v.review.submitting {
 		t.Error("still submitting after the result")
 	}
 	if diff := cmp.Diff([]string{"Submitting review…", "Approved #7"}, c.infos()); diff != "" {
@@ -114,8 +114,8 @@ func TestReviewSubmitFailureRefreshes(t *testing.T) {
 	for _, call := range c.client.Calls()[before:] {
 		reloaded = reloaded || call.Method == fake.MethodGetPullRequest
 	}
-	if !reloaded || c.v.submitting {
-		t.Errorf("reloaded=%v submitting=%v", reloaded, c.v.submitting)
+	if !reloaded || c.v.review.submitting {
+		t.Errorf("reloaded=%v submitting=%v", reloaded, c.v.review.submitting)
 	}
 }
 
@@ -123,11 +123,11 @@ func TestReviewSubmitFailureRefreshes(t *testing.T) {
 // stored, and an empty approval sends an empty body.
 func TestReviewEmptyBodyKeepsEarlierDraft(t *testing.T) {
 	c := newReviewer(t)
-	c.v.reviewDraft = "earlier thoughts"
+	c.v.review.draft = "earlier thoughts"
 	c.body = ""
 	c.command("approve")
-	if c.v.reviewDraft != "earlier thoughts" {
-		t.Errorf("draft = %q", c.v.reviewDraft)
+	if c.v.review.draft != "earlier thoughts" {
+		t.Errorf("draft = %q", c.v.review.draft)
 	}
 	conf, ok := c.lastConfirm()
 	if !ok {

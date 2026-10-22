@@ -101,8 +101,8 @@ func TestReviewVerdicts(t *testing.T) {
 			if diff := cmp.Diff([]string{"Submitting review…", tt.info}, c.infos()); diff != "" {
 				t.Errorf("info (-want +got):\n%s", diff)
 			}
-			if c.v.reviewDraft != "" {
-				t.Errorf("draft kept after success: %q", c.v.reviewDraft)
+			if c.v.review.draft != "" {
+				t.Errorf("draft kept after success: %q", c.v.review.draft)
 			}
 			if rs := c.v.detail.Reviews; rs[len(rs)-1].Body != tt.want.Body || rs[len(rs)-1].SubmittedAt.IsZero() {
 				t.Errorf("workspace not refreshed after success: %+v", rs[len(rs)-1])
@@ -137,7 +137,7 @@ func TestReviewCommentThroughChooser(t *testing.T) {
 func TestReviewCommandReview(t *testing.T) {
 	c := newReviewer(t)
 	c.command("review")
-	if c.v.chooser == nil {
+	if c.v.review.chooser == nil {
 		t.Fatal(":review did not open the chooser")
 	}
 	if !strings.Contains(c.render(), "Request changes") {
@@ -149,7 +149,7 @@ func TestReviewChooserCancels(t *testing.T) {
 	c := newReviewer(t)
 	c.command("review")
 	c.send(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if c.v.CapturesKeys() || c.v.chooser != nil {
+	if c.v.CapturesKeys() || c.v.review.chooser != nil {
 		t.Error("esc did not close the chooser")
 	}
 	if len(c.openedOn) != 0 || len(c.client.Submissions()) != 0 {
@@ -176,8 +176,8 @@ func TestReviewChooserReleasesOnEsc(t *testing.T) {
 		t.Fatal(":review through the root should open the chooser")
 	}
 	step(tea.KeyPressMsg{Code: 'j', Text: "j"})
-	if h.v.chooser.Query() != "j" {
-		t.Errorf("key did not reach the chooser raw: %q", h.v.chooser.Query())
+	if h.v.review.chooser.Query() != "j" {
+		t.Errorf("key did not reach the chooser raw: %q", h.v.review.chooser.Query())
 	}
 	step(tea.KeyPressMsg{Code: tea.KeyEscape})
 	if h.v.CapturesKeys() {
@@ -191,8 +191,8 @@ func TestReviewEmptyBodyIsAnError(t *testing.T) {
 			c := newReviewer(t)
 			c.body = "  \n"
 			if name == "comment" {
-				c.v.chooser = nil
-				cmd := c.v.startReview(github.ReviewEventComment)
+				c.v.review.chooser = nil
+				cmd := c.v.review.start(c.v.reviewEnv(), github.ReviewEventComment)
 				c.run(cmd)
 			} else {
 				c.command(name)
@@ -214,7 +214,7 @@ func TestReviewWithPendingReview(t *testing.T) {
 	c := newReviewer(t)
 	c.client.SetPendingReview(testRepo, 7, &github.PendingReview{ID: "PRR_1", Body: "draft on github", CommentCount: 3})
 	c.body = "" // an empty body is fine with inline comments
-	cmd := c.v.startReview(github.ReviewEventComment)
+	cmd := c.v.review.start(c.v.reviewEnv(), github.ReviewEventComment)
 	c.run(cmd)
 	if diff := cmp.Diff([]string{"draft on github"}, c.openedOn); diff != "" {
 		t.Errorf("editor opened on (-want +got):\n%s", diff)
@@ -251,8 +251,8 @@ func TestReviewPendingGoneAtSubmit(t *testing.T) {
 	if got := c.lastError(); !strings.Contains(got, "submitted or deleted elsewhere") {
 		t.Errorf("error = %q", got)
 	}
-	if c.v.reviewDraft != "my summary" {
-		t.Errorf("draft = %q", c.v.reviewDraft)
+	if c.v.review.draft != "my summary" {
+		t.Errorf("draft = %q", c.v.review.draft)
 	}
 	var reloaded bool
 	for _, call := range c.client.Calls()[before:] {
@@ -329,8 +329,8 @@ func TestReviewEditorFailureKeepsText(t *testing.T) {
 	if _, ok := c.lastConfirm(); ok {
 		t.Error("asked for confirmation after editor failure")
 	}
-	if !strings.Contains(c.lastError(), "edit review") || c.v.reviewDraft != "typed before crash" {
-		t.Errorf("error %q, draft %q", c.lastError(), c.v.reviewDraft)
+	if !strings.Contains(c.lastError(), "edit review") || c.v.review.draft != "typed before crash" {
+		t.Errorf("error %q, draft %q", c.lastError(), c.v.review.draft)
 	}
 }
 
@@ -349,14 +349,14 @@ func TestReviewStatusErrorIsShown(t *testing.T) {
 func TestReviewStaleResultsAreIgnored(t *testing.T) {
 	c := newReviewer(t)
 	c.body = "x"
-	old := c.v.startReview(github.ReviewEventApprove)
-	c.v.rseq++ // another review was started meanwhile
+	old := c.v.review.start(c.v.reviewEnv(), github.ReviewEventApprove)
+	c.v.review.seq++ // another review was started meanwhile
 	c.run(old)
 	if len(c.openedOn) != 0 {
 		t.Error("stale status opened the editor")
 	}
 	// A result for another workspace is ignored too.
-	c.send(reviewSubmittedMsg{owner: nil, repo: testRepo, number: 7, event: github.ReviewEventApprove})
+	c.send(reviewSubmittedMsg{flow: nil, repo: testRepo, number: 7, event: github.ReviewEventApprove})
 	if len(c.infos()) != 0 {
 		t.Errorf("foreign result acted on: %v", c.infos())
 	}
@@ -376,7 +376,7 @@ func TestCommandsReachOnlyKnownNames(t *testing.T) {
 
 func TestReviewBeforeLoad(t *testing.T) {
 	v := newHarness(t, 80, 24).v // Init not run: nothing loaded
-	msgs := messages(v.openChooser())
+	msgs := messages(v.review.openChooser(v.reviewEnv()))
 	if len(msgs) != 1 {
 		t.Fatalf("msgs = %v", msgs)
 	}

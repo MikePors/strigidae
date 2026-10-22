@@ -12,46 +12,50 @@ import (
 	"github.com/MikePors/strigidae/internal/ui"
 	"github.com/MikePors/strigidae/internal/ui/components/picker"
 	"github.com/MikePors/strigidae/internal/ui/termtext"
+	"github.com/MikePors/strigidae/internal/ui/theme"
 )
 
-// verdicts are the chooser's rows, in order.
-var verdicts = []struct {
-	label string
-	event github.ReviewEvent
-}{
-	{"Approve", github.ReviewEventApprove},
-	{"Request changes", github.ReviewEventRequestChanges},
-	{"Comment", github.ReviewEventComment},
+// reviewFlow is the state of submitting a review: the verdict chooser, the
+// unsent summary, the request sequence and the in-flight flag. Its methods
+// take everything they need from the workspace as a reviewEnv, and result
+// messages carry the flow's own pointer as their identity.
+type reviewFlow struct {
+	chooser    *picker.Model // non-nil while the verdict chooser is open
+	seq        int           // latest review request; older results are stale
+	draft      string        // unsent summary, kept until a review is submitted
+	submitting bool          // a submission is in flight
 }
 
-// reviewStage says what a status result is for.
-type reviewStage int
+// reviewEnv is what the flow needs from the workspace at one moment.
+type reviewEnv struct {
+	client      github.Client
+	repo        github.Repo
+	number      int
+	theme       theme.Theme
+	edit        EditFunc
+	reload      func() tea.Cmd // reloads the workspace
+	loaded      bool           // the pull request detail has loaded
+	diffHead    string         // head SHA the diff on screen was loaded for
+	diffPending bool           // a diff load is in flight
+	diffReady   bool           // a diff is loaded and shown
+}
 
-const (
-	// stageEdit: the status only supplies the pending review's body, so the
-	// editor can open pre-filled.
-	stageEdit reviewStage = iota
-	// stageConfirm: the status is the fresh state shown in the confirmation.
-	stageConfirm
-)
-
-// Results of submitting a review carry the same identity as load results. The
-// status and edit results also carry the review sequence, so starting another
-// review makes older ones stale.
+// Results carry the identity of the flow, repo and number that asked. The
+// ones that belong to one attempt (pending, edited, fresh) also carry the
+// flow's sequence, so starting another review makes older results stale.
 type (
-	reviewStatusMsg struct {
-		owner  *View
-		repo   github.Repo
-		number int
-		seq    int
-		stage  reviewStage
-		event  github.ReviewEvent
-		body   string // the edited summary, for stageConfirm
-		status github.ReviewStatus
-		err    error
+	// reviewPendingMsg is the pending review fetched to pre-fill the editor.
+	reviewPendingMsg struct {
+		flow    *reviewFlow
+		repo    github.Repo
+		number  int
+		seq     int
+		event   github.ReviewEvent
+		pending *github.PendingReview
+		err     error
 	}
 	reviewEditedMsg struct {
-		owner  *View
+		flow   *reviewFlow
 		repo   github.Repo
 		number int
 		seq    int
@@ -59,158 +63,220 @@ type (
 		body   string
 		err    error
 	}
-	reviewSubmittedMsg struct {
-		owner  *View
+	// reviewFreshMsg is the status fetched just before confirming.
+	reviewFreshMsg struct {
+		flow   *reviewFlow
 		repo   github.Repo
 		number int
+		seq    int
 		event  github.ReviewEvent
-		body   string
+		body   string // the edited summary
+		status github.ReviewStatus
 		err    error
 	}
-	// reviewSendMsg is what the confirmation's "yes" produces; handling it in
-	// Update marks the submission as in flight before the call starts.
+	// reviewSendMsg is what the confirmation's "yes" produces; handling it
+	// marks the submission as in flight before the call starts.
 	reviewSendMsg struct {
-		owner  *View
+		flow   *reviewFlow
 		repo   github.Repo
 		number int
 		event  github.ReviewEvent
 		body   string
 		status github.ReviewStatus
+	}
+	reviewSubmittedMsg struct {
+		flow   *reviewFlow
+		repo   github.Repo
+		number int
+		event  github.ReviewEvent
+		body   string
+		err    error
 	}
 	// refreshMsg asks the workspace to reload after its head moved.
 	refreshMsg struct {
-		owner  *View
+		flow   *reviewFlow
 		repo   github.Repo
 		number int
 	}
 )
 
-func (v *View) reviewMine(owner *View, repo github.Repo, number, seq int) bool {
-	return owner == v && repo == v.repo && number == v.number && seq == v.rseq
-}
-
-func (v *View) sameReview(owner *View, repo github.Repo, number int) bool {
-	return owner == v && repo == v.repo && number == v.number
+func (v *View) reviewEnv() reviewEnv {
+	return reviewEnv{
+		client: v.client, repo: v.repo, number: v.number, theme: v.th,
+		edit: v.edit, reload: v.load,
+		loaded:      v.detail != nil,
+		diffHead:    v.diffHead,
+		diffPending: v.diffPending,
+		diffReady:   !v.diffPending && v.diff.Parsed != nil && v.diff.Err == nil,
+	}
 }
 
 // Command implements ui.Commander: :approve, :request-changes and :review.
 func (v *View) Command(name, _ string) (tea.Cmd, bool) {
+	return v.review.command(name, v.reviewEnv())
+}
+
+func (f *reviewFlow) command(name string, env reviewEnv) (tea.Cmd, bool) {
 	switch name {
 	case "approve":
-		return v.startReview(github.ReviewEventApprove), true
+		return f.start(env, github.ReviewEventApprove), true
 	case "request-changes":
-		return v.startReview(github.ReviewEventRequestChanges), true
+		return f.start(env, github.ReviewEventRequestChanges), true
 	case "review":
-		return v.openChooser(), true
+		return f.openChooser(env), true
 	}
 	return nil, false
 }
 
-// reviewBlocked says why a review cannot start now, or returns nil. The
-// diff must be on screen: the review's commit is the one the diff shows.
-func (v *View) reviewBlocked() tea.Cmd {
+// mine reports whether a result belongs to this flow's latest attempt.
+func (f *reviewFlow) mine(env reviewEnv, flow *reviewFlow, repo github.Repo, number, seq int) bool {
+	return f.same(env, flow, repo, number) && seq == f.seq
+}
+
+func (f *reviewFlow) same(env reviewEnv, flow *reviewFlow, repo github.Repo, number int) bool {
+	return flow == f && repo == env.repo && number == env.number
+}
+
+// update handles the flow's messages. handled is false for any other message.
+func (f *reviewFlow) update(msg tea.Msg, env reviewEnv) (cmd tea.Cmd, handled bool) {
+	switch msg := msg.(type) {
+	case reviewPendingMsg:
+		if !f.mine(env, msg.flow, msg.repo, msg.number, msg.seq) {
+			return nil, true
+		}
+		return f.pendingFetched(msg, env), true
+	case reviewEditedMsg:
+		if !f.mine(env, msg.flow, msg.repo, msg.number, msg.seq) {
+			return nil, true
+		}
+		return f.edited(msg, env), true
+	case reviewFreshMsg:
+		if !f.mine(env, msg.flow, msg.repo, msg.number, msg.seq) {
+			return nil, true
+		}
+		return f.confirm(msg, env), true
+	case reviewSendMsg:
+		if !f.same(env, msg.flow, msg.repo, msg.number) {
+			return nil, true
+		}
+		f.submitting = true
+		return tea.Batch(ui.Info("Submitting review…"), f.submit(env, msg.event, msg.body, msg.status)), true
+	case reviewSubmittedMsg:
+		if !f.same(env, msg.flow, msg.repo, msg.number) {
+			return nil, true
+		}
+		return f.submitted(msg, env), true
+	case refreshMsg:
+		if !f.same(env, msg.flow, msg.repo, msg.number) {
+			return nil, true
+		}
+		return env.reload(), true
+	}
+	return nil, false
+}
+
+// blocked says why a review cannot start now, or returns nil. The diff must
+// be on screen: the review's commit is the one the diff shows.
+func (f *reviewFlow) blocked(env reviewEnv) tea.Cmd {
 	switch {
-	case v.submitting:
+	case f.submitting:
 		return ui.Info("a review is being submitted")
-	case v.detail == nil:
+	case !env.loaded:
 		return ui.Info("pull request not loaded yet")
-	case v.diffPending || v.diff.Parsed == nil || v.diff.Err != nil:
+	case !env.diffReady:
 		return ui.Info("diff not loaded")
 	}
 	return nil
 }
 
 // openChooser shows the verdict chooser.
-func (v *View) openChooser() tea.Cmd {
-	if blocked := v.reviewBlocked(); blocked != nil {
+func (f *reviewFlow) openChooser(env reviewEnv) tea.Cmd {
+	if blocked := f.blocked(env); blocked != nil {
 		return blocked
 	}
 	items := make([]string, len(verdicts))
 	for i, d := range verdicts {
 		items[i] = d.label
 	}
-	v.chooser = picker.New(v.th, "Submit review", items)
+	f.chooser = picker.New(env.theme, "Submit review", items)
 	return nil
 }
 
 // chooserKey feeds a raw key to the open chooser.
-func (v *View) chooserKey(msg tea.KeyPressMsg) tea.Cmd {
-	res := v.chooser.Update(msg)
+func (f *reviewFlow) chooserKey(msg tea.KeyPressMsg, env reviewEnv) tea.Cmd {
+	res := f.chooser.Update(msg)
 	switch res.Outcome {
 	case picker.Cancelled:
-		v.chooser = nil
+		f.chooser = nil
 	case picker.Chosen:
-		v.chooser = nil
-		return v.startReview(verdicts[res.Index].event)
+		f.chooser = nil
+		return f.start(env, verdicts[res.Index].event)
 	case picker.Open:
 	}
 	return nil
 }
 
-// startReview fetches the pending review (whose body pre-fills the editor)
-// and then opens the editor.
-func (v *View) startReview(event github.ReviewEvent) tea.Cmd {
-	if blocked := v.reviewBlocked(); blocked != nil {
+// start fetches the pending review (whose body pre-fills the editor); the
+// editor opens when it arrives.
+func (f *reviewFlow) start(env reviewEnv, event github.ReviewEvent) tea.Cmd {
+	if blocked := f.blocked(env); blocked != nil {
 		return blocked
 	}
-	v.rseq++
-	return v.fetchStatus(stageEdit, event, "")
-}
-
-func (v *View) fetchStatus(stage reviewStage, event github.ReviewEvent, body string) tea.Cmd {
-	client, repo, number, seq, owner := v.client, v.repo, v.number, v.rseq, v
+	f.seq++
+	flow, seq := f, f.seq
 	return func() tea.Msg {
-		st, err := client.GetReviewStatus(context.Background(), repo, number)
-		return reviewStatusMsg{owner: owner, repo: repo, number: number, seq: seq, stage: stage, event: event, body: body, status: st, err: err}
+		st, err := env.client.GetReviewStatus(context.Background(), env.repo, env.number)
+		return reviewPendingMsg{flow: flow, repo: env.repo, number: env.number, seq: seq, event: event, pending: st.Pending, err: err}
 	}
 }
 
-func (v *View) reviewStatus(msg reviewStatusMsg) tea.Cmd {
+// pendingFetched opens the editor on the saved draft, or the pending
+// review's body.
+func (f *reviewFlow) pendingFetched(msg reviewPendingMsg, env reviewEnv) tea.Cmd {
 	if msg.err != nil {
 		return ui.Error(termtext.SafeError(fmt.Errorf("check review state: %w", msg.err)))
 	}
-	if msg.stage == stageEdit {
-		return v.editReview(msg)
+	initial := f.draft
+	if initial == "" && msg.pending != nil {
+		initial = msg.pending.Body
 	}
-	return v.confirmReview(msg)
-}
-
-// editReview opens the editor on the saved draft, or the pending review's body.
-func (v *View) editReview(msg reviewStatusMsg) tea.Cmd {
-	initial := v.reviewDraft
-	if initial == "" && msg.status.Pending != nil {
-		initial = msg.status.Pending.Body
-	}
-	owner, repo, number, seq, event := v, v.repo, v.number, v.rseq, msg.event
-	return v.edit(initial, func(body string, err error) tea.Msg {
-		return reviewEditedMsg{owner: owner, repo: repo, number: number, seq: seq, event: event, body: body, err: err}
+	flow, seq, event := f, f.seq, msg.event
+	return env.edit(initial, func(body string, err error) tea.Msg {
+		return reviewEditedMsg{flow: flow, repo: env.repo, number: env.number, seq: seq, event: event, body: body, err: err}
 	})
 }
 
-// reviewEdited keeps a non-empty body as the draft, then re-queries the
-// state to confirm against. An empty body never overwrites an earlier draft,
-// and is not stored: it is only sent where that is allowed.
-func (v *View) reviewEdited(msg reviewEditedMsg) tea.Cmd {
+// edited keeps a non-empty body as the draft, then re-queries the state to
+// confirm against. An empty body never overwrites an earlier draft, and is
+// not stored: it is only sent where that is allowed.
+func (f *reviewFlow) edited(msg reviewEditedMsg, env reviewEnv) tea.Cmd {
 	body := strings.TrimRight(msg.body, " \t\r\n")
 	if body != "" {
-		v.reviewDraft = body
+		f.draft = body
 	}
 	if msg.err != nil {
 		return ui.Error(termtext.SafeError(fmt.Errorf("edit review: %w", msg.err)))
 	}
-	return v.fetchStatus(stageConfirm, msg.event, body)
+	flow, seq, event := f, f.seq, msg.event
+	return func() tea.Msg {
+		st, err := env.client.GetReviewStatus(context.Background(), env.repo, env.number)
+		return reviewFreshMsg{flow: flow, repo: env.repo, number: env.number, seq: seq, event: event, body: body, status: st, err: err}
+	}
 }
 
-// confirmReview applies the checks that need fresh state, then asks.
-func (v *View) confirmReview(msg reviewStatusMsg) tea.Cmd {
+// confirm applies the checks that need fresh state, then asks.
+func (f *reviewFlow) confirm(msg reviewFreshMsg, env reviewEnv) tea.Cmd {
+	if msg.err != nil {
+		return ui.Error(termtext.SafeError(fmt.Errorf("check review state: %w", msg.err)))
+	}
 	st, body := msg.status, msg.body
 	// The review applies to the commit whose diff is on screen. If that is
 	// not the head now (or the diff is not settled), the user must refresh.
-	if v.diffPending || st.HeadSHA != v.diffHead {
-		owner, repo, number := v, v.repo, v.number
-		refresh := func() tea.Msg { return refreshMsg{owner: owner, repo: repo, number: number} }
+	flow := f
+	if env.diffPending || st.HeadSHA != env.diffHead {
+		refresh := func() tea.Msg { return refreshMsg{flow: flow, repo: env.repo, number: env.number} }
 		return func() tea.Msg {
-			return ui.ConfirmMsg{Text: "Head moved since you loaded it; refresh first.", Notice: true, OnDismiss: refresh}
+			return ui.ConfirmMsg{Text: headMovedText, Notice: true, OnDismiss: refresh}
 		}
 	}
 	inline := 0
@@ -220,78 +286,43 @@ func (v *View) confirmReview(msg reviewStatusMsg) tea.Cmd {
 	if msg.event != github.ReviewEventApprove && strings.TrimSpace(body) == "" && inline == 0 {
 		return ui.Error(errors.New("empty review, nothing sent (did the editor fail?)"))
 	}
-	owner, repo, number := v, v.repo, v.number
 	send := func() tea.Msg {
-		return reviewSendMsg{owner: owner, repo: repo, number: number, event: msg.event, body: body, status: st}
+		return reviewSendMsg{flow: flow, repo: env.repo, number: env.number, event: msg.event, body: body, status: st}
 	}
-	return ui.Confirm(reviewQuestion(msg.event, v.repo, v.number, st.Pending), send)
-}
-
-// reviewQuestion is the confirmation text.
-func reviewQuestion(event github.ReviewEvent, repo github.Repo, number int, pending *github.PendingReview) string {
-	where := fmt.Sprintf("#%d in %s", number, termtext.Clean(repo.String()))
-	var q string
-	switch event {
-	case github.ReviewEventApprove:
-		q = "Approve " + where
-	case github.ReviewEventRequestChanges:
-		q = "Request changes on " + where
-	case github.ReviewEventComment:
-		q = "Comment on " + where
-	}
-	if pending != nil && pending.CommentCount > 0 {
-		noun := "comments"
-		if pending.CommentCount == 1 {
-			noun = "comment"
-		}
-		q += fmt.Sprintf(" with %d pending %s", pending.CommentCount, noun)
-	}
-	return q + "?"
+	return ui.Confirm(reviewQuestion(msg.event, env.repo, env.number, st.Pending), send)
 }
 
 // submit is the command that runs when the user confirms. The commit is the
-// head the diff on screen was loaded for, which confirmReview has just
-// checked is still the head. On failure it also returns the error itself, so
-// it shows even if the view was left meanwhile.
-func (v *View) submit(event github.ReviewEvent, body string, st github.ReviewStatus) tea.Cmd {
-	client, repo, number, owner := v.client, v.repo, v.number, v
+// head the diff on screen was loaded for, which confirm has just checked is
+// still the head. On failure it also returns the error itself, so it shows
+// even if the view was left meanwhile.
+func (f *reviewFlow) submit(env reviewEnv, event github.ReviewEvent, body string, st github.ReviewStatus) tea.Cmd {
+	flow := f
 	in := github.SubmitReviewInput{
-		Repo: repo, Number: number, PullRequestID: st.PullRequestID,
+		Repo: env.repo, Number: env.number, PullRequestID: st.PullRequestID,
 		Event: event, Body: body, CommitOID: st.HeadSHA,
 	}
 	if st.Pending != nil {
 		in.PendingReviewID = st.Pending.ID
 	}
 	return func() tea.Msg {
-		err := client.SubmitReview(context.Background(), in)
-		res := reviewSubmittedMsg{owner: owner, repo: repo, number: number, event: event, body: body, err: err}
+		err := env.client.SubmitReview(context.Background(), in)
+		res := reviewSubmittedMsg{flow: flow, repo: env.repo, number: env.number, event: event, body: body, err: err}
 		if err == nil {
 			return res
 		}
-		var shown ui.ErrorMsg
-		if errors.Is(err, github.ErrNotFound) && in.PendingReviewID != "" {
-			shown = ui.ErrorMsg{Err: errors.New("your pending review was submitted or deleted elsewhere; refreshing, then try again")}
-		} else {
-			// The call may or may not have landed, so the view refreshes to show.
-			shown = ui.ErrorMsg{Err: termtext.SafeError(fmt.Errorf("submit review: %w; refreshed to show the current state", err))}
-		}
+		shown := ui.ErrorMsg{Err: submitFailure(err, in.PendingReviewID != "")}
 		return tea.BatchMsg{func() tea.Msg { return res }, func() tea.Msg { return shown }}
 	}
 }
 
-func (v *View) reviewSubmitted(msg reviewSubmittedMsg) tea.Cmd {
-	v.submitting = false
+func (f *reviewFlow) submitted(msg reviewSubmittedMsg, env reviewEnv) tea.Cmd {
+	f.submitting = false
 	if msg.err != nil {
 		// The draft stays for the next attempt. Whatever went wrong, the
 		// review may or may not have landed, so show the current state.
-		return v.load()
+		return env.reload()
 	}
-	v.reviewDraft = ""
-	return tea.Batch(ui.Info(fmt.Sprintf(submittedFmt[msg.event], v.number)), v.load())
-}
-
-var submittedFmt = map[github.ReviewEvent]string{
-	github.ReviewEventApprove:        "Approved #%d",
-	github.ReviewEventRequestChanges: "Requested changes on #%d",
-	github.ReviewEventComment:        "Commented on #%d",
+	f.draft = ""
+	return tea.Batch(ui.Info(submittedText(msg.event, env.number)), env.reload())
 }

@@ -83,11 +83,7 @@ type View struct {
 	focus  pane
 	ov     overview
 	picker *picker.Model // non-nil while the file picker is open
-	// chooser is the review verdict chooser, non-nil while it is open.
-	chooser     *picker.Model
-	rseq        int    // latest review request; older results are stale
-	submitting  bool   // a review submission is in flight
-	reviewDraft string // unsent review summary, kept until it is submitted
+	review reviewFlow    // submitting a review (see review.go)
 	// pickerItems are the paths the picker was built from; a choice is
 	// resolved by path because a refresh may replace the file list meanwhile.
 	pickerItems []string
@@ -138,12 +134,12 @@ func (v *View) Title() string { return fmt.Sprintf("#%d", v.number) }
 
 // Loading implements ui.Loader.
 func (v *View) Loading() bool {
-	return v.prPending || v.diffPending || v.thrPending || v.submitting
+	return v.prPending || v.diffPending || v.thrPending || v.review.submitting
 }
 
 // CapturesKeys implements ui.KeyCapturer: the file picker owns the keyboard
 // while it is open.
-func (v *View) CapturesKeys() bool { return v.picker != nil || v.chooser != nil }
+func (v *View) CapturesKeys() bool { return v.picker != nil || v.review.chooser != nil }
 
 // Init implements ui.View.
 func (v *View) Init() tea.Cmd { return v.load() }
@@ -169,6 +165,9 @@ func (v *View) FullHelp() [][]key.Binding {
 
 // Update implements ui.View.
 func (v *View) Update(msg tea.Msg) (ui.View, tea.Cmd) {
+	if cmd, ok := v.review.update(msg, v.reviewEnv()); ok {
+		return v, cmd
+	}
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		v.width, v.height = msg.Width, msg.Height
@@ -210,37 +209,11 @@ func (v *View) Update(msg tea.Msg) (ui.View, tea.Cmd) {
 			return v, nil
 		}
 		return v, v.posted(msg)
-	case reviewStatusMsg:
-		if !v.reviewMine(msg.owner, msg.repo, msg.number, msg.seq) {
-			return v, nil
-		}
-		return v, v.reviewStatus(msg)
-	case reviewEditedMsg:
-		if !v.reviewMine(msg.owner, msg.repo, msg.number, msg.seq) {
-			return v, nil
-		}
-		return v, v.reviewEdited(msg)
-	case reviewSubmittedMsg:
-		if !v.sameReview(msg.owner, msg.repo, msg.number) {
-			return v, nil
-		}
-		return v, v.reviewSubmitted(msg)
-	case reviewSendMsg:
-		if !v.sameReview(msg.owner, msg.repo, msg.number) {
-			return v, nil
-		}
-		v.submitting = true
-		return v, tea.Batch(ui.Info("Submitting review…"), v.submit(msg.event, msg.body, msg.status))
-	case refreshMsg:
-		if !v.sameReview(msg.owner, msg.repo, msg.number) {
-			return v, nil
-		}
-		return v, v.load()
 	case keys.Msg:
 		return v, v.handleKey(msg)
 	case tea.KeyPressMsg:
-		if v.chooser != nil {
-			return v, v.chooserKey(msg)
+		if v.review.chooser != nil {
+			return v, v.review.chooserKey(msg, v.reviewEnv())
 		}
 		if v.picker != nil {
 			v.pickerKey(msg)
