@@ -14,9 +14,12 @@ import (
 // `y` runs OnYes, anything else (esc included) cancels. A view returns it for
 // actions that must not happen by accident, such as posting a comment.
 //
-// A ConfirmMsg that arrives while another prompt is open replaces it
-// silently (the visible text always matches the action that would run). Views
-// whose confirmation arrives after a network round trip should expect that.
+// A ConfirmMsg that arrives while the user is busy is dropped, not shown: the
+// command line is open, another prompt is open, or the top view captures
+// keys (a picker, a chooser). The status bar says the confirmation was
+// skipped and the user runs the command again. This keeps a question that
+// arrives after a network round trip from taking a key meant for something
+// else. Notices follow the same rule.
 type ConfirmMsg struct {
 	// Text is the question, already cleaned of untrusted escapes.
 	Text string

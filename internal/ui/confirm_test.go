@@ -65,6 +65,7 @@ func TestConfirmRendersAndFits(t *testing.T) {
 		t.Errorf("escape in %q", row)
 	}
 	long := strings.Repeat("x", 200)
+	m.confirm = nil // a second question is dropped while one is open
 	askConfirm(m, long)
 	row = ansi.Strip(m.bottomRow())
 	if ansi.StringWidth(row) != 60 || !strings.HasSuffix(strings.TrimRight(row, " "), "… y/N") {

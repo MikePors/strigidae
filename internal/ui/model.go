@@ -129,6 +129,11 @@ func (m *Model) update(msg tea.Msg) tea.Cmd {
 	case QuitMsg:
 		return tea.Quit
 	case ConfirmMsg:
+		// A question that arrives late must not take a key meant for
+		// something else, so it never interrupts typing or another prompt.
+		if m.busy() {
+			return m.setStatus(confirmSkipped, statusInfo)
+		}
 		m.resetKeys()
 		m.confirm = newConfirmPrompt(msg)
 		return nil
@@ -213,6 +218,20 @@ func (m *Model) pop() tea.Cmd {
 		return r.Resumed()
 	}
 	return nil
+}
+
+// confirmSkipped is shown when a ConfirmMsg is dropped because the user is busy.
+const confirmSkipped = "confirmation skipped while you were typing; run the command again"
+
+// busy reports whether the user is in the middle of something a new
+// question would interrupt: the command line, another prompt, or a view
+// that captures keys.
+func (m *Model) busy() bool {
+	if m.cmdline.active || m.confirm.CapturesKeys() {
+		return true
+	}
+	c, ok := m.top().(KeyCapturer)
+	return ok && c.CapturesKeys()
 }
 
 func (m *Model) resetKeys() {
