@@ -98,6 +98,8 @@ type Theme struct {
 	DiffHunkCursor   lipgloss.Style // header row under the cursor
 	DiffNoNewline    lipgloss.Style // "\ No newline at end of file" rows
 	Syntax           Syntax         // foreground-only token styles
+	ThreadMarker     lipgloss.Style // gutter marker and header of an open review thread
+	ThreadBar        lipgloss.Style // left bar of a thread's comment lines
 	// --- end diff pane ---
 
 	PRList PRListStyles // pull request tables
@@ -191,6 +193,8 @@ func newTheme(p Palette, r Roles) Theme {
 		DiffHunkCursor:   bold(r.Info).Background(r.HunkCursorTint),
 		DiffNoNewline:    fg(r.Muted).Italic(true),
 		Syntax:           newSyntax(r),
+		ThreadMarker:     bold(r.Warning),
+		ThreadBar:        fg(r.Info),
 		// --- end diff pane ---
 
 		PRList: newPRListStyles(r),
