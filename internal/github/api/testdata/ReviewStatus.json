@@ -1,0 +1,15 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "id": "PR_kwDOExample27",
+        "headRefOid": "0123456789abcdef0123456789abcdef01234567",
+        "reviews": {
+          "nodes": [
+            {"id": "PRR_kwDOExample09", "body": "Draft summary", "comments": {"totalCount": 3}}
+          ]
+        }
+      }
+    }
+  }
+}
