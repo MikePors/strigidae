@@ -126,24 +126,32 @@ func checkRange(in github.AddThreadInput) error {
 	return nil
 }
 
-// findOwn returns where the viewer's own comment is. Like GitHub it accepts
-// the author's comments in any state, published ones included, and refuses
-// other people's with ErrForbidden.
-func (c *Client) findOwn(id string) (key prKey, ti, ci int, err error) {
+// findComment locates a comment among the pull requests' threads.
+func (c *Client) findComment(id string) (key prKey, ti, ci int, ok bool) {
 	for k, ts := range c.threads {
 		for i, t := range ts {
 			for j, cm := range t.Comments {
-				if cm.ID != id {
-					continue
+				if cm.ID == id {
+					return k, i, j, true
 				}
-				if cm.Author != c.Viewer {
-					return k, 0, 0, fmt.Errorf("comment %s belongs to %s: %w", id, cm.Author, github.ErrForbidden)
-				}
-				return k, i, j, nil
 			}
 		}
 	}
-	return prKey{}, 0, 0, fmt.Errorf("comment %s: %w", id, github.ErrNotFound)
+	return prKey{}, 0, 0, false
+}
+
+// findAllowed locates a comment the viewer may change as GitHub reports it
+// (the can-flags, so also other people's when the viewer has write access).
+// An unknown comment is ErrNotFound, a refused one ErrForbidden.
+func (c *Client) findAllowed(id string, allowed func(github.ReviewComment) bool) (key prKey, ti, ci int, err error) {
+	key, ti, ci, ok := c.findComment(id)
+	switch {
+	case !ok:
+		return prKey{}, 0, 0, fmt.Errorf("comment %s: %w", id, github.ErrNotFound)
+	case !allowed(c.threads[key][ti].Comments[ci]):
+		return prKey{}, 0, 0, fmt.Errorf("comment %s: %w", id, github.ErrForbidden)
+	}
+	return key, ti, ci, nil
 }
 
 // publishPending marks the pending comments of a pull request as published,
@@ -159,7 +167,7 @@ func (c *Client) publishPending(key prKey) {
 }
 
 // UpdateReviewComment implements github.Client. Like GitHub it changes the
-// viewer's own comments in any state; an empty body is refused.
+// comments the viewer may update (see ViewerCanUpdate), in any state; an empty body is refused.
 func (c *Client) UpdateReviewComment(ctx context.Context, commentID, body string) (github.ReviewComment, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -169,7 +177,7 @@ func (c *Client) UpdateReviewComment(ctx context.Context, commentID, body string
 	if strings.TrimSpace(body) == "" {
 		return github.ReviewComment{}, fmt.Errorf("update review comment %s: empty body", commentID)
 	}
-	key, ti, ci, err := c.findOwn(commentID)
+	key, ti, ci, err := c.findAllowed(commentID, func(cm github.ReviewComment) bool { return cm.ViewerCanUpdate })
 	if err != nil {
 		return github.ReviewComment{}, fmt.Errorf("update review comment: %w", err)
 	}
@@ -189,7 +197,7 @@ func (c *Client) DeleteReviewComment(ctx context.Context, commentID string) erro
 	if err := c.begin(ctx, Call{Method: MethodDeleteReviewComment}); err != nil {
 		return err
 	}
-	key, ti, ci, err := c.findOwn(commentID)
+	key, ti, ci, err := c.findAllowed(commentID, func(cm github.ReviewComment) bool { return cm.ViewerCanDelete })
 	if err != nil {
 		return fmt.Errorf("delete review comment: %w", err)
 	}
@@ -223,22 +231,17 @@ func (c *Client) GetReviewComment(ctx context.Context, commentID string) (github
 	if err := c.begin(ctx, Call{Method: MethodGetReviewComment}); err != nil {
 		return github.ReviewComment{}, err
 	}
-	for _, ts := range c.threads {
-		for _, t := range ts {
-			for _, cm := range t.Comments {
-				if cm.ID == commentID {
-					return cloneReviewComment(cm), nil
-				}
-			}
-		}
+	key, ti, ci, ok := c.findComment(commentID)
+	if !ok {
+		return github.ReviewComment{}, fmt.Errorf("load review comment %s: %w", commentID, github.ErrNotFound)
 	}
-	return github.ReviewComment{}, fmt.Errorf("load review comment %s: %w", commentID, github.ErrNotFound)
+	return cloneReviewComment(c.threads[key][ti].Comments[ci]), nil
 }
 
 // permissions sets what the viewer may do with each comment, as GitHub
-// reports it: the viewer's own comments are theirs and, unless the test said
-// otherwise, changeable; other people's are not theirs, but are changeable
-// too, as for a repository admin (so code must check authorship itself).
+// reports it. The viewer's own comments are theirs, with the can-flags as the
+// test set them; other people's are not theirs but changeable, as for a
+// repository admin (so code must check authorship itself).
 func (c *Client) permissions(ts []github.ReviewThread) []github.ReviewThread {
 	for i := range ts {
 		for j := range ts[i].Comments {

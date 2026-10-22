@@ -33,10 +33,7 @@ mutation ` + opStartReview + `($pullRequestId: ID!, $commitOID: GitObjectID!) {
 const addReviewThreadMutation = `
 mutation ` + opAddReviewThread + `($reviewId: ID!, $path: String!, $body: String!, $line: Int!, $side: DiffSide!, $startLine: Int, $startSide: DiffSide) {
   addPullRequestReviewThread(input: {pullRequestReviewId: $reviewId, path: $path, body: $body, line: $line, side: $side, startLine: $startLine, startSide: $startSide}) {
-    thread {
-      id subjectType isResolved isOutdated path line originalLine startLine originalStartLine diffSide startDiffSide
-      comments(first: 100) { nodes { ` + reviewCommentSelection + ` } }
-    }
+    thread { ` + threadSelection + ` }
   }
 }`
 
