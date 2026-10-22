@@ -67,6 +67,10 @@ type FilePane interface {
 	SetFile(f github.ChangedFile)
 	// SetSize gives the pane's inner size; it is called whenever it changes.
 	SetSize(width, height int)
+	// FocusedThreads returns the review threads at the pane's cursor: the one
+	// whose rows it is in, or those on the line it is on. Panes without
+	// threads return nil.
+	FocusedThreads() []github.ReviewThread
 	// Update handles a key while the right pane has focus.
 	Update(msg keys.Msg) tea.Cmd
 	// Render draws the pane in exactly width columns and at most height rows.

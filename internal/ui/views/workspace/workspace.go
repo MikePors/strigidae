@@ -60,6 +60,7 @@ type View struct {
 	bind     bindings
 	md       *markdown.Renderer
 	filePane FilePane
+	edit     EditFunc
 
 	seq         int // latest load request; older results are stale
 	prPending   bool
@@ -72,6 +73,9 @@ type View struct {
 	diff        DiffState
 	err         error // load failure while there is nothing to show
 	notFound    bool
+
+	cseq   int               // latest compose request; older results are stale
+	drafts map[string]string // unposted bodies, by thread ID or topLevelDraft
 
 	fw     scroll.Window // Files pane: row 0 is Overview, row i is Files[i-1]
 	focus  pane
@@ -105,6 +109,8 @@ func New(client github.Client, repo github.Repo, number int, opts ...Option) *Vi
 		th:     theme.Default(),
 		km:     keys.DefaultGlobal(),
 		bind:   defaultBindings(),
+		edit:   execEditor,
+		drafts: map[string]string{},
 	}
 	for _, o := range opts {
 		o(v)
@@ -145,7 +151,7 @@ func (v *View) ShortHelp() []key.Binding {
 func (v *View) FullHelp() [][]key.Binding {
 	out := [][]key.Binding{
 		{v.bind.PaneLeft, v.bind.PaneRight, v.bind.NextFile, v.bind.PrevFile, v.bind.FilePicker},
-		{v.bind.NextSection, v.bind.PrevSection},
+		{v.bind.NextSection, v.bind.PrevSection, v.bind.Comment, v.bind.Reply},
 	}
 	return append(out, v.filePane.FullHelp()...)
 }
@@ -177,6 +183,16 @@ func (v *View) Update(msg tea.Msg) (ui.View, tea.Cmd) {
 			return v, nil
 		}
 		return v, v.threadsLoaded(msg)
+	case editedMsg:
+		if !v.composeMine(msg.owner, msg.repo, msg.number, msg.seq) {
+			return v, nil
+		}
+		return v, v.edited(msg)
+	case postedMsg:
+		if !v.composeMine(msg.owner, msg.repo, msg.number, msg.seq) {
+			return v, nil
+		}
+		return v, v.posted(msg)
 	case keys.Msg:
 		return v, v.handleKey(msg)
 	case tea.KeyPressMsg:

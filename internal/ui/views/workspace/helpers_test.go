@@ -139,7 +139,7 @@ func (h *harness) run(cmd tea.Cmd) {
 		for _, c := range msg {
 			h.run(c)
 		}
-	case ui.InfoMsg, ui.ErrorMsg:
+	case ui.InfoMsg, ui.ErrorMsg, ui.ConfirmMsg:
 		h.msgs = append(h.msgs, msg)
 	default:
 		h.send(msg)
