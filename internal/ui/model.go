@@ -55,6 +55,7 @@ type Model struct {
 	seqGen        int
 
 	showHelp bool
+	confirm  *confirmPrompt // open yes/no question, or nil
 	cmdline  commandLine
 	status   struct {
 		text string
@@ -127,6 +128,10 @@ func (m *Model) update(msg tea.Msg) tea.Cmd {
 		return m.pop()
 	case QuitMsg:
 		return tea.Quit
+	case ConfirmMsg:
+		m.resetKeys()
+		m.confirm = newConfirmPrompt(msg)
+		return nil
 	case InfoMsg:
 		return m.setStatus(msg.Text, statusInfo)
 	case ErrorMsg:
@@ -212,6 +217,7 @@ func (m *Model) pop() tea.Cmd {
 
 func (m *Model) resetKeys() {
 	m.showHelp = false
+	m.confirm = nil
 	m.cmdline.close()
 	m.matcher.Reset()
 	m.seqGen++
@@ -251,6 +257,10 @@ func (m *Model) bindings() []key.Binding {
 
 func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	k := msg.String()
+	if c := m.confirm; c.CapturesKeys() {
+		m.confirm = nil
+		return c.answer(msg)
+	}
 	if m.cmdline.active {
 		line, ok, cmd := m.cmdline.handleKey(msg)
 		if ok {
@@ -365,6 +375,9 @@ func shortHelp(bs []key.Binding) string {
 
 // bottomRow is the status bar, or the command line while it is open.
 func (m *Model) bottomRow() string {
+	if m.confirm != nil {
+		return m.th.StatusInfo.Width(m.width).MaxWidth(m.width).MaxHeight(1).Render(m.confirm.render(m.width))
+	}
 	if m.cmdline.active {
 		return m.th.StatusCommand.Width(m.width).MaxWidth(m.width).MaxHeight(1).Render(m.cmdline.input.View())
 	}
