@@ -28,6 +28,10 @@ go install github.com/MikePors/strigidae/cmd/strig@latest
 
 `:copy-filename` copies the selected file's path using the OSC 52 terminal escape, which also works over SSH. Terminals that ignore OSC 52 copy nothing. Inside tmux, add `set -g set-clipboard on` to `~/.tmux.conf`.
 
+## Configuration
+
+strig reads an optional YAML config (tabs and the search queries behind their sections) from `$XDG_CONFIG_HOME/strig/config.yml` (default `~/.config/strig/config.yml`); `--config <path>` overrides it and `strig --config-path` prints the location in use. See [docs/config.md](docs/config.md) and [docs/config.example.yml](docs/config.example.yml).
+
 ## License
 
 [MIT](LICENSE)

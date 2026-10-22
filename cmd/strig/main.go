@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/MikePors/strigidae/internal/config"
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/github/api"
 	"github.com/MikePors/strigidae/internal/gitrepo"
@@ -20,6 +21,8 @@ import (
 // terminal.
 type deps struct {
 	getwd  func() (string, error)
+	getenv func(string) string
+	home   func() (string, error)
 	runner gitrepo.Runner
 	// knownHost reports whether host is a GitHub host gh can talk to.
 	knownHost func(host string) bool
@@ -30,6 +33,8 @@ type deps struct {
 func realDeps() deps {
 	return deps{
 		getwd:     os.Getwd,
+		getenv:    os.Getenv,
+		home:      os.UserHomeDir,
 		runner:    gitrepo.ExecRunner,
 		knownHost: api.KnownHost,
 		newClient: func(host string) (github.Client, error) {
@@ -56,6 +61,8 @@ func execute(args []string, stdout, stderr io.Writer, d deps) error {
 	fs.SetOutput(stderr)
 	showVersion := fs.Bool("version", false, "print version and exit")
 	showLogPath := fs.Bool("log-path", false, "print the log file path and exit")
+	showConfigPath := fs.Bool("config-path", false, "print the config file path and exit")
+	configFlag := fs.String("config", "", "config file `path` (default: $XDG_CONFIG_HOME/strig/config.yml)")
 	repoFlag := fs.String("R", "", "repository to show as `owner/repo` (default: the current checkout's upstream or origin remote)")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -67,6 +74,8 @@ func execute(args []string, stdout, stderr io.Writer, d deps) error {
 		return &usageError{fmt.Sprintf("unexpected argument %q (did you mean -R %s?)", fs.Arg(0), fs.Arg(0))}
 	}
 
+	configPath, configErr := configLocation(*configFlag, d)
+
 	switch {
 	case *showVersion:
 		return printLine(stdout, "strig "+version.String())
@@ -76,13 +85,33 @@ func execute(args []string, stdout, stderr io.Writer, d deps) error {
 			return err
 		}
 		return printLine(stdout, path)
+	case *showConfigPath:
+		if configErr != nil {
+			return configErr
+		}
+		return printLine(stdout, configPath)
 	}
 
-	a, err := newApp(*repoFlag, d)
+	if configErr != nil {
+		return configErr
+	}
+	cfg, err := config.Load(configPath, *configFlag != "")
+	if err != nil {
+		return err
+	}
+	a, err := newApp(*repoFlag, cfg, d)
 	if err != nil {
 		return err
 	}
 	return d.start(a, stderr)
+}
+
+// configLocation is the --config path if given, else the default location.
+func configLocation(flagValue string, d deps) (string, error) {
+	if flagValue != "" {
+		return flagValue, nil
+	}
+	return config.Path(d.getenv, d.home)
 }
 
 func printLine(stdout io.Writer, s string) error {
