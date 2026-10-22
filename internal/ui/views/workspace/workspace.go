@@ -82,6 +82,10 @@ type View struct {
 	focus  pane
 	ov     overview
 	picker *picker.Model // non-nil while the file picker is open
+	// chooser is the review verdict chooser, non-nil while it is open.
+	chooser     *picker.Model
+	rseq        int    // latest review request; older results are stale
+	reviewDraft string // unsent review summary, kept until it is submitted
 	// pickerItems are the paths the picker was built from; a choice is
 	// resolved by path because a refresh may replace the file list meanwhile.
 	pickerItems []string
@@ -97,6 +101,7 @@ var (
 	_ ui.View        = (*View)(nil)
 	_ ui.Loader      = (*View)(nil)
 	_ ui.KeyCapturer = (*View)(nil)
+	_ ui.Commander   = (*View)(nil)
 )
 
 // New returns the workspace for pull request number in repo.
@@ -134,7 +139,7 @@ func (v *View) Loading() bool { return v.prPending || v.diffPending || v.thrPend
 
 // CapturesKeys implements ui.KeyCapturer: the file picker owns the keyboard
 // while it is open.
-func (v *View) CapturesKeys() bool { return v.picker != nil }
+func (v *View) CapturesKeys() bool { return v.picker != nil || v.chooser != nil }
 
 // Init implements ui.View.
 func (v *View) Init() tea.Cmd { return v.load() }
@@ -153,7 +158,7 @@ func (v *View) ShortHelp() []key.Binding {
 func (v *View) FullHelp() [][]key.Binding {
 	out := [][]key.Binding{
 		{v.bind.PaneLeft, v.bind.PaneRight, v.bind.NextFile, v.bind.PrevFile, v.bind.FilePicker},
-		{v.bind.NextSection, v.bind.PrevSection, v.bind.Comment, v.bind.Reply},
+		{v.bind.NextSection, v.bind.PrevSection, v.bind.Comment, v.bind.Reply, v.bind.Review},
 	}
 	return append(out, v.filePane.FullHelp()...)
 }
@@ -197,9 +202,32 @@ func (v *View) Update(msg tea.Msg) (ui.View, tea.Cmd) {
 			return v, nil
 		}
 		return v, v.posted(msg)
+	case reviewStatusMsg:
+		if !v.reviewMine(msg.owner, msg.repo, msg.number, msg.seq) {
+			return v, nil
+		}
+		return v, v.reviewStatus(msg)
+	case reviewEditedMsg:
+		if !v.reviewMine(msg.owner, msg.repo, msg.number, msg.seq) {
+			return v, nil
+		}
+		return v, v.reviewEdited(msg)
+	case reviewSubmittedMsg:
+		if !v.sameReview(msg.owner, msg.repo, msg.number) {
+			return v, nil
+		}
+		return v, v.reviewSubmitted(msg)
+	case refreshMsg:
+		if !v.sameReview(msg.owner, msg.repo, msg.number) {
+			return v, nil
+		}
+		return v, v.load()
 	case keys.Msg:
 		return v, v.handleKey(msg)
 	case tea.KeyPressMsg:
+		if v.chooser != nil {
+			return v, v.chooserKey(msg)
+		}
 		if v.picker != nil {
 			v.pickerKey(msg)
 		}
