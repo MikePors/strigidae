@@ -1,12 +1,12 @@
 open #7 Add retry policy to sync client
 alice · main ← feat/retry · changes requested · [enhancement] [sync] · reviewers: bob, team core
-╭─ Files ────────────────────╮╭─ Overview ─────────────────────────────────────────────────────────╮
+╭─ Files 0/5 viewed ─────────╮╭─ Overview ─────────────────────────────────────────────────────────╮
 │> Overview                  ││   2. Then the call sites                                           │
-│  M …rnal/sync/client.go +25││   3. Finally the removed code                                      │
-│  A …rnal/sync/retry.go +214││                                                                    │
-│  D …rnal/sync/legacy.go -90││ Conversation (5)                                                   │
-│  R …y-and-backoff.md +12 -3││ bob commented · 2d ago                                             │
-│  M README.md          +2 -1││   Thanks! Could you add a test for the jitter bounds?              │
+│    M …al/sync/client.go +25││   3. Finally the removed code                                      │
+│    A …al/sync/retry.go +214││                                                                    │
+│    D …al/sync/legacy.go -90││ Conversation (5)                                                   │
+│    R …and-backoff.md +12 -3││ bob commented · 2d ago                                             │
+│    M README.md        +2 -1││   Thanks! Could you add a test for the jitter bounds?              │
 │                            ││                                                                    │
 │                            ││ carol requested changes · 1d ago                                   │
 │                            ││   The cap should be configurable.                                  │

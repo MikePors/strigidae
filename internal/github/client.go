@@ -22,4 +22,7 @@ type Client interface {
 	ReplyToThread(ctx context.Context, threadID, body string) (ReviewComment, error)
 	// AddComment posts a top-level comment on the pull request.
 	AddComment(ctx context.Context, repo Repo, number int, body string) (IssueComment, error)
+	// SetFileViewed marks the file at path as viewed (or, with viewed false,
+	// clears the mark) for the viewer. pullRequestID is PullRequest.ID.
+	SetFileViewed(ctx context.Context, pullRequestID, path string, viewed bool) error
 }

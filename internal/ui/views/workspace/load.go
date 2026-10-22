@@ -135,6 +135,7 @@ func (v *View) prLoaded(msg prLoadedMsg) tea.Cmd {
 	}
 	prev := v.selectedPath()
 	v.detail, v.err, v.notFound = &msg.detail, nil, false
+	v.reapplyViewed(msg.seq)
 	top, sel := v.fw.Top(), 0
 	for i, f := range msg.detail.Files {
 		if prev != "" && f.Path == prev {
