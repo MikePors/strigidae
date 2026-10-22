@@ -73,17 +73,13 @@ func loadThreads(ctx context.Context, c github.Client, repo github.Repo, number 
 // load starts a fresh load of the pull request and its diff.
 func (v *View) load() tea.Cmd {
 	v.seq++
-	v.prPending, v.diffPending, v.thrPending, v.thrErr = true, true, true, nil
-	v.ov.invalidate()
+	v.diffPending = true
 	v.diff.Loading = true
 	v.filePane.SetDiff(v.diff)
 	client, repo, number, seq, owner := v.client, v.repo, v.number, v.seq, v
 
 	return tea.Batch(
-		func() tea.Msg {
-			d, err := client.GetPullRequest(context.Background(), repo, number)
-			return prLoadedMsg{owner: owner, repo: repo, number: number, seq: seq, detail: d, err: err}
-		},
+		v.reloadPR(),
 		func() tea.Msg {
 			raw, err := client.GetDiff(context.Background(), repo, number)
 			if err != nil {
@@ -94,11 +90,31 @@ func (v *View) load() tea.Cmd {
 			parsed, perr := diff.Parse(raw)
 			return diffLoadedMsg{owner: owner, repo: repo, number: number, seq: seq, raw: raw, parsed: parsed, parseErr: perr}
 		},
-		func() tea.Msg {
-			ts, err := loadThreads(context.Background(), client, repo, number)
-			return threadsLoadedMsg{owner: owner, repo: repo, number: number, seq: seq, threads: ts, err: err}
-		},
+		v.reloadThreads(),
 	)
+}
+
+// reloadPR loads the pull request again under the current request sequence;
+// after posting a comment it refreshes just the conversation.
+func (v *View) reloadPR() tea.Cmd {
+	v.prPending = true
+	v.ov.invalidate()
+	client, repo, number, seq, owner := v.client, v.repo, v.number, v.seq, v
+	return func() tea.Msg {
+		d, err := client.GetPullRequest(context.Background(), repo, number)
+		return prLoadedMsg{owner: owner, repo: repo, number: number, seq: seq, detail: d, err: err}
+	}
+}
+
+// reloadThreads loads the review threads again under the current request
+// sequence; after posting a reply it refreshes just the threads.
+func (v *View) reloadThreads() tea.Cmd {
+	v.thrPending, v.thrErr = true, nil
+	client, repo, number, seq, owner := v.client, v.repo, v.number, v.seq, v
+	return func() tea.Msg {
+		ts, err := loadThreads(context.Background(), client, repo, number)
+		return threadsLoadedMsg{owner: owner, repo: repo, number: number, seq: seq, threads: ts, err: err}
+	}
 }
 
 // mine reports whether a result belongs to this workspace's latest request.

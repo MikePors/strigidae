@@ -10,9 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/ui/components/comment"
 	"github.com/MikePors/strigidae/internal/ui/components/markdown"
 	"github.com/MikePors/strigidae/internal/ui/termtext"
 	"github.com/MikePors/strigidae/internal/ui/theme"
@@ -50,15 +52,18 @@ func Lines(e Env, t github.ReviewThread, width int, o Options) []string {
 	}
 	th := e.Theme
 	bar := th.ThreadBar.Render("│ ")
+	bodyW := width - lipgloss.Width(bar)
 	for i, c := range t.Comments {
-		out = append(out, ansi.Truncate(bar+commentHeader(e, c, t.IsOutdated), width, "…"))
-		if strings.TrimSpace(c.Body) == "" {
+		cc := comment.Comment{
+			Author: c.Author, At: c.CreatedAt, Body: c.Body, Pending: c.Pending,
+			Reactions: c.Reactions, Muted: t.IsOutdated,
+		}
+		out = append(out, ansi.Truncate(bar+comment.Header(th, e.Now, cc), width, "…"))
+		body := comment.Body(th, e.Markdown, cc, bodyW)
+		if body == "" {
 			continue
 		}
-		for _, l := range strings.Split(e.Markdown.Render(termtext.CleanBlock(c.Body), width-2), "\n") {
-			if t.IsOutdated {
-				l = th.Muted.Render(strings.TrimRight(ansi.Strip(l), " "))
-			}
+		for l := range strings.SplitSeq(body, "\n") {
 			out = append(out, bar+l)
 		}
 		if i < len(t.Comments)-1 {
@@ -84,14 +89,14 @@ func header(e Env, t github.ReviewThread, width int, o Options) string {
 	}
 	n := len(t.Comments)
 	if n > 0 {
-		parts = append(parts, th.Author.Render(author(t.Comments[0].Author)))
+		parts = append(parts, th.Author.Render(comment.Author(t.Comments[0].Author)))
 	}
 	meta := fmt.Sprintf("%d comment", n)
 	if n != 1 {
 		meta += "s"
 	}
 	if n > 0 {
-		meta += " · " + RelTime(e.Now, t.Comments[n-1].CreatedAt)
+		meta += " · " + comment.RelTime(e.Now, t.Comments[n-1].CreatedAt)
 	}
 	parts = append(parts, th.Muted.Render(meta))
 	if t.IsResolved {
@@ -112,33 +117,6 @@ func header(e Env, t github.ReviewThread, width int, o Options) string {
 	return ansi.Truncate(line, width, "…")
 }
 
-func commentHeader(e Env, c github.ReviewComment, outdated bool) string {
-	th := e.Theme
-	name := th.Author
-	if outdated {
-		name = th.Muted
-	}
-	s := name.Render(author(c.Author)) + th.Muted.Render(" · "+RelTime(e.Now, c.CreatedAt))
-	if c.Pending {
-		s += " " + th.Pending.Render("PENDING (draft, not submitted)")
-	}
-	if r := reactions(c.Reactions); r != "" {
-		s += "  " + th.Muted.Render(r)
-	}
-	return s
-}
-
-// reactions formats the non-zero reaction counts: "👍 2 👀 1".
-func reactions(rs []github.ReactionSummary) string {
-	var parts []string
-	for _, r := range rs {
-		if r.Count > 0 {
-			parts = append(parts, termtext.Clean(r.Content.Emoji())+" "+strconv.Itoa(r.Count))
-		}
-	}
-	return strings.Join(parts, " ")
-}
-
 func location(t github.ReviewThread) string {
 	loc := termtext.Clean(t.Path)
 	line := t.Line
@@ -151,13 +129,6 @@ func location(t github.ReviewThread) string {
 	return loc
 }
 
-func author(name string) string {
-	if name == "" {
-		return "ghost"
-	}
-	return termtext.Clean(name)
-}
-
 // preview is the first non-empty line of a body, cleaned, for collapsed threads.
 func preview(body string) string {
 	for l := range strings.SplitSeq(termtext.CleanBlock(body), "\n") {
@@ -166,23 +137,4 @@ func preview(body string) string {
 		}
 	}
 	return ""
-}
-
-// RelTime formats t relative to now ("5m ago").
-func RelTime(now, t time.Time) string {
-	d := now.Sub(t)
-	switch {
-	case d < time.Minute:
-		return "just now"
-	case d < time.Hour:
-		return fmt.Sprintf("%dm ago", int(d/time.Minute))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh ago", int(d/time.Hour))
-	case d < 30*24*time.Hour:
-		return fmt.Sprintf("%dd ago", int(d/(24*time.Hour)))
-	case d < 365*24*time.Hour:
-		return fmt.Sprintf("%dmo ago", int(d/(30*24*time.Hour)))
-	default:
-		return fmt.Sprintf("%dy ago", int(d/(365*24*time.Hour)))
-	}
 }

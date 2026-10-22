@@ -147,6 +147,16 @@ func (m *Model) threadsAtCursor() []int {
 	return m.attach[m.rows[c].bi]
 }
 
+// ThreadsAtCursor returns the threads the cursor is on: the one whose rows it
+// is in, or those anchored to the diff line it is on.
+func (m *Model) ThreadsAtCursor() []github.ReviewThread {
+	var out []github.ReviewThread
+	for _, ti := range m.threadsAtCursor() {
+		out = append(out, m.fthreads[ti])
+	}
+	return out
+}
+
 func (m *Model) setExpanded(ts []int, v bool) {
 	if len(ts) == 0 {
 		return

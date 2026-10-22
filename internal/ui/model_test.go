@@ -275,6 +275,11 @@ func TestCapturersReleaseOnEsc(t *testing.T) {
 			press(m, "x")
 			return m, m.cmdline.CapturesKeys
 		}},
+		{"confirm prompt", func() (*Model, func() bool) {
+			m := newModel(newFake("v"))
+			run(m, Confirm("sure?", nil))
+			return m, func() bool { return m.confirm.CapturesKeys() }
+		}},
 		{"view implementing KeyCapturer", func() (*Model, func() bool) {
 			v := newFake("v")
 			v.capture = true

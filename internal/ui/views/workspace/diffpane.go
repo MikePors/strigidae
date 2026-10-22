@@ -149,6 +149,8 @@ func (p *diffPane) Update(msg keys.Msg) tea.Cmd {
 	return nil
 }
 
+func (p *diffPane) FocusedThreads() []github.ReviewThread { return p.dv.ThreadsAtCursor() }
+
 func (p *diffPane) Render(width, height int) string { return p.dv.Render(width, height) }
 
 func (p *diffPane) FullHelp() [][]key.Binding {
