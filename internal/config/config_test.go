@@ -39,6 +39,22 @@ func TestParseValid(t *testing.T) {
 			}},
 		},
 		{
+			"is:pr is added when missing, not when present",
+			`tabs:
+  - name: A
+    user: a
+    sections:
+      - {name: Bug, query: 'label:bug author:{user}'}
+      - {name: Has, query: 'author:{user} IS:PR'}
+      - {name: Type, query: 'type:pr label:x'}
+`,
+			Config{Tabs: []Tab{{Name: "A", User: "a", Sections: []Section{
+				sec("Bug", "is:pr label:bug author:a", 30, SortUpdated, OrderDesc),
+				sec("Has", "author:a IS:PR", 30, SortUpdated, OrderDesc),
+				sec("Type", "type:pr label:x", 30, SortUpdated, OrderDesc),
+			}}}},
+		},
+		{
 			"numeric scalars are text",
 			"tabs:\n  - name: 2024\n    user: 12345\n",
 			Config{Tabs: []Tab{{Name: "2024", User: "12345", Sections: defaultsFor("12345")}}},
@@ -101,6 +117,7 @@ func TestParseErrors(t *testing.T) {
 		{"too large", "# " + strings.Repeat("x", MaxFileSize) + "\n", "c.yml: config file is too large (limit 1048576 bytes)"},
 		{"duplicate section", "tabs:\n  - name: A\n    sections:\n      - {name: S, query: q}\n      - {name: ' S ', query: r}\n", `c.yml:5: duplicate section name "S" in this tab`},
 		{"duplicate tab after trimming", "tabs:\n  - name: A\n  - name: ' A'\n", `c.yml:3: duplicate tab name "A"`},
+		{"sort in query", "tabs:\n  - name: A\n    sections:\n      - {name: S, query: 'is:pr Sort:created-asc'}\n", "c.yml:4: query must not contain sort:; use the sort and order keys"},
 		{"unclosed bracket", "tabs: [\n", "c.yml:1: invalid YAML: did not find expected node content"},
 		{"not a mapping", "- a\n", "c.yml:1: the config file must be a mapping of keys to values"},
 		{"unknown top-level key", "tabz: []\n", `c.yml:1: unknown key "tabz" in the config file (valid keys: tabs)`},

@@ -64,6 +64,10 @@ Each section is one PR list driven by a GitHub search query.
 
 `{user}` is the only variable; any other `{...}` in a query is an error.
 
+Queries list pull requests only. If a query has no `is:pr` (or `type:pr`),
+strig adds `is:pr` when it loads the file. A query must not contain a `sort:`
+qualifier (an error); use the `sort` and `order` keys instead.
+
 ## Defaults
 
 With no config file, or a file without `tabs`, strig has one tab, **Me**, with
@@ -74,6 +78,9 @@ these sections (`{user}` is `@me`):
 | Review requested | `is:pr is:open review-requested:{user}` |
 | My PRs | `is:pr is:open author:{user}` |
 | Involved | `is:pr is:open involves:{user} -author:{user}` |
+
+**Tabs you list replace the default Me tab.** If `tabs` has only a teammate,
+you won't get your own dashboard. To keep it, list it first: `- name: Me`.
 
 A tab with no `sections` gets the same three, so a teammate's tab is just
 `- name: Alice` plus `user: alice`.

@@ -252,6 +252,22 @@ func (p *parser) section(n *yaml.Node) Section {
 			s.Name = p.str(v, "section name")
 		case "query":
 			s.Query = p.str(v, "query")
+			if p.err != nil {
+				return
+			}
+			hasPR := false
+			for _, tok := range strings.Fields(strings.ToLower(s.Query)) {
+				switch {
+				case strings.HasPrefix(tok, "sort:"):
+					p.fail(v, "query must not contain sort:; use the sort and order keys")
+					return
+				case tok == "is:pr" || tok == "type:pr":
+					hasPR = true
+				}
+			}
+			if !hasPR {
+				s.Query = "is:pr " + s.Query
+			}
 			for _, ph := range placeholder.FindAllString(s.Query, -1) {
 				if ph != "{user}" {
 					p.fail(v, "unknown variable %s in query (the only variable is {user})", ph)
