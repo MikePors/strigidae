@@ -26,19 +26,27 @@ func commandTable() []commandSpec {
 }
 
 // parseCommand turns a command line (without the ":") into a command. An
-// empty line does nothing; an unknown name yields an error message.
-func parseCommand(line string) tea.Cmd {
+// empty line does nothing. The static table is consulted first; then top, if
+// it is a Commander. A name nobody handles yields an error message.
+func parseCommand(line string, top View) tea.Cmd {
 	line = strings.TrimSpace(line)
 	if line == "" {
 		return nil
 	}
 	name, args, _ := strings.Cut(line, " ")
+	args = strings.TrimSpace(args)
 	for _, c := range commandTable() {
 		for _, n := range c.names {
 			if n == name {
-				return c.run(strings.TrimSpace(args))
+				return c.run(args)
 			}
 		}
+	}
+	if c, ok := top.(Commander); ok {
+		if cmd, handled := c.Command(name, args); handled {
+			return cmd
+		}
+		return Error(fmt.Errorf("not available here: %s", name))
 	}
 	return Error(fmt.Errorf("not a command: %s", name))
 }

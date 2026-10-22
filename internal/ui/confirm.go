@@ -18,6 +18,9 @@ type ConfirmMsg struct {
 	Text string
 	// OnYes runs when the user answers yes.
 	OnYes tea.Cmd
+	// Notice turns the question into a notice: no y/N is offered, and any key
+	// dismisses it and runs OnYes (nil is fine).
+	Notice bool
 }
 
 // Confirm returns a command that asks the question.
@@ -27,18 +30,20 @@ func Confirm(text string, onYes tea.Cmd) tea.Cmd {
 
 // confirmPrompt is the open question. It implements KeyCapturer.
 type confirmPrompt struct {
-	text  string
-	onYes tea.Cmd
-	yes   key.Binding
+	text   string
+	onYes  tea.Cmd
+	yes    key.Binding
+	notice bool
 }
 
 var _ KeyCapturer = (*confirmPrompt)(nil)
 
 func newConfirmPrompt(msg ConfirmMsg) *confirmPrompt {
 	return &confirmPrompt{
-		text:  msg.Text,
-		onYes: msg.OnYes,
-		yes:   key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "yes")),
+		text:   msg.Text,
+		onYes:  msg.OnYes,
+		yes:    key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "yes")),
+		notice: msg.Notice,
 	}
 }
 
@@ -47,7 +52,7 @@ func (c *confirmPrompt) CapturesKeys() bool { return c != nil }
 
 // answer returns the command for a key press: OnYes for `y`, nil otherwise.
 func (c *confirmPrompt) answer(msg tea.KeyPressMsg) tea.Cmd {
-	if key.Matches(msg, c.yes) {
+	if c.notice || key.Matches(msg, c.yes) {
 		return c.onYes
 	}
 	return nil
@@ -56,7 +61,10 @@ func (c *confirmPrompt) answer(msg tea.KeyPressMsg) tea.Cmd {
 // render fits the question and the choices in width columns; the choices
 // always stay visible.
 func (c *confirmPrompt) render(width int) string {
-	const choices = " y/N"
+	choices := " y/N"
+	if c.notice {
+		choices = " (any key)"
+	}
 	// Tabs and other controls would be measured differently than drawn.
 	text := " " + strings.Map(func(r rune) rune {
 		if unicode.IsSpace(r) || unicode.IsControl(r) {

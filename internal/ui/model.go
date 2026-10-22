@@ -264,7 +264,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	if m.cmdline.active {
 		line, ok, cmd := m.cmdline.handleKey(msg)
 		if ok {
-			return parseCommand(line)
+			return parseCommand(line, m.top())
 		}
 		return cmd
 	}

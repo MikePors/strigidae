@@ -75,6 +75,16 @@ type Loader interface {
 	Loading() bool
 }
 
+// Commander is optionally implemented by views that own commands of their
+// own (":approve" in the PR workspace). The root consults only the top view,
+// and only when the static command table has no match, so a command never
+// reaches two views the way a broadcast result would. Command returns the
+// command to run and true when it recognizes name; false means "not available
+// here" and the status bar says so. args is the rest of the line, trimmed.
+type Commander interface {
+	Command(name, args string) (cmd tea.Cmd, handled bool)
+}
+
 // Resumer is optionally implemented by views that want to know they are
 // visible again after the view above them was popped (for example to refresh).
 type Resumer interface {
