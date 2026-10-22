@@ -165,7 +165,7 @@ func (v *View) FullHelp() [][]key.Binding {
 	out := [][]key.Binding{
 		{v.bind.PaneLeft, v.bind.PaneRight, v.bind.NextFile, v.bind.PrevFile, v.bind.FilePicker},
 		{v.bind.NextSection, v.bind.PrevSection, v.bind.Comment, v.bind.Reply, v.bind.Viewed},
-		{v.bind.Visual, v.bind.EditPending, v.bind.DeletePending},
+		{v.bind.Visual, v.bind.EditComment, v.bind.DeleteComment},
 	}
 	return append(out, v.filePane.FullHelp()...)
 }
@@ -212,24 +212,24 @@ func (v *View) Update(msg tea.Msg) (ui.View, tea.Cmd) {
 			return v, v.viewedDone(msg)
 		}
 	case editedMsg:
-		if !v.composeMine(msg.owner, msg.repo, msg.number, msg.seq) {
+		if !v.composeMine(origin{msg.owner, msg.repo, msg.number}, msg.seq) {
 			return v, nil
 		}
 		return v, v.edited(msg)
 	case postedMsg:
 		// A post is never superseded by a later compose, so it is identified
 		// by owner, repo and number only.
-		if msg.owner != v || msg.repo != v.repo || msg.number != v.number {
+		if !v.owns(msg.origin) {
 			return v, nil
 		}
 		return v, v.posted(msg)
 	case commentDeletedMsg:
-		if msg.owner != v || msg.repo != v.repo || msg.number != v.number {
+		if !v.owns(msg.origin) {
 			return v, nil
 		}
 		return v, v.commentDeleted(msg)
 	case commentCheckedMsg:
-		if msg.owner != v || msg.repo != v.repo || msg.number != v.number {
+		if !v.owns(msg.origin) {
 			return v, nil
 		}
 		return v, v.commentChecked(msg)

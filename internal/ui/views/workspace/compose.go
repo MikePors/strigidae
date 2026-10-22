@@ -36,8 +36,8 @@ type target struct {
 	// inline, when set, is a new inline comment for the pending review; the
 	// repo, number and pending review are filled in when it is sent.
 	inline *github.AddThreadInput
-	// commentID, when set, is the pending comment being edited; initial is its
-	// current body, shown when no draft is kept.
+	// commentID, when set, is the comment (pending or published) being edited;
+	// initial is its current body, shown when no draft is kept.
 	commentID string
 	initial   string
 }
@@ -70,32 +70,36 @@ type (
 		err    error
 	}
 	postedMsg struct {
-		owner  *View
-		repo   github.Repo
-		number int
+		origin origin
 		tgt    target
 		body   string
 		err    error
 	}
 )
 
-func (v *View) composeMine(owner *View, repo github.Repo, number, seq int) bool {
-	return owner == v && repo == v.repo && number == v.number && seq == v.cseq
+// origin is the identity of the workspace and pull request a result belongs
+// to: every view in the stack receives every result, so each ignores the ones
+// that are not its own.
+type origin struct {
+	owner  *View // compared, never dereferenced
+	repo   github.Repo
+	number int
 }
+
+func (v *View) origin() origin { return origin{owner: v, repo: v.repo, number: v.number} }
+
+// owns reports whether a result with origin o was asked for by this view.
+func (v *View) owns(o origin) bool { return o == v.origin() }
+
+func (v *View) composeMine(o origin, seq int) bool { return v.owns(o) && seq == v.cseq }
 
 // reply starts a reply to the thread under the diff cursor.
 func (v *View) reply() tea.Cmd {
-	if v.sel() == 0 {
-		return nil
+	t, ok, hint := v.focusedThread(" to reply")
+	if !ok {
+		return hint
 	}
-	switch ts := v.filePane.FocusedThreads(); len(ts) {
-	case 0:
-		return nil
-	case 1:
-		return v.compose(target{threadID: ts[0].ID, label: threadLocation(ts[0])})
-	default:
-		return ui.Info("several threads on this line: move onto one to reply")
-	}
+	return v.compose(target{threadID: t.ID, label: threadLocation(t)})
 }
 
 // comment starts a top-level comment from the Overview, or an inline one on a
@@ -167,15 +171,15 @@ func firstLine(body string) string {
 // post is the command that runs when the user confirms. On failure it also
 // returns the error itself, so it shows even if the view was left meanwhile.
 func (v *View) post(tgt target, body string) tea.Cmd {
-	client, repo, number, owner := v.client, v.repo, v.number, v
+	client, o := v.client, v.origin()
 	return func() tea.Msg {
 		var err error
 		if tgt.threadID != "" {
 			_, err = client.ReplyToThread(context.Background(), tgt.threadID, body)
 		} else {
-			_, err = client.AddComment(context.Background(), repo, number, body)
+			_, err = client.AddComment(context.Background(), o.repo, o.number, body)
 		}
-		res := postedMsg{owner: owner, repo: repo, number: number, tgt: tgt, body: body, err: err}
+		res := postedMsg{origin: o, tgt: tgt, body: body, err: err}
 		if err == nil {
 			return res
 		}
@@ -189,7 +193,7 @@ func (v *View) post(tgt target, body string) tea.Cmd {
 }
 
 func (v *View) posted(msg postedMsg) tea.Cmd {
-	if isStaleErr(msg.err) {
+	if isStale(msg.err) {
 		// The comment cannot be edited any more, so its draft is useless.
 		delete(v.drafts, msg.tgt.draftKey())
 		return v.reloadPendingComments()
@@ -197,23 +201,19 @@ func (v *View) posted(msg postedMsg) tea.Cmd {
 	if msg.err != nil {
 		return nil // the draft stays; the command already reported the error
 	}
-	what, reload := "Comment", v.reloadPR
-	switch {
-	case msg.tgt.threadID != "":
-		what, reload = "Reply", v.reloadThreads
-	case msg.tgt.inline != nil:
-		what, reload = "Pending comment added", v.reloadPendingComments
-	case msg.tgt.commentID != "":
-		what, reload = "Comment updated", v.reloadPendingComments
-	}
 	// A newer draft for the same target must survive.
 	if v.drafts[msg.tgt.draftKey()] == msg.body {
 		delete(v.drafts, msg.tgt.draftKey())
 	}
-	if msg.tgt.inline == nil && msg.tgt.commentID == "" {
-		what += " posted"
+	switch {
+	case msg.tgt.threadID != "":
+		return tea.Batch(ui.Info("Reply posted"), v.reloadThreads())
+	case msg.tgt.inline != nil:
+		return tea.Batch(ui.Info("Pending comment added"), v.reloadPendingComments())
+	case msg.tgt.commentID != "":
+		return tea.Batch(ui.Info("Comment updated"), v.reloadPendingComments())
 	}
-	return tea.Batch(ui.Info(what), reload())
+	return tea.Batch(ui.Info("Comment posted"), v.reloadPR())
 }
 
 // threadLocation is "path:line" for a thread.
