@@ -462,3 +462,150 @@ func TestInlineKeysAreInHelp(t *testing.T) {
 		}
 	}
 }
+
+// submitElsewhere publishes the pending review on the server, as submitting
+// it on github.com would, without the view hearing about it.
+func (c *inliner) submitElsewhere() {
+	c.t.Helper()
+	in := github.SubmitReviewInput{
+		Repo: testRepo, Number: 7, PullRequestID: prNodeID, Event: github.ReviewEventComment,
+		PendingReviewID: c.client.StartedReviews()[0].ReviewID,
+	}
+	if err := c.client.SubmitReview(c.t.Context(), in); err != nil {
+		c.t.Fatal(err)
+	}
+}
+
+func (c *inliner) serverBody(id string) string {
+	c.t.Helper()
+	page, err := c.client.ListReviewThreads(c.t.Context(), testRepo, 7, github.PageRequest{})
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	for _, th := range page.Items {
+		for _, cm := range th.Comments {
+			if cm.ID == id {
+				return cm.Body
+			}
+		}
+	}
+	c.t.Fatalf("comment %s not on the server", id)
+	return ""
+}
+
+func (c *inliner) pendingThreadShown() bool {
+	for _, th := range c.v.threads {
+		for _, cm := range th.Comments {
+			if cm.Pending {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func TestStaleCommentIsNeverEditedOrDeleted(t *testing.T) {
+	stale := func(t *testing.T, failReload bool) (*inliner, string) {
+		c := newInliner(t)
+		id := c.addPending("original").Comments[0].ID
+		c.submitElsewhere()
+		if failReload {
+			c.client.SetError(fake.MethodListReviewThreads, errors.New("boom"))
+			c.press("R")
+			c.client.SetError(fake.MethodListReviewThreads, nil)
+		}
+		if !c.pendingThreadShown() {
+			t.Fatal("setup: the view should still think the comment is pending")
+		}
+		c.msgs = nil
+		return c, id
+	}
+	for _, failReload := range []bool{false, true} {
+		name := map[bool]string{false: "thread list is stale", true: "thread reload failed"}[failReload]
+		t.Run(name+"/edit", func(t *testing.T) {
+			c, id := stale(t, failReload)
+			c.body = "rewritten publicly" // the editor closes, then the check refuses
+			c.press("e")
+			if !strings.Contains(c.lastError(), "no longer pending") {
+				t.Errorf("error = %q", c.lastError())
+			}
+			if got := c.methods(fake.MethodUpdateReviewComment); len(got) != 0 {
+				t.Errorf("update sent: %v", got)
+			}
+			if got := c.serverBody(id); got != "original" {
+				t.Errorf("published comment now says %q", got)
+			}
+		})
+		t.Run(name+"/delete", func(t *testing.T) {
+			c, id := stale(t, failReload)
+			c.press("D") // refused before any confirmation is shown
+			if _, asked := c.lastConfirm(); asked {
+				t.Error("asked to delete a comment that is not pending")
+			}
+			if !strings.Contains(c.lastError(), "no longer pending") {
+				t.Errorf("error = %q", c.lastError())
+			}
+			if got := c.methods(fake.MethodDeleteReviewComment); len(got) != 0 {
+				t.Errorf("delete sent: %v", got)
+			}
+			if got := c.serverBody(id); got != "original" {
+				t.Errorf("comment = %q", got)
+			}
+		})
+	}
+}
+
+func TestStaleEditRefreshesTheView(t *testing.T) {
+	c := newInliner(t)
+	c.addPending("original")
+	c.submitElsewhere()
+	c.body = "x"
+	c.press("e")
+	if c.pendingThreadShown() {
+		t.Error("the refresh did not show the comment as published")
+	}
+}
+
+func TestDeleteRechecksAfterTheAnswer(t *testing.T) {
+	c := newInliner(t)
+	th := c.addPending("original")
+	c.msgs = nil
+	c.press("D")
+	conf, ok := c.lastConfirm()
+	if !ok {
+		t.Fatal("no confirmation")
+	}
+	c.submitElsewhere() // while the question is open
+	c.run(conf.OnYes)
+	if got := c.methods(fake.MethodDeleteReviewComment); len(got) != 0 {
+		t.Errorf("delete sent after the review was submitted: %v", got)
+	}
+	if !strings.Contains(c.lastError(), "no longer pending") {
+		t.Errorf("error = %q", c.lastError())
+	}
+	if got := c.serverBody(th.Comments[0].ID); got != "original" {
+		t.Errorf("comment = %q", got)
+	}
+}
+
+func TestEditAndDeleteRefusedWhileSubmitting(t *testing.T) {
+	c := newInliner(t)
+	c.addPending("original")
+	c.openedOn, c.msgs = nil, nil
+	c.v.review.submitting = true
+	c.body = "x"
+	c.press("e")
+	c.press("D")
+	if len(c.openedOn) != 0 {
+		t.Error("editor opened while a review is being submitted")
+	}
+	if got := c.infos(); len(got) != 2 || got[0] != "a review is being submitted" {
+		t.Errorf("infos = %v", got)
+	}
+	if _, asked := c.lastConfirm(); asked {
+		t.Error("asked to delete while a review is being submitted")
+	}
+	if got := c.methods(fake.MethodUpdateReviewComment, fake.MethodDeleteReviewComment); len(got) != 0 {
+		t.Errorf("mutations sent: %v", got)
+	}
+}

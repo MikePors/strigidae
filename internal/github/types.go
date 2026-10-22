@@ -279,6 +279,9 @@ type PendingReview struct {
 	CommentCount int
 	// CommitOID is the commit the review is anchored to; empty if unknown.
 	CommitOID string
+	// CommentIDs are the IDs of its inline comments, as far as the status
+	// query lists them (at most 100; compare with CommentCount).
+	CommentIDs []string
 }
 
 // ReviewStatus is the state a review submission depends on.

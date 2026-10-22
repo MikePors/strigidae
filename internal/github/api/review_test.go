@@ -21,7 +21,7 @@ func TestGetReviewStatus(t *testing.T) {
 	want := github.ReviewStatus{
 		PullRequestID: "PR_kwDOExample27",
 		HeadSHA:       "0123456789abcdef0123456789abcdef01234567",
-		Pending:       &github.PendingReview{ID: "PRR_kwDOExample09", Body: "Draft summary", CommentCount: 3, CommitOID: "0123456789abcdef0123456789abcdef01234567"},
+		Pending:       &github.PendingReview{ID: "PRR_kwDOExample09", Body: "Draft summary", CommentCount: 3, CommitOID: "0123456789abcdef0123456789abcdef01234567", CommentIDs: []string{"PRRC_1", "PRRC_2", "PRRC_3"}},
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("status (-want +got):\n%s", diff)

@@ -66,6 +66,7 @@ func (c *Client) GetReviewStatus(ctx context.Context, repo github.Repo, number i
 	}
 	st := github.ReviewStatus{PullRequestID: d.ID, HeadSHA: d.HeadSHA}
 	if p, ok := c.pending[key]; ok {
+		p.CommentIDs = c.pendingIDs(key)
 		st.Pending = &p
 	}
 	return st, nil
@@ -106,6 +107,7 @@ func (c *Client) SubmitReview(ctx context.Context, in github.SubmitReviewInput) 
 	if in.Event != github.ReviewEventApprove && strings.TrimSpace(in.Body) == "" && inline == 0 {
 		return fmt.Errorf("submit review on %s#%d: body is required", in.Repo, in.Number)
 	}
+	c.publishPending(key)
 	delete(c.pending, key)
 	c.nextID++
 	d.Reviews = append(slices.Clip(d.Reviews), github.Review{

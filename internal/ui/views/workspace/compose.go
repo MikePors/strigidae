@@ -188,6 +188,11 @@ func (v *View) post(tgt target, body string) tea.Cmd {
 }
 
 func (v *View) posted(msg postedMsg) tea.Cmd {
+	if errors.Is(msg.err, errNotPending) {
+		// The comment cannot be edited any more, so its draft is useless.
+		delete(v.drafts, msg.tgt.draftKey())
+		return v.reloadPendingComments()
+	}
 	if msg.err != nil {
 		return nil // the draft stays; the command already reported the error
 	}

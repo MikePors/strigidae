@@ -6,7 +6,7 @@
         "headRefOid": "0123456789abcdef0123456789abcdef01234567",
         "reviews": {
           "nodes": [
-            {"id": "PRR_kwDOExample09", "body": "Draft summary", "commit": {"oid": "0123456789abcdef0123456789abcdef01234567"},"comments": {"totalCount": 3}}
+            {"id": "PRR_kwDOExample09", "body": "Draft summary", "commit": {"oid": "0123456789abcdef0123456789abcdef01234567"},"comments": {"totalCount": 3, "nodes": [{"id": "PRRC_1"}, {"id": "PRRC_2"}, {"id": "PRRC_3"}]}}
           ]
         }
       }

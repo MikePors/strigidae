@@ -124,16 +124,18 @@ func checkRange(in github.AddThreadInput) error {
 	return nil
 }
 
-// findPending returns the thread and comment indexes of a pending comment.
-func (c *Client) findPending(id string) (key prKey, ti, ci int, err error) {
+// findOwn returns where the viewer's own comment is. Like GitHub it accepts
+// the author's comments in any state, published ones included, and refuses
+// other people's with ErrForbidden.
+func (c *Client) findOwn(id string) (key prKey, ti, ci int, err error) {
 	for k, ts := range c.threads {
 		for i, t := range ts {
 			for j, cm := range t.Comments {
 				if cm.ID != id {
 					continue
 				}
-				if !cm.Pending {
-					return k, 0, 0, fmt.Errorf("comment %s is not part of your pending review: %w", id, github.ErrForbidden)
+				if cm.Author != c.Viewer {
+					return k, 0, 0, fmt.Errorf("comment %s belongs to %s: %w", id, cm.Author, github.ErrForbidden)
 				}
 				return k, i, j, nil
 			}
@@ -142,8 +144,33 @@ func (c *Client) findPending(id string) (key prKey, ti, ci int, err error) {
 	return prKey{}, 0, 0, fmt.Errorf("comment %s: %w", id, github.ErrNotFound)
 }
 
-// UpdateReviewComment implements github.Client. Only pending comments can be
-// changed (ErrForbidden otherwise); an empty body is refused.
+// pendingIDs lists the IDs of the pending comments of a pull request.
+func (c *Client) pendingIDs(key prKey) []string {
+	var ids []string
+	for _, t := range c.threads[key] {
+		for _, cm := range t.Comments {
+			if cm.Pending {
+				ids = append(ids, cm.ID)
+			}
+		}
+	}
+	return ids
+}
+
+// publishPending marks the pending comments of a pull request as published,
+// as submitting the review does.
+func (c *Client) publishPending(key prKey) {
+	ts := cloneThreads(c.threads[key])
+	for i := range ts {
+		for j := range ts[i].Comments {
+			ts[i].Comments[j].Pending = false
+		}
+	}
+	c.threads[key] = ts
+}
+
+// UpdateReviewComment implements github.Client. Like GitHub it changes the
+// viewer's own comments in any state; an empty body is refused.
 func (c *Client) UpdateReviewComment(ctx context.Context, commentID, body string) (github.ReviewComment, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -153,7 +180,7 @@ func (c *Client) UpdateReviewComment(ctx context.Context, commentID, body string
 	if strings.TrimSpace(body) == "" {
 		return github.ReviewComment{}, fmt.Errorf("update review comment %s: empty body", commentID)
 	}
-	key, ti, ci, err := c.findPending(commentID)
+	key, ti, ci, err := c.findOwn(commentID)
 	if err != nil {
 		return github.ReviewComment{}, fmt.Errorf("update review comment: %w", err)
 	}
@@ -173,17 +200,18 @@ func (c *Client) DeleteReviewComment(ctx context.Context, commentID string) erro
 	if err := c.begin(ctx, Call{Method: MethodDeleteReviewComment}); err != nil {
 		return err
 	}
-	key, ti, ci, err := c.findPending(commentID)
+	key, ti, ci, err := c.findOwn(commentID)
 	if err != nil {
 		return fmt.Errorf("delete review comment: %w", err)
 	}
+	wasPending := c.threads[key][ti].Comments[ci].Pending
 	ts := slices.Clone(c.threads[key])
 	ts[ti].Comments = slices.Delete(slices.Clone(ts[ti].Comments), ci, ci+1)
 	if len(ts[ti].Comments) == 0 {
 		ts = slices.Delete(ts, ti, ti+1)
 	}
 	c.threads[key] = ts
-	if p, ok := c.pending[key]; ok {
+	if p, ok := c.pending[key]; ok && wasPending {
 		p.CommentCount = max(0, p.CommentCount-1)
 		c.pending[key] = p
 	}

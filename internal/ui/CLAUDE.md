@@ -48,9 +48,7 @@ Reserved globally:
 | `/`, `n` / `N` | filter or search, next / previous match |
 | `o` | open the current item in the browser |
 | `R` | refresh |
-| `c` | new comment (top-level, or on the cursor line / visual selection in a diff, added to the pending review) |
-| `V` | diff: visual-line mode, `j`/`k` extend, `c` comments on the range, `esc` leaves; captures keys |
-| `e` / `D` | diff: edit / delete your pending comment at the cursor (`D` asks `y/N`) |
+| `c` | new comment (top-level, or on the cursor line / visual selection in a diff) |
 | `r` | reply to the focused comment thread |
 | `:` | command line |
 | `]` / `[` | next / previous chunk of what the pane shows: hunk in a diff, section in the Overview |

@@ -19,7 +19,7 @@ func TestStartReview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := (github.PendingReview{ID: "PRR_kwDOExample11"}); got != want {
+	if want := (github.PendingReview{ID: "PRR_kwDOExample11"}); !cmp.Equal(got, want) {
 		t.Errorf("review = %+v, want %+v", got, want)
 	}
 	want := map[string]any{"pullRequestId": "PR_kwDOExample27", "commitOID": "abc123"}
