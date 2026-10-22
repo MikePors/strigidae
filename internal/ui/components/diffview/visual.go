@@ -15,7 +15,6 @@ const markSelected = "▎"
 // SideRight), and are equal for a single line.
 type Range struct {
 	Path       string
-	Hunk       int
 	Side       Side
 	Start, End int
 }
@@ -36,11 +35,10 @@ func (m *Model) VisualActive() bool { return m.vis }
 // VisualStart begins a line selection at the cursor line. It reports false
 // (and starts nothing) when the cursor is not on a diff line.
 func (m *Model) VisualStart() bool {
-	bi, ok := m.cursorBase()
-	if _, onLine := m.Cursor(); !ok || !onLine {
+	if _, ok := m.Cursor(); !ok {
 		return false
 	}
-	m.vis, m.vbi = true, bi
+	m.vis, m.vbi = true, m.rows[m.win.Cursor()].bi
 	return true
 }
 
@@ -110,7 +108,7 @@ func (m *Model) Anchor() (r Range, ok bool) {
 		return Range{}, false
 	}
 	n := c.Number()
-	return Range{Path: c.Path, Hunk: c.Hunk, Side: c.Side, Start: n, End: n}, true
+	return Range{Path: c.Path, Side: c.Side, Start: n, End: n}, true
 }
 
 // selection is the range between the selection's anchor and the cursor.
@@ -140,7 +138,7 @@ func (m *Model) rangeOf(a, b int) (Range, error) {
 	if err != nil {
 		return Range{}, err
 	}
-	return rangeFor(m.file.Path(), m.base[lo].hunk, lines)
+	return rangeFor(m.file.Path(), lines)
 }
 
 // linesIn collects the diff lines of base rows lo to hi, which must all be in
@@ -159,10 +157,10 @@ func (m *Model) linesIn(lo, hi int) ([]*diff.Line, error) {
 	return lines, nil
 }
 
-// rangeFor is the range covering lines, all of one hunk. A range containing a
+// rangeFor is the range covering lines (all of one hunk). A range containing a
 // deleted line is on the old side, any other on the new side (context lines
 // exist on both); added and deleted lines together are on no side.
-func rangeFor(path string, hunk int, lines []*diff.Line) (Range, error) {
+func rangeFor(path string, lines []*diff.Line) (Range, error) {
 	if len(lines) == 0 {
 		return Range{}, errNoLines
 	}
@@ -175,9 +173,9 @@ func rangeFor(path string, hunk int, lines []*diff.Line) (Range, error) {
 	}
 	first, last := lines[0], lines[len(lines)-1]
 	if hasDel {
-		return Range{Path: path, Hunk: hunk, Side: SideLeft, Start: first.Old, End: last.Old}, nil
+		return Range{Path: path, Side: SideLeft, Start: first.Old, End: last.Old}, nil
 	}
-	return Range{Path: path, Hunk: hunk, Side: SideRight, Start: first.New, End: last.New}, nil
+	return Range{Path: path, Side: SideRight, Start: first.New, End: last.New}, nil
 }
 
 // selected reports whether base row bi is inside the selection.
