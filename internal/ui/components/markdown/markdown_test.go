@@ -5,10 +5,12 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/MikePors/strigidae/internal/ui/theme"
 )
 
 func TestRenderCachesAndTrims(t *testing.T) {
-	r := New(true)
+	r := New(theme.New(true))
 	out := r.Render("# Title\n\nsome **bold** text", 40)
 	plain := ansi.Strip(out)
 	if !strings.Contains(plain, "Title") || !strings.Contains(plain, "bold") {
@@ -30,13 +32,13 @@ func TestRenderCachesAndTrims(t *testing.T) {
 }
 
 func TestStyleIsFixed(t *testing.T) {
-	if New(true).Render("**x**", 20) == New(false).Render("**x**", 20) {
+	if New(theme.New(true)).Render("**x**", 20) == New(theme.New(false)).Render("**x**", 20) {
 		t.Error("dark and light styles should differ")
 	}
 }
 
 func TestWraps(t *testing.T) {
-	out := ansi.Strip(New(true).Render(strings.Repeat("word ", 40), 30))
+	out := ansi.Strip(New(theme.New(true)).Render(strings.Repeat("word ", 40), 30))
 	for _, l := range strings.Split(out, "\n") {
 		if ansi.StringWidth(l) > 30 {
 			t.Errorf("line %q wider than 30", l)

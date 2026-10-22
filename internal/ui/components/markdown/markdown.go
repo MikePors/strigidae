@@ -6,20 +6,22 @@ import (
 	"strings"
 
 	"charm.land/glamour/v2"
-	"charm.land/glamour/v2/styles"
 
 	"github.com/MikePors/strigidae/internal/ui/termtext"
+	"github.com/MikePors/strigidae/internal/ui/theme"
 )
 
 type cacheKey struct {
-	body  string
-	width int
+	body    string
+	width   int
+	themeID string
 }
 
-// Renderer renders Markdown with a fixed Glamour style. It is not safe for
-// concurrent use; views call it from Update and Render only.
+// Renderer renders Markdown with a Glamour style built from a theme's roles.
+// It is not safe for concurrent use; views call it from Update and Render
+// only.
 type Renderer struct {
-	style string
+	th theme.Theme
 	// Only the current width is kept: callers render at one width at a time,
 	// so a window resize drops what was built for the old one.
 	width int
@@ -27,14 +29,11 @@ type Renderer struct {
 	cache map[cacheKey]string
 }
 
-// New returns a Renderer using Glamour's dark or light style. The style is
-// chosen explicitly, never auto-detected, so output is deterministic.
-func New(dark bool) *Renderer {
-	style := styles.LightStyle
-	if dark {
-		style = styles.DarkStyle
-	}
-	return &Renderer{style: style, cache: map[cacheKey]string{}}
+// New returns a Renderer styled by th. The style comes from the theme, never
+// from terminal detection, so output is deterministic. Build a new Renderer
+// when the theme changes.
+func New(th theme.Theme) *Renderer {
+	return &Renderer{th: th, cache: map[cacheKey]string{}}
 }
 
 // Render returns body rendered and wrapped to width columns, without the
@@ -46,7 +45,7 @@ func (r *Renderer) Render(body string, width int) string {
 		r.width, r.tr = width, nil
 		clear(r.cache)
 	}
-	k := cacheKey{body, width}
+	k := cacheKey{body, width, r.th.ID}
 	if s, ok := r.cache[k]; ok {
 		return s
 	}
@@ -59,7 +58,7 @@ func (r *Renderer) Render(body string, width int) string {
 
 func (r *Renderer) render(body string, width int) string {
 	if r.tr == nil {
-		tr, err := glamour.NewTermRenderer(glamour.WithStandardStyle(r.style), glamour.WithWordWrap(width-4))
+		tr, err := glamour.NewTermRenderer(glamour.WithStyles(styleConfig(r.th)), glamour.WithChromaFormatter("terminal16m"), glamour.WithWordWrap(width-4))
 		if err != nil {
 			return body
 		}

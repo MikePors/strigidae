@@ -105,7 +105,7 @@ func New(client github.Client, repo github.Repo, number int, opts ...Option) *Vi
 	for _, o := range opts {
 		o(v)
 	}
-	v.md = markdown.New(v.th.IsDark)
+	v.md = markdown.New(v.th)
 	v.ov = newOverview()
 	if v.filePane == nil {
 		v.filePane = newDiffPane(v.th)
@@ -154,7 +154,7 @@ func (v *View) Update(msg tea.Msg) (ui.View, tea.Cmd) {
 		v.layout()
 	case ui.ThemeMsg:
 		v.th = msg.Theme
-		v.md = markdown.New(v.th.IsDark)
+		v.md = markdown.New(v.th)
 		v.ov.invalidate()
 		v.filePane.SetTheme(v.th)
 		v.layout()

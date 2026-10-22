@@ -6,6 +6,8 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/MikePors/strigidae/internal/ui/theme"
 )
 
 // commandSpec is one entry in the command registry.
@@ -52,10 +54,28 @@ type commandLine struct {
 
 var _ KeyCapturer = (*commandLine)(nil)
 
-func newCommandLine() commandLine {
+func newCommandLine(th theme.Theme) commandLine {
 	in := textinput.New()
 	in.Prompt = ":"
-	return commandLine{input: in}
+	c := commandLine{input: in}
+	c.setTheme(th)
+	return c
+}
+
+// setTheme styles the input from the theme's command-line styles, so the
+// typed text is readable on light and dark backgrounds alike.
+func (c *commandLine) setTheme(th theme.Theme) {
+	state := textinput.StyleState{
+		Text:        th.CommandText,
+		Prompt:      th.CommandPrompt,
+		Placeholder: th.CommandHint,
+		Suggestion:  th.CommandHint,
+	}
+	c.input.SetStyles(textinput.Styles{
+		Focused: state,
+		Blurred: state,
+		Cursor:  textinput.CursorStyle{Color: th.CommandText.GetForeground(), Shape: tea.CursorBlock, Blink: true},
+	})
 }
 
 // CapturesKeys implements KeyCapturer.
