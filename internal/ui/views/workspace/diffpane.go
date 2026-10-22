@@ -31,10 +31,10 @@ func defaultDiffBindings() diffBindings {
 		return key.NewBinding(key.WithKeys(k), key.WithHelp(helpKey, desc))
 	}
 	return diffBindings{
-		NextHunk:        b("] h", "]h", "next hunk"),
-		PrevHunk:        b("[ h", "[h", "previous hunk"),
-		NextThread:      b("] c", "]c", "next comment thread"),
-		PrevThread:      b("[ c", "[c", "previous comment thread"),
+		NextHunk:        b("]", "]", "next hunk"),
+		PrevHunk:        b("[", "[", "previous hunk"),
+		NextThread:      b(")", ")", "next comment thread"),
+		PrevThread:      b("(", "(", "previous comment thread"),
 		ToggleThread:    b("z a", "za", "toggle comment thread (also enter on a marked line)"),
 		OpenThread:      b("z o", "zo", "open comment thread"),
 		CloseThread:     b("z c", "zc", "close comment thread"),

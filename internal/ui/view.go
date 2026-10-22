@@ -40,7 +40,7 @@ import (
 //
 // ShortHelp and FullHelp come from help.KeyMap. List only bindings specific
 // to the view; the global ones are added by the root. FullHelp doubles as the
-// registry of the view's multi-key sequences (bindings with keys like "] f"),
+// registry of the view's multi-key sequences (bindings with keys like "g f"),
 // so every binding the view reacts to must appear there, even if ShortHelp
 // leaves it out.
 type View interface {

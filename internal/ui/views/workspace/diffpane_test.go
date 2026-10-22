@@ -29,7 +29,7 @@ func (h *harness) cursorText() string {
 // openClientDiff selects client.go and focuses the right pane.
 func openClientDiff(t *testing.T, w, ht int) *harness {
 	h := loaded(t, w, ht)
-	h.press("] f", "l")
+	h.press("}", "l")
 	if got := h.v.selectedPath(); got != "internal/sync/client.go" {
 		t.Fatalf("selected %q", got)
 	}
@@ -74,14 +74,14 @@ func TestDiffPaneKeys(t *testing.T) {
 		t.Errorf("ctrl+b: cursor on %q", h.cursorText())
 	}
 
-	// Hunks: ] h goes to the second hunk's header, [ h back to the first.
-	h.press("] h", "j")
+	// Hunks: ] goes to the second hunk's header, [ back to the first.
+	h.press("]", "j")
 	if !strings.Contains(h.cursorText(), "c.conn.Ping") {
-		t.Errorf("] h j: cursor on %q", h.cursorText())
+		t.Errorf("]: cursor on %q", h.cursorText())
 	}
-	h.press("[ h", "[ h", "j")
+	h.press("[", "[", "j")
 	if !strings.Contains(h.cursorText(), `"context"`) {
-		t.Errorf("[ h: cursor on %q", h.cursorText())
+		t.Errorf("[: cursor on %q", h.cursorText())
 	}
 
 	// Horizontal scrolling: 4 columns, then half a screen.
@@ -106,8 +106,8 @@ func TestDiffPaneKeys(t *testing.T) {
 
 func TestDiffPaneKeysReachOnlyWhenRightFocused(t *testing.T) {
 	h := loaded(t, 100, 24)
-	h.press("] f") // Files pane still focused
-	h.press("j")   // moves the file selection, not the diff cursor
+	h.press("}") // Files pane still focused
+	h.press("j") // moves the file selection, not the diff cursor
 	if got := h.v.selectedPath(); got != "internal/sync/retry.go" {
 		t.Errorf("selected %q", got)
 	}
@@ -115,14 +115,14 @@ func TestDiffPaneKeysReachOnlyWhenRightFocused(t *testing.T) {
 
 func TestDiffLookupByOldPathAndRename(t *testing.T) {
 	h := loaded(t, 100, 24)
-	h.press("] f", "] f", "] f") // legacy.go, deleted
+	h.press("}", "}", "}") // legacy.go, deleted
 	if got := h.v.selectedPath(); got != "internal/sync/legacy.go" {
 		t.Fatalf("selected %q", got)
 	}
 	if out := ansi.Strip(h.render()); !strings.Contains(out, "retryForever") {
 		t.Errorf("deleted file diff missing:\n%s", out)
 	}
-	h.press("] f") // renamed file: ChangedFile carries the new path
+	h.press("}") // renamed file: ChangedFile carries the new path
 	if out := ansi.Strip(h.render()); !strings.Contains(out, "New text.") {
 		t.Errorf("renamed file diff missing:\n%s", out)
 	}
@@ -154,28 +154,28 @@ func TestDiffPaneStates(t *testing.T) {
 		h := newHarness(t, 100, 24)
 		h.v.Init()
 		h.send(prLoadedMsg{owner: h.v, repo: testRepo, number: 7, seq: h.v.seq, detail: testDetail()})
-		h.press("] f")
+		h.press("}")
 		golden.Assert(t, "diff_loading", h.render(), false)
 	})
 	t.Run("too large", func(t *testing.T) {
 		h := newHarness(t, 100, 24)
 		h.client.SetError(fake.MethodGetDiff, github.ErrDiffTooLarge)
 		h.run(h.v.Init())
-		h.press("] f")
+		h.press("}")
 		golden.Assert(t, "diff_too_large", h.render(), false)
 	})
 	t.Run("error", func(t *testing.T) {
 		h := newHarness(t, 100, 24)
 		h.client.SetError(fake.MethodGetDiff, errors.New("connection reset"))
 		h.run(h.v.Init())
-		h.press("] f")
+		h.press("}")
 		golden.Assert(t, "diff_error", h.render(), false)
 	})
 	t.Run("parse error", func(t *testing.T) {
 		h := newHarness(t, 100, 24)
 		h.client.SetDiff(testRepo, 7, "diff --git a/x b/x\n@@ -1,2 +1,2 @@\n+only one line\n")
 		h.run(h.v.Init())
-		h.press("] f")
+		h.press("}")
 		out := ansi.Strip(h.render())
 		if !strings.Contains(out, "No diff available for this file.") || !strings.Contains(out, "could not be fully parsed") {
 			t.Errorf("a file missing from a partly parsed diff should say why:\n%s", out)
@@ -191,12 +191,12 @@ func TestGoldenDiffPane(t *testing.T) {
 	})
 	t.Run("hscroll", func(t *testing.T) {
 		h := openClientDiff(t, 100, 24)
-		h.press("] h", "j", "j", "j", "z L")
+		h.press("]", "j", "j", "j", "z L")
 		golden.Assert(t, "diff_hscroll", h.render(), false)
 	})
 	t.Run("deleted", func(t *testing.T) {
 		h := loaded(t, 100, 24)
-		h.press("] f", "] f", "] f")
+		h.press("}", "}", "}")
 		golden.Assert(t, "diff_deleted", h.render(), false)
 	})
 }

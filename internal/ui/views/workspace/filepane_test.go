@@ -39,7 +39,7 @@ func (p *stubPane) Render(int, int) string { return "stub" }
 
 func (p *stubPane) FullHelp() [][]key.Binding {
 	return [][]key.Binding{{
-		key.NewBinding(key.WithKeys("] h")), key.NewBinding(key.WithKeys("z h")),
+		key.NewBinding(key.WithKeys("]")), key.NewBinding(key.WithKeys("z h")),
 	}}
 }
 
@@ -94,15 +94,13 @@ func TestFilePaneContractThroughRoot(t *testing.T) {
 		t.Errorf("resize did not change SetSize: %v", got)
 	}
 
-	keyp("]")
-	keyp("f") // ] f selects the first file
+	keyp("}") // selects the first file
 	keyp("l") // focus the right pane
 	keyp("]")
-	keyp("h")
 	keyp("z")
 	keyp("h")
 	keyp("j")
-	if diff := cmp.Diff([]string{"] h", "z h", "j"}, p.keys); diff != "" {
+	if diff := cmp.Diff([]string{"]", "z h", "j"}, p.keys); diff != "" {
 		t.Errorf("keys reaching the pane (-want +got):\n%s", diff)
 	}
 	if diff := cmp.Diff([]string{"internal/sync/client.go"}, p.files); diff != "" {

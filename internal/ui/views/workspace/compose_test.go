@@ -56,7 +56,7 @@ func (c *composer) infos() (out []string) {
 // onThread selects the client.go diff and moves to the resolved thread on line 12.
 func (c *composer) onThread() {
 	c.selectFile()
-	c.press("] c")
+	c.press(")")
 }
 
 func TestReplyAsksThenPosts(t *testing.T) {
@@ -280,7 +280,7 @@ func TestReplyWithZeroOneAndSeveralThreads(t *testing.T) {
 		t.Errorf("zero threads: opened %v, msgs %v", c.openedOn, c.msgs)
 	}
 
-	c.press("] c") // line 12, one thread
+	c.press(")") // line 12, one thread
 	c.press("r")
 	if len(c.openedOn) != 1 {
 		t.Fatalf("one thread: editor opened %d times", len(c.openedOn))

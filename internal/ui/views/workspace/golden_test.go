@@ -42,12 +42,12 @@ func TestGolden(t *testing.T) {
 	})
 	t.Run("overview_scrolled_to_conversation", func(t *testing.T) {
 		h := loaded(t, 100, 24)
-		h.press("l", "] s")
+		h.press("l", "]")
 		golden.Assert(t, "overview_conversation", h.render(), false)
 	})
 	t.Run("file_selected", func(t *testing.T) {
 		h := loaded(t, 100, 24)
-		h.press("] f", "] f", "l")
+		h.press("}", "}", "l")
 		golden.Assert(t, "file_selected", h.render(), false)
 	})
 	t.Run("picker", func(t *testing.T) {
@@ -92,7 +92,7 @@ func TestGolden(t *testing.T) {
 		h := &harness{t: t, v: v, client: c}
 		h.send(tea.WindowSizeMsg{Width: 80, Height: 12})
 		h.run(v.Init())
-		h.press("] f", "f")
+		h.press("}", "f")
 		golden.Assert(t, "empty", h.render(), false)
 	})
 }
