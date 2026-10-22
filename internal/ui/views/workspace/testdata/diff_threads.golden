@@ -1,12 +1,12 @@
 open #7 Add retry policy to sync client
 alice · main ← feat/retry · changes requested · [enhancement] [sync] · reviewers: bob, team core
-╭─ Files ────────────────────╮╭─ internal/sync/client.go ──────────────────────────────────────────╮
+╭─ Files 0/5 viewed ─────────╮╭─ internal/sync/client.go ──────────────────────────────────────────╮
 │  Overview                  ││>@@ -10,8 +10,10 @@ import (                                        │
-│> M …rnal/sync/client.go +25││  10  10       "context"                                            │
-│  A …rnal/sync/retry.go +214││  11  11       "time"                                               │
-│  D …rnal/sync/legacy.go -90││  12  12 ○ )                                                        │
-│  R …y-and-backoff.md +12 -3││           ▸ carol 1 comment · 1d ago [resolved] — Nit: unused impo…│
-│  M README.md          +2 -1││  13  13                                                            │
+│>   M …al/sync/client.go +25││  10  10       "context"                                            │
+│    A …al/sync/retry.go +214││  11  11       "time"                                               │
+│    D …al/sync/legacy.go -90││  12  12 ○ )                                                        │
+│    R …and-backoff.md +12 -3││           ▸ carol 1 comment · 1d ago [resolved] — Nit: unused impo…│
+│    M README.md        +2 -1││  13  13                                                            │
 │                            ││  14      -func (c *Client) Sync(ctx context.Context) error {       │
 │                            ││  15      -    return c.retryForever(ctx, c.sync)                   │
 │                            ││      14 ●+func (c *Client) Sync(ctx context.Context) error {       │

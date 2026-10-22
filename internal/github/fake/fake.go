@@ -36,6 +36,7 @@ const (
 	MethodAddComment         = "AddComment"
 	MethodGetReviewStatus    = "GetReviewStatus"
 	MethodSubmitReview       = "SubmitReview"
+	MethodSetFileViewed      = "SetFileViewed"
 )
 
 // Call is one recorded call with the arguments that apply to its method.
@@ -47,6 +48,10 @@ type Call struct {
 	Page     github.PageRequest
 	ThreadID string
 	Body     string
+	// PullRequestID, Path and Viewed are set for SetFileViewed.
+	PullRequestID string
+	Path          string
+	Viewed        bool
 }
 
 // Reply is a recorded successful ReplyToThread call.
@@ -407,4 +412,33 @@ func (c *Client) AddComment(ctx context.Context, repo github.Repo, number int, b
 	}
 	c.comments = append(c.comments, Comment{Repo: repo, Number: number, Body: body})
 	return ic, nil
+}
+
+// SetFileViewed implements github.Client. It updates the file's state in the
+// pull request detail with the matching ID, so later reads report it; an
+// unknown pull request or path fails with ErrNotFound.
+func (c *Client) SetFileViewed(ctx context.Context, pullRequestID, path string, viewed bool) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err := c.begin(ctx, Call{Method: MethodSetFileViewed, PullRequestID: pullRequestID, Path: path, Viewed: viewed}); err != nil {
+		return err
+	}
+	state := github.FileUnviewed
+	if viewed {
+		state = github.FileViewed
+	}
+	for key, d := range c.details {
+		if d.ID != pullRequestID {
+			continue
+		}
+		for i := range d.Files {
+			if d.Files[i].Path == path {
+				d.Files = slices.Clone(d.Files)
+				d.Files[i].Viewed = state
+				c.details[key] = d
+				return nil
+			}
+		}
+	}
+	return fmt.Errorf("mark %s as viewed in %s: %w", path, pullRequestID, github.ErrNotFound)
 }

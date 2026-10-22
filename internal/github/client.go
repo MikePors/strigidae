@@ -32,4 +32,7 @@ type Client interface {
 	// it creates and submits a new review on in.CommitOID. A pending review
 	// that no longer exists yields ErrNotFound.
 	SubmitReview(ctx context.Context, in SubmitReviewInput) error
+	// SetFileViewed marks the file at path as viewed (or, with viewed false,
+	// clears the mark) for the viewer. pullRequestID is PullRequest.ID.
+	SetFileViewed(ctx context.Context, pullRequestID, path string, viewed bool) error
 }

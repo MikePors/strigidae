@@ -75,12 +75,27 @@ const (
 	FileChanged  FileChangeType = "CHANGED"
 )
 
+// ViewedState is the viewer's "Viewed" mark on a file of a pull request. It is
+// private to the viewer and shared with github.com.
+type ViewedState string
+
+// Viewed states. The zero value means the state is unknown and is treated as
+// unviewed.
+const (
+	FileUnviewed ViewedState = "UNVIEWED"
+	FileViewed   ViewedState = "VIEWED"
+	// FileDismissed means the file was viewed but changed in a later push.
+	FileDismissed ViewedState = "DISMISSED"
+)
+
 // ChangedFile is one file in a pull request.
 type ChangedFile struct {
 	Path      string
 	Additions int
 	Deletions int
 	Change    FileChangeType
+	// Viewed is the viewer's viewed state of the file.
+	Viewed ViewedState
 }
 
 // ReviewState is the state of a submitted review.

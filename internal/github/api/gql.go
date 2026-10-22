@@ -85,6 +85,8 @@ type gqlFile struct {
 	Additions  int
 	Deletions  int
 	ChangeType string
+	// ViewerViewedState is VIEWED, UNVIEWED or DISMISSED.
+	ViewerViewedState string
 }
 
 type gqlReview struct {
@@ -239,7 +241,7 @@ func mapDetail(n gqlPullRequestDetail, files []gqlFile, comments []gqlIssueComme
 	}
 	for _, f := range files {
 		d.Files = append(d.Files, github.ChangedFile{
-			Path: f.Path, Additions: f.Additions, Deletions: f.Deletions, Change: github.FileChangeType(f.ChangeType),
+			Path: f.Path, Additions: f.Additions, Deletions: f.Deletions, Change: github.FileChangeType(f.ChangeType), Viewed: github.ViewedState(f.ViewerViewedState),
 		})
 	}
 	for _, c := range comments {

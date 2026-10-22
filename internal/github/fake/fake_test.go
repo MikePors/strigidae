@@ -362,3 +362,42 @@ func TestConcurrentUse(t *testing.T) {
 		t.Errorf("recorded %d comments, want 40", got)
 	}
 }
+
+func TestSetFileViewed(t *testing.T) {
+	c := fake.New()
+	c.SetPullRequest(github.PullRequestDetail{
+		PullRequest: github.PullRequest{ID: "PR_1", Repo: repo, Number: 1},
+		Files:       []github.ChangedFile{{Path: "a.go", Viewed: github.FileDismissed}, {Path: "b.go"}},
+	})
+	ctx := context.Background()
+	if err := c.SetFileViewed(ctx, "PR_1", "a.go", true); err != nil {
+		t.Fatal(err)
+	}
+	d, _ := c.GetPullRequest(ctx, repo, 1)
+	if d.Files[0].Viewed != github.FileViewed || d.Files[1].Viewed != "" {
+		t.Errorf("files = %+v", d.Files)
+	}
+	if err := c.SetFileViewed(ctx, "PR_1", "a.go", false); err != nil {
+		t.Fatal(err)
+	}
+	d, _ = c.GetPullRequest(ctx, repo, 1)
+	if d.Files[0].Viewed != github.FileUnviewed {
+		t.Errorf("files = %+v", d.Files)
+	}
+	if err := c.SetFileViewed(ctx, "PR_1", "missing.go", true); !errors.Is(err, github.ErrNotFound) {
+		t.Errorf("unknown path: err = %v", err)
+	}
+	if err := c.SetFileViewed(ctx, "PR_9", "a.go", true); !errors.Is(err, github.ErrNotFound) {
+		t.Errorf("unknown PR: err = %v", err)
+	}
+	boom := errors.New("boom")
+	c.SetError(fake.MethodSetFileViewed, boom)
+	if err := c.SetFileViewed(ctx, "PR_1", "a.go", true); !errors.Is(err, boom) {
+		t.Errorf("injected: err = %v", err)
+	}
+	calls := c.Calls()
+	last := calls[len(calls)-1]
+	if last.Method != fake.MethodSetFileViewed || last.PullRequestID != "PR_1" || last.Path != "a.go" || !last.Viewed {
+		t.Errorf("last call = %+v", last)
+	}
+}

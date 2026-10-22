@@ -1,12 +1,12 @@
 open #7 Add retry policy to sync client
 alice · main ← feat/retry · changes requested · [enhancement] [sync] · reviewers: bob, team core
-╭─ Files ────────────────────╮╭─ internal/sync/client.go ──────────────────────────────────────────╮
+╭─ Files 0/5 viewed ─────────╮╭─ internal/sync/client.go ──────────────────────────────────────────╮
 │  Overview                  ││Loading diff…                                                       │
-│> M …rnal/sync/client.go +25││                                                                    │
-│  A …rnal/sync/retry.go +214││                                                                    │
-│  D …rnal/sync/legacy.go -90││                                                                    │
-│  R …y-and-backoff.md +12 -3││                                                                    │
-│  M README.md          +2 -1││                                                                    │
+│>   M …al/sync/client.go +25││                                                                    │
+│    A …al/sync/retry.go +214││                                                                    │
+│    D …al/sync/legacy.go -90││                                                                    │
+│    R …and-backoff.md +12 -3││                                                                    │
+│    M README.md        +2 -1││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││                                                                    │

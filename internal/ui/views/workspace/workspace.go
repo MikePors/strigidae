@@ -79,6 +79,8 @@ type View struct {
 	cseq   int               // latest compose request; older results are stale
 	drafts map[string]string // unposted bodies, by thread ID or topLevelDraft
 
+	viewedState map[string]*viewedToggle // by path; see viewedToggle
+
 	fw     scroll.Window // Files pane: row 0 is Overview, row i is Files[i-1]
 	focus  pane
 	ov     overview
@@ -105,17 +107,18 @@ var (
 // New returns the workspace for pull request number in repo.
 func New(client github.Client, repo github.Repo, number int, opts ...Option) *View {
 	v := &View{
-		client:  client,
-		repo:    repo,
-		number:  number,
-		now:     time.Now,
-		open:    openInBrowser,
-		th:      theme.Default(),
-		km:      keys.DefaultGlobal(),
-		bind:    defaultBindings(),
-		navBind: defaultDiffBindings(),
-		edit:    execEditor,
-		drafts:  map[string]string{},
+		client:      client,
+		repo:        repo,
+		number:      number,
+		now:         time.Now,
+		open:        openInBrowser,
+		th:          theme.Default(),
+		km:          keys.DefaultGlobal(),
+		bind:        defaultBindings(),
+		navBind:     defaultDiffBindings(),
+		edit:        execEditor,
+		drafts:      map[string]string{},
+		viewedState: map[string]*viewedToggle{},
 	}
 	for _, o := range opts {
 		o(v)
@@ -158,7 +161,7 @@ func (v *View) ShortHelp() []key.Binding {
 func (v *View) FullHelp() [][]key.Binding {
 	out := [][]key.Binding{
 		{v.bind.PaneLeft, v.bind.PaneRight, v.bind.NextFile, v.bind.PrevFile, v.bind.FilePicker},
-		{v.bind.NextSection, v.bind.PrevSection, v.bind.Comment, v.bind.Reply},
+		{v.bind.NextSection, v.bind.PrevSection, v.bind.Comment, v.bind.Reply, v.bind.Viewed},
 	}
 	return append(out, v.filePane.FullHelp()...)
 }
@@ -197,6 +200,10 @@ func (v *View) Update(msg tea.Msg) (ui.View, tea.Cmd) {
 			return v, nil
 		}
 		return v, v.threadsLoaded(msg)
+	case viewedMsg:
+		if v.viewedMine(msg) {
+			return v, v.viewedDone(msg)
+		}
 	case editedMsg:
 		if !v.composeMine(msg.owner, msg.repo, msg.number, msg.seq) {
 			return v, nil

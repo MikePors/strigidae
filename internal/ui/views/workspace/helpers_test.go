@@ -52,6 +52,7 @@ follow-up issue for making the policy configurable.
 func testDetail() github.PullRequestDetail {
 	return github.PullRequestDetail{
 		PullRequest: github.PullRequest{
+			ID:   "PR_7",
 			Repo: testRepo, Number: 7, Title: "Add retry policy to sync client",
 			Author: "alice", State: github.PRStateOpen,
 			ReviewDecision: github.ReviewDecisionChangesRequested,

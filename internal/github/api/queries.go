@@ -9,6 +9,8 @@ const (
 	opPullRequestDetail = "PullRequestDetail"
 	opReviewThreads     = "ReviewThreads"
 	opReplyToThread     = "ReplyToThread"
+	opMarkFileViewed    = "MarkFileViewed"
+	opUnmarkFileViewed  = "UnmarkFileViewed"
 )
 
 const reactionSelection = `reactionGroups { content viewerHasReacted reactors { totalCount } }`
@@ -23,7 +25,7 @@ fragment PullRequestFields on PullRequest {
 }`
 
 const (
-	fileSelection = `path additions deletions changeType`
+	fileSelection = `path additions deletions changeType viewerViewedState`
 
 	issueCommentSelection = `id url body createdAt author { login } ` + reactionSelection
 
@@ -121,4 +123,14 @@ mutation ` + opReplyToThread + `($threadId: ID!, $body: String!) {
   addPullRequestReviewThreadReply(input: {pullRequestReviewThreadId: $threadId, body: $body}) {
     comment { ` + reviewCommentSelection + ` }
   }
+}`
+
+const markFileViewedMutation = `
+mutation ` + opMarkFileViewed + `($pullRequestId: ID!, $path: String!) {
+  markFileAsViewed(input: {pullRequestId: $pullRequestId, path: $path}) { clientMutationId }
+}`
+
+const unmarkFileViewedMutation = `
+mutation ` + opUnmarkFileViewed + `($pullRequestId: ID!, $path: String!) {
+  unmarkFileAsViewed(input: {pullRequestId: $pullRequestId, path: $path}) { clientMutationId }
 }`
