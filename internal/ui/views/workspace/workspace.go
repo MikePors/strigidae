@@ -72,7 +72,8 @@ type View struct {
 	threads     []github.ReviewThread // sorted by file and line
 	detail      *github.PullRequestDetail
 	diff        DiffState
-	err         error // load failure while there is nothing to show
+	diffHead    string // head SHA the diff on screen was loaded for; "" if unknown
+	err         error  // load failure while there is nothing to show
 	notFound    bool
 
 	cseq   int               // latest compose request; older results are stale
@@ -84,6 +85,7 @@ type View struct {
 	focus  pane
 	ov     overview
 	picker *picker.Model // non-nil while the file picker is open
+	review reviewFlow    // submitting a review (see review.go)
 	// pickerItems are the paths the picker was built from; a choice is
 	// resolved by path because a refresh may replace the file list meanwhile.
 	pickerItems []string
@@ -99,6 +101,7 @@ var (
 	_ ui.View        = (*View)(nil)
 	_ ui.Loader      = (*View)(nil)
 	_ ui.KeyCapturer = (*View)(nil)
+	_ ui.Commander   = (*View)(nil)
 )
 
 // New returns the workspace for pull request number in repo.
@@ -133,11 +136,13 @@ func New(client github.Client, repo github.Repo, number int, opts ...Option) *Vi
 func (v *View) Title() string { return fmt.Sprintf("#%d", v.number) }
 
 // Loading implements ui.Loader.
-func (v *View) Loading() bool { return v.prPending || v.diffPending || v.thrPending }
+func (v *View) Loading() bool {
+	return v.prPending || v.diffPending || v.thrPending || v.review.submitting
+}
 
 // CapturesKeys implements ui.KeyCapturer: the file picker owns the keyboard
 // while it is open.
-func (v *View) CapturesKeys() bool { return v.picker != nil }
+func (v *View) CapturesKeys() bool { return v.picker != nil || v.review.chooser != nil }
 
 // Init implements ui.View.
 func (v *View) Init() tea.Cmd { return v.load() }
@@ -163,6 +168,9 @@ func (v *View) FullHelp() [][]key.Binding {
 
 // Update implements ui.View.
 func (v *View) Update(msg tea.Msg) (ui.View, tea.Cmd) {
+	if cmd, ok := v.review.update(msg, v.reviewEnv()); ok {
+		return v, cmd
+	}
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		v.width, v.height = msg.Width, msg.Height
@@ -177,7 +185,11 @@ func (v *View) Update(msg tea.Msg) (ui.View, tea.Cmd) {
 		if !v.mine(msg.owner, msg.repo, msg.number, msg.seq) {
 			return v, nil
 		}
-		return v, v.prLoaded(msg)
+		cmd := v.prLoaded(msg)
+		if msg.thenDiff {
+			cmd = tea.Batch(cmd, v.fetchDiff(msg))
+		}
+		return v, cmd
 	case diffLoadedMsg:
 		if !v.mine(msg.owner, msg.repo, msg.number, msg.seq) {
 			return v, nil
@@ -207,6 +219,9 @@ func (v *View) Update(msg tea.Msg) (ui.View, tea.Cmd) {
 	case keys.Msg:
 		return v, v.handleKey(msg)
 	case tea.KeyPressMsg:
+		if v.review.chooser != nil {
+			return v, v.review.chooserKey(msg, v.reviewEnv())
+		}
 		if v.picker != nil {
 			v.pickerKey(msg)
 		}

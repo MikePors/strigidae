@@ -168,9 +168,7 @@ func TestReopenedWorkspaceIgnoresOldResults(t *testing.T) {
 	if second.detail != nil || !second.Loading() {
 		t.Fatalf("results of the closed workspace were accepted: detail=%v loading=%v", second.detail != nil, second.Loading())
 	}
-	for _, m := range newResults {
-		second.Update(m)
-	}
+	feed(second, newResults)
 	if second.detail == nil || second.detail.Title != "fresh data" || second.Loading() {
 		t.Errorf("own results not applied: detail=%v loading=%v", second.detail, second.Loading())
 	}

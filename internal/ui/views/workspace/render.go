@@ -102,6 +102,9 @@ func (v *View) Render(width, height int) string {
 	if v.picker != nil {
 		overlay(rows, v.picker.Render(width, height-headerRows), width, headerRows)
 	}
+	if v.review.chooser != nil {
+		overlay(rows, v.review.chooser.Render(width, height-headerRows), width, headerRows)
+	}
 	return strings.Join(rows, "\n")
 }
 

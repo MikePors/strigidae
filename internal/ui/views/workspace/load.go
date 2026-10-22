@@ -24,13 +24,20 @@ type (
 		seq    int
 		detail github.PullRequestDetail
 		err    error
+		// thenDiff makes the result start the diff load. The diff is fetched
+		// after the detail so that the head recorded for it can only be older
+		// than the diff, never newer.
+		thenDiff bool
 	}
 	diffLoadedMsg struct {
 		owner  *View
 		repo   github.Repo
 		number int
 		seq    int
-		raw    string
+		// head is the detail's head SHA this diff followed; empty when the
+		// detail failed to load.
+		head string
+		raw  string
 		// parsed is Raw parsed in the command, so Update stays cheap. It is
 		// never nil when err is nil, and may be partial when parseErr is set.
 		parsed   *diff.Diff
@@ -76,33 +83,40 @@ func (v *View) load() tea.Cmd {
 	v.diffPending = true
 	v.diff.Loading = true
 	v.filePane.SetDiff(v.diff)
-	client, repo, number, seq, owner := v.client, v.repo, v.number, v.seq, v
 
-	return tea.Batch(
-		v.reloadPR(),
-		func() tea.Msg {
-			raw, err := client.GetDiff(context.Background(), repo, number)
-			if err != nil {
-				return diffLoadedMsg{owner: owner, repo: repo, number: number, seq: seq, err: err}
-			}
-			// diff.Parse returns a best-effort result with its error, so
-			// files before a malformed hunk still show.
-			parsed, perr := diff.Parse(raw)
-			return diffLoadedMsg{owner: owner, repo: repo, number: number, seq: seq, raw: raw, parsed: parsed, parseErr: perr}
-		},
-		v.reloadThreads(),
-	)
+	return tea.Batch(v.fetchPR(true), v.reloadThreads())
+}
+
+// fetchDiff loads the diff once the detail has landed.
+func (v *View) fetchDiff(msg prLoadedMsg) tea.Cmd {
+	client, repo, number, seq, owner := v.client, v.repo, v.number, msg.seq, v
+	head := ""
+	if msg.err == nil {
+		head = msg.detail.HeadSHA
+	}
+	return func() tea.Msg {
+		raw, err := client.GetDiff(context.Background(), repo, number)
+		if err != nil {
+			return diffLoadedMsg{owner: owner, repo: repo, number: number, seq: seq, err: err}
+		}
+		// diff.Parse returns a best-effort result with its error, so
+		// files before a malformed hunk still show.
+		parsed, perr := diff.Parse(raw)
+		return diffLoadedMsg{owner: owner, repo: repo, number: number, seq: seq, head: head, raw: raw, parsed: parsed, parseErr: perr}
+	}
 }
 
 // reloadPR loads the pull request again under the current request sequence;
 // after posting a comment it refreshes just the conversation.
-func (v *View) reloadPR() tea.Cmd {
+func (v *View) reloadPR() tea.Cmd { return v.fetchPR(false) }
+
+func (v *View) fetchPR(thenDiff bool) tea.Cmd {
 	v.prPending = true
 	v.ov.invalidate()
 	client, repo, number, seq, owner := v.client, v.repo, v.number, v.seq, v
 	return func() tea.Msg {
 		d, err := client.GetPullRequest(context.Background(), repo, number)
-		return prLoadedMsg{owner: owner, repo: repo, number: number, seq: seq, detail: d, err: err}
+		return prLoadedMsg{owner: owner, repo: repo, number: number, seq: seq, detail: d, err: err, thenDiff: thenDiff}
 	}
 }
 
@@ -172,6 +186,7 @@ func (v *View) diffLoaded(msg diffLoadedMsg) tea.Cmd {
 		v.diff.Loading = false // keep the loaded diff; the error goes to the status bar
 	} else {
 		v.diff = DiffState{Raw: msg.raw, Parsed: msg.parsed, ParseErr: msg.parseErr, Err: msg.err}
+		v.diffHead = msg.head
 	}
 	v.filePane.SetDiff(v.diff)
 	if msg.parseErr != nil {

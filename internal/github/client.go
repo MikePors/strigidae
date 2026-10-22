@@ -22,6 +22,16 @@ type Client interface {
 	ReplyToThread(ctx context.Context, threadID, body string) (ReviewComment, error)
 	// AddComment posts a top-level comment on the pull request.
 	AddComment(ctx context.Context, repo Repo, number int, body string) (IssueComment, error)
+	// GetReviewStatus returns what a review submission needs to know right
+	// now: the pull request's node ID, its current head commit, and the
+	// viewer's pending review if there is one. It is a small query, cheap
+	// enough to run just before asking for confirmation.
+	GetReviewStatus(ctx context.Context, repo Repo, number int) (ReviewStatus, error)
+	// SubmitReview submits a review verdict. With in.PendingReviewID set it
+	// submits that pending review (so its inline comments go too); otherwise
+	// it creates and submits a new review on in.CommitOID. A pending review
+	// that no longer exists yields ErrNotFound.
+	SubmitReview(ctx context.Context, in SubmitReviewInput) error
 	// SetFileViewed marks the file at path as viewed (or, with viewed false,
 	// clears the mark) for the viewer. pullRequestID is PullRequest.ID.
 	SetFileViewed(ctx context.Context, pullRequestID, path string, viewed bool) error

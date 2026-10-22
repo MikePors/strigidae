@@ -242,7 +242,7 @@ func TestParseCommand(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.line, func(t *testing.T) {
-			got := parseCommand(tt.line)()
+			got := parseCommand(tt.line, nil)()
 			if tt.want == nil {
 				em, ok := got.(ErrorMsg)
 				if !ok || em.Err.Error() != "not a command: "+tt.name {
@@ -255,7 +255,7 @@ func TestParseCommand(t *testing.T) {
 			}
 		})
 	}
-	if parseCommand("   ") != nil {
+	if parseCommand("   ", nil) != nil {
 		t.Error("blank line should do nothing")
 	}
 }

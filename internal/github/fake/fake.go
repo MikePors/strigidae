@@ -34,6 +34,8 @@ const (
 	MethodListReviewThreads  = "ListReviewThreads"
 	MethodReplyToThread      = "ReplyToThread"
 	MethodAddComment         = "AddComment"
+	MethodGetReviewStatus    = "GetReviewStatus"
+	MethodSubmitReview       = "SubmitReview"
 	MethodSetFileViewed      = "SetFileViewed"
 )
 
@@ -88,6 +90,8 @@ type Client struct {
 	calls    []Call
 	replies  []Reply
 	comments []Comment
+	pending  map[prKey]github.PendingReview
+	reviews  []Submission
 	nextID   int
 }
 
@@ -104,6 +108,7 @@ func New() *Client {
 		diffs:   map[prKey]string{},
 		threads: map[prKey][]github.ReviewThread{},
 		errs:    map[string]error{},
+		pending: map[prKey]github.PendingReview{},
 	}
 }
 

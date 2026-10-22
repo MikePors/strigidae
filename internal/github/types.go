@@ -256,3 +256,48 @@ type ReviewThread struct {
 	StartDiffSide     DiffSide
 	Comments          []ReviewComment
 }
+
+// ReviewEvent is the verdict of a review being submitted.
+type ReviewEvent string
+
+// Review events.
+const (
+	ReviewEventApprove        ReviewEvent = "APPROVE"
+	ReviewEventRequestChanges ReviewEvent = "REQUEST_CHANGES"
+	ReviewEventComment        ReviewEvent = "COMMENT"
+)
+
+// PendingReview is the viewer's unsubmitted review on a pull request. GitHub
+// allows one per user per pull request.
+type PendingReview struct {
+	ID string
+	// Body is the review summary written so far.
+	Body string
+	// CommentCount is the number of inline comments waiting in it.
+	CommentCount int
+}
+
+// ReviewStatus is the state a review submission depends on.
+type ReviewStatus struct {
+	// PullRequestID is the pull request's node ID.
+	PullRequestID string
+	// HeadSHA is the pull request's current head commit.
+	HeadSHA string
+	// Pending is the viewer's pending review, or nil.
+	Pending *PendingReview
+}
+
+// SubmitReviewInput describes a review to submit.
+type SubmitReviewInput struct {
+	Repo          Repo
+	Number        int
+	PullRequestID string
+	Event         ReviewEvent
+	Body          string
+	// CommitOID is the commit a new review applies to. A pending review keeps
+	// the commit it was started on.
+	CommitOID string
+	// PendingReviewID, if set, submits that pending review instead of
+	// creating a new one.
+	PendingReviewID string
+}
