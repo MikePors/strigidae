@@ -217,9 +217,12 @@ type ReviewComment struct {
 	// nobody else can see yet.
 	Pending bool
 	// ViewerCanUpdate and ViewerCanDelete say whether the viewer may change or
-	// delete the comment: their own, pending or published.
+	// delete the comment. They are also true for other people's comments when
+	// the viewer has write access, so authorship needs ViewerDidAuthor.
 	ViewerCanUpdate bool
 	ViewerCanDelete bool
+	// ViewerDidAuthor is set when the viewer wrote the comment.
+	ViewerDidAuthor bool
 	// DiffHunk is the hunk the comment was made on, useful for outdated threads.
 	DiffHunk  string
 	Reactions []ReactionSummary

@@ -546,7 +546,7 @@ func TestEditPublishedCommentAsksAfterTheEditor(t *testing.T) {
 		t.Errorf("editor opened on (-want +got):\n%s", diff)
 	}
 	conf, ok := c.lastConfirm()
-	if !ok || conf.Text != "Update your published comment on "+clientPath+":10?" {
+	if !ok || conf.Text != "Update your published comment on #7 "+clientPath+":10?" {
 		t.Fatalf("confirmation = %q (%v)", conf.Text, ok)
 	}
 	if len(c.updates()) != 0 {
@@ -569,7 +569,7 @@ func TestDeleteAlwaysAsks(t *testing.T) {
 		c.msgs = nil
 		c.press("D")
 		conf, ok := c.lastConfirm()
-		if !ok || conf.Text != "Delete your published comment on "+clientPath+":10?" {
+		if !ok || conf.Text != "Delete your published comment on #7 "+clientPath+":10?" {
 			t.Fatalf("confirmation = %q (%v)", conf.Text, ok)
 		}
 		if len(c.deletes()) != 0 {
@@ -639,7 +639,7 @@ func TestPendingTurnedPublishedWhileTheEditorIsOpen(t *testing.T) {
 		t.Fatal("a published comment was updated without asking")
 	}
 	conf, ok := c.lastConfirm()
-	if !ok || conf.Text != "Update your published comment on "+clientPath+":10?" {
+	if !ok || conf.Text != "Update your published comment on #7 "+clientPath+":10?" {
 		t.Fatalf("confirmation = %q (%v)", conf.Text, ok)
 	}
 	c.run(conf.OnYes)
@@ -654,7 +654,7 @@ func TestPendingTurnedPublishedBeforeDeleteAsksTheRightQuestion(t *testing.T) {
 	c.submitElsewhere() // the view still shows it as pending
 	c.msgs = nil
 	c.press("D")
-	if conf, ok := c.lastConfirm(); !ok || !strings.HasPrefix(conf.Text, "Delete your published comment on ") {
+	if conf, ok := c.lastConfirm(); !ok || !strings.HasPrefix(conf.Text, "Delete your published comment on #7 ") {
 		t.Errorf("confirmation = %q (%v)", conf.Text, ok)
 	}
 }
@@ -796,5 +796,115 @@ func TestEditAndDeleteRefusedWhileSubmitting(t *testing.T) {
 	}
 	if got := c.methods(fake.MethodUpdateReviewComment, fake.MethodDeleteReviewComment); len(got) != 0 {
 		t.Errorf("mutations sent: %v", got)
+	}
+}
+
+// Write access makes viewerCanUpdate/viewerCanDelete true on other people's
+// comments (the fake models this), so authorship has to be checked too.
+func TestOtherPeoplesCommentsAreNeverTargeted(t *testing.T) {
+	theirs := func(id string) github.ReviewComment {
+		return github.ReviewComment{ID: id, Author: "bob", Body: "theirs"}
+	}
+	t.Run("only their comment in the thread", func(t *testing.T) {
+		c := newInliner(t)
+		c.seed(github.ReviewThread{ID: "t-mine", Path: clientPath, Line: 10, DiffSide: github.SideRight, Comments: []github.ReviewComment{theirs("c-bob")}})
+		c.onMine()
+		if cm := c.client.Viewer; cm == "bob" {
+			t.Fatal("setup")
+		}
+		c.msgs = nil
+		c.press("e")
+		c.press("D")
+		if got := c.infos(); len(got) != 2 || got[0] != "no comment of yours here" {
+			t.Errorf("infos = %v", got)
+		}
+		if _, asked := c.lastConfirm(); asked || len(c.openedOn) != 0 {
+			t.Errorf("asked %v, editor opened on %v", asked, c.openedOn)
+		}
+	})
+	t.Run("their reply is the last comment", func(t *testing.T) {
+		c := newInliner(t)
+		th := c.mine(true, true, github.ReviewComment{ID: "c-mine", Body: "mine"})
+		th.Comments = append(th.Comments, theirs("c-bob-reply"))
+		c.seed(th)
+		c.onMine()
+		c.msgs = nil
+		c.press("D")
+		conf, ok := c.lastConfirm()
+		if !ok {
+			t.Fatal("no confirmation")
+		}
+		c.run(conf.OnYes)
+		if diff := cmp.Diff([]string{"c-mine"}, c.client.DeletedComments()); diff != "" {
+			t.Errorf("deleted (-want +got):\n%s", diff)
+		}
+		c.seed(th)
+		c.onMine()
+		c.body = "mine, edited"
+		c.press("e")
+		if diff := cmp.Diff([]string{"mine"}, c.openedOn); diff != "" {
+			t.Errorf("editor opened on (-want +got):\n%s", diff)
+		}
+	})
+	t.Run("the fresh read shows it is not yours", func(t *testing.T) {
+		c := newInliner(t)
+		c.seed(c.mine(true, true))
+		c.onMine()
+		// On the server the comment is somebody else's now.
+		other := github.ReviewThread{ID: "t-mine", Path: clientPath, Line: 10, DiffSide: github.SideRight, Comments: []github.ReviewComment{theirs("c-mine")}}
+		c.client.SetReviewThreads(testRepo, 7, append(testThreads(), other))
+		c.msgs, c.body = nil, "rewritten"
+		c.press("D")
+		if !strings.Contains(c.lastError(), "not yours") {
+			t.Errorf("delete error = %q", c.lastError())
+		}
+		if _, asked := c.lastConfirm(); asked {
+			t.Error("asked to delete somebody else's comment")
+		}
+		// The view refreshed, so it no longer offers the comment at all; make
+		// it stale again for the edit path.
+		c.client.SetReviewThreads(testRepo, 7, append(testThreads(), c.mine(true, true)))
+		c.press("R")
+		c.onMine()
+		c.client.SetReviewThreads(testRepo, 7, append(testThreads(), other))
+		c.msgs = nil
+		c.press("e")
+		if !strings.Contains(c.lastError(), "not yours") || len(c.updates()) != 0 {
+			t.Errorf("edit error = %q, updates %v", c.lastError(), c.updates())
+		}
+	})
+}
+
+func TestDeleteMustNotDeleteAPublishedCommentThatWasAskedAboutAsPending(t *testing.T) {
+	c := newInliner(t)
+	id := c.addPending("original").Comments[0].ID
+	c.msgs = nil
+	c.press("D")
+	conf, ok := c.lastConfirm()
+	if !ok || !strings.HasPrefix(conf.Text, "Delete pending comment on ") {
+		t.Fatalf("confirmation = %q (%v)", conf.Text, ok)
+	}
+	c.submitElsewhere() // published while the question is open
+	before := len(c.deletes())
+	c.run(conf.OnYes)
+	if len(c.deletes()) != before {
+		t.Fatal("a published comment was deleted on the answer to the pending question")
+	}
+	again, ok := c.lastConfirm()
+	if !ok || again.Text != "Delete your published comment on #7 "+clientPath+":10?" {
+		t.Fatalf("second confirmation = %q (%v)", again.Text, ok)
+	}
+	c.run(again.OnYes)
+	if diff := cmp.Diff([]string{id}, c.client.DeletedComments()); diff != "" {
+		t.Errorf("deleted (-want +got):\n%s", diff)
+	}
+}
+
+func TestPublishedEditPromptIsDroppedWhenTheViewChanged(t *testing.T) {
+	c := newInliner(t)
+	other := New(c.client, testRepo, 12)
+	msg := commentCheckedMsg{owner: other, repo: testRepo, number: 12, confirm: ui.ConfirmMsg{Text: "Update your published comment on #12 a.go:1?"}}
+	if _, cmd := c.v.Update(msg); cmd != nil {
+		t.Errorf("a prompt for another view produced %v", messages(cmd))
 	}
 }

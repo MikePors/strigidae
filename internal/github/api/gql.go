@@ -82,6 +82,7 @@ type gqlReviewComment struct {
 
 	ViewerCanUpdate bool
 	ViewerCanDelete bool
+	ViewerDidAuthor bool
 }
 
 type gqlFile struct {
@@ -228,6 +229,7 @@ func mapReviewComment(n gqlReviewComment) github.ReviewComment {
 
 		ViewerCanUpdate: n.ViewerCanUpdate,
 		ViewerCanDelete: n.ViewerCanDelete,
+		ViewerDidAuthor: n.ViewerDidAuthor,
 		Reactions:       mapReactions(n.ReactionGroups),
 	}
 }

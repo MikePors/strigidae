@@ -189,7 +189,7 @@ func (v *View) post(tgt target, body string) tea.Cmd {
 }
 
 func (v *View) posted(msg postedMsg) tea.Cmd {
-	if errors.Is(msg.err, errCommentGone) {
+	if isStaleErr(msg.err) {
 		// The comment cannot be edited any more, so its draft is useless.
 		delete(v.drafts, msg.tgt.draftKey())
 		return v.reloadPendingComments()

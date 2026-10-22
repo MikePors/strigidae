@@ -27,9 +27,26 @@ type commentDeletedMsg struct {
 	err    error
 }
 
-// errCommentGone is returned when a comment to change does not exist any more
-// or the viewer may no longer change it.
-var errCommentGone = errors.New("that comment is gone or no longer yours; refreshed")
+// staleError is why a comment cannot be changed any more: what is on screen
+// is out of date, so the view refreshes.
+type staleError string
+
+func (e staleError) Error() string { return string(e) }
+
+// isStale returns the staleError in err, if any.
+func isStale(err error) (staleError, bool) {
+	var s staleError
+	return s, errors.As(err, &s)
+}
+
+const (
+	// errCommentGone: the comment does not exist any more, or the viewer may
+	// no longer change it.
+	errCommentGone = staleError("that comment is gone or no longer yours; refreshed")
+	// errNotYours: the viewer has write access, so GitHub lets them change the
+	// comment, but somebody else wrote it.
+	errNotYours = staleError("that comment is not yours; refreshed")
+)
 
 // commentCheckedMsg is the result of re-reading a comment before a prompt:
 // either the confirmation to show, or why the action is refused.
@@ -51,6 +68,8 @@ func freshComment(ctx context.Context, c github.Client, id string, deleting bool
 		return cm, errCommentGone
 	case err != nil:
 		return cm, fmt.Errorf("check comment: %w", err)
+	case !cm.ViewerDidAuthor:
+		return cm, errNotYours
 	case deleting && !cm.ViewerCanDelete, !deleting && !cm.ViewerCanUpdate:
 		return cm, errCommentGone
 	}
@@ -145,7 +164,8 @@ func (v *View) commentAtCursor(deleting bool) (github.ReviewComment, github.Revi
 	var found, pending *github.ReviewComment
 	for i := range t.Comments {
 		c := &t.Comments[i]
-		if (deleting && !c.ViewerCanDelete) || (!deleting && !c.ViewerCanUpdate) {
+		// Write access makes the can-flags true on other people's comments too.
+		if !c.ViewerDidAuthor || (deleting && !c.ViewerCanDelete) || (!deleting && !c.ViewerCanUpdate) {
 			continue
 		}
 		found = c
@@ -186,20 +206,31 @@ func (v *View) deleteComment() tea.Cmd {
 			res.err = err
 			return res
 		}
-		q := "Delete your published comment on " + label + "?"
-		if fresh.Pending {
-			q = "Delete pending comment on " + label + "?"
-		}
-		res.confirm = ui.ConfirmMsg{Text: q, OnYes: sendDelete(client, owner, repo, number, id)}
+		res.confirm = deletePrompt(client, owner, repo, number, id, label, fresh.Pending)
 		return res
 	}
 }
 
-// sendDelete runs when the user confirms: it re-reads the comment once more
-// (the answer may have taken a while), then deletes it.
-func sendDelete(client github.Client, owner *View, repo github.Repo, number int, id string) tea.Cmd {
+// deletePrompt is the confirmation for deleting a comment known to be pending
+// or published right now.
+func deletePrompt(client github.Client, owner *View, repo github.Repo, number int, id, label string, pending bool) ui.ConfirmMsg {
+	q := fmt.Sprintf("Delete your published comment on #%d %s?", number, label)
+	if pending {
+		q = "Delete pending comment on " + label + "?"
+	}
+	return ui.ConfirmMsg{Text: q, OnYes: sendDelete(client, owner, repo, number, id, label, pending)}
+}
+
+// sendDelete runs when the user confirms the question asked for a comment that
+// was pending (or published). It re-reads the comment (the answer may have
+// taken a while) and deletes only if it is still in the state that was asked
+// about; otherwise the question for the new state is asked instead.
+func sendDelete(client github.Client, owner *View, repo github.Repo, number int, id, label string, wasPending bool) tea.Cmd {
 	return func() tea.Msg {
-		_, err := freshComment(context.Background(), client, id, true)
+		fresh, err := freshComment(context.Background(), client, id, true)
+		if err == nil && fresh.Pending != wasPending {
+			return commentCheckedMsg{owner: owner, repo: repo, number: number, confirm: deletePrompt(client, owner, repo, number, id, label, fresh.Pending)}
+		}
 		if err == nil {
 			err = client.DeleteReviewComment(context.Background(), id)
 		}
@@ -224,21 +255,21 @@ func (v *View) commentChecked(msg commentCheckedMsg) tea.Cmd {
 // to be gone.
 func (v *View) refuseStale(err error, what string) tea.Cmd {
 	e := ui.Error(commentFailure(err, what))
-	if errors.Is(err, errCommentGone) {
+	if _, stale := isStale(err); stale {
 		return tea.Batch(e, v.reloadPendingComments())
 	}
 	return e
 }
 
 func commentFailure(err error, what string) error {
-	if errors.Is(err, errCommentGone) {
-		return errCommentGone
+	if s, stale := isStale(err); stale {
+		return s
 	}
 	return termtext.SafeError(fmt.Errorf("%s: %w", what, err))
 }
 
 func (v *View) commentDeleted(msg commentDeletedMsg) tea.Cmd {
-	if errors.Is(msg.err, errCommentGone) {
+	if _, stale := isStale(msg.err); stale {
 		return v.reloadPendingComments() // the error is already shown
 	}
 	if msg.err != nil {
@@ -258,8 +289,8 @@ func (v *View) commentSend(tgt target, body string) tea.Cmd {
 			return res
 		}
 		shown := ui.ErrorMsg{Err: termtext.SafeError(fmt.Errorf("%s: %w; the comment is kept as a draft", what, err))}
-		if errors.Is(err, errCommentGone) {
-			shown = ui.ErrorMsg{Err: errCommentGone}
+		if s, stale := isStale(err); stale {
+			shown = ui.ErrorMsg{Err: s}
 		}
 		return tea.BatchMsg{func() tea.Msg { return res }, func() tea.Msg { return shown }}
 	}
@@ -289,7 +320,9 @@ func (v *View) commentSend(tgt target, body string) tea.Cmd {
 				}
 				return result(err, "update comment")
 			}
-			return ui.ConfirmMsg{Text: "Update your published comment on " + termtext.Clean(tgt.label) + "?", OnYes: send}
+			// Through the view's identity check, like the delete prompt.
+			q := fmt.Sprintf("Update your published comment on #%d %s?", number, termtext.Clean(tgt.label))
+			return commentCheckedMsg{owner: owner, repo: repo, number: number, confirm: ui.ConfirmMsg{Text: q, OnYes: send}}
 		}
 	}
 	if v.detail == nil || v.diffPending {
@@ -329,4 +362,9 @@ func addPendingThread(ctx context.Context, c github.Client, in github.AddThreadI
 	in.PendingReviewID = pending.ID
 	_, err = c.AddReviewThread(ctx, in)
 	return err
+}
+
+func isStaleErr(err error) bool {
+	_, stale := isStale(err)
+	return stale
 }

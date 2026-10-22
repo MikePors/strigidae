@@ -98,7 +98,7 @@ func TestGetReviewComment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Pending || !got.ViewerCanUpdate || got.ViewerCanDelete || got.Body != "Consider a clearer name." {
+	if got.Pending || !got.ViewerCanUpdate || got.ViewerCanDelete || !got.ViewerDidAuthor || got.Body != "Consider a clearer name." {
 		t.Errorf("comment = %+v", got)
 	}
 	if s.Calls()[0].Vars["id"] != "PRRC_kwDOExample21" {

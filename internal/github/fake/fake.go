@@ -204,7 +204,7 @@ func (c *Client) SetDiff(repo github.Repo, number int, diff string) {
 func (c *Client) SetReviewThreads(repo github.Repo, number int, threads []github.ReviewThread) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.threads[prKey{repo, number}] = cloneThreads(threads)
+	c.threads[prKey{repo, number}] = c.permissions(cloneThreads(threads))
 }
 
 // SetError makes the named method fail with err until cleared with a nil err.
@@ -365,7 +365,7 @@ func (c *Client) ReplyToThread(ctx context.Context, threadID, body string) (gith
 				Body:      body,
 				CreatedAt: c.Now(),
 
-				ViewerCanUpdate: true, ViewerCanDelete: true,
+				ViewerCanUpdate: true, ViewerCanDelete: true, ViewerDidAuthor: true,
 			}
 			// Build a fresh slice so slices handed out earlier are never written to.
 			threads[i].Comments = append(slices.Clip(threads[i].Comments), rc)

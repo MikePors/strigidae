@@ -98,7 +98,7 @@ func (c *Client) AddReviewThread(ctx context.Context, in github.AddThreadInput) 
 		Line: in.Line, OriginalLine: in.Line, DiffSide: in.Side,
 		Comments: []github.ReviewComment{{
 			ID: "fake-review-comment-" + strconv.Itoa(c.nextID), Author: c.Viewer, Body: in.Body, CreatedAt: c.Now(), Pending: true,
-			ViewerCanUpdate: true, ViewerCanDelete: true,
+			ViewerCanUpdate: true, ViewerCanDelete: true, ViewerDidAuthor: true,
 		}},
 	}
 	if in.StartLine > 0 {
@@ -233,4 +233,22 @@ func (c *Client) GetReviewComment(ctx context.Context, commentID string) (github
 		}
 	}
 	return github.ReviewComment{}, fmt.Errorf("load review comment %s: %w", commentID, github.ErrNotFound)
+}
+
+// permissions sets what the viewer may do with each comment, as GitHub
+// reports it: the viewer's own comments are theirs and, unless the test said
+// otherwise, changeable; other people's are not theirs, but are changeable
+// too, as for a repository admin (so code must check authorship itself).
+func (c *Client) permissions(ts []github.ReviewThread) []github.ReviewThread {
+	for i := range ts {
+		for j := range ts[i].Comments {
+			cm := &ts[i].Comments[j]
+			if cm.Author == c.Viewer {
+				cm.ViewerDidAuthor = true
+				continue
+			}
+			cm.ViewerDidAuthor, cm.ViewerCanUpdate, cm.ViewerCanDelete = false, true, true
+		}
+	}
+	return ts
 }
