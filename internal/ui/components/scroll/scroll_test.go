@@ -157,3 +157,21 @@ func TestAccessors(t *testing.T) {
 		t.Error("zero Window should stay at 0")
 	}
 }
+
+func TestGotoRow(t *testing.T) {
+	var w Window
+	w.SetRows(50)
+	w.SetSize(10)
+	w.GotoRow(25)
+	if w.Cursor() != 25 || w.Top() != 16 {
+		t.Errorf("cursor/top = %d/%d, want 25/16", w.Cursor(), w.Top())
+	}
+	w.GotoRow(3)
+	if w.Cursor() != 3 || w.Top() != 3 {
+		t.Errorf("cursor/top = %d/%d, want 3/3", w.Cursor(), w.Top())
+	}
+	w.GotoRow(99)
+	if w.Cursor() != 49 {
+		t.Errorf("cursor = %d, want 49 (clamped)", w.Cursor())
+	}
+}

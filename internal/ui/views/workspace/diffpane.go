@@ -163,10 +163,10 @@ func (p *diffPane) CommentRange() (LineRange, bool) {
 	return LineRange{Path: r.Path, Side: side, Start: r.Start, End: r.End}, true
 }
 
-func (p *diffPane) VisualStart() bool           { return p.dv.VisualStart() }
-func (p *diffPane) VisualActive() bool          { return p.dv.VisualActive() }
-func (p *diffPane) VisualMove(delta int) string { return p.dv.VisualMove(delta) }
-func (p *diffPane) VisualEnd()                  { p.dv.VisualEnd() }
+func (p *diffPane) VisualStart() bool          { return p.dv.VisualStart() }
+func (p *diffPane) VisualActive() bool         { return p.dv.VisualActive() }
+func (p *diffPane) VisualMove(delta int) error { return p.dv.VisualMove(delta) }
+func (p *diffPane) VisualEnd()                 { p.dv.VisualEnd() }
 
 func (p *diffPane) Render(width, height int) string { return p.dv.Render(width, height) }
 

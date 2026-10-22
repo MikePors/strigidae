@@ -90,7 +90,7 @@ type FilePane interface {
 	VisualActive() bool
 	// VisualMove extends the selection by delta lines; a refused move (outside
 	// one hunk or one side) leaves it unchanged and returns the reason.
-	VisualMove(delta int) (refusal string)
+	VisualMove(delta int) error
 	// VisualEnd leaves the line selection.
 	VisualEnd()
 	// Update handles a key while the right pane has focus.

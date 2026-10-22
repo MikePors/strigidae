@@ -107,7 +107,7 @@ func (m *Model) find(a anchor) int {
 			}
 			dist = abs(lineKey(h.OldStart, h.NewStart) - lineKey(a.hunkOld, a.hunkNew))
 		default:
-			if r.line == nil || r.line.Kind == diff.NoNewline { // also skips thread rows
+			if !r.isLine() { // also skips thread rows
 				continue
 			}
 			if r.line.Kind == a.kind && r.line.Old == a.old && r.line.New == a.new {

@@ -135,11 +135,11 @@ func (v *View) visualKey(msg tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
-func refusal(reason string) tea.Cmd {
-	if reason == "" {
+func refusal(err error) tea.Cmd {
+	if err == nil {
 		return nil
 	}
-	return ui.Info(reason)
+	return ui.Info(err.Error())
 }
 
 // commentAtCursor returns the comment the viewer may change that e/D (or the

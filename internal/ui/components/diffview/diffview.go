@@ -95,6 +95,12 @@ type row struct {
 	msg  bool // one line of the file's notice (binary, renamed, ...), shown above its threads
 }
 
+// isLine reports whether r is a diff line a comment can be written on: not a
+// hunk header, notice or thread row, and not a "no newline" marker.
+func (r row) isLine() bool {
+	return r.tr == nil && r.line != nil && r.line.Kind != diff.NoNewline
+}
+
 // threadRow places a row inside a thread's block of lines.
 type threadRow struct{ t, i int }
 
@@ -466,7 +472,7 @@ func (m *Model) Cursor() (c CursorLine, ok bool) {
 		return CursorLine{}, false
 	}
 	r := m.rows[m.win.Cursor()]
-	if r.line == nil || r.line.Kind == diff.NoNewline {
+	if !r.isLine() {
 		return CursorLine{}, false
 	}
 	c = CursorLine{
