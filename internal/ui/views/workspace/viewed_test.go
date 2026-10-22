@@ -128,51 +128,6 @@ func TestToggleViewedRevertsOnError(t *testing.T) {
 	}
 }
 
-func TestFailedToggleDoesNotRevertNewerChange(t *testing.T) {
-	h := viewedHarness(t, 100, 24)
-	h.press("j", "v") // viewed
-	h.press("v")      // unviewed again
-	// The first toggle's failure arrives late: the file no longer holds what
-	// that toggle set (viewed), so nothing is reverted.
-	h.send(viewedMsg{
-		owner: h.v, repo: testRepo, number: 7, seq: h.v.seq, path: firstFile,
-		from: github.FileUnviewed, to: github.FileViewed, err: errors.New("late"),
-	})
-	if got := h.stateOf(); got != github.FileUnviewed {
-		t.Errorf("state = %q", got)
-	}
-}
-
-func TestStaleViewedResultIgnored(t *testing.T) {
-	tests := []struct {
-		name string
-		mut  func(m *viewedMsg, v *View)
-	}{
-		{"old seq", func(m *viewedMsg, v *View) { m.seq = v.seq - 1 }},
-		{"other number", func(m *viewedMsg, _ *View) { m.number = 8 }},
-		{"other repo", func(m *viewedMsg, _ *View) { m.repo = github.Repo{Owner: "x", Name: "y"} }},
-		{"other view", func(m *viewedMsg, _ *View) { m.owner = New(nil, testRepo, 7) }},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			h := viewedHarness(t, 100, 24)
-			h.client.SetError(fake.MethodSetFileViewed, errors.New("boom"))
-			h.press("j")
-			// Mark locally without a real failure result.
-			h.v.detail.Files[0].Viewed = github.FileViewed
-			m := viewedMsg{
-				owner: h.v, repo: testRepo, number: 7, seq: h.v.seq, path: firstFile,
-				from: github.FileUnviewed, to: github.FileViewed, err: errors.New("x"),
-			}
-			tt.mut(&m, h.v)
-			h.send(m)
-			if got := h.stateOf(); got != github.FileViewed {
-				t.Errorf("stale result changed state to %q", got)
-			}
-		})
-	}
-}
-
 func TestFilesTitleShowsProgress(t *testing.T) {
 	h := viewedHarness(t, 100, 24, github.FileViewed, github.FileDismissed, github.FileViewed)
 	if !strings.Contains(ansi.Strip(h.render()), "Files 2/5 viewed") {

@@ -12,17 +12,24 @@ import (
 	"github.com/MikePors/strigidae/internal/ui/termtext"
 )
 
-// viewedMsg is the result of a mark/unmark mutation. It carries the load
-// identity plus the toggle it belongs to, so a failure reverts only a mark
-// that still holds what this toggle set.
+// viewedToggle is the client-side state of one file's viewed mark while a
+// toggle is in flight or not yet reflected by a reload. Mutations for a path
+// are sent one at a time, so the server cannot see them out of order.
+type viewedToggle struct {
+	inflight  bool
+	want      github.ViewedState // latest state the user asked for; shown at once
+	confirmed github.ViewedState // last state known to be on the server
+}
+
+// viewedMsg is the result of one mutation. It is matched on owner, repo,
+// number and path, not on the load sequence: a reload does not make the
+// result irrelevant.
 type viewedMsg struct {
 	owner  *View
 	repo   github.Repo
 	number int
-	seq    int
 	path   string
-	from   github.ViewedState // state before the toggle
-	to     github.ViewedState // state the toggle set
+	sent   github.ViewedState // state the mutation asked for
 	err    error
 }
 
@@ -46,9 +53,10 @@ func (v *View) filesTitle() string {
 	return "Files"
 }
 
-// toggleViewed flips the viewed mark of the selected file at once and sends
-// the change to GitHub in the background. A file that is viewed becomes
-// unviewed; an unviewed or dismissed one becomes viewed.
+// toggleViewed flips the viewed mark of the selected file at once. A viewed
+// file becomes unviewed; an unviewed or dismissed one becomes viewed. The
+// mutation is sent now if none is in flight for the file, else when the
+// running one finishes.
 func (v *View) toggleViewed() tea.Cmd {
 	s := v.sel()
 	if s == 0 || s > len(v.files()) {
@@ -58,36 +66,92 @@ func (v *View) toggleViewed() tea.Cmd {
 		return ui.Error(errors.New("mark file as viewed: pull request ID unknown"))
 	}
 	f := &v.detail.Files[s-1]
-	from, to := f.Viewed, github.FileViewed
-	if from == github.FileViewed {
-		to = github.FileUnviewed
+	t := v.viewedState[f.Path]
+	if t == nil {
+		t = &viewedToggle{confirmed: f.Viewed}
+		v.viewedState[f.Path] = t
 	}
-	f.Viewed = to
+	t.want = github.FileViewed
+	if f.Viewed == github.FileViewed {
+		t.want = github.FileUnviewed
+	}
+	f.Viewed = t.want
+	if t.inflight {
+		return nil
+	}
+	t.inflight = true
+	return v.sendViewed(f.Path, t.want)
+}
 
-	client, repo, number, seq, owner := v.client, v.repo, v.number, v.seq, v
-	prID, path := v.detail.ID, f.Path
+// sendViewed is the command that runs one mutation. On failure it also
+// returns the error itself, so it shows even if the view was left meanwhile.
+func (v *View) sendViewed(path string, state github.ViewedState) tea.Cmd {
+	client, repo, number, owner, prID := v.client, v.repo, v.number, v, v.detail.ID
 	return func() tea.Msg {
-		err := client.SetFileViewed(context.Background(), prID, path, to == github.FileViewed)
-		res := viewedMsg{owner: owner, repo: repo, number: number, seq: seq, path: path, from: from, to: to, err: err}
+		err := client.SetFileViewed(context.Background(), prID, path, state == github.FileViewed)
+		res := viewedMsg{owner: owner, repo: repo, number: number, path: path, sent: state, err: err}
 		if err == nil {
 			return res
 		}
-		// The error is also sent on its own so it shows even if the view
-		// was left or refreshed meanwhile.
-		shown := ui.ErrorMsg{Err: termtext.SafeError(fmt.Errorf("mark %s as viewed: %w", termtext.Clean(path), err))}
+		verb := "mark"
+		if state != github.FileViewed {
+			verb = "unmark"
+		}
+		shown := ui.ErrorMsg{Err: termtext.SafeError(fmt.Errorf("%s %s as viewed: %w", verb, termtext.Clean(path), err))}
 		return tea.BatchMsg{func() tea.Msg { return res }, func() tea.Msg { return shown }}
 	}
 }
 
-// viewedDone reverts a failed toggle, unless the file has changed again since.
-func (v *View) viewedDone(msg viewedMsg) {
-	if msg.err == nil || v.detail == nil {
+func (v *View) viewedMine(msg viewedMsg) bool {
+	return msg.owner == v && msg.repo == v.repo && msg.number == v.number
+}
+
+// viewedDone records a mutation's outcome and sends the next wanted state, if
+// the user toggled again meanwhile.
+func (v *View) viewedDone(msg viewedMsg) tea.Cmd {
+	t := v.viewedState[msg.path]
+	if t == nil {
+		return nil
+	}
+	if msg.err == nil {
+		t.confirmed = msg.sent
+	} else {
+		t.want = t.confirmed
+		v.setViewed(msg.path, t.want)
+	}
+	if t.want != msg.sent && t.want != t.confirmed {
+		return v.sendViewed(msg.path, t.want)
+	}
+	t.inflight = false
+	return nil
+}
+
+func (v *View) setViewed(path string, state github.ViewedState) {
+	if v.detail == nil {
 		return
 	}
 	for i := range v.detail.Files {
-		f := &v.detail.Files[i]
-		if f.Path == msg.path && f.Viewed == msg.to {
-			f.Viewed = msg.from
+		if v.detail.Files[i].Path == path {
+			v.detail.Files[i].Viewed = state
+		}
+	}
+}
+
+// reapplyViewed runs after the detail is replaced by a reload. Files with a
+// toggle in flight or unconfirmed keep their wanted mark, because the reload
+// may have read before the mutation landed; settled entries are dropped so
+// the server's state shows, and so are entries for files that vanished.
+func (v *View) reapplyViewed() {
+	present := map[string]bool{}
+	for _, f := range v.files() {
+		present[f.Path] = true
+	}
+	for path, t := range v.viewedState {
+		switch {
+		case !present[path], !t.inflight && t.want == t.confirmed:
+			delete(v.viewedState, path)
+		default:
+			v.setViewed(path, t.want)
 		}
 	}
 }

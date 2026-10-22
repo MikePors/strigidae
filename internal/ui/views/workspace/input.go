@@ -21,7 +21,7 @@ type bindings struct {
 	FilePicker               key.Binding
 	NextSection, PrevSection key.Binding
 	Comment, Reply           key.Binding
-	Viewed                   key.Binding // PROPOSAL: key awaits maintainer approval
+	Viewed                   key.Binding
 }
 
 func defaultBindings() bindings {

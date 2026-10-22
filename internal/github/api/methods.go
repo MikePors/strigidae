@@ -239,14 +239,11 @@ func (c *Client) AddComment(ctx context.Context, repo github.Repo, number int, b
 
 // SetFileViewed implements github.Client.
 func (c *Client) SetFileViewed(ctx context.Context, pullRequestID, path string, viewed bool) error {
-	q, what := unmarkFileViewedMutation, "unmark"
+	q := unmarkFileViewedMutation
 	if viewed {
-		q, what = markFileViewedMutation, "mark"
+		q = markFileViewedMutation
 	}
 	var resp json.RawMessage
-	vars := map[string]any{"pullRequestId": pullRequestID, "path": path}
-	if err := c.query(ctx, q, vars, &resp); err != nil {
-		return fmt.Errorf("%s file as viewed: %w", what, err)
-	}
-	return nil
+	// The caller names the action and the file, so the error is not wrapped again.
+	return c.query(ctx, q, map[string]any{"pullRequestId": pullRequestID, "path": path}, &resp)
 }
