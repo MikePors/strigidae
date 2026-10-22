@@ -111,8 +111,12 @@ func (v *View) reviewEnv() reviewEnv {
 	}
 }
 
-// Command implements ui.Commander: :approve, :request-changes and :review.
+// Command implements ui.Commander: :approve, :request-changes, :review and
+// :copy-filename.
 func (v *View) Command(name, _ string) (tea.Cmd, bool) {
+	if name == "copy-filename" {
+		return v.copyFilename(), true
+	}
 	return v.review.command(name, v.reviewEnv())
 }
 
