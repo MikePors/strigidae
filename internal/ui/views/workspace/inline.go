@@ -123,7 +123,7 @@ type commentWrite struct {
 	// ask returns the question for a comment that is pending or published, or
 	// "" to write without asking.
 	ask    func(pending bool) string
-	write  func(ctx context.Context) error
+	write  func(ctx context.Context, c github.Client) error
 	result func(err error) tea.Msg
 }
 
@@ -139,7 +139,7 @@ func (w commentWrite) run(agreed *bool) tea.Msg {
 		pending := fresh.Pending
 		return commentCheckedMsg{origin: w.origin, question: q, onYes: func() tea.Msg { return w.run(&pending) }}
 	}
-	return w.result(w.write(ctx))
+	return w.result(w.write(ctx, w.client))
 }
 
 // withShownError returns res together with an error to show, so the error
@@ -237,12 +237,9 @@ func (v *View) commentAtCursor(ch change) (github.ReviewComment, string, tea.Cmd
 	if blocked := v.commentBlocked(); blocked != nil {
 		return github.ReviewComment{}, "", blocked
 	}
-	t, ok, hint := v.focusedThread("")
+	t, _, hint := v.focusedThread("") // no thread: pickComment finds nothing
 	if hint != nil {
 		return github.ReviewComment{}, "", hint
-	}
-	if !ok {
-		return github.ReviewComment{}, "", ui.Info("no comment of yours here")
 	}
 	c, found := pickComment(t, ch)
 	if !found {
@@ -267,16 +264,16 @@ func (v *View) deleteComment() tea.Cmd {
 	if cmd != nil {
 		return cmd
 	}
-	o, label := v.origin(), termtext.Clean(label)
+	o, id, label := v.origin(), c.ID, termtext.Clean(label)
 	w := commentWrite{
-		origin: o, client: v.client, id: c.ID, change: changeDelete,
+		origin: o, client: v.client, id: id, change: changeDelete,
 		ask: func(pending bool) string {
 			if pending {
 				return "Delete pending comment on " + label + "?"
 			}
 			return fmt.Sprintf("Delete your published comment on #%d %s?", o.number, label)
 		},
-		write: func(ctx context.Context) error { return v.client.DeleteReviewComment(ctx, c.ID) },
+		write: func(ctx context.Context, cl github.Client) error { return cl.DeleteReviewComment(ctx, id) },
 		result: func(err error) tea.Msg {
 			res := commentDeletedMsg{origin: o, err: err}
 			if err == nil {
@@ -286,11 +283,6 @@ func (v *View) deleteComment() tea.Cmd {
 		},
 	}
 	return func() tea.Msg { return w.run(nil) }
-}
-
-// commentChecked shows the question a check produced.
-func (v *View) commentChecked(msg commentCheckedMsg) tea.Cmd {
-	return ui.Confirm(msg.question, msg.onYes)
 }
 
 // commentFailure is the error to show for a failed comment call: the stale
@@ -340,8 +332,8 @@ func (v *View) commentSend(tgt target, body string) tea.Cmd {
 				}
 				return fmt.Sprintf("Update your published comment on #%d %s?", o.number, label)
 			},
-			write: func(ctx context.Context) error {
-				_, err := client.UpdateReviewComment(ctx, tgt.commentID, body)
+			write: func(ctx context.Context, cl github.Client) error {
+				_, err := cl.UpdateReviewComment(ctx, tgt.commentID, body)
 				return err
 			},
 			result: func(err error) tea.Msg { return result(err, "update comment") },

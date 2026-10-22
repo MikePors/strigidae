@@ -232,7 +232,7 @@ func (v *View) Update(msg tea.Msg) (ui.View, tea.Cmd) {
 		if !v.owns(msg.origin) {
 			return v, nil
 		}
-		return v, v.commentChecked(msg)
+		return v, ui.Confirm(msg.question, msg.onYes)
 	case keys.Msg:
 		return v, v.handleKey(msg)
 	case tea.KeyPressMsg:
