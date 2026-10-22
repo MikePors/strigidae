@@ -320,3 +320,91 @@ func TestGoldenThreads(t *testing.T) {
 	n := threadModel(t, 40, 24)
 	golden.Assert(t, "threads_narrow", screen(n), false)
 }
+
+func binaryThread() github.ReviewThread {
+	return github.ReviewThread{
+		ID: "bin", Path: "logo.png", SubjectType: github.SubjectFile,
+		Comments: []github.ReviewComment{comment("hank", "Please compress.", time.Hour)},
+	}
+}
+
+func TestThreadsOnBinaryFileInEitherOrder(t *testing.T) {
+	for _, threadsFirst := range []bool{false, true} {
+		m := New(theme.New(true), WithClock(func() time.Time { return threadNow }))
+		m.SetSize(60, 10)
+		if threadsFirst {
+			m.SetThreads([]github.ReviewThread{binaryThread()})
+		}
+		m.SetFile(fixture(t, "logo.png"))
+		if !threadsFirst {
+			m.SetThreads([]github.ReviewThread{binaryThread()})
+		}
+		out := screen(m)
+		bi, ti := strings.Index(out, "Binary file"), strings.Index(out, "hank")
+		if bi < 0 || ti < bi {
+			t.Errorf("threadsFirst=%v: notice should come first, then the thread:\n%s", threadsFirst, out)
+		}
+	}
+}
+
+func TestRefreshOfBinaryFileWithCursorOnThread(t *testing.T) {
+	m := New(theme.New(true), WithClock(func() time.Time { return threadNow }))
+	m.SetSize(60, 10)
+	m.SetFile(fixture(t, "logo.png"))
+	m.SetThreads([]github.ReviewThread{binaryThread()})
+	m.NextThread()
+	m.SetMessage("Loading diff…") // must not panic
+	m.SetFile(fixture(t, "logo.png"))
+	if !strings.Contains(cursorRowText(m), "hank") {
+		t.Errorf("cursor should be back on the thread, at %q", cursorRowText(m))
+	}
+	m.SetFile(nil)
+	m.SetThreads(nil)
+}
+
+func TestCursorStaysOnItsThreadWhenThreadsChange(t *testing.T) {
+	m := threadModel(t, 100, 12)
+	m.NextThread()
+	m.NextThread()
+	m.NextThread() // dave, the thread on the deleted line
+	if !strings.Contains(cursorRowText(m), "dave") {
+		t.Fatalf("setup: at %q", cursorRowText(m))
+	}
+	m.CursorDown(1)
+	added := github.ReviewThread{
+		ID: "new", Path: "server.go", Line: 3, DiffSide: github.SideRight,
+		Comments: []github.ReviewComment{comment("zed", "new above", time.Hour)},
+	}
+	m.SetThreads(append([]github.ReviewThread{added}, sampleThreads()...))
+	if !strings.Contains(cursorRowText(m), "dave · 2h ago") {
+		t.Errorf("cursor moved off its thread: %q", cursorRowText(m))
+	}
+	// And a refresh where the diff reloads first.
+	m.SetFile(fixture(t, "server.go"))
+	if !strings.Contains(cursorRowText(m), "dave · 2h ago") {
+		t.Errorf("cursor left its thread on a diff refresh: %q", cursorRowText(m))
+	}
+}
+
+func TestBlocksAreCachedPerThread(t *testing.T) {
+	m := threadModel(t, 100, 40)
+	base := m.renders
+	m.goToRow(t, `"log"`)
+	m.ToggleThread()
+	if got := m.renders - base; got != 1 {
+		t.Errorf("a toggle rendered %d blocks, want 1", got)
+	}
+	m.ToggleThread()
+	if got := m.renders - base; got != 1 {
+		t.Errorf("toggling back should hit the cache, rendered %d", got)
+	}
+	m.SetSize(90, 40)
+	if m.renders-base < 1+m.ThreadCount() {
+		t.Error("a width change should re-render the blocks")
+	}
+	before := m.renders
+	m.SetThreads(sampleThreads())
+	if m.renders == before {
+		t.Error("SetThreads should drop the cache")
+	}
+}

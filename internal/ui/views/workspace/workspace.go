@@ -65,6 +65,8 @@ type View struct {
 	prPending   bool
 	diffPending bool
 	thrPending  bool
+	thrLoaded   bool                  // a thread load has succeeded
+	thrErr      error                 // why the last thread load failed; cleared when a load starts
 	threads     []github.ReviewThread // sorted by file and line
 	detail      *github.PullRequestDetail
 	diff        DiffState

@@ -73,7 +73,8 @@ func loadThreads(ctx context.Context, c github.Client, repo github.Repo, number 
 // load starts a fresh load of the pull request and its diff.
 func (v *View) load() tea.Cmd {
 	v.seq++
-	v.prPending, v.diffPending, v.thrPending = true, true, true
+	v.prPending, v.diffPending, v.thrPending, v.thrErr = true, true, true, nil
+	v.ov.invalidate()
 	v.diff.Loading = true
 	v.filePane.SetDiff(v.diff)
 	client, repo, number, seq, owner := v.client, v.repo, v.number, v.seq, v
@@ -135,10 +136,13 @@ func (v *View) prLoaded(msg prLoadedMsg) tea.Cmd {
 func (v *View) threadsLoaded(msg threadsLoadedMsg) tea.Cmd {
 	v.thrPending = false
 	if msg.err != nil {
-		// Keep whatever threads were shown before; the error goes to the status bar.
+		// Keep whatever threads were shown before; the error goes to the status
+		// bar, and to the Overview while there is nothing else to show.
+		v.thrErr = msg.err
+		v.ov.invalidate()
 		return ui.Error(termtext.SafeError(fmt.Errorf("load review threads: %w", msg.err)))
 	}
-	v.threads = sortThreads(msg.threads)
+	v.threads, v.thrLoaded = sortThreads(msg.threads), true
 	v.filePane.SetThreads(v.threads)
 	v.ov.invalidate()
 	v.layout()

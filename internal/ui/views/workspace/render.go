@@ -41,7 +41,7 @@ func (v *View) layout() {
 	h := max(0, v.panesHeight()-2)
 	v.sizeFilePane(filesW, rightW, h)
 	if rightW > 0 {
-		v.ov.ensure(v.th, v.md, v.detail, v.threads, v.now(), max(1, rightW-4), h)
+		v.ov.ensure(v.th, v.md, v.detail, threadsView{v.threads, v.thrLoaded, v.thrPending, v.thrErr}, v.now(), max(1, rightW-4), h)
 	}
 	v.fw.SetRows(v.entries())
 	v.fw.SetSize(h)

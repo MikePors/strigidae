@@ -92,6 +92,7 @@ type row struct {
 	text string // display text: tabs expanded, controls replaced
 	bi   int    // index in base of this row, or of the row a thread row follows
 	tr   *threadRow
+	msg  bool // one line of the file's notice (binary, renamed, ...), shown above its threads
 }
 
 // threadRow places a row inside a thread's block of lines.
@@ -117,8 +118,11 @@ type Model struct {
 	orphans  []int                 // fthreads that map to no diff line
 	open     map[string]bool       // thread ID -> expanded, once the user chose
 	blocks   [][]string            // rendered lines of each fthreads entry
-	numW     int                   // width of one line-number column
-	maxW     int                   // widest code line, in cells
+	bcache   map[blockKey][]string // rendered threads; dropped by SetThreads and when width or theme change
+	bsig     blockSig
+	renders  int // thread blocks rendered, for tests
+	numW     int // width of one line-number column
+	maxW     int // widest code line, in cells
 
 	cache map[int][]Span // highlighted rows, by base row index; reset per file
 	saved *position      // position kept while a message replaces the file
@@ -172,11 +176,16 @@ func (m *Model) SetFile(f *diff.File) {
 	m.saved = nil
 	m.file, m.msg = f, ""
 	m.reset()
-	if f == nil || f.Binary || len(f.Hunks) == 0 {
+	if f == nil {
 		return
 	}
-	m.build(f)
-	m.sync()
+	if f.Binary || len(f.Hunks) == 0 {
+		// No diff rows: the file's notice and its threads are all there is.
+		m.placeThreads()
+		m.layout()
+	} else {
+		m.build(f)
+	}
 	if prev != nil {
 		m.restore(*prev)
 	}
@@ -210,6 +219,7 @@ func TooLargeMessage() string {
 }
 
 func (m *Model) reset() {
+	m.bcache = nil
 	m.base, m.rows, m.hunkRow = nil, nil, nil
 	m.fthreads, m.attach, m.orphans, m.blocks = nil, nil, nil, nil
 	m.cache = map[int][]Span{}
@@ -269,11 +279,12 @@ func (m *Model) sync() {
 }
 
 // cursorKey identifies the cursor row independently of how many thread rows
-// precede it.
+// precede it. A thread row is identified by the thread's ID, so a reload that
+// adds or removes threads keeps the cursor on the same one.
 type cursorKey struct {
-	bi   int
-	tr   threadRow
-	isTr bool
+	bi     int
+	thread string // ID of the thread the cursor is in, or ""
+	off    int    // row within the thread's block
 }
 
 func (m *Model) cursorKey() (cursorKey, bool) {
@@ -284,7 +295,7 @@ func (m *Model) cursorKey() (cursorKey, bool) {
 	r := m.rows[c]
 	k := cursorKey{bi: r.bi}
 	if r.tr != nil {
-		k.tr, k.isTr = *r.tr, true
+		k.thread, k.off = m.fthreads[r.tr.t].ID, r.tr.i
 	}
 	return k, true
 }
@@ -292,24 +303,27 @@ func (m *Model) cursorKey() (cursorKey, bool) {
 // keyRow returns the row for k; a thread row that is gone (a collapsed block
 // is shorter) falls back to the nearest one in its block, then to its line.
 func (m *Model) keyRow(k cursorKey) int {
-	best := -1
+	if k.thread != "" {
+		if r := m.threadRowFor(k.thread, k.off); r >= 0 {
+			return r
+		}
+	}
 	for i, r := range m.rows {
-		switch {
-		case k.isTr && r.tr != nil && r.tr.t == k.tr.t:
-			if r.tr.i <= k.tr.i {
-				best = i
-			}
-		case !k.isTr && r.tr == nil && r.bi == k.bi:
+		if r.tr == nil && r.bi == k.bi {
 			return i
 		}
 	}
-	if best < 0 {
-		for i, r := range m.rows {
-			if r.tr == nil && r.bi == k.bi {
-				return i
-			}
+	return 0
+}
+
+// threadRowFor returns the row at offset off in the block of the thread with
+// the given ID (clamped to the block), or -1 if the thread is not shown.
+func (m *Model) threadRowFor(id string, off int) int {
+	best := -1
+	for i, r := range m.rows {
+		if r.tr != nil && m.fthreads[r.tr.t].ID == id && r.tr.i <= off {
+			best = i
 		}
-		return 0
 	}
 	return best
 }
@@ -318,12 +332,22 @@ func (m *Model) keyRow(k cursorKey) int {
 // cursor on the same row and at the same place in the view.
 func (m *Model) layout() {
 	k, had := m.cursorKey()
+	m.relayout(k, had)
+}
+
+// relayout is layout with the cursor key taken by the caller, for changes to
+// the thread list, which would make the current rows' thread indexes stale.
+func (m *Model) relayout(k cursorKey, had bool) {
 	off := m.win.Cursor() - m.win.Top()
 	m.rows = m.rows[:0]
 	m.hunkRow = m.hunkRow[:0]
 	m.blocks = make([][]string, len(m.fthreads))
 	for i := range m.fthreads {
 		m.blocks[i] = m.renderBlock(i)
+	}
+	base := m.base
+	if m.file != nil && len(base) == 0 && len(m.fthreads) > 0 {
+		base = m.noticeRows()
 	}
 	var pending []int
 	flush := func(bi int) {
@@ -334,19 +358,19 @@ func (m *Model) layout() {
 		}
 		pending = pending[:0]
 	}
-	for i, r := range m.base {
-		if r.line == nil {
+	for i, r := range base {
+		if r.line == nil && !r.msg {
 			m.hunkRow = append(m.hunkRow, len(m.rows))
 		}
 		m.rows = append(m.rows, r)
 		pending = append(pending, m.attach[i]...)
-		if i+1 < len(m.base) && m.base[i+1].line != nil && m.base[i+1].line.Kind == diff.NoNewline {
+		if i+1 < len(base) && base[i+1].line != nil && base[i+1].line.Kind == diff.NoNewline {
 			continue // the marker belongs to this line; threads go after it
 		}
 		flush(i)
 	}
 	pending = append(pending, m.orphans...)
-	flush(len(m.base) - 1)
+	flush(len(base) - 1)
 	m.sync()
 	if had && len(m.rows) > 0 {
 		c := m.keyRow(k)

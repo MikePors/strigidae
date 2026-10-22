@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"charm.land/bubbles/v2/viewport"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/ui/components/markdown"
@@ -34,7 +35,7 @@ func (o *overview) invalidate() { o.dirty = true }
 
 // ensure sizes the viewport and rebuilds the content when the data, theme or
 // width changed. Markdown rendering is cached by the renderer.
-func (o *overview) ensure(th theme.Theme, md *markdown.Renderer, d *github.PullRequestDetail, threads []github.ReviewThread, now time.Time, width, height int) {
+func (o *overview) ensure(th theme.Theme, md *markdown.Renderer, d *github.PullRequestDetail, threads threadsView, now time.Time, width, height int) {
 	o.vp.SetWidth(width)
 	o.vp.SetHeight(height)
 	minute := now.Truncate(time.Minute)
@@ -74,12 +75,21 @@ func (o *overview) ensure(th theme.Theme, md *markdown.Renderer, d *github.PullR
 	}
 
 	o.sections = append(o.sections, line)
-	add(th.SectionHeading.Render(fmt.Sprintf("Review threads (%d)", len(threads))))
-	if len(threads) == 0 {
-		add(th.Muted.Render("No review threads."))
+	switch {
+	case !threads.loaded && threads.pending:
+		add(th.SectionHeading.Render("Review threads"))
+		add(th.Muted.Render("Loading review threads…"))
+	case !threads.loaded && threads.err != nil:
+		add(th.SectionHeading.Render("Review threads"))
+		add(th.ErrorText.Render(ansi.Wrap("Could not load review threads: "+termtext.SafeError(threads.err).Error(), width, "")))
+	default:
+		add(th.SectionHeading.Render(fmt.Sprintf("Review threads (%d)", len(threads.list))))
+		if len(threads.list) == 0 {
+			add(th.Muted.Render("No review threads."))
+		}
 	}
 	env := thread.Env{Theme: th, Markdown: md, Now: now}
-	for _, t := range threads {
+	for _, t := range threads.list {
 		add(strings.Join(thread.Lines(env, t, width, thread.Options{Expanded: true, Location: true}), "\n"))
 		add("")
 	}
@@ -106,6 +116,15 @@ func (o *overview) jump(delta int) {
 			return
 		}
 	}
+}
+
+// threadsView is the review threads and how loading them stands, as the
+// Overview needs them.
+type threadsView struct {
+	list    []github.ReviewThread
+	loaded  bool // a load has succeeded
+	pending bool // a load is in flight
+	err     error
 }
 
 // entry is one item of the conversation: a top-level comment or a review.

@@ -77,6 +77,9 @@ func (m *Model) renderRow(i int) string {
 	if r.tr != nil {
 		return m.renderThreadRow(i, r)
 	}
+	if r.msg {
+		return m.renderNoticeRow(i, r)
+	}
 	if r.line == nil {
 		return m.renderHunk(m.file.Hunks[r.hunk].Header(), cur)
 	}

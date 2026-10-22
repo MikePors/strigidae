@@ -278,3 +278,45 @@ func TestGoldenThreads(t *testing.T) {
 		golden.Assert(t, "diff_threads_narrow", h.render(), false)
 	})
 }
+
+func overviewThreadsText(h *harness) string {
+	h.press("l", "G")
+	return ansi.Strip(h.render())
+}
+
+func TestOverviewThreadsLoadingState(t *testing.T) {
+	h := newHarness(t, 100, 40)
+	for _, m := range messages(h.v.Init()) {
+		if _, ok := m.(threadsLoadedMsg); !ok { // the thread load is still in flight
+			h.send(m)
+		}
+	}
+	out := overviewThreadsText(h)
+	if !strings.Contains(out, "Loading review threads…") || strings.Contains(out, "No review threads.") {
+		t.Errorf("expected the loading state:\n%s", out)
+	}
+}
+
+func TestOverviewThreadsErrorState(t *testing.T) {
+	h := newHarness(t, 100, 40)
+	h.client.SetError(fake.MethodListReviewThreads, errors.New("boom\x1b[2J"))
+	h.run(h.v.Init())
+	out := overviewThreadsText(h)
+	if !strings.Contains(out, "Could not load review threads: ") || !strings.Contains(out, "boom") || strings.Contains(out, "No review threads.") {
+		t.Errorf("expected the error state:\n%s", out)
+	}
+	assertTame(t, "thread error state", h.render())
+	// The next load replaces it.
+	h.client.SetError(fake.MethodListReviewThreads, nil)
+	h.press("R")
+	if out := ansi.Strip(h.render()); !strings.Contains(out, "No review threads.") || strings.Contains(out, "Could not load") {
+		t.Errorf("expected the empty state after a good load:\n%s", out)
+	}
+}
+
+func TestOverviewThreadsEmptyState(t *testing.T) {
+	h := loaded(t, 100, 40)
+	if out := overviewThreadsText(h); !strings.Contains(out, "Review threads (0)") || !strings.Contains(out, "No review threads.") {
+		t.Errorf("expected the empty state:\n%s", out)
+	}
+}

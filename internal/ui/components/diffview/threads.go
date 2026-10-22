@@ -2,6 +2,8 @@ package diffview
 
 import (
 	"slices"
+	"strings"
+	"time"
 
 	"github.com/charmbracelet/x/ansi"
 
@@ -20,9 +22,11 @@ const (
 // on the file it displays. Which threads the user expanded or collapsed is
 // kept across calls, by thread ID.
 func (m *Model) SetThreads(ts []github.ReviewThread) {
+	k, had := m.cursorKey()
 	m.threads = ts
+	m.bcache = nil
 	m.placeThreads()
-	m.layout()
+	m.relayout(k, had)
 }
 
 // placeThreads picks the threads on the shown file and anchors each to a row
@@ -75,13 +79,59 @@ func (m *Model) expanded(t github.ReviewThread) bool {
 	return thread.DefaultExpanded(t)
 }
 
+// blockSig is what every cached block depends on besides its own key.
+type blockSig struct {
+	width   int
+	themeID string
+	minute  time.Time // relative times age
+}
+
+type blockKey struct {
+	id       string
+	expanded bool
+	location bool
+}
+
+// renderBlock returns the lines of thread ti, from the cache when the thread,
+// its expanded state, the width and the theme are unchanged.
 func (m *Model) renderBlock(ti int) []string {
 	t := m.fthreads[ti]
-	env := thread.Env{Theme: m.th, Markdown: m.md, Now: m.now()}
-	return thread.Lines(env, t, m.w-m.gutterW(), thread.Options{
-		Expanded: m.expanded(t),
-		Location: slices.Contains(m.orphans, ti),
-	})
+	now := m.now()
+	sig := blockSig{width: m.w - m.gutterW(), themeID: m.th.ID, minute: now.Truncate(time.Minute)}
+	if m.bcache == nil || sig != m.bsig {
+		m.bcache, m.bsig = map[blockKey][]string{}, sig
+	}
+	key := blockKey{id: t.ID, expanded: m.expanded(t), location: slices.Contains(m.orphans, ti)}
+	if lines, ok := m.bcache[key]; ok {
+		return lines
+	}
+	m.renders++
+	env := thread.Env{Theme: m.th, Markdown: m.md, Now: now}
+	lines := thread.Lines(env, t, sig.width, thread.Options{Expanded: key.expanded, Location: key.location})
+	m.bcache[key] = lines
+	return lines
+}
+
+// noticeRows are the rows for the notice of a file with no diff rows (binary,
+// rename only, ...), wrapped to the width, so its threads can follow it.
+func (m *Model) noticeRows() []row {
+	var out []row
+	for _, l := range m.messageLines() {
+		l, _ = displayText(l)
+		for _, w := range strings.Split(ansi.Wrap(l, max(m.w-1, 1), ""), "\n") {
+			out = append(out, row{msg: true, text: w, bi: len(out)})
+		}
+	}
+	return out
+}
+
+func (m *Model) renderNoticeRow(i int, r row) string {
+	lead := " "
+	if i == m.win.Cursor() {
+		lead = ">"
+	}
+	s := ansi.Truncate(lead+r.text, m.w, "")
+	return m.th.Muted.Render(s + spaces(m.w-ansi.StringWidth(s)))
 }
 
 // threadsAtCursor returns the threads the cursor is on: the one whose rows it
