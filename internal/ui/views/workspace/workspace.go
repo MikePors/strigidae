@@ -58,6 +58,7 @@ type View struct {
 	th       theme.Theme
 	km       keys.Global
 	bind     bindings
+	navBind  diffBindings // hunk/thread keys, routed to the file pane from either focus
 	md       *markdown.Renderer
 	filePane FilePane
 
@@ -97,14 +98,15 @@ var (
 // New returns the workspace for pull request number in repo.
 func New(client github.Client, repo github.Repo, number int, opts ...Option) *View {
 	v := &View{
-		client: client,
-		repo:   repo,
-		number: number,
-		now:    time.Now,
-		open:   openInBrowser,
-		th:     theme.Default(),
-		km:     keys.DefaultGlobal(),
-		bind:   defaultBindings(),
+		client:  client,
+		repo:    repo,
+		number:  number,
+		now:     time.Now,
+		open:    openInBrowser,
+		th:      theme.Default(),
+		km:      keys.DefaultGlobal(),
+		bind:    defaultBindings(),
+		navBind: defaultDiffBindings(),
 	}
 	for _, o := range opts {
 		o(v)

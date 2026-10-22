@@ -84,11 +84,9 @@ func TestCapturerReleasesOnEsc(t *testing.T) {
 		_, _ = m.Update(msg) // commands (timers, spinner) are not run
 	}
 	step(tea.WindowSizeMsg{Width: 100, Height: 25})
-	for _, k := range []string{"]", "f"} {
-		step(tea.KeyPressMsg{Code: rune(k[0]), Text: k})
-	}
+	step(tea.KeyPressMsg{Code: '}', Text: "}"})
 	if h.v.sel() != 1 {
-		t.Fatalf("] f through the root: sel = %d", h.v.sel())
+		t.Fatalf("} through the root: sel = %d", h.v.sel())
 	}
 	step(tea.KeyPressMsg{Code: 'f', Text: "f"})
 	if !h.v.CapturesKeys() {

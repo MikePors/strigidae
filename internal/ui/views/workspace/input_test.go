@@ -52,26 +52,26 @@ func TestFocusAndFileNavigation(t *testing.T) {
 		t.Error("enter should focus the right pane")
 	}
 
-	// ] f and [ f work from either pane and never land on Overview.
+	// } and { work from either pane and never land on Overview.
 	h.press("g g") // scrolls the overview, selection unchanged
 	if h.v.sel() != 5 {
 		t.Errorf("g g in the right pane moved the selection to %d", h.v.sel())
 	}
-	h.press("[ f")
+	h.press("{")
 	if h.v.sel() != 4 {
-		t.Errorf("[ f: sel = %d", h.v.sel())
+		t.Errorf("{: sel = %d", h.v.sel())
 	}
-	h.press("h", "g g", "[ f")
+	h.press("h", "g g", "{")
 	if h.v.sel() != 0 {
-		t.Errorf("[ f from Overview should stay: sel = %d", h.v.sel())
+		t.Errorf("{ from Overview should stay: sel = %d", h.v.sel())
 	}
-	h.press("] f")
+	h.press("}")
 	if h.v.sel() != 1 {
-		t.Errorf("] f from Overview: sel = %d", h.v.sel())
+		t.Errorf("} from Overview: sel = %d", h.v.sel())
 	}
-	h.press("l", "] f", "] f", "] f", "] f", "] f")
+	h.press("l", "}", "}", "}", "}", "}")
 	if h.v.sel() != 5 {
-		t.Errorf("] f clamps at the last file: sel = %d", h.v.sel())
+		t.Errorf("} clamps at the last file: sel = %d", h.v.sel())
 	}
 }
 
@@ -81,23 +81,23 @@ func TestSectionJumps(t *testing.T) {
 	if h.v.ov.vp.YOffset() != 0 {
 		t.Fatal("overview should start at the top")
 	}
-	h.press("] s")
+	h.press("]")
 	conv := h.v.ov.sections[1]
 	if got := h.v.ov.vp.YOffset(); got != conv {
-		t.Errorf("] s: offset = %d, want %d", got, conv)
+		t.Errorf("]: offset = %d, want %d", got, conv)
 	}
-	h.press("[ s")
+	h.press("[")
 	if got := h.v.ov.vp.YOffset(); got != 0 {
-		t.Errorf("[ s: offset = %d, want 0", got)
+		t.Errorf("[: offset = %d, want 0", got)
 	}
 	// Works from the Files pane as well.
-	h.press("h", "] s")
+	h.press("h", "]")
 	if got := h.v.ov.vp.YOffset(); got != conv {
-		t.Errorf("] s from files: offset = %d, want %d", got, conv)
+		t.Errorf("] from files: offset = %d, want %d", got, conv)
 	}
 	// Ignored while a file is selected.
-	h.press("j", "[ s")
-	h.press("g g", "] s")
+	h.press("j", "[")
+	h.press("g g", "]")
 }
 
 func TestOverviewScrolling(t *testing.T) {

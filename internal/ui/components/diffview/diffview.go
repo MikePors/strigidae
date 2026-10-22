@@ -9,11 +9,11 @@
 //	g g / G        GotoTop() / GotoBottom()
 //	ctrl+d / ctrl+u HalfPageDown() / HalfPageUp()
 //	ctrl+f / ctrl+b PageDown() / PageUp()
-//	] h / [ h      NextHunk() / PrevHunk()
+//	] / [          NextHunk() / PrevHunk()
 //	z h / z l      ScrollLeft(4) / ScrollRight(4)
 //	z H / z L      HalfScrollLeft() / HalfScrollRight()
 //	z a / z o / z c  ToggleThread() / OpenThread() / CloseThread()
-//	] c / [ c      NextThread() / PrevThread()
+//	) / (          NextThread() / PrevThread()
 //
 // Usage:
 //

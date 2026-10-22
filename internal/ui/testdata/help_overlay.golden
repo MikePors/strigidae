@@ -1,25 +1,25 @@
-Help  ? / esc to close                                          
-                                                                
-Global                                        v                 
-j        down                                 ]f       next file
-k        up                                                     
-gg       top                                                    
-G        bottom                                                 
-ctrl+d   half page down                                         
-ctrl+u   half page up                                           
-ctrl+f   page down                                              
-ctrl+b   page up                                                
-                                                                
-enter    open / select                                          
-o        open in browser                                        
-R        refresh                                                
-/        filter / search                                        
-n        next match                                             
-N        previous match                                         
-                                                                
-esc      cancel / clear                                         
-?        toggle help                                            
-:        command line (:q close, :qa quit)                      
+Help  ? / esc to close                                              
+                                                                    
+Global                                        v                     
+j        down                                 zq       test sequence
+k        up                                                         
+gg       top                                                        
+G        bottom                                                     
+ctrl+d   half page down                                             
+ctrl+u   half page up                                               
+ctrl+f   page down                                                  
+ctrl+b   page up                                                    
+                                                                    
+enter    open / select                                              
+o        open in browser                                            
+R        refresh                                                    
+/        filter / search                                            
+n        next match                                                 
+N        previous match                                             
+                                                                    
+esc      cancel / clear                                             
+?        toggle help                                                
+:        command line (:q close, :qa quit)                          
 
 
 
@@ -27,4 +27,4 @@ esc      cancel / clear
 
 
 
- v  ? help  ]f next file                                              
+ v  ? help  zq test sequence                                          

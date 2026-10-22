@@ -83,7 +83,7 @@ func TestThreadsPagedLoad(t *testing.T) {
 
 func TestThreadsInOverview(t *testing.T) {
 	h := threadHarness(t, 100, 60)
-	h.press("l", "] s", "] s")
+	h.press("l", "]", "]")
 	out := ansi.Strip(h.render())
 	for _, want := range []string{
 		"Review threads (4)",
@@ -182,9 +182,9 @@ func TestThreadKeys(t *testing.T) {
 	h.selectFile()
 	has := func(s string) bool { return strings.Contains(ansi.Strip(h.render()), s) }
 
-	h.press("] c") // first thread in row order: the resolved one on line 12
+	h.press(")") // first thread in row order: the resolved one on line 12
 	if !strings.Contains(h.cursorRow(), "carol") {
-		t.Fatalf("] c landed on %q", h.cursorRow())
+		t.Fatalf(") landed on %q", h.cursorRow())
 	}
 	h.press("z o")
 	if !has("Nit: unused import.") || !has("▾ carol") {
@@ -203,17 +203,17 @@ func TestThreadKeys(t *testing.T) {
 		t.Error("z a should toggle it")
 	}
 
-	h.press("] c")
+	h.press(")")
 	if !strings.Contains(h.cursorRow(), "bob") {
-		t.Errorf("second ] c landed on %q", h.cursorRow())
+		t.Errorf("second ) landed on %q", h.cursorRow())
 	}
-	h.press("[ c")
+	h.press("(")
 	if !strings.Contains(h.cursorRow(), "carol") {
-		t.Errorf("[ c landed on %q", h.cursorRow())
+		t.Errorf("( landed on %q", h.cursorRow())
 	}
 
 	// enter on the commented diff line toggles its thread.
-	h.press("[ c", "k")
+	h.press("(", "k")
 	if h.cursorText() == "" || !strings.Contains(h.cursorRow(), "12") {
 		t.Fatalf("setup: expected the commented line 12, at %q", h.cursorRow())
 	}
@@ -236,7 +236,7 @@ func (h *harness) cursorRow() string {
 
 func TestThreadKeysAreRegisteredForSequences(t *testing.T) {
 	h := loaded(t, 100, 30)
-	want := map[string]bool{"] c": false, "[ c": false, "z a": false, "z o": false, "z c": false}
+	want := map[string]bool{")": false, "(": false, "z a": false, "z o": false, "z c": false}
 	for _, group := range h.v.FullHelp() {
 		for _, b := range group {
 			for _, k := range b.Keys() {
@@ -264,7 +264,7 @@ func TestEnterInOverviewDoesNothingToThreads(t *testing.T) {
 func TestGoldenThreads(t *testing.T) {
 	t.Run("overview_threads", func(t *testing.T) {
 		h := threadHarness(t, 100, 40)
-		h.press("l", "] s", "] s")
+		h.press("l", "]", "]")
 		golden.Assert(t, "overview_threads", h.render(), false)
 	})
 	t.Run("diff_threads", func(t *testing.T) {

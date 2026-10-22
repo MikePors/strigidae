@@ -198,15 +198,15 @@ func TestPartialDiffStillShowsParsedFiles(t *testing.T) {
 	h.client.SetDiff(testRepo, 7, malformedDiff(t))
 	h.run(h.v.Init())
 
-	h.press("] f") // client.go parsed fine
+	h.press("}") // client.go parsed fine
 	if out := ansi.Strip(h.render()); !strings.Contains(out, "func (c *Client) Sync") {
 		t.Errorf("a file that parsed should show its diff:\n%s", out)
 	}
-	h.press("] f") // retry.go is the malformed one: what parsed before the problem shows
+	h.press("}") // retry.go is the malformed one: what parsed before the problem shows
 	if out := ansi.Strip(h.render()); !strings.Contains(out, "+one") {
 		t.Errorf("the partly parsed file should show what parsed:\n%s", out)
 	}
-	h.press("] f") // legacy.go is not in the diff at all
+	h.press("}") // legacy.go is not in the diff at all
 	out := ansi.Strip(h.render())
 	if !strings.Contains(out, "No diff available for this file.") || !strings.Contains(out, "could not be fully parsed") {
 		t.Errorf("the missing file should say so:\n%s", out)
