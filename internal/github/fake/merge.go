@@ -82,6 +82,8 @@ func (c *Client) MergePullRequest(ctx context.Context, in github.MergeInput) err
 		return fmt.Errorf("merge %s#%d: %w", in.Repo, in.Number, github.ErrNotFound)
 	}
 	switch {
+	case in.ExpectedHeadOID == "" || in.Method == "":
+		return fmt.Errorf("merge %s#%d: missing merge method or expected head", in.Repo, in.Number)
 	case in.PullRequestID == "" || in.PullRequestID != d.ID:
 		return fmt.Errorf("merge %s#%d: unknown pull request ID %q", in.Repo, in.Number, in.PullRequestID)
 	case !slices.Contains(c.mergeSettings(in.Repo).Allowed, in.Method):

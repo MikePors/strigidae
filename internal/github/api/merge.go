@@ -72,6 +72,16 @@ func (c *Client) GetMergeStatus(ctx context.Context, repo github.Repo, number in
 
 // MergePullRequest implements github.Client.
 func (c *Client) MergePullRequest(ctx context.Context, in github.MergeInput) error {
+	// An empty expectedHeadOid would drop GitHub's head check, so none of
+	// these may be empty.
+	switch {
+	case in.PullRequestID == "":
+		return fmt.Errorf("merge %s#%d: missing pull request ID", in.Repo, in.Number)
+	case in.Method == "":
+		return fmt.Errorf("merge %s#%d: missing merge method", in.Repo, in.Number)
+	case in.ExpectedHeadOID == "":
+		return fmt.Errorf("merge %s#%d: missing expected head commit", in.Repo, in.Number)
+	}
 	var resp map[string]any
 	vars := map[string]any{"pullRequestId": in.PullRequestID, "mergeMethod": string(in.Method), "expectedHeadOid": in.ExpectedHeadOID}
 	if err := c.query(ctx, mergeMutation, vars, &resp); err != nil {

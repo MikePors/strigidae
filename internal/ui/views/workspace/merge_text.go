@@ -1,6 +1,8 @@
 package workspace
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -71,4 +73,13 @@ func mergeQuestion(number int, method github.MergeMethod, st github.MergeStatus)
 // mergedText is the success message.
 func mergedText(number int, method github.MergeMethod) string {
 	return fmt.Sprintf("Merged #%d (%s)", number, methodNames[method])
+}
+
+// mergeFailure is the error shown when MergePullRequest failed. The merge
+// may or may not have landed, so the view refreshes to show.
+func mergeFailure(err error) error {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return errors.New("merge timed out; refreshed to show the current state")
+	}
+	return termtext.SafeError(fmt.Errorf("%w; refreshed to show the current state", err))
 }

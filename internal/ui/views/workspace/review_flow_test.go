@@ -19,7 +19,7 @@ func flowEnv(c github.Client) reviewEnv {
 		client: c, repo: testRepo, number: 7, theme: theme.Default(),
 		edit:   func(string, func(string, error) tea.Msg) tea.Cmd { return nil },
 		reload: func() tea.Cmd { return nil },
-		loaded: true, diffReady: true, diffHead: "h1",
+		loaded: true, diffReady: true, diffHead: "h1", timeouts: defaultTimeouts,
 	}
 }
 

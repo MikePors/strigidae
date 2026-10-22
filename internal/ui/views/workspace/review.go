@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -38,6 +39,32 @@ type reviewEnv struct {
 	diffHead    string         // head SHA the diff on screen was loaded for
 	diffPending bool           // a diff load is in flight
 	diffReady   bool           // a diff is loaded and shown
+	timeouts    timeouts
+}
+
+// timeouts bound the calls a flow makes. A status query that hangs would
+// make a confirmation arrive arbitrarily late, and a write that hangs would
+// leave the flow "in flight" for good.
+type timeouts struct {
+	status time.Duration // the fresh status queries
+	write  time.Duration // the submit and merge calls
+}
+
+// defaultTimeouts are used unless WithTimeouts overrides them.
+var defaultTimeouts = timeouts{status: 15 * time.Second, write: 60 * time.Second}
+
+// WithTimeouts replaces the deadlines of the review and merge calls, so tests
+// need not wait.
+func WithTimeouts(status, write time.Duration) Option {
+	return func(v *View) { v.timeouts = timeouts{status: status, write: write} }
+}
+
+func (e reviewEnv) statusCtx() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), e.timeouts.status)
+}
+
+func (e reviewEnv) writeCtx() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), e.timeouts.write)
 }
 
 // Results carry the identity of the flow, repo and number that asked. The
@@ -103,7 +130,7 @@ type (
 func (v *View) reviewEnv() reviewEnv {
 	return reviewEnv{
 		client: v.client, repo: v.repo, number: v.number, theme: v.th,
-		edit: v.edit, reload: v.load,
+		edit: v.edit, reload: v.load, timeouts: v.timeouts,
 		loaded:      v.detail != nil,
 		diffHead:    v.diffHead,
 		diffPending: v.diffPending,
@@ -232,7 +259,9 @@ func (f *reviewFlow) start(env reviewEnv, event github.ReviewEvent) tea.Cmd {
 	f.seq++
 	flow, seq := f, f.seq
 	return func() tea.Msg {
-		st, err := env.client.GetReviewStatus(context.Background(), env.repo, env.number)
+		ctx, cancel := env.statusCtx()
+		defer cancel()
+		st, err := env.client.GetReviewStatus(ctx, env.repo, env.number)
 		return reviewPendingMsg{flow: flow, repo: env.repo, number: env.number, seq: seq, event: event, pending: st.Pending, err: err}
 	}
 }
@@ -266,7 +295,9 @@ func (f *reviewFlow) edited(msg reviewEditedMsg, env reviewEnv) tea.Cmd {
 	}
 	flow, seq, event := f, f.seq, msg.event
 	return func() tea.Msg {
-		st, err := env.client.GetReviewStatus(context.Background(), env.repo, env.number)
+		ctx, cancel := env.statusCtx()
+		defer cancel()
+		st, err := env.client.GetReviewStatus(ctx, env.repo, env.number)
 		return reviewFreshMsg{flow: flow, repo: env.repo, number: env.number, seq: seq, event: event, body: body, status: st, err: err}
 	}
 }
@@ -313,10 +344,14 @@ func (f *reviewFlow) submit(env reviewEnv, event github.ReviewEvent, body string
 		in.PendingReviewID = st.Pending.ID
 	}
 	return func() tea.Msg {
-		err := env.client.SubmitReview(context.Background(), in)
+		ctx, cancel := env.writeCtx()
+		defer cancel()
+		err := env.client.SubmitReview(ctx, in)
 		res := reviewSubmittedMsg{flow: flow, repo: env.repo, number: env.number, event: event, body: body, err: err}
 		if err == nil {
-			return res
+			// Sent from here too, so it shows even if the view was left meanwhile.
+			done := ui.InfoMsg{Text: submittedText(event, env.number)}
+			return tea.BatchMsg{func() tea.Msg { return res }, func() tea.Msg { return done }}
 		}
 		shown := ui.ErrorMsg{Err: submitFailure(err, in.PendingReviewID != "")}
 		return tea.BatchMsg{func() tea.Msg { return res }, func() tea.Msg { return shown }}
@@ -331,5 +366,5 @@ func (f *reviewFlow) submitted(msg reviewSubmittedMsg, env reviewEnv) tea.Cmd {
 		return env.reload()
 	}
 	f.draft = ""
-	return tea.Batch(ui.Info(submittedText(msg.event, env.number)), env.reload())
+	return env.reload()
 }

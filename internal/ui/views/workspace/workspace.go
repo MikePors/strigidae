@@ -62,6 +62,7 @@ type View struct {
 	md       *markdown.Renderer
 	filePane FilePane
 	edit     EditFunc
+	timeouts timeouts
 
 	seq         int // latest load request; older results are stale
 	prPending   bool
@@ -118,6 +119,7 @@ func New(client github.Client, repo github.Repo, number int, opts ...Option) *Vi
 		bind:        defaultBindings(),
 		navBind:     defaultDiffBindings(),
 		edit:        execEditor,
+		timeouts:    defaultTimeouts,
 		drafts:      map[string]string{},
 		viewedState: map[string]*viewedToggle{},
 	}

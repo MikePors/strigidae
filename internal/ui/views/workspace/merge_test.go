@@ -1,14 +1,19 @@
 package workspace
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/github/fake"
+	"github.com/MikePors/strigidae/internal/ui"
 )
 
 // mergeCommand runs :merge with args.
@@ -266,5 +271,102 @@ func TestMergeQuestionCleansBaseRef(t *testing.T) {
 	q := mergeQuestion(7, github.MergeMethodMerge, github.MergeStatus{BaseRef: "ma\x1b[31min"})
 	if strings.Contains(q, "\x1b") {
 		t.Errorf("question = %q", q)
+	}
+}
+
+func TestMergeHeadMovedNoticeWhileReloadInFlight(t *testing.T) {
+	c := newReviewer(t)
+	cmd, _ := c.v.Command("merge", "")
+	c.v.diffPending = true // R pressed during the status query; the heads still match
+	c.run(cmd)
+	conf, ok := c.lastConfirm()
+	if !ok || !conf.Notice || conf.Text != headMovedText {
+		t.Fatalf("confirm = %+v, ok = %v", conf, ok)
+	}
+	if len(c.client.Merges()) != 0 {
+		t.Error("merged while the diff was reloading")
+	}
+}
+
+func TestMergeRefusesUnknownDiffHead(t *testing.T) {
+	f := mergeFlow{seq: 1}
+	env := flowEnv(fake.New())
+	env.diffHead = ""
+	cmd := f.confirm(mergeFreshMsg{flow: &f, repo: testRepo, number: 7, seq: 1, status: github.MergeStatus{Allowed: github.MergeMethods}}, env)
+	msgs := messages(cmd)
+	if len(msgs) != 1 {
+		t.Fatalf("msgs = %v", msgs)
+	}
+	if e, ok := msgs[0].(ui.ErrorMsg); !ok || !strings.Contains(e.Err.Error(), "unknown") {
+		t.Errorf("msg = %#v", msgs[0])
+	}
+}
+
+// hangingClient blocks the merge calls until their context ends.
+type hangingClient struct{ *fake.Client }
+
+func (hangingClient) GetMergeStatus(ctx context.Context, _ github.Repo, _ int) (github.MergeStatus, error) {
+	<-ctx.Done()
+	return github.MergeStatus{}, ctx.Err()
+}
+
+func (hangingClient) MergePullRequest(ctx context.Context, _ github.MergeInput) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func TestMergeStatusQueryTimesOut(t *testing.T) {
+	var f mergeFlow
+	env := flowEnv(hangingClient{fake.New()})
+	env.timeouts = timeouts{status: time.Millisecond, write: time.Millisecond}
+	msg, ok := f.command("", env)().(mergeFreshMsg)
+	if !ok || !errors.Is(msg.err, context.DeadlineExceeded) {
+		t.Fatalf("msg = %#v", msg)
+	}
+	if msgs := messages(f.confirm(msg, env)); len(msgs) != 1 {
+		t.Errorf("msgs = %v, want one error", msgs)
+	}
+}
+
+func TestMergeCallTimesOutAndClearsInFlight(t *testing.T) {
+	f := mergeFlow{merging: true}
+	env := flowEnv(hangingClient{fake.New()})
+	env.timeouts = timeouts{status: time.Millisecond, write: time.Millisecond}
+	var reloads int
+	env.reload = func() tea.Cmd { reloads++; return nil }
+	st := github.MergeStatus{PullRequestID: "PR_7", HeadSHA: "h1"}
+
+	var shown error
+	for _, m := range messages(f.merge(env, github.MergeMethodMerge, st)) {
+		switch m := m.(type) {
+		case ui.ErrorMsg:
+			shown = m.Err
+		case mergedMsg:
+			f.update(m, env)
+		}
+	}
+	if shown == nil || shown.Error() != "merge timed out; refreshed to show the current state" {
+		t.Errorf("error = %v", shown)
+	}
+	if f.merging || reloads != 1 {
+		t.Errorf("merging = %v, reloads = %d", f.merging, reloads)
+	}
+}
+
+func TestMergeSuccessIsReportedByTheCommand(t *testing.T) {
+	c := fake.New()
+	d := testDetail()
+	d.HeadSHA = "h1"
+	c.SetPullRequest(d)
+	var f mergeFlow
+	st := github.MergeStatus{PullRequestID: "PR_7", HeadSHA: "h1"}
+	var infos []string
+	for _, m := range messages(f.merge(flowEnv(c), github.MergeMethodMerge, st)) {
+		if i, ok := m.(ui.InfoMsg); ok {
+			infos = append(infos, i.Text)
+		}
+	}
+	if diff := cmp.Diff([]string{"Merged #7 (merge commit)"}, infos); diff != "" {
+		t.Errorf("info (-want +got):\n%s", diff)
 	}
 }

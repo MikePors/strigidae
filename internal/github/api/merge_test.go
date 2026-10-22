@@ -63,8 +63,31 @@ func TestMergePullRequestRefused(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data":null,"errors":[{"message":"Required status check is expected."}]}`))
 		return true
 	}}
-	err := newTestClient(t, s).MergePullRequest(context.Background(), github.MergeInput{Repo: repo, Number: 27})
+	in := github.MergeInput{Repo: repo, Number: 27, PullRequestID: "PR_1", Method: github.MergeMethodMerge, ExpectedHeadOID: "abc"}
+	err := newTestClient(t, s).MergePullRequest(context.Background(), in)
 	if err == nil || !strings.Contains(err.Error(), "Required status check is expected.") {
 		t.Errorf("err = %v, want GitHub's message", err)
+	}
+}
+
+func TestMergePullRequestRefusesIncompleteInput(t *testing.T) {
+	good := github.MergeInput{Repo: repo, Number: 27, PullRequestID: "PR_1", Method: github.MergeMethodMerge, ExpectedHeadOID: "abc"}
+	tests := map[string]func(*github.MergeInput){
+		"no pull request ID": func(in *github.MergeInput) { in.PullRequestID = "" },
+		"no method":          func(in *github.MergeInput) { in.Method = "" },
+		"no expected head":   func(in *github.MergeInput) { in.ExpectedHeadOID = "" },
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			s := &server{}
+			in := good
+			mutate(&in)
+			if err := newTestClient(t, s).MergePullRequest(context.Background(), in); err == nil {
+				t.Error("no error")
+			}
+			if len(s.Calls()) != 0 {
+				t.Error("a request was sent")
+			}
+		})
 	}
 }

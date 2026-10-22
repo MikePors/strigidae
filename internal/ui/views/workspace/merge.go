@@ -1,7 +1,7 @@
 package workspace
 
 import (
-	"context"
+	"errors"
 	"fmt"
 
 	tea "charm.land/bubbletea/v2"
@@ -75,7 +75,9 @@ func (f *mergeFlow) command(args string, env reviewEnv) tea.Cmd {
 	f.seq++
 	flow, seq := f, f.seq
 	return func() tea.Msg {
-		st, err := env.client.GetMergeStatus(context.Background(), env.repo, env.number)
+		ctx, cancel := env.statusCtx()
+		defer cancel()
+		st, err := env.client.GetMergeStatus(ctx, env.repo, env.number)
 		return mergeFreshMsg{flow: flow, repo: env.repo, number: env.number, seq: seq, requested: requested, status: st, err: err}
 	}
 }
@@ -103,7 +105,7 @@ func (f *mergeFlow) update(msg tea.Msg, env reviewEnv) (cmd tea.Cmd, handled boo
 			// Whatever went wrong, the merge may or may not have landed.
 			return env.reload(), true
 		}
-		return tea.Batch(ui.Info(mergedText(env.number, msg.method)), env.reload()), true
+		return env.reload(), true
 	case mergeRefreshMsg:
 		if !f.same(env, msg.flow, msg.repo, msg.number) {
 			return nil, true
@@ -121,6 +123,9 @@ func (f *mergeFlow) confirm(msg mergeFreshMsg, env reviewEnv) tea.Cmd {
 	st := msg.status
 	// Merge exactly what was reviewed: the commit whose diff is on screen.
 	flow := f
+	if env.diffHead == "" {
+		return ui.Error(errors.New("head of the diff on screen is unknown; refresh first"))
+	}
 	if env.diffPending || st.HeadSHA != env.diffHead {
 		refresh := func() tea.Msg { return mergeRefreshMsg{flow: flow, repo: env.repo, number: env.number} }
 		return func() tea.Msg {
@@ -146,12 +151,18 @@ func (f *mergeFlow) merge(env reviewEnv, method github.MergeMethod, st github.Me
 		Method: method, ExpectedHeadOID: st.HeadSHA,
 	}
 	return func() tea.Msg {
-		err := env.client.MergePullRequest(context.Background(), in)
+		ctx, cancel := env.writeCtx()
+		defer cancel()
+		err := env.client.MergePullRequest(ctx, in)
 		res := mergedMsg{flow: flow, repo: env.repo, number: env.number, method: method, err: err}
+		// The outcome is also sent from here, so it shows even if the view
+		// was left meanwhile.
+		var shown tea.Msg
 		if err == nil {
-			return res
+			shown = ui.InfoMsg{Text: mergedText(env.number, method)}
+		} else {
+			shown = ui.ErrorMsg{Err: mergeFailure(err)}
 		}
-		shown := ui.ErrorMsg{Err: termtext.SafeError(fmt.Errorf("%w; refreshed to show the current state", err))}
 		return tea.BatchMsg{func() tea.Msg { return res }, func() tea.Msg { return shown }}
 	}
 }

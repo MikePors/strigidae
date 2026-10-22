@@ -1,6 +1,7 @@
 package workspace
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -58,6 +59,9 @@ func submittedText(event github.ReviewEvent, number int) string {
 // submitFailure is the error shown when SubmitReview failed. pending says the
 // call was for a pending review.
 func submitFailure(err error, pending bool) error {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return errors.New("submit review timed out; refreshed to show the current state")
+	}
 	if pending && errors.Is(err, github.ErrNotFound) {
 		return errors.New("your pending review was submitted or deleted elsewhere; refreshing, then try again")
 	}

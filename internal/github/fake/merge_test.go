@@ -46,6 +46,7 @@ func TestMergePullRequest(t *testing.T) {
 		fail   bool
 	}{
 		{"ok", func(*Client, github.Repo, *github.MergeInput) {}, false},
+		{"no expected head", func(_ *Client, _ github.Repo, in *github.MergeInput) { in.ExpectedHeadOID = "" }, true},
 		{"wrong id", func(_ *Client, _ github.Repo, in *github.MergeInput) { in.PullRequestID = "x" }, true},
 		{"head moved", func(c *Client, r github.Repo, _ *github.MergeInput) { c.SetHeadSHA(r, 1, "h2") }, true},
 		{"method not allowed", func(c *Client, r github.Repo, _ *github.MergeInput) {
