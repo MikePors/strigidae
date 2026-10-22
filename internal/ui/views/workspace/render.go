@@ -129,16 +129,6 @@ func (v *View) renderHeader(width int) []string {
 	sep := v.th.Muted.Render(" · ")
 	parts := []string{
 		v.th.Author.Render(termtext.Clean(d.Author)),
-		v.th.Muted.Render(termtext.Clean(d.BaseRef) + " ← " + termtext.Clean(d.HeadRef)),
-	}
-	switch d.ReviewDecision {
-	case github.ReviewDecisionApproved:
-		parts = append(parts, v.th.FileAdded.Render("approved"))
-	case github.ReviewDecisionChangesRequested:
-		parts = append(parts, v.th.FileDeleted.Render("changes requested"))
-	case github.ReviewDecisionReviewRequired:
-		parts = append(parts, v.th.FileModified.Render("review required"))
-	case github.ReviewDecisionNone:
 	}
 	switch d.Checks {
 	case github.ChecksPassing:
@@ -149,6 +139,18 @@ func (v *View) renderHeader(width int) []string {
 		parts = append(parts, v.th.PRList.ChecksRunning.Render("● checks running"))
 	case github.ChecksNone:
 	}
+	switch d.ReviewDecision {
+	case github.ReviewDecisionApproved:
+		parts = append(parts, v.th.FileAdded.Render("approved"))
+	case github.ReviewDecisionChangesRequested:
+		parts = append(parts, v.th.FileDeleted.Render("changes requested"))
+	case github.ReviewDecisionReviewRequired:
+		parts = append(parts, v.th.FileModified.Render("review required"))
+	case github.ReviewDecisionNone:
+	}
+	// Branches are the least glanceable part, so they come after the states
+	// and are what truncation eats first.
+	parts = append(parts, v.th.Muted.Render(termtext.Clean(d.BaseRef)+" ← "+termtext.Clean(d.HeadRef)))
 	if len(d.Labels) > 0 {
 		names := make([]string, len(d.Labels))
 		for i, l := range d.Labels {

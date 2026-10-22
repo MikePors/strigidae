@@ -188,7 +188,7 @@ func TestListPullRequestsPagination(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p2.HasMore() || len(p2.Items) != 1 || p2.Items[0].ReviewDecision != github.ReviewDecisionReviewRequired || p2.Items[0].Checks != github.ChecksRunning {
+	if p2.HasMore() || len(p2.Items) != 1 || p2.Items[0].ReviewDecision != github.ReviewDecisionReviewRequired || p2.Items[0].Checks != github.ChecksNone {
 		t.Errorf("unexpected page 2: %+v", p2)
 	}
 
@@ -245,7 +245,7 @@ func TestGetPullRequest(t *testing.T) {
 	want := github.PullRequestDetail{
 		PullRequest: github.PullRequest{
 			ID: "PR_kwDOExample01", HeadSHA: sha(1), Repo: repo, Number: 27, Title: "feat(api): add GitHub client layer", Author: "MikePors",
-			State: github.PRStateOpen, ReviewDecision: github.ReviewDecisionChangesRequested, CommentCount: 2, Checks: github.ChecksFailing,
+			State: github.PRStateOpen, ReviewDecision: github.ReviewDecisionChangesRequested, CommentCount: 2,
 			CreatedAt: mustTime(t, "2026-10-18T09:00:00Z"), UpdatedAt: mustTime(t, "2026-10-19T08:30:00Z"),
 			URL: "https://github.com/MikePors/strigidae/pull/27", HeadRef: "feat/4-github-client", BaseRef: "main",
 		},

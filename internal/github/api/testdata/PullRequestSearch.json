@@ -17,7 +17,7 @@
           "baseRefName": "main",
           "headRefName": "fix-typo",
           "headRefOid": "0000000000000000000000000000000000001111",
-          "commits": {"nodes": [{"commit": {"statusCheckRollup": {"state": "EXPECTED"}}}]},
+          "statusCheckRollup": {"state": "EXPECTED"},
           "author": {"login": "octocat"},
           "commentCount": {"totalCount": 4},
           "repository": {"nameWithOwner": "octo/widgets"}

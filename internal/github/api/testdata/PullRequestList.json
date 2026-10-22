@@ -18,7 +18,7 @@
             "baseRefName": "main",
             "headRefName": "feat/4-github-client",
             "headRefOid": "0000000000000000000000000000000000001111",
-            "commits": {"nodes": [{"commit": {"statusCheckRollup": {"state": "SUCCESS"}}}]},
+            "statusCheckRollup": {"state": "SUCCESS"},
             "author": {"login": "MikePors"},
             "commentCount": {"totalCount": 2},
             "repository": {"nameWithOwner": "MikePors/strigidae"}
@@ -36,7 +36,7 @@
             "baseRefName": "main",
             "headRefName": "chore/3-templates",
             "headRefOid": "0000000000000000000000000000000000002222",
-            "commits": {"nodes": [{"commit": {"statusCheckRollup": {"state": "FAILURE"}}}]},
+            "statusCheckRollup": {"state": "FAILURE"},
             "author": null,
             "commentCount": {"totalCount": 0},
             "repository": {"nameWithOwner": "MikePors/strigidae"}

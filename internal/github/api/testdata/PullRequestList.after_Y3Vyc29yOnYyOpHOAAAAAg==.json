@@ -18,7 +18,7 @@
             "baseRefName": "main",
             "headRefName": "dependabot/github_actions/actions-1c0c2ed584",
             "headRefOid": "0000000000000000000000000000000000001111",
-            "commits": {"nodes": [{"commit": {"statusCheckRollup": {"state": "PENDING"}}}]},
+            "statusCheckRollup": null,
             "author": {"login": "dependabot[bot]"},
             "commentCount": {"totalCount": 1},
             "repository": {"nameWithOwner": "MikePors/strigidae"}

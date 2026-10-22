@@ -1,5 +1,5 @@
 open #7 Add retry policy to sync client
-alice · main ← feat/retry · changes requested · [enhancemen…
+alice · changes requested · main ← feat/retry · [enhancemen…
 ╭─ Files 0/5 viewed ───────────────────────────────────────╮
 │  Overview                                                │
 │>   M internal/sync/client.go                          +25│
