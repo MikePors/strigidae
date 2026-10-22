@@ -35,4 +35,12 @@ type Client interface {
 	// SetFileViewed marks the file at path as viewed (or, with viewed false,
 	// clears the mark) for the viewer. pullRequestID is PullRequest.ID.
 	SetFileViewed(ctx context.Context, pullRequestID, path string, viewed bool) error
+	// GetMergeStatus returns what a merge needs to know right now: the pull
+	// request's node ID, head commit and base branch, and the repository's
+	// allowed merge methods and branch deletion setting.
+	GetMergeStatus(ctx context.Context, repo Repo, number int) (MergeStatus, error)
+	// MergePullRequest merges the pull request with in.Method and GitHub's
+	// default commit title and message. GitHub's refusal (failing checks,
+	// conflicts, a moved head) comes back as an error.
+	MergePullRequest(ctx context.Context, in MergeInput) error
 }

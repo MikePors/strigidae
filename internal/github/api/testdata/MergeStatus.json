@@ -1,0 +1,15 @@
+{
+  "data": {
+    "repository": {
+      "mergeCommitAllowed": false,
+      "squashMergeAllowed": true,
+      "rebaseMergeAllowed": true,
+      "deleteBranchOnMerge": true,
+      "pullRequest": {
+        "id": "PR_kwDOExample27",
+        "headRefOid": "0123456789abcdef0123456789abcdef01234567",
+        "baseRefName": "main"
+      }
+    }
+  }
+}
