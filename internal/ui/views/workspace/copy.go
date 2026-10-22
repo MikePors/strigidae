@@ -18,8 +18,9 @@ func (v *View) copyFilename() tea.Cmd {
 	if path == "" {
 		return ui.Error(errors.New("no file to copy"))
 	}
-	// Paths come from git; a path with control characters is never put on the
-	// clipboard, where pasting it into a shell could run something.
+	// Refuse control and bidi characters so the path cannot carry escapes or
+	// line breaks (a pasted newline would submit a line). It is the raw path,
+	// so it may still contain shell metacharacters.
 	if termtext.Clean(path) != path {
 		return ui.Error(fmt.Errorf("not copied: %s contains control characters", termtext.Clean(path)))
 	}
