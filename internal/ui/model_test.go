@@ -21,7 +21,7 @@ import (
 // fakeView records what the root sends it.
 type fakeView struct {
 	title   string
-	next    key.Binding // view-specific sequence "g f"
+	next    key.Binding // view-specific sequence "z q" (arbitrary; no real binding uses it)
 	capture bool
 	loading bool
 	resumed int
@@ -32,7 +32,7 @@ type fakeView struct {
 func newFake(title string) *fakeView {
 	return &fakeView{
 		title: title,
-		next:  key.NewBinding(key.WithKeys("g f"), key.WithHelp("gf", "next file")),
+		next:  key.NewBinding(key.WithKeys("z q"), key.WithHelp("zq", "test sequence")),
 	}
 }
 
@@ -349,9 +349,9 @@ func TestSequences(t *testing.T) {
 	t.Run("view-declared sequence", func(t *testing.T) {
 		v := newFake("v")
 		m := newModel(v)
-		press(m, "g")
-		press(m, "f")
-		if diff := cmp.Diff([]keys.Msg{{Seq: "g f"}}, v.keyMsgs()); diff != "" {
+		press(m, "z")
+		press(m, "q")
+		if diff := cmp.Diff([]keys.Msg{{Seq: "z q"}}, v.keyMsgs()); diff != "" {
 			t.Errorf("mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -371,7 +371,7 @@ func TestSequences(t *testing.T) {
 		m := newModel(newFake("v"))
 		stale := press(m, "g")
 		press(m, "g")
-		press(m, "g") // new pending prefix
+		press(m, "z") // new pending prefix
 		run(m, stale)
 		if !m.matcher.Pending() {
 			t.Error("stale timeout cleared a newer prefix")
