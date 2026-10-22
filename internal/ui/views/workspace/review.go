@@ -111,11 +111,14 @@ func (v *View) reviewEnv() reviewEnv {
 	}
 }
 
-// Command implements ui.Commander: :approve, :request-changes, :review and
-// :copy-filename.
-func (v *View) Command(name, _ string) (tea.Cmd, bool) {
-	if name == "copy-filename" {
+// Command implements ui.Commander: :approve, :request-changes, :review,
+// :merge and :copy-filename.
+func (v *View) Command(name, args string) (tea.Cmd, bool) {
+	switch name {
+	case "copy-filename":
 		return v.copyFilename(), true
+	case "merge":
+		return v.merge.command(args, v.reviewEnv()), true
 	}
 	return v.review.command(name, v.reviewEnv())
 }

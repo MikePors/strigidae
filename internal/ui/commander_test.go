@@ -72,8 +72,8 @@ func TestCommanderDeclinedAndPlainViews(t *testing.T) {
 	t.Run("a view that is not a Commander", func(t *testing.T) {
 		m := newModel(&cmdView{fakeView: newFake("below")})
 		run(m, Push(newFake("plain")))
-		run(m, typeCommand(m, "review"))
-		if m.status.text != "not available here: review" {
+		run(m, typeCommand(m, "merge squash"))
+		if m.status.text != "not available here: merge" {
 			t.Errorf("status = %q", m.status.text)
 		}
 	})

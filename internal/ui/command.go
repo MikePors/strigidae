@@ -58,7 +58,7 @@ func parseCommand(line string, top View) tea.Cmd {
 // viewCommands are the names that views may handle through Commander. The
 // shell keeps the list so it can tell "a command this view lacks" from a
 // typo. Add a name here when a view starts handling it.
-var viewCommands = []string{"approve", "copy-filename", "request-changes", "review"}
+var viewCommands = []string{"approve", "copy-filename", "merge", "request-changes", "review"}
 
 // commandLine is the ":" prompt drawn in the status bar row. It is the
 // reference pattern for key-capturing input: while active it reports
