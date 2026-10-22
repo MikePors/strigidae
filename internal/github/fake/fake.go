@@ -37,6 +37,8 @@ const (
 	MethodGetReviewStatus    = "GetReviewStatus"
 	MethodSubmitReview       = "SubmitReview"
 	MethodSetFileViewed      = "SetFileViewed"
+	MethodGetMergeStatus     = "GetMergeStatus"
+	MethodMergePullRequest   = "MergePullRequest"
 )
 
 // Call is one recorded call with the arguments that apply to its method.
@@ -93,6 +95,8 @@ type Client struct {
 	pending  map[prKey]github.PendingReview
 	reviews  []Submission
 	nextID   int
+	merge    map[github.Repo]MergeSettings
+	merges   []Merge
 }
 
 var _ github.Client = (*Client)(nil)
@@ -109,6 +113,7 @@ func New() *Client {
 		threads: map[prKey][]github.ReviewThread{},
 		errs:    map[string]error{},
 		pending: map[prKey]github.PendingReview{},
+		merge:   map[github.Repo]MergeSettings{},
 	}
 }
 

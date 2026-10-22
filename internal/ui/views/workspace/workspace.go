@@ -86,6 +86,7 @@ type View struct {
 	ov     overview
 	picker *picker.Model // non-nil while the file picker is open
 	review reviewFlow    // submitting a review (see review.go)
+	merge  mergeFlow     // merging the pull request (see merge.go)
 	// pickerItems are the paths the picker was built from; a choice is
 	// resolved by path because a refresh may replace the file list meanwhile.
 	pickerItems []string
@@ -137,7 +138,7 @@ func (v *View) Title() string { return fmt.Sprintf("#%d", v.number) }
 
 // Loading implements ui.Loader.
 func (v *View) Loading() bool {
-	return v.prPending || v.diffPending || v.thrPending || v.review.submitting
+	return v.prPending || v.diffPending || v.thrPending || v.review.submitting || v.merge.merging
 }
 
 // CapturesKeys implements ui.KeyCapturer: the file picker owns the keyboard
@@ -169,6 +170,9 @@ func (v *View) FullHelp() [][]key.Binding {
 // Update implements ui.View.
 func (v *View) Update(msg tea.Msg) (ui.View, tea.Cmd) {
 	if cmd, ok := v.review.update(msg, v.reviewEnv()); ok {
+		return v, cmd
+	}
+	if cmd, ok := v.merge.update(msg, v.reviewEnv()); ok {
 		return v, cmd
 	}
 	switch msg := msg.(type) {
