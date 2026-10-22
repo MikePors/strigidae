@@ -14,11 +14,17 @@ import (
 	"github.com/MikePors/strigidae/internal/ui/theme"
 )
 
-const headSHA = "aaaa1111"
+const (
+	headSHA  = "aaaa1111"
+	prNodeID = "PR_node_7"
+)
 
 // reviewer is a composer whose pull request has a head commit.
 func newReviewer(t *testing.T) *composer {
 	c := newComposer(t)
+	d := testDetail()
+	d.ID = prNodeID
+	c.client.SetPullRequest(d)
 	c.setHead(headSHA)
 	return c
 }
@@ -57,19 +63,19 @@ func TestReviewVerdicts(t *testing.T) {
 		{
 			name: "approve with no comment", command: "approve", body: "",
 			wantText: "Approve #7 in acme/widgets?",
-			want:     fake.Submission{Repo: testRepo, Number: 7, Event: github.ReviewEventApprove, CommitOID: headSHA},
+			want:     fake.Submission{Repo: testRepo, Number: 7, PullRequestID: prNodeID, Event: github.ReviewEventApprove, CommitOID: headSHA},
 			info:     "Approved #7",
 		},
 		{
 			name: "approve with a summary", command: "approve", body: "Nice.\n",
 			wantText: "Approve #7 in acme/widgets?",
-			want:     fake.Submission{Repo: testRepo, Number: 7, Event: github.ReviewEventApprove, Body: "Nice.", CommitOID: headSHA},
+			want:     fake.Submission{Repo: testRepo, Number: 7, PullRequestID: prNodeID, Event: github.ReviewEventApprove, Body: "Nice.", CommitOID: headSHA},
 			info:     "Approved #7",
 		},
 		{
 			name: "request changes", command: "request-changes", body: "Please fix.",
 			wantText: "Request changes on #7 in acme/widgets?",
-			want:     fake.Submission{Repo: testRepo, Number: 7, Event: github.ReviewEventRequestChanges, Body: "Please fix.", CommitOID: headSHA},
+			want:     fake.Submission{Repo: testRepo, Number: 7, PullRequestID: prNodeID, Event: github.ReviewEventRequestChanges, Body: "Please fix.", CommitOID: headSHA},
 			info:     "Requested changes on #7",
 		},
 	}
@@ -92,7 +98,7 @@ func TestReviewVerdicts(t *testing.T) {
 			if diff := cmp.Diff([]fake.Submission{tt.want}, c.client.Submissions()); diff != "" {
 				t.Errorf("submissions (-want +got):\n%s", diff)
 			}
-			if diff := cmp.Diff([]string{tt.info}, c.infos()); diff != "" {
+			if diff := cmp.Diff([]string{"Submitting review…", tt.info}, c.infos()); diff != "" {
 				t.Errorf("info (-want +got):\n%s", diff)
 			}
 			if c.v.reviewDraft != "" {
@@ -108,7 +114,7 @@ func TestReviewVerdicts(t *testing.T) {
 func TestReviewCommentThroughChooser(t *testing.T) {
 	c := newReviewer(t)
 	c.body = "Some thoughts."
-	c.press("S")
+	c.command("review")
 	if !c.v.CapturesKeys() {
 		t.Fatal("chooser does not capture keys")
 	}
@@ -141,7 +147,7 @@ func TestReviewCommandReview(t *testing.T) {
 
 func TestReviewChooserCancels(t *testing.T) {
 	c := newReviewer(t)
-	c.press("S")
+	c.command("review")
 	c.send(tea.KeyPressMsg{Code: tea.KeyEscape})
 	if c.v.CapturesKeys() || c.v.chooser != nil {
 		t.Error("esc did not close the chooser")
@@ -158,9 +164,16 @@ func TestReviewChooserReleasesOnEsc(t *testing.T) {
 	m := ui.New(h.v, theme.New(true), ui.Options{})
 	step := func(msg tea.Msg) { _, _ = m.Update(msg) }
 	step(tea.WindowSizeMsg{Width: 100, Height: 25})
-	step(tea.KeyPressMsg{Code: 'S', Text: "S"})
+	step(tea.KeyPressMsg{Code: ':', Text: ":"})
+	for _, r := range "review" {
+		step(tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if cmd != nil {
+		step(cmd())
+	}
 	if !h.v.CapturesKeys() {
-		t.Fatal("S through the root should open the chooser")
+		t.Fatal(":review through the root should open the chooser")
 	}
 	step(tea.KeyPressMsg{Code: 'j', Text: "j"})
 	if h.v.chooser.Query() != "j" {
@@ -214,7 +227,7 @@ func TestReviewWithPendingReview(t *testing.T) {
 		t.Errorf("text = %q, want %q", conf.Text, want)
 	}
 	c.run(conf.OnYes)
-	want := []fake.Submission{{Repo: testRepo, Number: 7, Event: github.ReviewEventComment, CommitOID: headSHA, PendingReviewID: "PRR_1"}}
+	want := []fake.Submission{{Repo: testRepo, Number: 7, PullRequestID: prNodeID, Event: github.ReviewEventComment, CommitOID: headSHA, PendingReviewID: "PRR_1"}}
 	if diff := cmp.Diff(want, c.client.Submissions()); diff != "" {
 		t.Errorf("submissions (-want +got):\n%s", diff)
 	}
@@ -259,10 +272,10 @@ func TestReviewHeadMoved(t *testing.T) {
 	if !ok {
 		t.Fatal("no notice shown")
 	}
-	if !conf.Notice || !strings.Contains(conf.Text, "Head moved") {
+	if !conf.Notice || !strings.Contains(conf.Text, "Head moved") || conf.OnYes != nil {
 		t.Errorf("confirm = %+v", conf)
 	}
-	c.run(conf.OnYes) // any key
+	c.run(conf.OnDismiss) // any key
 	if len(c.client.Submissions()) != 0 {
 		t.Error("submitted although the head moved")
 	}
@@ -279,10 +292,10 @@ func TestReviewServerErrorKeepsDraft(t *testing.T) {
 	c.client.SetError(fake.MethodSubmitReview, errors.New("Can not request changes on your own pull request\x1b[31m"))
 	c.run(conf.OnYes)
 	got := c.lastError()
-	if !strings.Contains(got, "Can not request changes on your own pull request") || strings.ContainsRune(got, 0x1b) {
+	if !strings.Contains(got, "Can not request changes on your own pull request") || !strings.Contains(got, "refreshed to show the current state") || strings.ContainsRune(got, 0x1b) {
 		t.Errorf("error = %q", got)
 	}
-	if len(c.infos()) != 0 {
+	if len(c.infos()) != 1 {
 		t.Errorf("success message after failure: %v", c.infos())
 	}
 	// The next attempt starts from the draft.

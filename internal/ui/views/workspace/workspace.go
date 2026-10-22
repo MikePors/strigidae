@@ -72,7 +72,8 @@ type View struct {
 	threads     []github.ReviewThread // sorted by file and line
 	detail      *github.PullRequestDetail
 	diff        DiffState
-	err         error // load failure while there is nothing to show
+	diffHead    string // head SHA the diff on screen was loaded for; "" if unknown
+	err         error  // load failure while there is nothing to show
 	notFound    bool
 
 	cseq   int               // latest compose request; older results are stale
@@ -85,6 +86,7 @@ type View struct {
 	// chooser is the review verdict chooser, non-nil while it is open.
 	chooser     *picker.Model
 	rseq        int    // latest review request; older results are stale
+	submitting  bool   // a review submission is in flight
 	reviewDraft string // unsent review summary, kept until it is submitted
 	// pickerItems are the paths the picker was built from; a choice is
 	// resolved by path because a refresh may replace the file list meanwhile.
@@ -135,7 +137,9 @@ func New(client github.Client, repo github.Repo, number int, opts ...Option) *Vi
 func (v *View) Title() string { return fmt.Sprintf("#%d", v.number) }
 
 // Loading implements ui.Loader.
-func (v *View) Loading() bool { return v.prPending || v.diffPending || v.thrPending }
+func (v *View) Loading() bool {
+	return v.prPending || v.diffPending || v.thrPending || v.submitting
+}
 
 // CapturesKeys implements ui.KeyCapturer: the file picker owns the keyboard
 // while it is open.
@@ -158,7 +162,7 @@ func (v *View) ShortHelp() []key.Binding {
 func (v *View) FullHelp() [][]key.Binding {
 	out := [][]key.Binding{
 		{v.bind.PaneLeft, v.bind.PaneRight, v.bind.NextFile, v.bind.PrevFile, v.bind.FilePicker},
-		{v.bind.NextSection, v.bind.PrevSection, v.bind.Comment, v.bind.Reply, v.bind.Review},
+		{v.bind.NextSection, v.bind.PrevSection, v.bind.Comment, v.bind.Reply},
 	}
 	return append(out, v.filePane.FullHelp()...)
 }
@@ -179,7 +183,11 @@ func (v *View) Update(msg tea.Msg) (ui.View, tea.Cmd) {
 		if !v.mine(msg.owner, msg.repo, msg.number, msg.seq) {
 			return v, nil
 		}
-		return v, v.prLoaded(msg)
+		cmd := v.prLoaded(msg)
+		if msg.thenDiff {
+			cmd = tea.Batch(cmd, v.fetchDiff(msg))
+		}
+		return v, cmd
 	case diffLoadedMsg:
 		if !v.mine(msg.owner, msg.repo, msg.number, msg.seq) {
 			return v, nil
@@ -217,6 +225,12 @@ func (v *View) Update(msg tea.Msg) (ui.View, tea.Cmd) {
 			return v, nil
 		}
 		return v, v.reviewSubmitted(msg)
+	case reviewSendMsg:
+		if !v.sameReview(msg.owner, msg.repo, msg.number) {
+			return v, nil
+		}
+		v.submitting = true
+		return v, tea.Batch(ui.Info("Submitting review…"), v.submit(msg.event, msg.body, msg.status))
 	case refreshMsg:
 		if !v.sameReview(msg.owner, msg.repo, msg.number) {
 			return v, nil

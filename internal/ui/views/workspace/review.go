@@ -46,6 +46,7 @@ type (
 		seq    int
 		stage  reviewStage
 		event  github.ReviewEvent
+		body   string // the edited summary, for stageConfirm
 		status github.ReviewStatus
 		err    error
 	}
@@ -65,6 +66,16 @@ type (
 		event  github.ReviewEvent
 		body   string
 		err    error
+	}
+	// reviewSendMsg is what the confirmation's "yes" produces; handling it in
+	// Update marks the submission as in flight before the call starts.
+	reviewSendMsg struct {
+		owner  *View
+		repo   github.Repo
+		number int
+		event  github.ReviewEvent
+		body   string
+		status github.ReviewStatus
 	}
 	// refreshMsg asks the workspace to reload after its head moved.
 	refreshMsg struct {
@@ -95,10 +106,24 @@ func (v *View) Command(name, _ string) (tea.Cmd, bool) {
 	return nil, false
 }
 
+// reviewBlocked says why a review cannot start now, or returns nil. The
+// diff must be on screen: the review's commit is the one the diff shows.
+func (v *View) reviewBlocked() tea.Cmd {
+	switch {
+	case v.submitting:
+		return ui.Info("a review is being submitted")
+	case v.detail == nil:
+		return ui.Info("pull request not loaded yet")
+	case v.diffPending || v.diff.Parsed == nil || v.diff.Err != nil:
+		return ui.Info("diff not loaded")
+	}
+	return nil
+}
+
 // openChooser shows the verdict chooser.
 func (v *View) openChooser() tea.Cmd {
-	if v.detail == nil {
-		return ui.Info("pull request not loaded yet")
+	if blocked := v.reviewBlocked(); blocked != nil {
+		return blocked
 	}
 	items := make([]string, len(verdicts))
 	for i, d := range verdicts {
@@ -125,18 +150,18 @@ func (v *View) chooserKey(msg tea.KeyPressMsg) tea.Cmd {
 // startReview fetches the pending review (whose body pre-fills the editor)
 // and then opens the editor.
 func (v *View) startReview(event github.ReviewEvent) tea.Cmd {
-	if v.detail == nil {
-		return ui.Info("pull request not loaded yet")
+	if blocked := v.reviewBlocked(); blocked != nil {
+		return blocked
 	}
 	v.rseq++
-	return v.fetchStatus(stageEdit, event)
+	return v.fetchStatus(stageEdit, event, "")
 }
 
-func (v *View) fetchStatus(stage reviewStage, event github.ReviewEvent) tea.Cmd {
+func (v *View) fetchStatus(stage reviewStage, event github.ReviewEvent, body string) tea.Cmd {
 	client, repo, number, seq, owner := v.client, v.repo, v.number, v.rseq, v
 	return func() tea.Msg {
 		st, err := client.GetReviewStatus(context.Background(), repo, number)
-		return reviewStatusMsg{owner: owner, repo: repo, number: number, seq: seq, stage: stage, event: event, status: st, err: err}
+		return reviewStatusMsg{owner: owner, repo: repo, number: number, seq: seq, stage: stage, event: event, body: body, status: st, err: err}
 	}
 }
 
@@ -162,8 +187,9 @@ func (v *View) editReview(msg reviewStatusMsg) tea.Cmd {
 	})
 }
 
-// reviewEdited keeps the body as the draft, then re-queries the state to
-// confirm against.
+// reviewEdited keeps a non-empty body as the draft, then re-queries the
+// state to confirm against. An empty body never overwrites an earlier draft,
+// and is not stored: it is only sent where that is allowed.
 func (v *View) reviewEdited(msg reviewEditedMsg) tea.Cmd {
 	body := strings.TrimRight(msg.body, " \t\r\n")
 	if body != "" {
@@ -172,18 +198,19 @@ func (v *View) reviewEdited(msg reviewEditedMsg) tea.Cmd {
 	if msg.err != nil {
 		return ui.Error(termtext.SafeError(fmt.Errorf("edit review: %w", msg.err)))
 	}
-	v.reviewDraft = body
-	return v.fetchStatus(stageConfirm, msg.event)
+	return v.fetchStatus(stageConfirm, msg.event, body)
 }
 
 // confirmReview applies the checks that need fresh state, then asks.
 func (v *View) confirmReview(msg reviewStatusMsg) tea.Cmd {
-	st, body := msg.status, v.reviewDraft
-	if v.detail != nil && st.HeadSHA != v.detail.HeadSHA {
+	st, body := msg.status, msg.body
+	// The review applies to the commit whose diff is on screen. If that is
+	// not the head now (or the diff is not settled), the user must refresh.
+	if v.diffPending || st.HeadSHA != v.diffHead {
 		owner, repo, number := v, v.repo, v.number
 		refresh := func() tea.Msg { return refreshMsg{owner: owner, repo: repo, number: number} }
 		return func() tea.Msg {
-			return ui.ConfirmMsg{Text: "Head moved since you loaded it; refresh first.", OnYes: refresh, Notice: true}
+			return ui.ConfirmMsg{Text: "Head moved since you loaded it; refresh first.", Notice: true, OnDismiss: refresh}
 		}
 	}
 	inline := 0
@@ -193,14 +220,14 @@ func (v *View) confirmReview(msg reviewStatusMsg) tea.Cmd {
 	if msg.event != github.ReviewEventApprove && strings.TrimSpace(body) == "" && inline == 0 {
 		return ui.Error(errors.New("empty review, nothing sent (did the editor fail?)"))
 	}
-	return ui.Confirm(v.reviewQuestion(msg.event, st.Pending), v.submit(msg.event, body, st))
+	owner, repo, number := v, v.repo, v.number
+	send := func() tea.Msg {
+		return reviewSendMsg{owner: owner, repo: repo, number: number, event: msg.event, body: body, status: st}
+	}
+	return ui.Confirm(reviewQuestion(msg.event, v.repo, v.number, st.Pending), send)
 }
 
 // reviewQuestion is the confirmation text.
-func (v *View) reviewQuestion(event github.ReviewEvent, pending *github.PendingReview) string {
-	return reviewQuestion(event, v.repo, v.number, pending)
-}
-
 func reviewQuestion(event github.ReviewEvent, repo github.Repo, number int, pending *github.PendingReview) string {
 	where := fmt.Sprintf("#%d in %s", number, termtext.Clean(repo.String()))
 	var q string
@@ -223,9 +250,9 @@ func reviewQuestion(event github.ReviewEvent, repo github.Repo, number int, pend
 }
 
 // submit is the command that runs when the user confirms. The commit is the
-// head the user saw, which confirmReview has just checked is still the head.
-// On failure it also returns the error itself, so it shows even if the view
-// was left meanwhile.
+// head the diff on screen was loaded for, which confirmReview has just
+// checked is still the head. On failure it also returns the error itself, so
+// it shows even if the view was left meanwhile.
 func (v *View) submit(event github.ReviewEvent, body string, st github.ReviewStatus) tea.Cmd {
 	client, repo, number, owner := v.client, v.repo, v.number, v
 	in := github.SubmitReviewInput{
@@ -245,24 +272,21 @@ func (v *View) submit(event github.ReviewEvent, body string, st github.ReviewSta
 		if errors.Is(err, github.ErrNotFound) && in.PendingReviewID != "" {
 			shown = ui.ErrorMsg{Err: errors.New("your pending review was submitted or deleted elsewhere; refreshing, then try again")}
 		} else {
-			shown = ui.ErrorMsg{Err: termtext.SafeError(fmt.Errorf("submit review: %w", err))}
+			// The call may or may not have landed, so the view refreshes to show.
+			shown = ui.ErrorMsg{Err: termtext.SafeError(fmt.Errorf("submit review: %w; refreshed to show the current state", err))}
 		}
 		return tea.BatchMsg{func() tea.Msg { return res }, func() tea.Msg { return shown }}
 	}
 }
 
 func (v *View) reviewSubmitted(msg reviewSubmittedMsg) tea.Cmd {
+	v.submitting = false
 	if msg.err != nil {
-		// The draft stays for the next attempt. A vanished pending review
-		// means the view is out of date.
-		if errors.Is(msg.err, github.ErrNotFound) {
-			return v.load()
-		}
-		return nil
+		// The draft stays for the next attempt. Whatever went wrong, the
+		// review may or may not have landed, so show the current state.
+		return v.load()
 	}
-	if v.reviewDraft == msg.body {
-		v.reviewDraft = ""
-	}
+	v.reviewDraft = ""
 	return tea.Batch(ui.Info(fmt.Sprintf(submittedFmt[msg.event], v.number)), v.load())
 }
 
