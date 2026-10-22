@@ -189,7 +189,9 @@ func (v *View) Update(msg tea.Msg) (ui.View, tea.Cmd) {
 		}
 		return v, v.edited(msg)
 	case postedMsg:
-		if !v.composeMine(msg.owner, msg.repo, msg.number, msg.seq) {
+		// A post is never superseded by a later compose, so it is identified
+		// by owner, repo and number only.
+		if msg.owner != v || msg.repo != v.repo || msg.number != v.number {
 			return v, nil
 		}
 		return v, v.posted(msg)

@@ -42,8 +42,10 @@ func (t target) draftKey() string {
 	return t.threadID
 }
 
-// Results of composing carry the same identity as load results, plus the
-// compose sequence: starting a new edit makes older results stale.
+// Results of composing carry the same identity as load results. An edit
+// result also carries the compose sequence, so starting a new edit makes older
+// ones stale; a post result does not, because a later compose does not
+// supersede a post.
 type (
 	editedMsg struct {
 		owner  *View
@@ -58,8 +60,8 @@ type (
 		owner  *View
 		repo   github.Repo
 		number int
-		seq    int
 		tgt    target
+		body   string
 		err    error
 	}
 )
@@ -102,10 +104,14 @@ func (v *View) compose(tgt target) tea.Cmd {
 
 // edited asks for confirmation once the editor closed with a body.
 func (v *View) edited(msg editedMsg) tea.Cmd {
+	body := strings.TrimRight(msg.body, " \t\r\n")
 	if msg.err != nil {
+		// Whatever was typed is kept, so the next try starts from it.
+		if strings.TrimSpace(body) != "" {
+			v.drafts[msg.tgt.draftKey()] = body
+		}
 		return ui.Error(termtext.SafeError(fmt.Errorf("edit comment: %w", msg.err)))
 	}
-	body := strings.TrimRight(msg.body, " \t\r\n")
 	if strings.TrimSpace(body) == "" {
 		return ui.Error(errors.New("empty comment, nothing posted (did the editor fail?)"))
 	}
@@ -135,9 +141,10 @@ func firstLine(body string) string {
 	return ""
 }
 
-// post is the command that runs when the user confirms.
+// post is the command that runs when the user confirms. On failure it also
+// returns the error itself, so it shows even if the view was left meanwhile.
 func (v *View) post(tgt target, body string) tea.Cmd {
-	client, repo, number, seq, owner := v.client, v.repo, v.number, v.cseq, v
+	client, repo, number, owner := v.client, v.repo, v.number, v
 	return func() tea.Msg {
 		var err error
 		if tgt.threadID != "" {
@@ -145,19 +152,31 @@ func (v *View) post(tgt target, body string) tea.Cmd {
 		} else {
 			_, err = client.AddComment(context.Background(), repo, number, body)
 		}
-		return postedMsg{owner: owner, repo: repo, number: number, seq: seq, tgt: tgt, err: err}
+		res := postedMsg{owner: owner, repo: repo, number: number, tgt: tgt, body: body, err: err}
+		if err == nil {
+			return res
+		}
+		what := "comment"
+		if tgt.threadID != "" {
+			what = "reply"
+		}
+		shown := ui.ErrorMsg{Err: termtext.SafeError(fmt.Errorf("post %s: %w", what, err))}
+		return tea.BatchMsg{func() tea.Msg { return res }, func() tea.Msg { return shown }}
 	}
 }
 
 func (v *View) posted(msg postedMsg) tea.Cmd {
+	if msg.err != nil {
+		return nil // the draft stays; the command already reported the error
+	}
 	what, reload := "Comment", v.reloadPR
 	if msg.tgt.threadID != "" {
 		what, reload = "Reply", v.reloadThreads
 	}
-	if msg.err != nil {
-		return ui.Error(termtext.SafeError(fmt.Errorf("post %s: %w", strings.ToLower(what), msg.err)))
+	// A newer draft for the same target must survive.
+	if v.drafts[msg.tgt.draftKey()] == msg.body {
+		delete(v.drafts, msg.tgt.draftKey())
 	}
-	delete(v.drafts, msg.tgt.draftKey())
 	return tea.Batch(ui.Info(what+" posted"), reload())
 }
 

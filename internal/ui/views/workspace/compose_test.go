@@ -165,6 +165,14 @@ func TestEditorFailureShowsError(t *testing.T) {
 	if _, ok := c.lastConfirm(); ok {
 		t.Error("asked to confirm after a failed editor")
 	}
+	if c.v.drafts["t-resolved"] != "half written" {
+		t.Errorf("typed text not kept as the draft: %v", c.v.drafts)
+	}
+	c.err, c.body = nil, ""
+	c.press("r")
+	if got := c.openedOn[len(c.openedOn)-1]; got != "half written" {
+		t.Errorf("next editor opened on %q", got)
+	}
 }
 
 func TestFailedPostKeepsDraft(t *testing.T) {
@@ -207,11 +215,48 @@ func TestStaleComposeResultsIgnored(t *testing.T) {
 	if _, ok := c.lastConfirm(); ok || c.v.drafts["t-resolved"] == "late" {
 		t.Error("foreign edit result was accepted")
 	}
+}
 
-	c.drafts(map[string]string{"t-resolved": "keep"})
-	c.send(postedMsg{owner: c.v, repo: testRepo, number: 7, seq: c.v.cseq - 1, tgt: target{threadID: "t-resolved"}})
-	if c.v.drafts["t-resolved"] != "keep" || len(c.infos()) != 0 {
-		t.Error("stale post result was acted on")
+func TestPostResultAfterNewComposeIsHandled(t *testing.T) {
+	c := newComposer(t)
+	c.onThread()
+	c.body = "first"
+	c.press("r")
+	conf, _ := c.lastConfirm()
+	// The user starts another compose before the post returns.
+	c.body = "second"
+	before := c.v.cseq
+	c.press("h", "g g", "c")
+	if c.v.cseq == before {
+		t.Fatal("setup: no new compose started")
+	}
+	c.drafts(map[string]string{"t-resolved": "first"})
+	c.msgs = nil
+	c.run(conf.OnYes)
+	if diff := cmp.Diff([]string{"Reply posted"}, c.infos()); diff != "" {
+		t.Errorf("info (-want +got):\n%s", diff)
+	}
+	if _, ok := c.v.drafts["t-resolved"]; ok {
+		t.Error("posted draft kept")
+	}
+
+	// A newer draft for the same target survives the older post.
+	c.drafts(map[string]string{"t-resolved": "newer"})
+	c.send(postedMsg{owner: c.v, repo: testRepo, number: 7, tgt: target{threadID: "t-resolved"}, body: "first"})
+	if c.v.drafts["t-resolved"] != "newer" {
+		t.Errorf("newer draft deleted: %v", c.v.drafts)
+	}
+
+	// A failure is reported by the command itself, and keeps the draft.
+	c.client.SetError(fake.MethodReplyToThread, errors.New("boom"))
+	c.drafts(map[string]string{"t-resolved": "first"})
+	c.msgs = nil
+	c.run(c.v.post(target{threadID: "t-resolved"}, "first"))
+	if err := c.lastErr(); err == nil || !strings.Contains(err.Error(), "post reply: boom") {
+		t.Errorf("error = %v", err)
+	}
+	if c.v.drafts["t-resolved"] != "first" {
+		t.Error("draft lost")
 	}
 }
 
