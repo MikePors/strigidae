@@ -2,6 +2,7 @@ package ui
 
 import (
 	"strings"
+	"unicode"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
@@ -56,6 +57,12 @@ func (c *confirmPrompt) answer(msg tea.KeyPressMsg) tea.Cmd {
 // always stay visible.
 func (c *confirmPrompt) render(width int) string {
 	const choices = " y/N"
-	text := " " + strings.ReplaceAll(ansi.Strip(c.text), "\n", " ")
+	// Tabs and other controls would be measured differently than drawn.
+	text := " " + strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) || unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, ansi.Strip(c.text))
 	return ansi.Truncate(text, max(0, width-len(choices)), "…") + choices
 }

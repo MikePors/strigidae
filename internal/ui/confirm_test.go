@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -68,6 +69,18 @@ func TestConfirmRendersAndFits(t *testing.T) {
 	row = ansi.Strip(m.bottomRow())
 	if ansi.StringWidth(row) != 60 || !strings.HasSuffix(strings.TrimRight(row, " "), "… y/N") {
 		t.Errorf("long row = %q", row)
+	}
+}
+
+func TestConfirmTabsKeepChoicesVisible(t *testing.T) {
+	m := newModel(newFake("v"))
+	askConfirm(m, "Post comment? \"foo\tbar"+strings.Repeat("\tx", 60)+"\"")
+	row := m.bottomRow()
+	if w := lipgloss.Width(row); w != 60 {
+		t.Errorf("row is %d wide, want 60", w)
+	}
+	if !strings.HasSuffix(strings.TrimRight(ansi.Strip(row), " "), "y/N") {
+		t.Errorf("choices clipped: %q", ansi.Strip(row))
 	}
 }
 
