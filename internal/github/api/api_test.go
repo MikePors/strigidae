@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -253,10 +254,10 @@ func TestGetPullRequest(t *testing.T) {
 		Labels:         []github.Label{{Name: "enhancement", Color: "a2eeef"}},
 		ReviewRequests: []github.Reviewer{{Name: "octocat"}, {Name: "maintainers", IsTeam: true}},
 		Files: []github.ChangedFile{
-			{Path: "internal/github/client.go", Additions: 40, Change: github.FileAdded},
-			{Path: "go.mod", Additions: 3, Deletions: 1, Change: github.FileModified},
+			{Path: "internal/github/client.go", Additions: 40, Change: github.FileAdded, Viewed: github.FileViewed},
+			{Path: "go.mod", Additions: 3, Deletions: 1, Change: github.FileModified, Viewed: github.FileUnviewed},
 			{Path: "docs/old.md", Deletions: 12, Change: github.FileDeleted},
-			{Path: "docs/new.md", Additions: 5, Deletions: 5, Change: github.FileRenamed},
+			{Path: "docs/new.md", Additions: 5, Deletions: 5, Change: github.FileRenamed, Viewed: github.FileDismissed},
 		},
 		Comments: []github.IssueComment{
 			{
@@ -619,5 +620,46 @@ func TestNewUsesTokenSource(t *testing.T) {
 	}
 	if asked != "ghe.example.test" || c.Host() != "ghe.example.test" {
 		t.Errorf("token looked up for %q, client host %q", asked, c.Host())
+	}
+}
+
+func TestSetFileViewed(t *testing.T) {
+	tests := []struct {
+		name   string
+		viewed bool
+		op     string
+		field  string
+	}{
+		{"mark", true, "MarkFileViewed", "markFileAsViewed"},
+		{"unmark", false, "UnmarkFileViewed", "unmarkFileAsViewed"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &server{}
+			c := newTestClient(t, s)
+			if err := c.SetFileViewed(context.Background(), "PR_kwDOExample01", "go.mod", tt.viewed); err != nil {
+				t.Fatal(err)
+			}
+			got := s.Calls()[0]
+			if got.Op != tt.op || !strings.Contains(got.Query, tt.field+"(input:") {
+				t.Errorf("op = %q, query = %q", got.Op, got.Query)
+			}
+			if got.Vars["pullRequestId"] != "PR_kwDOExample01" || got.Vars["path"] != "go.mod" {
+				t.Errorf("unexpected variables: %v", got.Vars)
+			}
+		})
+	}
+}
+
+func TestSetFileViewedError(t *testing.T) {
+	s := &server{}
+	s.override = func(_ call, w http.ResponseWriter) bool {
+		s.fixture(w, http.StatusOK, "error_not_found.json")
+		return true
+	}
+	c := newTestClient(t, s)
+	err := c.SetFileViewed(context.Background(), "PR_x", "go.mod", true)
+	if !errors.Is(err, github.ErrNotFound) {
+		t.Errorf("err = %v, want ErrNotFound", err)
 	}
 }

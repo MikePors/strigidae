@@ -82,7 +82,7 @@ func (v *View) Render(width, height int) string {
 	h := v.panesHeight()
 	var left, right []string
 	if filesW > 0 {
-		left = drawPane(v, "Files", v.fileRows(filesW-2, h-2), filesW, h, v.focus == paneFiles)
+		left = drawPane(v, v.filesTitle(), v.fileRows(filesW-2, h-2), filesW, h, v.focus == paneFiles)
 	}
 	if rightW > 0 {
 		right = drawPane(v, v.rightTitle(), v.rightRows(rightW-2, h-2), rightW, h, v.focus == paneRight)
@@ -211,7 +211,7 @@ func (v *View) fileRow(f github.ChangedFile, width int, selected bool) string {
 		counts += fmt.Sprintf(" -%d", f.Deletions)
 	}
 	counts = strings.TrimSpace(counts)
-	pathW := max(4, width-2-2-1-ansi.StringWidth(counts))
+	pathW := max(4, width-2-2-2-1-ansi.StringWidth(counts))
 	path := termtext.Clean(f.Path)
 	if over := ansi.StringWidth(path) - pathW; over > 0 {
 		path = ansi.TruncateLeft(path, over+1, "…") // +1: the ellipsis takes a cell
@@ -220,7 +220,7 @@ func (v *View) fileRow(f github.ChangedFile, width int, selected bool) string {
 	marker := changeMarker(f.Change)
 
 	if selected {
-		return v.th.Selected.Render("> " + marker + " " + path + " " + counts)
+		return v.th.Selected.Render("> " + viewedGlyph(f.Viewed) + " " + marker + " " + path + " " + counts)
 	}
 	mStyle := v.th.FileModified
 	switch f.Change {
@@ -237,7 +237,29 @@ func (v *View) fileRow(f github.ChangedFile, width int, selected bool) string {
 	if f.Deletions > 0 {
 		cs = append(cs, v.th.FileDeleted.Render(fmt.Sprintf("-%d", f.Deletions)))
 	}
-	return "  " + mStyle.Render(marker) + " " + v.th.Normal.Render(path) + " " + strings.Join(cs, " ")
+	pathStyle, glyph := v.th.Normal, " "
+	switch f.Viewed {
+	case github.FileViewed:
+		// Viewed files recede; the check is the only bright part of the row.
+		pathStyle, glyph = v.th.Muted, v.th.FileAdded.Render(viewedGlyph(f.Viewed))
+	case github.FileDismissed:
+		// Changed since viewed: needs another look, so the row stays normal.
+		glyph = v.th.FileModified.Render(viewedGlyph(f.Viewed))
+	case github.FileUnviewed:
+	}
+	return "  " + glyph + " " + mStyle.Render(marker) + " " + pathStyle.Render(path) + " " + strings.Join(cs, " ")
+}
+
+// viewedGlyph is the one-cell mark of a file's viewed state.
+func viewedGlyph(s github.ViewedState) string {
+	switch s {
+	case github.FileViewed:
+		return "✓"
+	case github.FileDismissed:
+		return "↻"
+	case github.FileUnviewed:
+	}
+	return " "
 }
 
 func changeMarker(c github.FileChangeType) string {

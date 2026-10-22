@@ -39,9 +39,9 @@ func TestFocusedPaneStyling(t *testing.T) {
 		t.Helper()
 		lines := strings.Split(out, "\n")
 		top, row := lines[headerRows], lines[headerRows+1]
-		files, right := plainEdge("Files"), focusedEdge("Overview")
+		files, right := plainEdge("Files 0/5 viewed"), focusedEdge("Overview")
 		if filesFocused {
-			files, right = focusedEdge("Files"), plainEdge("Overview")
+			files, right = focusedEdge("Files 0/5 viewed"), plainEdge("Overview")
 		}
 		if !strings.Contains(top, files) {
 			t.Errorf("Files pane top edge lacks the expected styles:\n got %q\nwant %q inside", top, files)

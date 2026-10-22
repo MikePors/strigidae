@@ -1,12 +1,12 @@
 open #7 Add retry policy to sync client
 alice · main ← feat/retry · changes requested · [enhancement] [sync] · reviewers: bob, team core
-╭─ Files ────────────────────╮╭─ internal/sync/retry.go ───────────────────────────────────────────╮
+╭─ Files 0/5 viewed ─────────╮╭─ internal/sync/retry.go ───────────────────────────────────────────╮
 │  Overview                  ││>@@ -0,0 +1,14 @@                                                   │
-│  M …rnal/sync/client.go +25││       1  +package sync                                             │
-│> A …rnal/sync/retry.go +214││       2  +                                                         │
-│  D …rnal/sync/legacy.go -90││       3  +import "context"                                         │
-│  R …y-and-backoff.md +12 -3││       4  +                                                         │
-│  M README.md          +2 -1││       5  +// Retry runs fn with exponential backoff.               │
+│    M …al/sync/client.go +25││       1  +package sync                                             │
+│>   A …al/sync/retry.go +214││       2  +                                                         │
+│    D …al/sync/legacy.go -90││       3  +import "context"                                         │
+│    R …and-backoff.md +12 -3││       4  +                                                         │
+│    M README.md        +2 -1││       5  +// Retry runs fn with exponential backoff.               │
 │                            ││       6  +func Retry(ctx context.Context, attempts int, fn func() e│
 │                            ││       7  +    var err error                                        │
 │                            ││       8  +    for i := 0; i < attempts; i++ {                      │

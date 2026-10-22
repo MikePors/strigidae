@@ -21,6 +21,7 @@ type bindings struct {
 	FilePicker               key.Binding
 	NextSection, PrevSection key.Binding
 	Comment, Reply           key.Binding
+	Viewed                   key.Binding // PROPOSAL: key awaits maintainer approval
 }
 
 func defaultBindings() bindings {
@@ -37,6 +38,7 @@ func defaultBindings() bindings {
 		PrevSection: b("[", "[", "previous section (overview)"),
 		Comment:     b("c", "c", "new comment on the pull request (overview)"),
 		Reply:       b("r", "r", "reply to the comment thread at the cursor (diff)"),
+		Viewed:      b("v", "v", "toggle file viewed"),
 	}
 }
 
@@ -62,6 +64,8 @@ func (v *View) handleKey(msg keys.Msg) tea.Cmd {
 		v.jumpSection(-1)
 	case key.Matches(msg, v.bind.Comment):
 		return v.comment()
+	case key.Matches(msg, v.bind.Viewed):
+		return v.toggleViewed()
 	case key.Matches(msg, v.bind.Reply):
 		return v.reply()
 	case key.Matches(msg, v.km.Open):

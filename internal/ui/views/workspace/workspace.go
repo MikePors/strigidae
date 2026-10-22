@@ -153,7 +153,7 @@ func (v *View) ShortHelp() []key.Binding {
 func (v *View) FullHelp() [][]key.Binding {
 	out := [][]key.Binding{
 		{v.bind.PaneLeft, v.bind.PaneRight, v.bind.NextFile, v.bind.PrevFile, v.bind.FilePicker},
-		{v.bind.NextSection, v.bind.PrevSection, v.bind.Comment, v.bind.Reply},
+		{v.bind.NextSection, v.bind.PrevSection, v.bind.Comment, v.bind.Reply, v.bind.Viewed},
 	}
 	return append(out, v.filePane.FullHelp()...)
 }
@@ -185,6 +185,10 @@ func (v *View) Update(msg tea.Msg) (ui.View, tea.Cmd) {
 			return v, nil
 		}
 		return v, v.threadsLoaded(msg)
+	case viewedMsg:
+		if v.mine(msg.owner, msg.repo, msg.number, msg.seq) {
+			v.viewedDone(msg)
+		}
 	case editedMsg:
 		if !v.composeMine(msg.owner, msg.repo, msg.number, msg.seq) {
 			return v, nil
