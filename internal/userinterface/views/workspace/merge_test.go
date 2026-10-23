@@ -102,7 +102,7 @@ func TestMergeConfirmationAndSuccess(test *testing.T) {
 			if diff := cmp.Diff(want, composer.client.Merges()); diff != "" {
 				test.Errorf("merges (-want +got):\n%s", diff)
 			}
-			if diff := cmp.Diff([]string{"Merging…", testCase.info}, composer.infos()); diff != "" {
+			if diff := cmp.Diff([]string{"Merging…", testCase.info}, composer.infoMessages()); diff != "" {
 				test.Errorf("info (-want +got):\n%s", diff)
 			}
 			if composer.v.detail.State != github.PullRequestStateMerged {
@@ -219,7 +219,7 @@ func TestMergeBlockedWhileInFlight(test *testing.T) {
 	before := len(composer.client.Calls())
 	composer.messages = nil
 	composer.mergeCommand("")
-	if diff := cmp.Diff([]string{"a merge is in progress"}, composer.infos()); diff != "" {
+	if diff := cmp.Diff([]string{"a merge is in progress"}, composer.infoMessages()); diff != "" {
 		test.Errorf("info (-want +got):\n%s", diff)
 	}
 	if len(composer.client.Calls()) != before {
@@ -231,7 +231,7 @@ func TestMergeNeedsLoadedPullRequestAndDiff(test *testing.T) {
 	test.Run("not loaded", func(test *testing.T) {
 		testComposer := &composer{harness: newHarness(test, 110, 40)} // Init not delivered
 		testComposer.mergeCommand("")
-		if diff := cmp.Diff([]string{"pull request not loaded yet"}, testComposer.infos()); diff != "" {
+		if diff := cmp.Diff([]string{"pull request not loaded yet"}, testComposer.infoMessages()); diff != "" {
 			test.Errorf("info (-want +got):\n%s", diff)
 		}
 	})
@@ -239,7 +239,7 @@ func TestMergeNeedsLoadedPullRequestAndDiff(test *testing.T) {
 		composer := newReviewer(test)
 		composer.v.diff = DiffState{}
 		composer.mergeCommand("")
-		if diff := cmp.Diff([]string{"diff not loaded"}, composer.infos()); diff != "" {
+		if diff := cmp.Diff([]string{"diff not loaded"}, composer.infoMessages()); diff != "" {
 			test.Errorf("info (-want +got):\n%s", diff)
 		}
 	})

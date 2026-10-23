@@ -44,7 +44,7 @@ func (composer *composer) lastConfirm() (userinterface.ConfirmMessage, bool) {
 	return userinterface.ConfirmMessage{}, false
 }
 
-func (composer *composer) infos() (out []string) {
+func (composer *composer) infoMessages() (out []string) {
 	for _, message := range composer.messages {
 		if i, ok := message.(userinterface.InfoMessage); ok {
 			out = append(out, i.Text)
@@ -82,7 +82,7 @@ func TestReplyAsksThenPosts(test *testing.T) {
 	if diff := cmp.Diff(want, composer.client.Replies()); diff != "" {
 		test.Errorf("replies (-want +got):\n%s", diff)
 	}
-	if diff := cmp.Diff([]string{"Reply posted"}, composer.infos()); diff != "" {
+	if diff := cmp.Diff([]string{"Reply posted"}, composer.infoMessages()); diff != "" {
 		test.Errorf("info (-want +got):\n%s", diff)
 	}
 	if len(composer.v.drafts) != 0 {
@@ -233,7 +233,7 @@ func TestPostResultAfterNewComposeIsHandled(test *testing.T) {
 	composer.drafts(map[string]string{"t-resolved": "first"})
 	composer.messages = nil
 	composer.run(configuration.OnYes)
-	if diff := cmp.Diff([]string{"Reply posted"}, composer.infos()); diff != "" {
+	if diff := cmp.Diff([]string{"Reply posted"}, composer.infoMessages()); diff != "" {
 		test.Errorf("info (-want +got):\n%s", diff)
 	}
 	if _, ok := composer.v.drafts["t-resolved"]; ok {
@@ -305,7 +305,7 @@ func TestReplyWithZeroOneAndSeveralThreads(test *testing.T) {
 	if len(composer.openedOn) != 1 {
 		test.Error("editor opened with several threads")
 	}
-	if diff := cmp.Diff([]string{"several threads on this line: move onto one to reply"}, composer.infos()); diff != "" {
+	if diff := cmp.Diff([]string{"several threads on this line: move onto one to reply"}, composer.infoMessages()); diff != "" {
 		test.Errorf("status (-want +got):\n%s", diff)
 	}
 }
@@ -346,7 +346,7 @@ func TestTopLevelCommentIsPostedFromTheOverview(test *testing.T) {
 	if diff := cmp.Diff(want, composer.client.Comments()); diff != "" {
 		test.Errorf("comments (-want +got):\n%s", diff)
 	}
-	if diff := cmp.Diff([]string{"Comment posted"}, composer.infos()); diff != "" {
+	if diff := cmp.Diff([]string{"Comment posted"}, composer.infoMessages()); diff != "" {
 		test.Errorf("info (-want +got):\n%s", diff)
 	}
 	composer.press("G")
@@ -359,7 +359,7 @@ func TestTopLevelCommentIsPostedFromTheOverview(test *testing.T) {
 	composer.press("c")
 	// On a hunk header there is no line to comment on (inline comments have
 	// their own tests in inline_test.go).
-	if len(composer.openedOn) != 0 || len(composer.infos()) != 1 || !strings.Contains(composer.infos()[0], "diff line") {
+	if len(composer.openedOn) != 0 || len(composer.infoMessages()) != 1 || !strings.Contains(composer.infoMessages()[0], "diff line") {
 		test.Errorf("c on a hunk header: %v %v", composer.openedOn, composer.messages)
 	}
 }

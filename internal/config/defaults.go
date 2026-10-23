@@ -5,7 +5,7 @@ import "strings"
 // Limits and defaults for section options.
 const (
 	DefaultLimit = 30
-	MaxLimit     = 100
+	MaximumLimit = 100
 	// Me is the user value meaning the signed-in viewer.
 	Me = "@me"
 )

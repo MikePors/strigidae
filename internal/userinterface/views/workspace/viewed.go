@@ -59,7 +59,7 @@ func (view *View) filesTitle() string {
 // mutation is sent now if none is in flight for the file, else when the
 // running one finishes.
 func (view *View) toggleViewed() tea.Cmd {
-	size := view.sel()
+	size := view.selection()
 	if size == 0 || size > len(view.files()) {
 		return nil
 	}

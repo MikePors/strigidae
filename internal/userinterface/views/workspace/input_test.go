@@ -9,8 +9,8 @@ import (
 
 func TestFocusAndFileNavigation(test *testing.T) {
 	harness := loaded(test, 100, 30)
-	if harness.v.focus != paneFiles || harness.v.sel() != 0 {
-		test.Fatalf("initial focus=%v sel=%d", harness.v.focus, harness.v.sel())
+	if harness.v.focus != paneFiles || harness.v.selection() != 0 {
+		test.Fatalf("initial focus=%v sel=%d", harness.v.focus, harness.v.selection())
 	}
 	harness.press("l")
 	if harness.v.focus != paneRight {
@@ -22,28 +22,28 @@ func TestFocusAndFileNavigation(test *testing.T) {
 	}
 
 	harness.press("j", "j")
-	if harness.v.sel() != 2 {
-		test.Errorf("j j: sel = %d", harness.v.sel())
+	if harness.v.selection() != 2 {
+		test.Errorf("j j: sel = %d", harness.v.selection())
 	}
 	harness.press("k")
-	if harness.v.sel() != 1 {
-		test.Errorf("k: sel = %d", harness.v.sel())
+	if harness.v.selection() != 1 {
+		test.Errorf("k: sel = %d", harness.v.selection())
 	}
 	harness.press("G")
-	if harness.v.sel() != 5 {
-		test.Errorf("G: sel = %d", harness.v.sel())
+	if harness.v.selection() != 5 {
+		test.Errorf("G: sel = %d", harness.v.selection())
 	}
 	harness.press("j")
-	if harness.v.sel() != 5 {
-		test.Errorf("j past the end: sel = %d", harness.v.sel())
+	if harness.v.selection() != 5 {
+		test.Errorf("j past the end: sel = %d", harness.v.selection())
 	}
 	harness.press("g g")
-	if harness.v.sel() != 0 {
-		test.Errorf("g g: sel = %d", harness.v.sel())
+	if harness.v.selection() != 0 {
+		test.Errorf("g g: sel = %d", harness.v.selection())
 	}
 	harness.press("ctrl+f")
-	if harness.v.sel() != 5 {
-		test.Errorf("ctrl+f: sel = %d", harness.v.sel())
+	if harness.v.selection() != 5 {
+		test.Errorf("ctrl+f: sel = %d", harness.v.selection())
 	}
 
 	// enter in the Files pane focuses the right pane.
@@ -54,24 +54,24 @@ func TestFocusAndFileNavigation(test *testing.T) {
 
 	// } and { work from either pane and never land on Overview.
 	harness.press("g g") // scrolls the overview, selection unchanged
-	if harness.v.sel() != 5 {
-		test.Errorf("g g in the right pane moved the selection to %d", harness.v.sel())
+	if harness.v.selection() != 5 {
+		test.Errorf("g g in the right pane moved the selection to %d", harness.v.selection())
 	}
 	harness.press("{")
-	if harness.v.sel() != 4 {
-		test.Errorf("{: sel = %d", harness.v.sel())
+	if harness.v.selection() != 4 {
+		test.Errorf("{: sel = %d", harness.v.selection())
 	}
 	harness.press("h", "g g", "{")
-	if harness.v.sel() != 0 {
-		test.Errorf("{ from Overview should stay: sel = %d", harness.v.sel())
+	if harness.v.selection() != 0 {
+		test.Errorf("{ from Overview should stay: sel = %d", harness.v.selection())
 	}
 	harness.press("}")
-	if harness.v.sel() != 1 {
-		test.Errorf("} from Overview: sel = %d", harness.v.sel())
+	if harness.v.selection() != 1 {
+		test.Errorf("} from Overview: sel = %d", harness.v.selection())
 	}
 	harness.press("l", "}", "}", "}", "}", "}")
-	if harness.v.sel() != 5 {
-		test.Errorf("} clamps at the last file: sel = %d", harness.v.sel())
+	if harness.v.selection() != 5 {
+		test.Errorf("} clamps at the last file: sel = %d", harness.v.selection())
 	}
 }
 

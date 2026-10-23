@@ -101,7 +101,7 @@ func FromBase16(name string, view Variant, base16 [16]color.Color) (Palette, err
 
 // minDistinctContrast is how far a colour must be from the background and the
 // foreground (as a WCAG contrast ratio) to count as a distinct shade.
-const minDistinctContrast = 1.1
+const minimumDistinctContrast = 1.1
 
 // FromANSI builds a Base24 palette from a terminal's colours: its background,
 // foreground and the 16 ANSI colours (black, red, green, yellow, blue,
@@ -139,7 +139,7 @@ func FromANSI(name string, background, foreground color.Color, ansi [16]color.Co
 	palette.colors[Base01] = blend(background, foreground, 0.12)
 	palette.colors[Base02] = blend(background, foreground, 0.25)
 	palette.colors[Base03] = blend(background, foreground, 0.45)
-	if contrast(ansi[8], background) >= minDistinctContrast && contrast(ansi[8], foreground) >= minDistinctContrast {
+	if contrast(ansi[8], background) >= minimumDistinctContrast && contrast(ansi[8], foreground) >= minimumDistinctContrast {
 		palette.colors[Base03] = ansi[8]
 	}
 	palette.colors[Base04] = blend(background, foreground, 0.7)

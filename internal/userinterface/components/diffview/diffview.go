@@ -127,7 +127,7 @@ type Model struct {
 	open        map[string]bool       // thread ID -> expanded, once the user chose
 	blocks      [][]string            // rendered lines of each fthreads entry
 	bcache      map[blockKey][]string // rendered threads; dropped by SetThreads and when width or theme change
-	bsig        blockSig
+	bsig        blockSignature
 	renders     int // thread blocks rendered, for tests
 	numberWidth int // width of one line-number column
 	maxWidth    int // widest code line, in cells

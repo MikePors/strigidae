@@ -83,7 +83,7 @@ func lineKey(oldNo, newNo int) int {
 	return oldNo
 }
 
-func abs(count int) int {
+func absolute(count int) int {
 	if count < 0 {
 		return -count
 	}
@@ -105,7 +105,7 @@ func (model *Model) find(anchor anchor) int {
 			if hunk.OldStart == anchor.hunkOld && hunk.NewStart == anchor.hunkNew {
 				return i
 			}
-			dist = abs(lineKey(hunk.OldStart, hunk.NewStart) - lineKey(anchor.hunkOld, anchor.hunkNew))
+			dist = absolute(lineKey(hunk.OldStart, hunk.NewStart) - lineKey(anchor.hunkOld, anchor.hunkNew))
 		default:
 			if !row.isLine() { // also skips thread rows
 				continue
@@ -113,7 +113,7 @@ func (model *Model) find(anchor anchor) int {
 			if row.line.Kind == anchor.kind && row.line.Old == anchor.old && row.line.New == anchor.new {
 				return i
 			}
-			dist = abs(lineKey(row.line.Old, row.line.New) - lineKey(anchor.old, anchor.new))
+			dist = absolute(lineKey(row.line.Old, row.line.New) - lineKey(anchor.old, anchor.new))
 		}
 		if bestDist < 0 || dist < bestDist {
 			best, bestDist = i, dist

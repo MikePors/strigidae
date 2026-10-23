@@ -98,7 +98,7 @@ func TestReviewVerdicts(test *testing.T) {
 			if diff := cmp.Diff([]fake.Submission{testCase.want}, composer.client.Submissions()); diff != "" {
 				test.Errorf("submissions (-want +got):\n%s", diff)
 			}
-			if diff := cmp.Diff([]string{"Submitting review…", testCase.info}, composer.infos()); diff != "" {
+			if diff := cmp.Diff([]string{"Submitting review…", testCase.info}, composer.infoMessages()); diff != "" {
 				test.Errorf("info (-want +got):\n%s", diff)
 			}
 			if composer.v.review.draft != "" {
@@ -295,8 +295,8 @@ func TestReviewServerErrorKeepsDraft(test *testing.T) {
 	if !strings.Contains(got, "Can not request changes on your own pull request") || !strings.Contains(got, "refreshed to show the current state") || strings.ContainsRune(got, 0x1b) {
 		test.Errorf("error = %q", got)
 	}
-	if len(composer.infos()) != 1 {
-		test.Errorf("success message after failure: %v", composer.infos())
+	if len(composer.infoMessages()) != 1 {
+		test.Errorf("success message after failure: %v", composer.infoMessages())
 	}
 	// The next attempt starts from the draft.
 	composer.client.SetError(fake.MethodSubmitReview, nil)
@@ -357,8 +357,8 @@ func TestReviewStaleResultsAreIgnored(test *testing.T) {
 	}
 	// A result for another workspace is ignored too.
 	composer.send(reviewSubmittedMessage{flow: nil, repository: testRepository, number: 7, event: github.ReviewEventApprove})
-	if len(composer.infos()) != 0 {
-		test.Errorf("foreign result acted on: %v", composer.infos())
+	if len(composer.infoMessages()) != 0 {
+		test.Errorf("foreign result acted on: %v", composer.infoMessages())
 	}
 }
 

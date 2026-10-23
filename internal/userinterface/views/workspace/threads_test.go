@@ -256,7 +256,7 @@ func TestThreadKeysAreRegisteredForSequences(test *testing.T) {
 func TestEnterInOverviewDoesNothingToThreads(test *testing.T) {
 	harness := threadHarness(test, 100, 40)
 	harness.press("l", "enter") // overview focused: must not panic or change selection
-	if harness.v.sel() != 0 {
+	if harness.v.selection() != 0 {
 		test.Error("enter in the overview changed the selection")
 	}
 }

@@ -45,7 +45,7 @@ type Highlighter func(path, text string) []Span
 
 // maxHighlightLen bounds the line length we are willing to lex; longer lines
 // (minified bundles) render as plain text.
-const maxHighlightLen = 2000
+const maximumHighlightLength = 2000
 
 // ChromaHighlighter returns the default Highlighter, backed by Chroma. It
 // remembers the lexer chosen for each path, so the (slow) file-name matching
@@ -53,7 +53,7 @@ const maxHighlightLen = 2000
 func ChromaHighlighter() Highlighter {
 	lexerFor := map[string]chroma.Lexer{}
 	return func(path, text string) []Span {
-		if text == "" || len(text) > maxHighlightLen {
+		if text == "" || len(text) > maximumHighlightLength {
 			return plain(text)
 		}
 		lexer, seen := lexerFor[path]

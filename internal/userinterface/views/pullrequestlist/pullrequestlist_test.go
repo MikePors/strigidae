@@ -185,7 +185,7 @@ func TestRefreshKeepsSelectionPastFirstPage(test *testing.T) {
 	}
 }
 
-func TestRefreshCapsAtMaxPageSize(test *testing.T) {
+func TestRefreshCapsAtMaximumPageSize(test *testing.T) {
 	client := fakeWith(makePRs(250))
 	view := loadedView(test, client, nil)
 	for len(view.pullRequests) < 150 {
@@ -194,8 +194,8 @@ func TestRefreshCapsAtMaxPageSize(test *testing.T) {
 	view.win.Restore(120, 0, 0)
 	deliver(test, view, press(view, "R"))
 	calls := client.Calls()
-	if got := calls[len(calls)-1].Page.Limit; got != github.MaxPageSize {
-		test.Errorf("refresh limit = %d, want %d", got, github.MaxPageSize)
+	if got := calls[len(calls)-1].Page.Limit; got != github.MaximumPageSize {
+		test.Errorf("refresh limit = %d, want %d", got, github.MaximumPageSize)
 	}
 	// Pinned: only the first 100 rows are reloaded and the cursor keeps its
 	// index (clamped), even though that may now be a different PR.

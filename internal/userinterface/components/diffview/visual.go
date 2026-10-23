@@ -72,7 +72,7 @@ func (model *Model) furthest(from, delta int) (row int, err error) {
 		step = -1
 	}
 	row = from
-	for range abs(delta) {
+	for range absolute(delta) {
 		next := model.nextLineRow(row, step)
 		if next < 0 {
 			return row, nil

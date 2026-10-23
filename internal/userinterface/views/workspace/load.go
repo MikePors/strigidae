@@ -56,14 +56,14 @@ type (
 
 // maxThreadPages bounds the follow-up requests for review threads, so a
 // misbehaving server cannot keep the command running forever.
-const maxThreadPages = 100
+const maximumThreadPages = 100
 
 // loadThreads fetches every review thread, page by page. Any failure discards
 // the partial result: a half-list would hide threads without saying so.
 func loadThreads(ctx context.Context, client github.Client, repository github.Repository, number int) ([]github.ReviewThread, error) {
 	var all []github.ReviewThread
 	var request github.PageRequest
-	for range maxThreadPages {
+	for range maximumThreadPages {
 		page, err := client.ListReviewThreads(ctx, repository, number, request)
 		if err != nil {
 			return nil, err
@@ -74,7 +74,7 @@ func loadThreads(ctx context.Context, client github.Client, repository github.Re
 		}
 		request.After = page.Next
 	}
-	return nil, fmt.Errorf("more than %d pages of review threads", maxThreadPages)
+	return nil, fmt.Errorf("more than %d pages of review threads", maximumThreadPages)
 }
 
 // load starts a fresh load of the pull request and its diff.

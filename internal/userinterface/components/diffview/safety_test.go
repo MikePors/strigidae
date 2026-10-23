@@ -166,7 +166,7 @@ func TestSetFileKeepsPositionAcrossReparse(test *testing.T) {
 	small := *secondDiff.File("server.go")
 	small.Hunks = small.Hunks[:1]
 	model.SetFile(&small)
-	if model.win.Cursor() >= len(model.rows) || model.win.Top() > model.win.MaxTop() || model.win.Cursor() < model.win.Top() || model.win.Cursor() >= model.win.Top()+6 {
+	if model.win.Cursor() >= len(model.rows) || model.win.Top() > model.win.MaximumTop() || model.win.Cursor() < model.win.Top() || model.win.Cursor() >= model.win.Top()+6 {
 		test.Errorf("not clamped: cursor %d top %d rows %d", model.win.Cursor(), model.win.Top(), len(model.rows))
 	}
 

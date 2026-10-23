@@ -12,10 +12,10 @@ import (
 
 // Layout constants.
 const (
-	narrowBelow = 80 // below this width only one pane is shown
-	headerRows  = 2
-	filesMin    = 26
-	filesMax    = 44
+	narrowBelow  = 80 // below this width only one pane is shown
+	headerRows   = 2
+	filesMinimum = 26
+	filesMaximum = 44
 )
 
 // panesHeight is the height available to the panes below the header.
@@ -30,7 +30,7 @@ func (view *View) paneWidths() (files, right int) {
 		}
 		return 0, view.width
 	}
-	files = min(max(view.width*30/100, filesMin), filesMax)
+	files = min(max(view.width*30/100, filesMinimum), filesMaximum)
 	return files, view.width - files
 }
 
@@ -199,7 +199,7 @@ func (view *View) fileRows(width, height int) []string {
 	var rows []string
 	view.fw.SetSize(height)
 	for i := view.fw.Top(); i < view.entries() && len(rows) < height; i++ {
-		selected := i == view.sel()
+		selected := i == view.selection()
 		if i == 0 {
 			rows = append(rows, view.overviewRow(selected))
 			continue
@@ -297,7 +297,7 @@ func changeMarker(change github.FileChangeType) string {
 
 // rightRows renders the right pane's content.
 func (view *View) rightRows(width, height int) []string {
-	if view.sel() > 0 {
+	if view.selection() > 0 {
 		return strings.Split(view.filePane.Render(width, height), "\n")
 	}
 	lines := strings.Split(view.ov.vp.View(), "\n")

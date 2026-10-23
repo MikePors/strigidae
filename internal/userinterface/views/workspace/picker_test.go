@@ -85,8 +85,8 @@ func TestCapturerReleasesOnEsc(test *testing.T) {
 	}
 	step(tea.WindowSizeMsg{Width: 100, Height: 25})
 	step(tea.KeyPressMsg{Code: '}', Text: "}"})
-	if harness.v.sel() != 1 {
-		test.Fatalf("} through the root: sel = %d", harness.v.sel())
+	if harness.v.selection() != 1 {
+		test.Fatalf("} through the root: sel = %d", harness.v.selection())
 	}
 	step(tea.KeyPressMsg{Code: 'f', Text: "f"})
 	if !harness.v.CapturesKeys() {

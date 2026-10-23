@@ -61,12 +61,12 @@ func TestNavigationKeysThroughRoot(test *testing.T) {
 			harness := loaded(test, 100, 24)
 			model, timers := rootFor(harness)
 			_, _ = model.Update(k)
-			if harness.v.sel() != 1 {
-				test.Errorf("%s: } sel = %d, want 1", name, harness.v.sel())
+			if harness.v.selection() != 1 {
+				test.Errorf("%s: } sel = %d, want 1", name, harness.v.selection())
 			}
 			_, _ = model.Update(terminalKeys("{", '[')[name])
-			if harness.v.sel() != 1 {
-				test.Errorf("%s: { at the first file should stay, sel = %d", name, harness.v.sel())
+			if harness.v.selection() != 1 {
+				test.Errorf("%s: { at the first file should stay, sel = %d", name, harness.v.selection())
 			}
 			if *timers != 0 {
 				test.Errorf("%s: %d sequence timers started", name, *timers)
@@ -138,8 +138,8 @@ func TestNavigationKeysThroughRoot(test *testing.T) {
 			test.Errorf("]: offset = %d", harness.v.ov.vp.YOffset())
 		}
 		press(model, "f") // is the file picker, not "next file"
-		if !harness.v.CapturesKeys() || harness.v.sel() != 0 {
-			test.Errorf("f after ]: captures = %v, sel = %d", harness.v.CapturesKeys(), harness.v.sel())
+		if !harness.v.CapturesKeys() || harness.v.selection() != 0 {
+			test.Errorf("f after ]: captures = %v, sel = %d", harness.v.CapturesKeys(), harness.v.selection())
 		}
 	})
 

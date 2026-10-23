@@ -62,10 +62,10 @@ func (window *Window) HorizontalOffset() int { return window.x }
 func (window *Window) Height() int { return window.height }
 
 // MaxTop returns the largest valid top row.
-func (window *Window) MaxTop() int { return max(window.rows-window.height, 0) }
+func (window *Window) MaximumTop() int { return max(window.rows-window.height, 0) }
 
 // MaxX returns the largest valid horizontal offset.
-func (window *Window) MaxHorizontalOffset() int { return max(window.content-window.view, 0) }
+func (window *Window) MaximumHorizontalOffset() int { return max(window.content-window.view, 0) }
 
 func (window *Window) clamp() {
 	if window.rows == 0 {
@@ -73,8 +73,8 @@ func (window *Window) clamp() {
 		return
 	}
 	window.cursor = min(max(window.cursor, 0), window.rows-1)
-	window.top = min(max(window.top, 0), window.MaxTop())
-	window.x = min(max(window.x, 0), window.MaxHorizontalOffset())
+	window.top = min(max(window.top, 0), window.MaximumTop())
+	window.x = min(max(window.x, 0), window.MaximumHorizontalOffset())
 	window.follow()
 }
 
@@ -122,7 +122,7 @@ func (window *Window) ScrollDown(count int) { window.scrollBy(count) }
 func (window *Window) ScrollUp(count int) { window.scrollBy(-count) }
 
 func (window *Window) scrollBy(count int) {
-	window.top = min(max(window.top+count, 0), window.MaxTop())
+	window.top = min(max(window.top+count, 0), window.MaximumTop())
 	window.cursor = min(max(window.cursor, window.top), max(window.top+window.height-1, window.top))
 	window.clamp()
 }
@@ -140,7 +140,7 @@ func (window *Window) PageDown() { window.shift(max(window.height, 1)) }
 func (window *Window) PageUp() { window.shift(-max(window.height, 1)) }
 
 func (window *Window) shift(count int) {
-	window.top = min(max(window.top+count, 0), window.MaxTop())
+	window.top = min(max(window.top+count, 0), window.MaximumTop())
 	window.cursor += count
 	window.clamp()
 }

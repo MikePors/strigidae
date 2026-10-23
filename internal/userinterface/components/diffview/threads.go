@@ -79,7 +79,7 @@ func (model *Model) expanded(reviewThread github.ReviewThread) bool {
 }
 
 // blockSig is what every cached block depends on besides its own key.
-type blockSig struct {
+type blockSignature struct {
 	width           int
 	themeIdentifier string
 	minute          time.Time // relative times age
@@ -96,7 +96,7 @@ type blockKey struct {
 func (model *Model) renderBlock(threadIndex int) []string {
 	reviewThread := model.fthreads[threadIndex]
 	now := model.now()
-	signature := blockSig{width: model.w - model.gutterWidth(), themeIdentifier: model.th.Identifier, minute: now.Truncate(time.Minute)}
+	signature := blockSignature{width: model.w - model.gutterWidth(), themeIdentifier: model.th.Identifier, minute: now.Truncate(time.Minute)}
 	if model.bcache == nil || signature != model.bsig {
 		model.bcache, model.bsig = map[blockKey][]string{}, signature
 	}

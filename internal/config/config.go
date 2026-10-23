@@ -66,7 +66,7 @@ func Load(path string, mustExist bool) (Config, error) {
 	}
 	defer func() { _ = file.Close() }() // read-only
 	// One byte over the limit is enough for Parse to refuse the file.
-	data, err := io.ReadAll(io.LimitReader(file, MaxFileSize+1))
+	data, err := io.ReadAll(io.LimitReader(file, MaximumFileSize+1))
 	if err != nil {
 		return Config{}, fmt.Errorf("read config: %w", err)
 	}

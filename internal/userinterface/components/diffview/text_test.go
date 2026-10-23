@@ -102,7 +102,7 @@ func TestClassifyAndChroma(test *testing.T) {
 	if got := highlighter("x.go", ""); got != nil {
 		test.Errorf("empty line: %+v", got)
 	}
-	long := strings.Repeat("x", maxHighlightLen+1)
+	long := strings.Repeat("x", maximumHighlightLength+1)
 	if got := highlighter("x.go", long); len(got) != 1 || got[0].Class != ClassPlain {
 		test.Error("very long lines should skip lexing")
 	}

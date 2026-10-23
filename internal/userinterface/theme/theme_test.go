@@ -327,11 +327,11 @@ func TestGuardFixesUnreadableDerivedRoles(test *testing.T) {
 		background color.Color
 		min        float64
 	}{
-		{"text", roles.Text, roles.Background, minTextContrast},
-		{"text on bar", roles.Text, roles.Surface, minTextContrast},
-		{"muted", roles.Muted, roles.Background, minAccentContrast},
-		{"muted on bar", roles.Muted, roles.Surface, minAccentContrast},
-		{"success", roles.Success, roles.Background, minAccentContrast},
+		{"text", roles.Text, roles.Background, minimumTextContrast},
+		{"text on bar", roles.Text, roles.Surface, minimumTextContrast},
+		{"muted", roles.Muted, roles.Background, minimumAccentContrast},
+		{"muted on bar", roles.Muted, roles.Surface, minimumAccentContrast},
+		{"success", roles.Success, roles.Background, minimumAccentContrast},
 	}
 	for _, testCase := range checks {
 		if got := contrast(testCase.foreground, testCase.background); got < testCase.min {

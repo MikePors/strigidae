@@ -114,7 +114,7 @@ func TestParseErrors(test *testing.T) {
 		{"merge key", "tabs:\n  - <<: {name: A}\n", "c.yml:2: YAML aliases and merge keys are not supported"},
 		{"quoted limit", "tabs:\n  - name: A\n    sections:\n      - {name: S, query: q, limit: '5'}\n", "c.yml:4: limit must be a whole number from 1 to 100"},
 		{"null name", "tabs:\n  - name:\n", "c.yml:2: tab name must be a non-empty text value"},
-		{"too large", "# " + strings.Repeat("x", MaxFileSize) + "\n", "c.yml: config file is too large (limit 1048576 bytes)"},
+		{"too large", "# " + strings.Repeat("x", MaximumFileSize) + "\n", "c.yml: config file is too large (limit 1048576 bytes)"},
 		{"duplicate section", "tabs:\n  - name: A\n    sections:\n      - {name: S, query: q}\n      - {name: ' S ', query: r}\n", `c.yml:5: duplicate section name "S" in this tab`},
 		{"duplicate tab after trimming", "tabs:\n  - name: A\n  - name: ' A'\n", `c.yml:3: duplicate tab name "A"`},
 		{"sort in query", "tabs:\n  - name: A\n    sections:\n      - {name: S, query: 'is:pr Sort:created-asc'}\n", "c.yml:4: query must not contain sort:; use the sort and order keys"},

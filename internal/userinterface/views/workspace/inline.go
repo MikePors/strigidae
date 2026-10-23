@@ -235,7 +235,7 @@ func (view *View) commentBlocked() tea.Cmd { return view.review.blocked(view.rev
 // there is none (or the diff is not showing); hint is the message to show when
 // several threads share the line. what finishes that message.
 func (view *View) focusedThread(what string) (thread github.ReviewThread, ok bool, hint tea.Cmd) {
-	if view.sel() == 0 {
+	if view.selection() == 0 {
 		return thread, false, nil
 	}
 	switch threads := view.filePane.FocusedThreads(); len(threads) {

@@ -9,7 +9,7 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
-func ptr[Value any](value Value) *Value { return &value }
+func pointer[Value any](value Value) *Value { return &value }
 
 // styleConfig builds the Glamour style from the theme's roles, so Markdown
 // follows the palette like every other pane. Layout (margins, list indents,
@@ -18,10 +18,10 @@ func ptr[Value any](value Value) *Value { return &value }
 // colour.
 func styleConfig(activeTheme theme.Theme) ansi.StyleConfig {
 	roles := activeTheme.Roles
-	column := func(color color.Color) *string { return ptr(theme.HexString(color)) }
+	column := func(color color.Color) *string { return pointer(theme.HexString(color)) }
 	text, muted := column(roles.Text), column(roles.Muted)
 	accent, link := column(roles.Accent), column(roles.Link)
-	bold := ptr(true)
+	bold := pointer(true)
 
 	// The marker is pre-styled (muted) inside the prefix, so it keeps its own
 	// colour while the heading text takes the block's.
@@ -32,12 +32,12 @@ func styleConfig(activeTheme theme.Theme) ansi.StyleConfig {
 	return ansi.StyleConfig{
 		Document: ansi.StyleBlock{
 			StylePrimitive: ansi.StylePrimitive{BlockPrefix: "\n", BlockSuffix: "\n", Color: text},
-			Margin:         ptr(uint(2)),
+			Margin:         pointer(uint(2)),
 		},
 		BlockQuote: ansi.StyleBlock{
 			StylePrimitive: ansi.StylePrimitive{Color: muted},
-			Indent:         ptr(uint(1)),
-			IndentToken:    ptr("│ "),
+			Indent:         pointer(uint(1)),
+			IndentToken:    pointer("│ "),
 		},
 		List: ansi.StyleList{LevelIndent: 2},
 
@@ -72,7 +72,7 @@ func styleConfig(activeTheme theme.Theme) ansi.StyleConfig {
 		CodeBlock: ansi.StyleCodeBlock{
 			StyleBlock: ansi.StyleBlock{
 				StylePrimitive: ansi.StylePrimitive{Color: text},
-				Margin:         ptr(uint(2)),
+				Margin:         pointer(uint(2)),
 			},
 			// The same generated style the diff's token colours come from.
 			Theme: activeTheme.ChromaStyleName(),

@@ -35,13 +35,13 @@ func newInliner(test *testing.T) *inliner {
 }
 
 // dv is the diff component behind the right pane.
-func (inliner *inliner) dv() *diffview.Model { return inliner.v.filePane.(*diffPane).dv }
+func (inliner *inliner) diffView() *diffview.Model { return inliner.v.filePane.(*diffPane).dv }
 
 // cursorTo moves the diff cursor, from the top, to the first row where found
 // holds.
 func (inliner *inliner) cursorTo(what string, found func(diffView *diffview.Model) bool) {
 	inliner.t.Helper()
-	diffView := inliner.dv()
+	diffView := inliner.diffView()
 	diffView.GotoTop()
 	for range 200 {
 		if found(diffView) {
@@ -129,7 +129,7 @@ func TestInlineCommentOnEachSide(test *testing.T) {
 			if diff := cmp.Diff([]github.AddThreadInput{testCase.want}, got); diff != "" {
 				test.Errorf("added (-want +got):\n%s", diff)
 			}
-			if diff := cmp.Diff([]string{"Pending comment added"}, inliner.infos()); diff != "" {
+			if diff := cmp.Diff([]string{"Pending comment added"}, inliner.infoMessages()); diff != "" {
 				test.Errorf("info (-want +got):\n%s", diff)
 			}
 			if len(inliner.v.drafts) != 0 {
@@ -214,7 +214,7 @@ func TestVisualRefusesTwoSidesAndEscLeaves(test *testing.T) {
 	inliner.press("V")
 	inliner.messages = nil
 	inliner.typ("j") // the next line is an added one
-	if diff := cmp.Diff([]string{diffview.ErrMixesSides.Error()}, inliner.infos()); diff != "" {
+	if diff := cmp.Diff([]string{diffview.ErrMixesSides.Error()}, inliner.infoMessages()); diff != "" {
 		test.Errorf("info (-want +got):\n%s", diff)
 	}
 	inliner.send(tea.KeyPressMsg{Code: tea.KeyEscape})
@@ -228,13 +228,13 @@ func TestVisualRefusesTwoSidesAndEscLeaves(test *testing.T) {
 
 func TestVisualOnHunkHeaderDoesNotStart(test *testing.T) {
 	inliner := newInliner(test)
-	inliner.dv().GotoTop()
+	inliner.diffView().GotoTop()
 	inliner.messages = nil
 	inliner.press("V")
 	if inliner.v.CapturesKeys() {
 		test.Error("visual mode started on a hunk header")
 	}
-	if diff := cmp.Diff([]string{"move onto a diff line to select lines"}, inliner.infos()); diff != "" {
+	if diff := cmp.Diff([]string{"move onto a diff line to select lines"}, inliner.infoMessages()); diff != "" {
 		test.Errorf("info (-want +got):\n%s", diff)
 	}
 }
@@ -317,7 +317,7 @@ func TestInlineRefusals(test *testing.T) {
 		composer.v.diff = DiffState{Err: errors.New("nope")} // as after a first load that failed
 		composer.messages, composer.body = nil, "x"
 		composer.press("c")
-		if diff := cmp.Diff([]string{"diff not loaded"}, composer.infos()); diff != "" || len(composer.openedOn) != 0 {
+		if diff := cmp.Diff([]string{"diff not loaded"}, composer.infoMessages()); diff != "" || len(composer.openedOn) != 0 {
 			test.Errorf("infos (-want +got):\n%s\nopened %v", diff, composer.openedOn)
 		}
 	})
@@ -346,10 +346,10 @@ func TestInlineRefusals(test *testing.T) {
 	})
 	test.Run("hunk header", func(test *testing.T) {
 		inliner := newInliner(test)
-		inliner.dv().GotoTop()
+		inliner.diffView().GotoTop()
 		inliner.messages = nil
 		inliner.press("c")
-		if diff := cmp.Diff([]string{"move onto a diff line to comment on it"}, inliner.infos()); diff != "" || len(inliner.openedOn) != 0 {
+		if diff := cmp.Diff([]string{"move onto a diff line to comment on it"}, inliner.infoMessages()); diff != "" || len(inliner.openedOn) != 0 {
 			test.Errorf("infos (-want +got):\n%s\nopened %v", diff, inliner.openedOn)
 		}
 	})
@@ -381,7 +381,7 @@ func TestEditPendingComment(test *testing.T) {
 	if got := inliner.pendingThread().Comments[0].Body; got != "second draft" {
 		test.Errorf("body = %q", got)
 	}
-	if diff := cmp.Diff([]string{"Comment updated"}, inliner.infos()); diff != "" {
+	if diff := cmp.Diff([]string{"Comment updated"}, inliner.infoMessages()); diff != "" {
 		test.Errorf("info (-want +got):\n%s", diff)
 	}
 	if thread.Identifier != inliner.pendingThread().Identifier {
@@ -406,7 +406,7 @@ func TestEditPendingEmptyBodyAndUnchanged(test *testing.T) {
 	inliner.client.SetError(fake.MethodUpdateReviewComment, nil)
 	inliner.messages, inliner.body = nil, "keep me"
 	inliner.press("e") // the kept draft replaces the body in the editor; the editor returns the original text
-	if diff := cmp.Diff([]string{"comment unchanged"}, inliner.infos()); diff != "" {
+	if diff := cmp.Diff([]string{"comment unchanged"}, inliner.infoMessages()); diff != "" {
 		test.Errorf("info (-want +got):\n%s", diff)
 	}
 }
@@ -418,16 +418,16 @@ func TestEditAndDeleteOnlyYourComments(test *testing.T) {
 	inliner.press("e")
 	inliner.press("D")
 	none := "no comment of yours here"
-	if diff := cmp.Diff([]string{none, none}, inliner.infos()); diff != "" {
+	if diff := cmp.Diff([]string{none, none}, inliner.infoMessages()); diff != "" {
 		test.Errorf("infos (-want +got):\n%s", diff)
 	}
 	if len(inliner.openedOn) != 0 {
 		test.Error("editor opened on someone else's comment")
 	}
-	inliner.dv().GotoTop() // a hunk header: no thread at all
+	inliner.diffView().GotoTop() // a hunk header: no thread at all
 	inliner.messages = nil
 	inliner.press("e")
-	if diff := cmp.Diff([]string{none}, inliner.infos()); diff != "" {
+	if diff := cmp.Diff([]string{none}, inliner.infoMessages()); diff != "" {
 		test.Errorf("infos on a line without a thread (-want +got):\n%s", diff)
 	}
 }
@@ -453,7 +453,7 @@ func TestDeletePendingComment(test *testing.T) {
 			test.Error("deleted thread still shown")
 		}
 	}
-	if diff := cmp.Diff([]string{"Comment deleted"}, inliner.infos()); diff != "" {
+	if diff := cmp.Diff([]string{"Comment deleted"}, inliner.infoMessages()); diff != "" {
 		test.Errorf("info (-want +got):\n%s", diff)
 	}
 }
@@ -563,7 +563,7 @@ func TestEditPublishedCommentAsksAfterTheEditor(test *testing.T) {
 	if got := inliner.serverBody("c-mine"); got != "published, revised" {
 		test.Errorf("body = %q", got)
 	}
-	if diff := cmp.Diff([]string{"Comment updated"}, inliner.infos()); diff != "" {
+	if diff := cmp.Diff([]string{"Comment updated"}, inliner.infoMessages()); diff != "" {
 		test.Errorf("info (-want +got):\n%s", diff)
 	}
 }
@@ -596,7 +596,7 @@ func TestEditPublishedUnchangedWithATrailingNewline(test *testing.T) {
 	if _, asked := inliner.lastConfirm(); asked || len(inliner.updates()) != 0 {
 		test.Errorf("asked %v, updates %v", asked, inliner.updates())
 	}
-	if diff := cmp.Diff([]string{"comment unchanged"}, inliner.infos()); diff != "" {
+	if diff := cmp.Diff([]string{"comment unchanged"}, inliner.infoMessages()); diff != "" {
 		test.Errorf("info (-want +got):\n%s", diff)
 	}
 }
@@ -906,8 +906,8 @@ func TestVisualModeEndsWhenTheFileGoes(test *testing.T) {
 	detail.Files = detail.Files[:0]
 	detail.Files = append(detail.Files, github.ChangedFile{Path: "README.md", Additions: 2, Change: github.FileModified})
 	inliner.send(pullRequestLoadedMessage{owner: inliner.v, repository: testRepository, number: 7, sequence: inliner.v.sequence, detail: detail})
-	if inliner.v.sel() != 0 {
-		test.Fatalf("the selection did not move to the Overview: sel = %d", inliner.v.sel())
+	if inliner.v.selection() != 0 {
+		test.Fatalf("the selection did not move to the Overview: sel = %d", inliner.v.selection())
 	}
 	if inliner.v.CapturesKeys() || inliner.v.filePane.VisualActive() {
 		test.Errorf("visual mode survived onto the Overview: captures %v, active %v", inliner.v.CapturesKeys(), inliner.v.filePane.VisualActive())
@@ -924,7 +924,7 @@ func TestVisualModeEndsWhenTheSelectionOrTheDiffChanges(test *testing.T) {
 		inliner := newInliner(test)
 		inliner.moveTo(diffview.SideRight, 10)
 		inliner.press("V")
-		inliner.v.selectEntry(inliner.v.sel() + 1)
+		inliner.v.selectEntry(inliner.v.selection() + 1)
 		if inliner.v.filePane.VisualActive() {
 			test.Error("the selection outlived its file")
 		}
@@ -1018,21 +1018,21 @@ func TestCommentWriteInFlightBlocksReviewsAndMerges(test *testing.T) {
 	for _, name := range []string{"approve", "request-changes", "review", "merge"} {
 		inliner.messages = nil
 		inliner.command(name)
-		if diff := cmp.Diff([]string{commentSavingText}, inliner.infos()); diff != "" {
+		if diff := cmp.Diff([]string{commentSavingText}, inliner.infoMessages()); diff != "" {
 			test.Errorf(":%s (-want +got):\n%s", name, diff)
 		}
 	}
 	inliner.messages, inliner.body = nil, "x"
 	inliner.moveTo(diffview.SideRight, 10)
 	inliner.press("c")
-	if diff := cmp.Diff([]string{commentSavingText}, inliner.infos()); diff != "" || len(inliner.openedOn) != 0 {
+	if diff := cmp.Diff([]string{commentSavingText}, inliner.infoMessages()); diff != "" || len(inliner.openedOn) != 0 {
 		test.Errorf("c (-want +got):\n%s", diff)
 	}
 	inliner.v.writes = 0
 	inliner.v.review.submitting = true
 	inliner.messages = nil
 	inliner.press("c")
-	if diff := cmp.Diff([]string{"a review is being submitted"}, inliner.infos()); diff != "" {
+	if diff := cmp.Diff([]string{"a review is being submitted"}, inliner.infoMessages()); diff != "" {
 		test.Errorf("c while submitting (-want +got):\n%s", diff)
 	}
 }
@@ -1099,7 +1099,7 @@ func TestCommandsBehaveLikeTheKeys(test *testing.T) {
 		inliner.press("h", "g g") // Files pane, Overview
 		inliner.messages = nil
 		inliner.command("edit-comment")
-		if diff := cmp.Diff([]string{"no comment of yours here"}, inliner.infos()); diff != "" {
+		if diff := cmp.Diff([]string{"no comment of yours here"}, inliner.infoMessages()); diff != "" {
 			test.Errorf("infos (-want +got):\n%s", diff)
 		}
 	})
@@ -1117,7 +1117,7 @@ func TestEditAndDeleteRefusedWhileSubmitting(test *testing.T) {
 		test.Error("editor opened while a review is being submitted")
 	}
 	busy := "a review is being submitted"
-	if diff := cmp.Diff([]string{busy, busy}, inliner.infos()); diff != "" {
+	if diff := cmp.Diff([]string{busy, busy}, inliner.infoMessages()); diff != "" {
 		test.Errorf("infos (-want +got):\n%s", diff)
 	}
 	if _, asked := inliner.lastConfirm(); asked {
@@ -1142,7 +1142,7 @@ func TestOtherPeoplesCommentsAreNeverTargeted(test *testing.T) {
 		inliner.press("e")
 		inliner.press("D")
 		none := "no comment of yours here"
-		if diff := cmp.Diff([]string{none, none}, inliner.infos()); diff != "" {
+		if diff := cmp.Diff([]string{none, none}, inliner.infoMessages()); diff != "" {
 			test.Errorf("infos (-want +got):\n%s", diff)
 		}
 		if _, asked := inliner.lastConfirm(); asked || len(inliner.openedOn) != 0 {
@@ -1294,10 +1294,10 @@ func TestEditAndDeleteUseTheirOwnPermission(test *testing.T) {
 			_, asked := inliner.lastConfirm()
 			offered := len(inliner.openedOn) > 0 || asked
 			if offered != testCase.offered {
-				test.Errorf("offered = %v (editor %v, asked %v), want %v; infos %v", offered, inliner.openedOn, asked, testCase.offered, inliner.infos())
+				test.Errorf("offered = %v (editor %v, asked %v), want %v; infos %v", offered, inliner.openedOn, asked, testCase.offered, inliner.infoMessages())
 			}
 			if !testCase.offered {
-				if diff := cmp.Diff([]string{"no comment of yours here"}, inliner.infos()); diff != "" {
+				if diff := cmp.Diff([]string{"no comment of yours here"}, inliner.infoMessages()); diff != "" {
 					test.Errorf("info (-want +got):\n%s", diff)
 				}
 			}
@@ -1319,7 +1319,7 @@ func TestWriteAfterYesIsInFlightUntilItsResult(test *testing.T) {
 		for _, name := range []string{"approve", "request-changes", "review", "merge"} {
 			inliner.messages = nil
 			inliner.command(name)
-			if diff := cmp.Diff([]string{commentSavingText}, inliner.infos()); diff != "" {
+			if diff := cmp.Diff([]string{commentSavingText}, inliner.infoMessages()); diff != "" {
 				test.Errorf(":%s while the write is in flight (-want +got):\n%s", name, diff)
 			}
 		}
@@ -1437,7 +1437,7 @@ func TestYesIsRefusedWhileAReviewOrMergeRuns(test *testing.T) {
 			if len(inliner.deletes()) != before || (inliner.v.writes > 0) {
 				test.Errorf("deletes %v, flag %v", inliner.deletes(), (inliner.v.writes > 0))
 			}
-			if len(inliner.infos()) == 0 {
+			if len(inliner.infoMessages()) == 0 {
 				test.Error("no message for the refused yes")
 			}
 		})
@@ -1673,7 +1673,7 @@ func TestReadIsRefusedWhenAReviewStartedMeanwhile(test *testing.T) {
 	if len(inliner.openedOn) != 0 {
 		test.Error("an editor opened while a review is being submitted")
 	}
-	if diff := cmp.Diff([]string{"a review is being submitted"}, inliner.infos()); diff != "" {
+	if diff := cmp.Diff([]string{"a review is being submitted"}, inliner.infoMessages()); diff != "" {
 		test.Errorf("infos (-want +got):\n%s", diff)
 	}
 }
@@ -1688,7 +1688,7 @@ func TestEachWriteIsCountedAndExcludesTheNext(test *testing.T) {
 		for _, name := range []string{"approve", "request-changes", "review", "merge"} {
 			inliner.messages = nil
 			inliner.command(name)
-			if diff := cmp.Diff([]string{commentSavingText}, inliner.infos()); diff != "" {
+			if diff := cmp.Diff([]string{commentSavingText}, inliner.infoMessages()); diff != "" {
 				test.Errorf("%s: :%s (-want +got):\n%s", what, name, diff)
 			}
 		}
@@ -1702,7 +1702,7 @@ func TestEachWriteIsCountedAndExcludesTheNext(test *testing.T) {
 			test.Errorf("%s: a second write opened an editor on %v", what, inliner.openedOn)
 		}
 		busy := commentSavingText
-		if diff := cmp.Diff([]string{busy, busy, busy, busy}, inliner.infos()); diff != "" {
+		if diff := cmp.Diff([]string{busy, busy, busy, busy}, inliner.infoMessages()); diff != "" {
 			test.Errorf("%s: second writes (-want +got):\n%s", what, diff)
 		}
 	}
@@ -1755,7 +1755,7 @@ func TestReviewAndMergeRefuseAtTheirYesWhileAWriteRuns(test *testing.T) {
 	if inliner.v.merge.merging || len(inliner.client.Merges()) != 0 {
 		test.Errorf("a merge started at its yes: merging %v", inliner.v.merge.merging)
 	}
-	if diff := cmp.Diff([]string{commentSavingText, commentSavingText}, inliner.infos()); diff != "" {
+	if diff := cmp.Diff([]string{commentSavingText, commentSavingText}, inliner.infoMessages()); diff != "" {
 		test.Errorf("infos (-want +got):\n%s", diff)
 	}
 }
@@ -1787,7 +1787,7 @@ func TestAYesIsRefusedWhileAnotherWriteRuns(test *testing.T) {
 	if ran || inliner.v.writes != 1 {
 		test.Errorf("the write ran %v, writes = %d", ran, inliner.v.writes)
 	}
-	if diff := cmp.Diff([]string{commentSavingText}, inliner.infos()); diff != "" {
+	if diff := cmp.Diff([]string{commentSavingText}, inliner.infoMessages()); diff != "" {
 		test.Errorf("infos (-want +got):\n%s", diff)
 	}
 }
@@ -1801,7 +1801,7 @@ func TestTopLevelCommentIsRefusedWhileAWriteRuns(test *testing.T) {
 	if len(inliner.openedOn) != 0 {
 		test.Error("an editor opened while a write is running")
 	}
-	if diff := cmp.Diff([]string{commentSavingText}, inliner.infos()); diff != "" {
+	if diff := cmp.Diff([]string{commentSavingText}, inliner.infoMessages()); diff != "" {
 		test.Errorf("infos (-want +got):\n%s", diff)
 	}
 }

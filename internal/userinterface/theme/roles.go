@@ -57,11 +57,11 @@ type Roles struct {
 // tintParams say how a tint is made from a role: how far the background's
 // lightness moves toward the role's, and how much of the role's chroma it
 // keeps (see tint).
-type tintParams struct{ lightMix, chroma float64 }
+type tintParameters struct{ lightMix, chroma float64 }
 
 // tintSet holds the parameters for each tint. They differ per variant because
 // the same blend reads very differently on a dark and a light background.
-type tintSet struct{ row, gutter, hunk, hunkCursor tintParams }
+type tintSet struct{ row, gutter, hunk, hunkCursor tintParameters }
 
 func tintsFor(view Variant) tintSet {
 	// Fitted so the built-in palettes reproduce the earlier hand-picked row
@@ -69,17 +69,17 @@ func tintsFor(view Variant) tintSet {
 	// light, with the same hunk-header shades.
 	if view == Light {
 		return tintSet{
-			row:        tintParams{0.07, 0.20},
-			gutter:     tintParams{0.085, 0.52},
-			hunk:       tintParams{0.09, 0.27},
-			hunkCursor: tintParams{0.20, 0.38},
+			row:        tintParameters{0.07, 0.20},
+			gutter:     tintParameters{0.085, 0.52},
+			hunk:       tintParameters{0.09, 0.27},
+			hunkCursor: tintParameters{0.20, 0.38},
 		}
 	}
 	return tintSet{
-		row:        tintParams{0.03, 0.24},
-		gutter:     tintParams{0.13, 0.38},
-		hunk:       tintParams{0.10, 0.31},
-		hunkCursor: tintParams{0.29, 0.49},
+		row:        tintParameters{0.03, 0.24},
+		gutter:     tintParameters{0.13, 0.38},
+		hunk:       tintParameters{0.10, 0.31},
+		hunkCursor: tintParameters{0.29, 0.49},
 	}
 }
 
@@ -129,7 +129,7 @@ func defaultRoles(palette Palette) Roles {
 }
 
 func (roles *Roles) deriveTints(tints tintSet) {
-	makeColor := func(role color.Color, parameters tintParams) color.Color {
+	makeColor := func(role color.Color, parameters tintParameters) color.Color {
 		return tint(roles.Background, role, parameters.lightMix, parameters.chroma)
 	}
 	roles.AddedTint = makeColor(roles.Added, tints.row)
@@ -215,8 +215,8 @@ func (roles *Roles) override(overrides Roles, tints tintSet) {
 // Minimum WCAG contrast ratios: body text, then everything else that is drawn
 // as a foreground.
 const (
-	minTextContrast   = 4.5
-	minAccentContrast = 3.0
+	minimumTextContrast   = 4.5
+	minimumAccentContrast = 3.0
 )
 
 // guard nudges derived foreground roles that are unreadable on the colours
@@ -242,8 +242,8 @@ func (roles *Roles) guard(overridden map[string]bool) {
 		}
 	}
 	// Text sits on the page and on the status bar.
-	check("text", &roles.Text, minTextContrast, roles.Background, roles.Surface)
-	check("muted", &roles.Muted, minAccentContrast, roles.Background, roles.Surface)
+	check("text", &roles.Text, minimumTextContrast, roles.Background, roles.Surface)
+	check("muted", &roles.Muted, minimumAccentContrast, roles.Background, roles.Surface)
 	for _, field := range []roleField{
 		{"accent", &roles.Accent},
 		{"accent-strong", &roles.AccentStrong},
@@ -264,9 +264,9 @@ func (roles *Roles) guard(overridden map[string]bool) {
 		{"syn-variable", &roles.SyntaxVariable},
 		{"syn-escape", &roles.SyntaxEscape},
 	} {
-		check(field.name, field.c, minAccentContrast, roles.Background)
+		check(field.name, field.c, minimumAccentContrast, roles.Background)
 	}
-	check("on-accent", &roles.OnAccent, minAccentContrast, roles.Accent)
+	check("on-accent", &roles.OnAccent, minimumAccentContrast, roles.Accent)
 }
 
 // fingerprint identifies the final roles and the variant. Every style and the

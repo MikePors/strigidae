@@ -69,9 +69,9 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 		view.stepFile(-1)
 	case key.Matches(message, view.bind.FilePicker):
 		view.openPicker()
-	case view.sel() == 0 && key.Matches(message, view.bind.NextSection):
+	case view.selection() == 0 && key.Matches(message, view.bind.NextSection):
 		view.jumpSection(1)
-	case view.sel() == 0 && key.Matches(message, view.bind.PreviousSection):
+	case view.selection() == 0 && key.Matches(message, view.bind.PreviousSection):
 		view.jumpSection(-1)
 	case key.Matches(message, view.bind.Comment):
 		return view.comment()
@@ -79,7 +79,7 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 		return view.toggleViewed()
 	case key.Matches(message, view.bind.Reply):
 		return view.reply()
-	case view.sel() > 0 && key.Matches(message, view.bind.Visual):
+	case view.selection() > 0 && key.Matches(message, view.bind.Visual):
 		return view.startVisual()
 	case key.Matches(message, view.bind.EditComment):
 		return view.editComment()
@@ -89,7 +89,7 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 		return view.openBrowser()
 	case key.Matches(message, view.km.Refresh):
 		return view.load()
-	case view.sel() > 0 && view.diffNav(message):
+	case view.selection() > 0 && view.diffNavigation(message):
 		// Reserved globally: hunk and thread keys work from either pane.
 		return view.filePane.Update(message)
 	case view.focus == paneFiles:
@@ -103,10 +103,10 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 
 // stepFile moves to the next or previous file. It never lands on Overview.
 func (view *View) stepFile(delta int) {
-	if len(view.files()) == 0 || (view.sel() == 0 && delta < 0) {
+	if len(view.files()) == 0 || (view.selection() == 0 && delta < 0) {
 		return
 	}
-	view.selectEntry(min(max(view.sel()+delta, 1), len(view.files())))
+	view.selectEntry(min(max(view.selection()+delta, 1), len(view.files())))
 }
 
 func (view *View) openBrowser() tea.Cmd {
@@ -124,7 +124,7 @@ func (view *View) openBrowser() tea.Cmd {
 
 // filesKey moves the selection in the Files pane.
 func (view *View) filesKey(message keys.Message) {
-	previous := view.sel()
+	previous := view.selection()
 	switch {
 	case key.Matches(message, view.km.Down):
 		view.fw.Down(1)
@@ -145,14 +145,14 @@ func (view *View) filesKey(message keys.Message) {
 	case key.Matches(message, view.km.Select):
 		view.focus = paneRight
 	}
-	if view.sel() != previous {
+	if view.selection() != previous {
 		view.selectionChanged()
 	}
 }
 
 // rightKey scrolls the Overview, or hands the key to the file pane.
 func (view *View) rightKey(message keys.Message) tea.Cmd {
-	if view.sel() > 0 {
+	if view.selection() > 0 {
 		return view.filePane.Update(message)
 	}
 	viewport := &view.ov.vp
@@ -187,7 +187,7 @@ func (view *View) jumpSection(delta int) {
 }
 
 // diffNav reports whether msg is a hunk or thread movement key.
-func (view *View) diffNav(message keys.Message) bool {
+func (view *View) diffNavigation(message keys.Message) bool {
 	bindings := view.navBind
 	return key.Matches(message, bindings.NextHunk, bindings.PreviousHunk, bindings.NextThread, bindings.PreviousThread)
 }

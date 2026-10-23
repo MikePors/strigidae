@@ -25,13 +25,13 @@ func TestFilePaneFollowsSelection(test *testing.T) {
 func TestRefreshKeepsFilesListTop(test *testing.T) {
 	harness := loaded(test, 100, 7) // three file rows visible
 	harness.press("G", "k", "k")
-	top, current := harness.v.fw.Top(), harness.v.sel()
+	top, current := harness.v.fw.Top(), harness.v.selection()
 	if top != 3 || current != 3 {
 		test.Fatalf("setup: top=%d cursor=%d, want 3 and 3", top, current)
 	}
 	harness.press("R")
-	if harness.v.fw.Top() != top || harness.v.sel() != current {
-		test.Errorf("refresh moved the list: top=%d cursor=%d, want %d and %d", harness.v.fw.Top(), harness.v.sel(), top, current)
+	if harness.v.fw.Top() != top || harness.v.selection() != current {
+		test.Errorf("refresh moved the list: top=%d cursor=%d, want %d and %d", harness.v.fw.Top(), harness.v.selection(), top, current)
 	}
 }
 
@@ -41,8 +41,8 @@ func TestRefreshWithShorterListStaysInBounds(test *testing.T) {
 	detail := testDetail()
 	detail.Files = detail.Files[:2]
 	harness.send(pullRequestLoadedMessage{owner: harness.v, repository: testRepository, number: 7, sequence: harness.v.sequence, detail: detail})
-	if harness.v.sel() < 0 || harness.v.sel() > 2 {
-		test.Errorf("selection = %d after the list shrank", harness.v.sel())
+	if harness.v.selection() < 0 || harness.v.selection() > 2 {
+		test.Errorf("selection = %d after the list shrank", harness.v.selection())
 	}
 	_ = harness.render()
 }

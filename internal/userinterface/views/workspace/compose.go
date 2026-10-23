@@ -134,7 +134,7 @@ func (view *View) reply() tea.Cmd {
 // comment starts a top-level comment from the Overview, or an inline one on a
 // diff line.
 func (view *View) comment() tea.Cmd {
-	if view.sel() != 0 {
+	if view.selection() != 0 {
 		return view.inlineComment()
 	}
 	if busy := view.writeBusy(); busy != nil {

@@ -243,7 +243,7 @@ func (view *View) refresh() tea.Cmd {
 	// lazily as before.
 	// Ask for as many rows as are loaded (up to the API maximum) so the rows
 	// the user has paged through survive; zero means the default size.
-	return view.fetch(github.PageRequest{Limit: min(len(view.pullRequests), github.MaxPageSize)}, false)
+	return view.fetch(github.PageRequest{Limit: min(len(view.pullRequests), github.MaximumPageSize)}, false)
 }
 
 // maybeLoadMore requests the next page when the selection is near the end of

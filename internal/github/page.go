@@ -4,7 +4,7 @@ package github
 const DefaultPageSize = 30
 
 // MaxPageSize is the largest page the API accepts.
-const MaxPageSize = 100
+const MaximumPageSize = 100
 
 // PageRequest asks for one page of a list. The zero value requests the first
 // page with the default size.
@@ -21,8 +21,8 @@ func (pageRequest PageRequest) Size() int {
 	switch {
 	case pageRequest.Limit <= 0:
 		return DefaultPageSize
-	case pageRequest.Limit > MaxPageSize:
-		return MaxPageSize
+	case pageRequest.Limit > MaximumPageSize:
+		return MaximumPageSize
 	default:
 		return pageRequest.Limit
 	}

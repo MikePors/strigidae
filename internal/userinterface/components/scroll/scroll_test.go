@@ -123,8 +123,8 @@ func TestSettersReclamp(test *testing.T) {
 		test.Errorf("negative height = %d", window.Height())
 	}
 	window.SetRows(-1)
-	if window.Cursor() != 0 || window.MaxTop() != 0 {
-		test.Errorf("negative rows: cursor %d maxTop %d", window.Cursor(), window.MaxTop())
+	if window.Cursor() != 0 || window.MaximumTop() != 0 {
+		test.Errorf("negative rows: cursor %d maxTop %d", window.Cursor(), window.MaximumTop())
 	}
 }
 
@@ -152,8 +152,8 @@ func TestResetAndRestore(test *testing.T) {
 
 func TestAccessors(test *testing.T) {
 	window := win(20, 6, 100, 40)
-	if window.Height() != 6 || window.MaxTop() != 14 || window.MaxHorizontalOffset() != 60 {
-		test.Errorf("Height/MaxTop/MaxX = %d/%d/%d", window.Height(), window.MaxTop(), window.MaxHorizontalOffset())
+	if window.Height() != 6 || window.MaximumTop() != 14 || window.MaximumHorizontalOffset() != 60 {
+		test.Errorf("Height/MaxTop/MaxX = %d/%d/%d", window.Height(), window.MaximumTop(), window.MaximumHorizontalOffset())
 	}
 	var zero Window
 	zero.Down(3)

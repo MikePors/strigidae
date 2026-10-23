@@ -157,7 +157,7 @@ func newChromaStyle(name string, roles Roles) *chroma.Style {
 }
 
 var (
-	chromaMu         sync.Mutex
+	chromaMutex      sync.Mutex
 	chromaRegistered = map[string]bool{}
 )
 
@@ -172,8 +172,8 @@ var (
 // render run on the UI goroutine (never in a tea.Cmd).
 func (theme Theme) ChromaStyleName() string {
 	name := "strig-" + theme.Identifier
-	chromaMu.Lock()
-	defer chromaMu.Unlock()
+	chromaMutex.Lock()
+	defer chromaMutex.Unlock()
 	if !chromaRegistered[name] {
 		chromastyles.Register(newChromaStyle(name, theme.Roles))
 		chromaRegistered[name] = true

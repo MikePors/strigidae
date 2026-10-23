@@ -11,16 +11,16 @@ import (
 )
 
 const (
-	gap          = "  "
-	marker       = "> " // prefix of the selected row, so selection survives without colour
-	noMarker     = "  "
-	draftPrefix  = "[draft] "
-	minTitleCols = 12
-	maxAuthor    = 16
-	ageCols      = 4
-	reviewCols   = 2
-	checksCols   = 2
-	commentCols  = 3
+	gap                 = "  "
+	marker              = "> " // prefix of the selected row, so selection survives without colour
+	noMarker            = "  "
+	draftPrefix         = "[draft] "
+	minimumTitleColumns = 12
+	maximumAuthor       = 16
+	ageColumns          = 4
+	reviewColumns       = 2
+	checksColumns       = 2
+	commentColumns      = 3
 )
 
 // Render implements userinterface.View.
@@ -69,13 +69,13 @@ type layout struct {
 }
 
 func (view *View) layout(width int) layout {
-	rowLayout := layout{age: ageCols, checks: checksCols, review: reviewCols, comments: commentCols, number: len("#")}
+	rowLayout := layout{age: ageColumns, checks: checksColumns, review: reviewColumns, comments: commentColumns, number: len("#")}
 	for _, pullRequest := range view.pullRequests {
 		rowLayout.number = max(rowLayout.number, len(fmt.Sprintf("#%d", pullRequest.Number)))
-		rowLayout.author = min(maxAuthor, max(rowLayout.author, ansi.StringWidth(pullRequest.Author)))
+		rowLayout.author = min(maximumAuthor, max(rowLayout.author, ansi.StringWidth(pullRequest.Author)))
 	}
 	rowLayout.author = max(rowLayout.author, len("AUTHOR"))
-	fits := func() bool { return rowLayout.fixed() <= width-minTitleCols }
+	fits := func() bool { return rowLayout.fixed() <= width-minimumTitleColumns }
 	// Drop the least important columns first on narrow terminals.
 	for _, drop := range []*int{&rowLayout.author, &rowLayout.comments, &rowLayout.checks, &rowLayout.review} {
 		if fits() {

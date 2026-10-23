@@ -40,7 +40,7 @@ func TestParseRepository(test *testing.T) {
 
 func TestPageRequestSize(test *testing.T) {
 	tests := []struct{ limit, want int }{
-		{0, DefaultPageSize}, {-1, DefaultPageSize}, {7, 7}, {100, 100}, {500, MaxPageSize},
+		{0, DefaultPageSize}, {-1, DefaultPageSize}, {7, 7}, {100, 100}, {500, MaximumPageSize},
 	}
 	for _, testCase := range tests {
 		if got := (PageRequest{Limit: testCase.limit}).Size(); got != testCase.want {

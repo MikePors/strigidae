@@ -8,7 +8,7 @@ import (
 )
 
 // MaxFileSize is the largest config file strig will read.
-const MaxFileSize = 1 << 20
+const MaximumFileSize = 1 << 20
 
 // topLevel maps each top-level key to the function that decodes it. Another
 // feature adding a key (a theme, merge defaults) adds an entry here and a
@@ -25,8 +25,8 @@ var (
 // Parse validates data, read from the file named path (used only in errors).
 // Empty data yields Default.
 func Parse(path string, data []byte) (Config, error) {
-	if len(data) > MaxFileSize {
-		return Config{}, &Error{Path: path, Message: fmt.Sprintf("config file is too large (limit %d bytes)", MaxFileSize)}
+	if len(data) > MaximumFileSize {
+		return Config{}, &Error{Path: path, Message: fmt.Sprintf("config file is too large (limit %d bytes)", MaximumFileSize)}
 	}
 	document, err := decodeSingle(path, data)
 	if err != nil {
@@ -106,7 +106,7 @@ func (parser *parser) section(node *yaml.Node) (Section, string) {
 			}
 			section.Query = norm
 		case "limit":
-			section.Limit = parser.int(node, "limit", 1, MaxLimit)
+			section.Limit = parser.int(node, "limit", 1, MaximumLimit)
 		case "sort":
 			section.Sort = Sort(parser.oneOf(node, "sort", sortNames))
 		case "order":

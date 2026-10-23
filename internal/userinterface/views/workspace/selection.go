@@ -16,20 +16,20 @@ func (view *View) files() []github.ChangedFile {
 func (view *View) entries() int { return 1 + len(view.files()) }
 
 // sel is the selected Files row: 0 is Overview, i is Files[i-1].
-func (view *View) sel() int { return view.fw.Cursor() }
+func (view *View) selection() int { return view.fw.Cursor() }
 
 // setSel moves the selection to row i, scrolling the Files list to show it.
-func (view *View) setSel(i int) { view.fw.Restore(i, view.fw.Top(), 0) }
+func (view *View) setSelection(i int) { view.fw.Restore(i, view.fw.Top(), 0) }
 
 func (view *View) selectedPath() string {
-	if size := view.sel(); size > 0 && size <= len(view.files()) {
+	if size := view.selection(); size > 0 && size <= len(view.files()) {
 		return view.files()[size-1].Path
 	}
 	return ""
 }
 
 func (view *View) selectionChanged() {
-	size := view.sel()
+	size := view.selection()
 	if size == 0 || size > len(view.files()) {
 		// The one place a line selection ends when the file leaves the screen,
 		// including when a reload drops the file. (Another file or a reloaded
@@ -45,9 +45,9 @@ func (view *View) selectionChanged() {
 }
 
 func (view *View) selectEntry(i int) {
-	previous := view.sel()
-	view.setSel(i)
-	if view.sel() != previous {
+	previous := view.selection()
+	view.setSelection(i)
+	if view.selection() != previous {
 		view.selectionChanged()
 	}
 	view.layout()

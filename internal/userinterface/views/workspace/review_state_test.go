@@ -99,7 +99,7 @@ func TestReviewSecondSubmitWhileInFlight(test *testing.T) {
 	if composer.v.review.submitting {
 		test.Error("still submitting after the result")
 	}
-	if diff := cmp.Diff([]string{"Submitting review…", "Approved #7"}, composer.infos()); diff != "" {
+	if diff := cmp.Diff([]string{"Submitting review…", "Approved #7"}, composer.infoMessages()); diff != "" {
 		test.Errorf("infos (-want +got):\n%s", diff)
 	}
 }
@@ -140,7 +140,7 @@ func TestReviewEmptyBodyKeepsEarlierDraft(test *testing.T) {
 	if len(subs) != 1 || subs[0].Body != "" {
 		test.Errorf("submissions = %+v, want an empty body", subs)
 	}
-	if !strings.Contains(strings.Join(composer.infos(), ","), "Approved #7") {
-		test.Errorf("infos = %v", composer.infos())
+	if !strings.Contains(strings.Join(composer.infoMessages(), ","), "Approved #7") {
+		test.Errorf("infos = %v", composer.infoMessages())
 	}
 }

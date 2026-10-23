@@ -39,7 +39,7 @@ var (
 		"BrightBlue": true, "BrightMagenta": true, "BrightCyan": true, "BrightWhite": true,
 	}
 	// Colour constructors that take a literal value or an index.
-	colourCtors = map[string]map[string]bool{
+	colourConstructors = map[string]map[string]bool{
 		lipglossPath: {"Color": true, "ANSIColor": true, "RGBColor": true},
 		ansiPath:     {"IndexedColor": true, "BasicColor": true, "TrueColor": true, "RGBColor": true},
 	}
@@ -111,7 +111,7 @@ func violations(relative, source string) ([]string, error) {
 				checkString(node, text)
 			}
 		case *ast.CallExpr:
-			if packageName, selection, ok := pkgSel(node.Fun); ok && colourCtors[packageName][selection] && !colourFile {
+			if packageName, selection, ok := pkgSel(node.Fun); ok && colourConstructors[packageName][selection] && !colourFile {
 				bad(node, "colour constructor %s.%s outside the palette files", filepath.Base(packageName), selection)
 			}
 		case *ast.CompositeLit:
