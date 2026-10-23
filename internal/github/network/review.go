@@ -9,13 +9,13 @@ import (
 
 // Operation names for the review calls; they double as fixture keys in tests.
 const (
-	opReviewStatus = "ReviewStatus"
-	opAddReview    = "AddReview"
-	opSubmitReview = "SubmitReview"
+	operationReviewStatus = "ReviewStatus"
+	operationAddReview    = "AddReview"
+	operationSubmitReview = "SubmitReview"
 )
 
 const reviewStatusQuery = `
-query ` + opReviewStatus + `($owner: String!, $name: String!, $number: Int!) {
+query ` + operationReviewStatus + `($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
       id headRefOid
@@ -27,21 +27,21 @@ query ` + opReviewStatus + `($owner: String!, $name: String!, $number: Int!) {
 // addReviewMutation creates a review and submits it in one call, because
 // event is given.
 const addReviewMutation = `
-mutation ` + opAddReview + `($pullRequestId: ID!, $event: PullRequestReviewEvent!, $body: String!, $commitOID: GitObjectID!) {
+mutation ` + operationAddReview + `($pullRequestId: ID!, $event: PullRequestReviewEvent!, $body: String!, $commitOID: GitObjectID!) {
   addPullRequestReview(input: {pullRequestId: $pullRequestId, event: $event, body: $body, commitOID: $commitOID}) {
     pullRequestReview { id state }
   }
 }`
 
 const submitReviewMutation = `
-mutation ` + opSubmitReview + `($reviewId: ID!, $event: PullRequestReviewEvent!, $body: String!) {
+mutation ` + operationSubmitReview + `($reviewId: ID!, $event: PullRequestReviewEvent!, $body: String!) {
   submitPullRequestReview(input: {pullRequestReviewId: $reviewId, event: $event, body: $body}) {
     pullRequestReview { id state }
   }
 }`
 
 // GetReviewStatus implements github.Client.
-func (c *Client) GetReviewStatus(ctx context.Context, repo github.Repo, number int) (github.ReviewStatus, error) {
+func (c *Client) GetReviewStatus(ctx context.Context, repo github.Repository, number int) (github.ReviewStatus, error) {
 	var resp struct {
 		Repository *struct {
 			PullRequest *struct {
@@ -66,13 +66,13 @@ func (c *Client) GetReviewStatus(ctx context.Context, repo github.Repo, number i
 		return github.ReviewStatus{}, fmt.Errorf("load review status of %s#%d: %w", repo, number, github.ErrNotFound)
 	}
 	pr := resp.Repository.PullRequest
-	st := github.ReviewStatus{PullRequestID: pr.ID, HeadSHA: pr.HeadRefOid}
+	st := github.ReviewStatus{PullRequestIdentifier: pr.ID, HeadSHA: pr.HeadRefOid}
 	// Pending reviews are visible only to their author, so any node is the viewer's.
 	if len(pr.Reviews.Nodes) > 0 {
 		n := pr.Reviews.Nodes[0]
-		st.Pending = &github.PendingReview{ID: n.ID, Body: n.Body, CommentCount: n.Comments.TotalCount}
+		st.Pending = &github.PendingReview{Identifier: n.ID, Body: n.Body, CommentCount: n.Comments.TotalCount}
 		if n.Commit != nil {
-			st.Pending.CommitOID = n.Commit.Oid
+			st.Pending.CommitObjectIdentifier = n.Commit.Oid
 		}
 	}
 	return st, nil
@@ -82,15 +82,15 @@ func (c *Client) GetReviewStatus(ctx context.Context, repo github.Repo, number i
 func (c *Client) SubmitReview(ctx context.Context, in github.SubmitReviewInput) error {
 	var resp map[string]any
 	var err error
-	if in.PendingReviewID != "" {
-		vars := map[string]any{"reviewId": in.PendingReviewID, "event": string(in.Event), "body": in.Body}
+	if in.PendingReviewIdentifier != "" {
+		vars := map[string]any{"reviewId": in.PendingReviewIdentifier, "event": string(in.Event), "body": in.Body}
 		err = c.query(ctx, submitReviewMutation, vars, &resp)
 	} else {
-		vars := map[string]any{"pullRequestId": in.PullRequestID, "event": string(in.Event), "body": in.Body, "commitOID": in.CommitOID}
+		vars := map[string]any{"pullRequestId": in.PullRequestIdentifier, "event": string(in.Event), "body": in.Body, "commitOID": in.CommitObjectIdentifier}
 		err = c.query(ctx, addReviewMutation, vars, &resp)
 	}
 	if err != nil {
-		return fmt.Errorf("submit review on %s#%d: %w", in.Repo, in.Number, err)
+		return fmt.Errorf("submit review on %s#%d: %w", in.Repository, in.Number, err)
 	}
 	return nil
 }

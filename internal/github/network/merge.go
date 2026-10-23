@@ -9,12 +9,12 @@ import (
 
 // Operation names for the merge calls; they double as fixture keys in tests.
 const (
-	opMergeStatus = "MergeStatus"
-	opMerge       = "MergePullRequest"
+	operationMergeStatus = "MergeStatus"
+	operationMerge       = "MergePullRequest"
 )
 
 const mergeStatusQuery = `
-query ` + opMergeStatus + `($owner: String!, $name: String!, $number: Int!) {
+query ` + operationMergeStatus + `($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed deleteBranchOnMerge
     pullRequest(number: $number) { id headRefOid baseRefName }
@@ -22,14 +22,14 @@ query ` + opMergeStatus + `($owner: String!, $name: String!, $number: Int!) {
 }`
 
 const mergeMutation = `
-mutation ` + opMerge + `($pullRequestId: ID!, $mergeMethod: PullRequestMergeMethod!, $expectedHeadOid: GitObjectID!) {
+mutation ` + operationMerge + `($pullRequestId: ID!, $mergeMethod: PullRequestMergeMethod!, $expectedHeadOid: GitObjectID!) {
   mergePullRequest(input: {pullRequestId: $pullRequestId, mergeMethod: $mergeMethod, expectedHeadOid: $expectedHeadOid}) {
     pullRequest { id state }
   }
 }`
 
 // GetMergeStatus implements github.Client.
-func (c *Client) GetMergeStatus(ctx context.Context, repo github.Repo, number int) (github.MergeStatus, error) {
+func (c *Client) GetMergeStatus(ctx context.Context, repo github.Repository, number int) (github.MergeStatus, error) {
 	var resp struct {
 		Repository *struct {
 			MergeCommitAllowed  bool
@@ -52,7 +52,7 @@ func (c *Client) GetMergeStatus(ctx context.Context, repo github.Repo, number in
 		return github.MergeStatus{}, fmt.Errorf("load merge status of %s#%d: %w", repo, number, github.ErrNotFound)
 	}
 	st := github.MergeStatus{
-		PullRequestID: r.PullRequest.ID, HeadSHA: r.PullRequest.HeadRefOid, BaseRef: r.PullRequest.BaseRefName,
+		PullRequestIdentifier: r.PullRequest.ID, HeadSHA: r.PullRequest.HeadRefOid, BaseBranch: r.PullRequest.BaseRefName,
 		DeleteBranchOnMerge: r.DeleteBranchOnMerge,
 	}
 	for _, m := range []struct {
@@ -73,9 +73,9 @@ func (c *Client) GetMergeStatus(ctx context.Context, repo github.Repo, number in
 // MergePullRequest implements github.Client.
 func (c *Client) MergePullRequest(ctx context.Context, in github.MergeInput) error {
 	var resp map[string]any
-	vars := map[string]any{"pullRequestId": in.PullRequestID, "mergeMethod": string(in.Method), "expectedHeadOid": in.ExpectedHeadOID}
+	vars := map[string]any{"pullRequestId": in.PullRequestIdentifier, "mergeMethod": string(in.Method), "expectedHeadOid": in.ExpectedHeadObjectIdentifier}
 	if err := c.query(ctx, mergeMutation, vars, &resp); err != nil {
-		return fmt.Errorf("merge %s#%d: %w", in.Repo, in.Number, err)
+		return fmt.Errorf("merge %s#%d: %w", in.Repository, in.Number, err)
 	}
 	return nil
 }

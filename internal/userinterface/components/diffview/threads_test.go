@@ -16,7 +16,7 @@ var threadNow = time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)
 
 func comment(author, body string, ago time.Duration) github.ReviewComment {
 	return github.ReviewComment{
-		ID: author + body, Author: author, Body: body, CreatedAt: threadNow.Add(-ago),
+		Identifier: author + body, Author: author, Body: body, CreatedAt: threadNow.Add(-ago),
 		Reactions: []github.ReactionSummary{{Content: github.ReactionThumbsUp, Count: 2}, {Content: github.ReactionRocket}},
 	}
 }
@@ -28,27 +28,27 @@ func comment(author, body string, ago time.Duration) github.ReviewComment {
 func sampleThreads() []github.ReviewThread {
 	return []github.ReviewThread{
 		{
-			ID: "open", Path: "server.go", Line: 5, DiffSide: github.SideRight, SubjectType: github.SubjectLine,
+			Identifier: "open", Path: "server.go", Line: 5, DiffSide: github.SideRight, SubjectType: github.SubjectLine,
 			Comments: []github.ReviewComment{comment("alice", "Do we need **log** here?", 3*time.Hour), comment("bob", "Yes, for `Serve`.", time.Hour)},
 		},
 		{
-			ID: "resolved", Path: "server.go", Line: 2, DiffSide: github.SideRight, IsResolved: true, ResolvedBy: "alice",
+			Identifier: "resolved", Path: "server.go", Line: 2, DiffSide: github.SideRight, IsResolved: true, ResolvedBy: "alice",
 			Comments: []github.ReviewComment{comment("carol", "Blank line please.", 50*time.Hour)},
 		},
 		{
-			ID: "left", Path: "server.go", Line: 32, DiffSide: github.SideLeft,
+			Identifier: "left", Path: "server.go", Line: 32, DiffSide: github.SideLeft,
 			Comments: []github.ReviewComment{comment("dave", "Why drop the return?", 2*time.Hour)},
 		},
 		{
-			ID: "outdated", Path: "server.go", OriginalLine: 4, DiffSide: github.SideRight, IsOutdated: true,
+			Identifier: "outdated", Path: "server.go", OriginalLine: 4, DiffSide: github.SideRight, IsOutdated: true,
 			Comments: []github.ReviewComment{comment("erin", "Old thought.", 80*time.Hour)},
 		},
 		{
-			ID: "gone", Path: "server.go", Line: 999, DiffSide: github.SideRight,
+			Identifier: "gone", Path: "server.go", Line: 999, DiffSide: github.SideRight,
 			Comments: []github.ReviewComment{comment("frank", "Where did this go?", time.Hour)},
 		},
 		{
-			ID: "other-file", Path: "other.go", Line: 1, DiffSide: github.SideRight,
+			Identifier: "other-file", Path: "other.go", Line: 1, DiffSide: github.SideRight,
 			Comments: []github.ReviewComment{comment("gina", "Not on this file.", time.Hour)},
 		},
 	}
@@ -323,7 +323,7 @@ func TestGoldenThreads(t *testing.T) {
 
 func binaryThread() github.ReviewThread {
 	return github.ReviewThread{
-		ID: "bin", Path: "logo.png", SubjectType: github.SubjectFile,
+		Identifier: "bin", Path: "logo.png", SubjectType: github.SubjectFile,
 		Comments: []github.ReviewComment{comment("hank", "Please compress.", time.Hour)},
 	}
 }
@@ -372,7 +372,7 @@ func TestCursorStaysOnItsThreadWhenThreadsChange(t *testing.T) {
 	}
 	m.CursorDown(1)
 	added := github.ReviewThread{
-		ID: "new", Path: "server.go", Line: 3, DiffSide: github.SideRight,
+		Identifier: "new", Path: "server.go", Line: 3, DiffSide: github.SideRight,
 		Comments: []github.ReviewComment{comment("zed", "new above", time.Hour)},
 	}
 	m.SetThreads(append([]github.ReviewThread{added}, sampleThreads()...))

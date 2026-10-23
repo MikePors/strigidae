@@ -8,24 +8,24 @@ import (
 	"github.com/MikePors/strigidae/internal/github"
 )
 
-func inlineClient() (*Client, github.Repo) {
-	repo := github.Repo{Owner: "acme", Name: "widgets"}
+func inlineClient() (*Client, github.Repository) {
+	repo := github.Repository{Owner: "acme", Name: "widgets"}
 	c := New()
-	c.SetPullRequest(github.PullRequestDetail{PullRequest: github.PullRequest{ID: "PR1", Repo: repo, Number: 7, HeadSHA: "abc"}})
+	c.SetPullRequest(github.PullRequestDetail{PullRequest: github.PullRequest{Identifier: "PR1", Repository: repo, Number: 7, HeadSHA: "abc"}})
 	return c, repo
 }
 
 func TestInlineLifecycle(t *testing.T) {
 	ctx := context.Background()
 	c, repo := inlineClient()
-	p, err := c.StartReview(ctx, github.StartReviewInput{Repo: repo, Number: 7, PullRequestID: "PR1", CommitOID: "abc"})
+	p, err := c.StartReview(ctx, github.StartReviewInput{Repository: repo, Number: 7, PullRequestIdentifier: "PR1", CommitObjectIdentifier: "abc"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.StartReview(ctx, github.StartReviewInput{Repo: repo, Number: 7, PullRequestID: "PR1", CommitOID: "abc"}); err == nil {
+	if _, err := c.StartReview(ctx, github.StartReviewInput{Repository: repo, Number: 7, PullRequestIdentifier: "PR1", CommitObjectIdentifier: "abc"}); err == nil {
 		t.Error("a second pending review should be refused")
 	}
-	th, err := c.AddReviewThread(ctx, github.AddThreadInput{Repo: repo, Number: 7, PendingReviewID: p.ID, Path: "a.go", Line: 5, Side: github.SideRight, Body: "hm"})
+	th, err := c.AddReviewThread(ctx, github.AddThreadInput{Repository: repo, Number: 7, PendingReviewIdentifier: p.Identifier, Path: "a.go", Line: 5, Side: github.SideRight, Body: "hm"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func TestInlineLifecycle(t *testing.T) {
 	if len(page.Items) != 1 || !page.Items[0].Comments[0].Pending {
 		t.Fatalf("threads = %+v", page.Items)
 	}
-	cid := th.Comments[0].ID
+	cid := th.Comments[0].Identifier
 	got, err := c.UpdateReviewComment(ctx, cid, "better")
 	if err != nil || got.Body != "better" {
 		t.Fatalf("update = %+v, %v", got, err)
@@ -59,23 +59,23 @@ func TestInlineErrors(t *testing.T) {
 	ctx := context.Background()
 	c, repo := inlineClient()
 	add := func(in github.AddThreadInput) error {
-		in.Repo, in.Number = repo, 7
+		in.Repository, in.Number = repo, 7
 		_, err := c.AddReviewThread(ctx, in)
 		return err
 	}
-	if err := add(github.AddThreadInput{PendingReviewID: "nope", Path: "a", Line: 1, Side: github.SideRight, Body: "x"}); !errors.Is(err, github.ErrNotFound) {
+	if err := add(github.AddThreadInput{PendingReviewIdentifier: "nope", Path: "a", Line: 1, Side: github.SideRight, Body: "x"}); !errors.Is(err, github.ErrNotFound) {
 		t.Errorf("no pending review: %v", err)
 	}
-	p, _ := c.StartReview(ctx, github.StartReviewInput{Repo: repo, Number: 7, PullRequestID: "PR1", CommitOID: "abc"})
-	if err := add(github.AddThreadInput{PendingReviewID: p.ID, Path: "a", Line: 1, Side: github.SideRight, Body: " "}); err == nil {
+	p, _ := c.StartReview(ctx, github.StartReviewInput{Repository: repo, Number: 7, PullRequestIdentifier: "PR1", CommitObjectIdentifier: "abc"})
+	if err := add(github.AddThreadInput{PendingReviewIdentifier: p.Identifier, Path: "a", Line: 1, Side: github.SideRight, Body: " "}); err == nil {
 		t.Error("an empty body was accepted")
 	}
 	// The cases of checkRange are in TestCheckRange; this keeps its wiring tested.
-	if err := add(github.AddThreadInput{PendingReviewID: p.ID, Path: "a", Line: 0, Side: github.SideRight, Body: "x"}); err == nil {
+	if err := add(github.AddThreadInput{PendingReviewIdentifier: p.Identifier, Path: "a", Line: 0, Side: github.SideRight, Body: "x"}); err == nil {
 		t.Error("a bad range was accepted")
 	}
 	c.SetError(MethodAddReviewThread, errors.New("boom"))
-	if err := add(github.AddThreadInput{PendingReviewID: p.ID, Path: "a", Line: 1, Side: github.SideRight, Body: "x"}); err == nil {
+	if err := add(github.AddThreadInput{PendingReviewIdentifier: p.Identifier, Path: "a", Line: 1, Side: github.SideRight, Body: "x"}); err == nil {
 		t.Error("injected error not returned")
 	}
 	if _, err := c.UpdateReviewComment(ctx, "missing", "x"); !errors.Is(err, github.ErrNotFound) {
@@ -115,15 +115,15 @@ func TestCheckRange(t *testing.T) {
 // the flag is false.
 func TestUpdateAndDeleteFollowTheFlags(t *testing.T) {
 	ctx := context.Background()
-	repo := github.Repo{Owner: "acme", Name: "widgets"}
+	repo := github.Repository{Owner: "acme", Name: "widgets"}
 	comments := []github.ReviewComment{
-		{ID: "own-ok", Author: "me", ViewerCanUpdate: true, ViewerCanDelete: true},
-		{ID: "own-no-update", Author: "me", ViewerCanDelete: true},
-		{ID: "own-no-delete", Author: "me", ViewerCanUpdate: true},
-		{ID: "other", Author: "bob"}, // the fake gives other people's comments the admin flags
+		{Identifier: "own-ok", Author: "me", ViewerCanUpdate: true, ViewerCanDelete: true},
+		{Identifier: "own-no-update", Author: "me", ViewerCanDelete: true},
+		{Identifier: "own-no-delete", Author: "me", ViewerCanUpdate: true},
+		{Identifier: "other", Author: "bob"}, // the fake gives other people's comments the admin flags
 	}
 	tests := []struct {
-		id         string
+		identifier string
 		update, rm error
 	}{
 		{"own-ok", nil, nil},
@@ -133,13 +133,13 @@ func TestUpdateAndDeleteFollowTheFlags(t *testing.T) {
 		{"missing", github.ErrNotFound, github.ErrNotFound},
 	}
 	for _, tt := range tests {
-		t.Run(tt.id, func(t *testing.T) {
+		t.Run(tt.identifier, func(t *testing.T) {
 			c := New()
-			c.SetReviewThreads(repo, 7, []github.ReviewThread{{ID: "t", Path: "a.go", Line: 1, Comments: comments}})
-			if _, err := c.UpdateReviewComment(ctx, tt.id, "new"); !errors.Is(err, tt.update) {
+			c.SetReviewThreads(repo, 7, []github.ReviewThread{{Identifier: "t", Path: "a.go", Line: 1, Comments: comments}})
+			if _, err := c.UpdateReviewComment(ctx, tt.identifier, "new"); !errors.Is(err, tt.update) {
 				t.Errorf("update err = %v, want %v", err, tt.update)
 			}
-			if err := c.DeleteReviewComment(ctx, tt.id); !errors.Is(err, tt.rm) {
+			if err := c.DeleteReviewComment(ctx, tt.identifier); !errors.Is(err, tt.rm) {
 				t.Errorf("delete err = %v, want %v", err, tt.rm)
 			}
 		})

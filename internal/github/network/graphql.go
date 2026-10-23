@@ -9,34 +9,34 @@ import (
 // ghost is shown for authors whose account was deleted (GraphQL returns null).
 const ghost = "ghost"
 
-type gqlActor struct{ Login string }
+type graphqlActor struct{ Login string }
 
-func (a *gqlActor) login() string {
+func (a *graphqlActor) login() string {
 	if a == nil || a.Login == "" {
 		return ghost
 	}
 	return a.Login
 }
 
-type gqlPageInfo struct {
+type graphqlPageInfo struct {
 	HasNextPage bool
 	EndCursor   string
 }
 
-func (p gqlPageInfo) next() string {
+func (p graphqlPageInfo) next() string {
 	if !p.HasNextPage {
 		return ""
 	}
 	return p.EndCursor
 }
 
-type gqlConn[N any] struct {
+type graphqlConnection[N any] struct {
 	TotalCount int
-	PageInfo   gqlPageInfo
+	PageInfo   graphqlPageInfo
 	Nodes      []N
 }
 
-type gqlPullRequest struct {
+type graphqlPullRequest struct {
 	ID                string
 	Number            int
 	Title             string
@@ -50,42 +50,42 @@ type gqlPullRequest struct {
 	HeadRefName       string
 	HeadRefOid        string
 	StatusCheckRollup *struct{ State string }
-	Author            *gqlActor
+	Author            *graphqlActor
 	CommentCount      struct{ TotalCount int }
 	Repository        struct{ NameWithOwner string }
 }
 
-type gqlReactionGroup struct {
+type graphqlReactionGroup struct {
 	Content          string
 	ViewerHasReacted bool
 	Reactors         struct{ TotalCount int }
 }
 
-type gqlIssueComment struct {
+type graphqlIssueComment struct {
 	ID             string
 	URL            string
 	Body           string
 	CreatedAt      time.Time
-	Author         *gqlActor
-	ReactionGroups []gqlReactionGroup
+	Author         *graphqlActor
+	ReactionGroups []graphqlReactionGroup
 }
 
-type gqlReviewComment struct {
+type graphqlReviewComment struct {
 	ID             string
 	State          string
 	URL            string
 	Body           string
 	DiffHunk       string
 	CreatedAt      time.Time
-	Author         *gqlActor
-	ReactionGroups []gqlReactionGroup
+	Author         *graphqlActor
+	ReactionGroups []graphqlReactionGroup
 
 	ViewerCanUpdate bool
 	ViewerCanDelete bool
 	ViewerDidAuthor bool
 }
 
-type gqlFile struct {
+type graphqlFile struct {
 	Path       string
 	Additions  int
 	Deletions  int
@@ -94,16 +94,16 @@ type gqlFile struct {
 	ViewerViewedState string
 }
 
-type gqlReview struct {
+type graphqlReview struct {
 	ID          string
 	State       string
 	Body        string
 	SubmittedAt time.Time
-	Author      *gqlActor
+	Author      *graphqlActor
 }
 
-type gqlPullRequestDetail struct {
-	gqlPullRequest
+type graphqlPullRequestDetail struct {
+	graphqlPullRequest
 	Body      string
 	Additions int
 	Deletions int
@@ -120,12 +120,12 @@ type gqlPullRequestDetail struct {
 			}
 		}
 	}
-	Files    gqlConn[gqlFile]
-	Comments gqlConn[gqlIssueComment]
-	Reviews  gqlConn[gqlReview]
+	Files    graphqlConnection[graphqlFile]
+	Comments graphqlConnection[graphqlIssueComment]
+	Reviews  graphqlConnection[graphqlReview]
 }
 
-type gqlThread struct {
+type graphqlThread struct {
 	ID                string
 	SubjectType       string
 	IsResolved        bool
@@ -137,23 +137,23 @@ type gqlThread struct {
 	OriginalStartLine *int
 	DiffSide          string
 	StartDiffSide     string
-	ResolvedBy        *gqlActor
-	Comments          struct{ Nodes []gqlReviewComment }
+	ResolvedBy        *graphqlActor
+	Comments          struct{ Nodes []graphqlReviewComment }
 }
 
-func mapPullRequest(n gqlPullRequest) (github.PullRequest, error) {
-	repo, err := github.ParseRepo(n.Repository.NameWithOwner)
+func mapPullRequest(n graphqlPullRequest) (github.PullRequest, error) {
+	repo, err := github.ParseRepository(n.Repository.NameWithOwner)
 	if err != nil {
 		return github.PullRequest{}, err
 	}
 	return github.PullRequest{
-		ID:             n.ID,
+		Identifier:     n.ID,
 		HeadSHA:        n.HeadRefOid,
-		Repo:           repo,
+		Repository:     repo,
 		Number:         n.Number,
 		Title:          n.Title,
 		Author:         n.Author.login(),
-		State:          github.PRState(n.State),
+		State:          github.PullRequestState(n.State),
 		Draft:          n.IsDraft,
 		ReviewDecision: github.ReviewDecision(n.ReviewDecision),
 		Checks:         mapChecks(n),
@@ -161,20 +161,20 @@ func mapPullRequest(n gqlPullRequest) (github.PullRequest, error) {
 		CreatedAt:      n.CreatedAt,
 		UpdatedAt:      n.UpdatedAt,
 		URL:            n.URL,
-		HeadRef:        n.HeadRefName,
-		BaseRef:        n.BaseRefName,
+		HeadBranch:     n.HeadRefName,
+		BaseBranch:     n.BaseRefName,
 	}, nil
 }
 
 // mapChecks reads the head commit's rollup; null means it has no checks.
-func mapChecks(n gqlPullRequest) github.CheckState {
+func mapChecks(n graphqlPullRequest) github.CheckState {
 	if n.StatusCheckRollup == nil {
 		return github.ChecksNone
 	}
 	return github.CheckStateFromRollup(n.StatusCheckRollup.State)
 }
 
-func mapPullRequests(nodes []gqlPullRequest) ([]github.PullRequest, error) {
+func mapPullRequests(nodes []graphqlPullRequest) ([]github.PullRequest, error) {
 	out := make([]github.PullRequest, 0, len(nodes))
 	for _, n := range nodes {
 		// Search results can contain nulls for inaccessible items, which decode
@@ -191,7 +191,7 @@ func mapPullRequests(nodes []gqlPullRequest) ([]github.PullRequest, error) {
 	return out, nil
 }
 
-func mapReactions(groups []gqlReactionGroup) []github.ReactionSummary {
+func mapReactions(groups []graphqlReactionGroup) []github.ReactionSummary {
 	var out []github.ReactionSummary
 	for _, g := range groups {
 		if g.Reactors.TotalCount == 0 {
@@ -206,26 +206,26 @@ func mapReactions(groups []gqlReactionGroup) []github.ReactionSummary {
 	return out
 }
 
-func mapIssueComment(n gqlIssueComment) github.IssueComment {
+func mapIssueComment(n graphqlIssueComment) github.IssueComment {
 	return github.IssueComment{
-		ID:        n.ID,
-		Author:    n.Author.login(),
-		Body:      n.Body,
-		CreatedAt: n.CreatedAt,
-		URL:       n.URL,
-		Reactions: mapReactions(n.ReactionGroups),
+		Identifier: n.ID,
+		Author:     n.Author.login(),
+		Body:       n.Body,
+		CreatedAt:  n.CreatedAt,
+		URL:        n.URL,
+		Reactions:  mapReactions(n.ReactionGroups),
 	}
 }
 
-func mapReviewComment(n gqlReviewComment) github.ReviewComment {
+func mapReviewComment(n graphqlReviewComment) github.ReviewComment {
 	return github.ReviewComment{
-		ID:        n.ID,
-		Author:    n.Author.login(),
-		Body:      n.Body,
-		CreatedAt: n.CreatedAt,
-		URL:       n.URL,
-		DiffHunk:  n.DiffHunk,
-		Pending:   n.State == "PENDING",
+		Identifier: n.ID,
+		Author:     n.Author.login(),
+		Body:       n.Body,
+		CreatedAt:  n.CreatedAt,
+		URL:        n.URL,
+		DiffHunk:   n.DiffHunk,
+		Pending:    n.State == "PENDING",
 
 		ViewerCanUpdate: n.ViewerCanUpdate,
 		ViewerCanDelete: n.ViewerCanDelete,
@@ -234,8 +234,8 @@ func mapReviewComment(n gqlReviewComment) github.ReviewComment {
 	}
 }
 
-func mapDetail(n gqlPullRequestDetail, files []gqlFile, comments []gqlIssueComment, reviews []gqlReview) (github.PullRequestDetail, error) {
-	pr, err := mapPullRequest(n.gqlPullRequest)
+func mapDetail(n graphqlPullRequestDetail, files []graphqlFile, comments []graphqlIssueComment, reviews []graphqlReview) (github.PullRequestDetail, error) {
+	pr, err := mapPullRequest(n.graphqlPullRequest)
 	if err != nil {
 		return github.PullRequestDetail{}, err
 	}
@@ -267,7 +267,7 @@ func mapDetail(n gqlPullRequestDetail, files []gqlFile, comments []gqlIssueComme
 	}
 	for _, r := range reviews {
 		d.Reviews = append(d.Reviews, github.Review{
-			ID: r.ID, Author: r.Author.login(), State: github.ReviewState(r.State), Body: r.Body, SubmittedAt: r.SubmittedAt,
+			Identifier: r.ID, Author: r.Author.login(), State: github.ReviewState(r.State), Body: r.Body, SubmittedAt: r.SubmittedAt,
 		})
 	}
 	return d, nil
@@ -280,9 +280,9 @@ func intOrZero(p *int) int {
 	return *p
 }
 
-func mapThread(n gqlThread) github.ReviewThread {
+func mapThread(n graphqlThread) github.ReviewThread {
 	t := github.ReviewThread{
-		ID:                n.ID,
+		Identifier:        n.ID,
 		SubjectType:       github.ThreadSubject(n.SubjectType),
 		IsResolved:        n.IsResolved,
 		IsOutdated:        n.IsOutdated,

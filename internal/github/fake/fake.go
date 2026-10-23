@@ -43,37 +43,37 @@ const (
 
 // Call is one recorded call with the arguments that apply to its method.
 type Call struct {
-	Method   string
-	Repo     github.Repo
-	Number   int
-	Query    string
-	Page     github.PageRequest
-	ThreadID string
-	Body     string
+	Method           string
+	Repository       github.Repository
+	Number           int
+	Query            string
+	Page             github.PageRequest
+	ThreadIdentifier string
+	Body             string
 	// PullRequestID, Path and Viewed are set by the methods that take them:
 	// PullRequestID by SetFileViewed, StartReview and MergePullRequest, Path by
 	// SetFileViewed and AddReviewThread, Viewed by SetFileViewed.
-	PullRequestID string
-	Path          string
-	Viewed        bool
+	PullRequestIdentifier string
+	Path                  string
+	Viewed                bool
 }
 
 // Reply is a recorded successful ReplyToThread call.
 type Reply struct {
-	ThreadID string
-	Body     string
+	ThreadIdentifier string
+	Body             string
 }
 
 // Comment is a recorded successful AddComment call.
 type Comment struct {
-	Repo   github.Repo
-	Number int
-	Body   string
+	Repository github.Repository
+	Number     int
+	Body       string
 }
 
-type prKey struct {
-	repo   github.Repo
-	number int
+type pullRequestKey struct {
+	repository github.Repository
+	number     int
 }
 
 // Client implements github.Client in memory. The zero value is not usable;
@@ -84,24 +84,24 @@ type Client struct {
 	// Now supplies timestamps for created comments.
 	Now func() time.Time
 
-	mu       sync.Mutex
-	lists    map[github.Repo][]github.PullRequest
-	search   map[string][]github.PullRequest
-	details  map[prKey]github.PullRequestDetail
-	diffs    map[prKey]string
-	threads  map[prKey][]github.ReviewThread
-	errs     map[string]error
-	calls    []Call
-	replies  []Reply
-	comments []Comment
-	pending  map[prKey]github.PendingReview
-	reviews  []Submission
-	nextID   int
-	merge    map[github.Repo]MergeSettings
-	merges   []Merge
-	added    []github.AddThreadInput
-	started  []StartedReview
-	deleted  []string
+	mu             sync.Mutex
+	lists          map[github.Repository][]github.PullRequest
+	search         map[string][]github.PullRequest
+	details        map[pullRequestKey]github.PullRequestDetail
+	diffs          map[pullRequestKey]string
+	threads        map[pullRequestKey][]github.ReviewThread
+	errs           map[string]error
+	calls          []Call
+	replies        []Reply
+	comments       []Comment
+	pending        map[pullRequestKey]github.PendingReview
+	reviews        []Submission
+	nextIdentifier int
+	merge          map[github.Repository]MergeSettings
+	merges         []Merge
+	added          []github.AddThreadInput
+	started        []StartedReview
+	deleted        []string
 }
 
 var _ github.Client = (*Client)(nil)
@@ -111,14 +111,14 @@ func New() *Client {
 	return &Client{
 		Viewer:  "me",
 		Now:     time.Now,
-		lists:   map[github.Repo][]github.PullRequest{},
+		lists:   map[github.Repository][]github.PullRequest{},
 		search:  map[string][]github.PullRequest{},
-		details: map[prKey]github.PullRequestDetail{},
-		diffs:   map[prKey]string{},
-		threads: map[prKey][]github.ReviewThread{},
+		details: map[pullRequestKey]github.PullRequestDetail{},
+		diffs:   map[pullRequestKey]string{},
+		threads: map[pullRequestKey][]github.ReviewThread{},
 		errs:    map[string]error{},
-		pending: map[prKey]github.PendingReview{},
-		merge:   map[github.Repo]MergeSettings{},
+		pending: map[pullRequestKey]github.PendingReview{},
+		merge:   map[github.Repository]MergeSettings{},
 	}
 }
 
@@ -174,7 +174,7 @@ func cloneDetail(d github.PullRequestDetail) github.PullRequestDetail {
 
 // SetPullRequests sets the pull requests known for repo. ListPullRequests
 // returns the open ones, most recently updated first.
-func (c *Client) SetPullRequests(repo github.Repo, prs []github.PullRequest) {
+func (c *Client) SetPullRequests(repo github.Repository, prs []github.PullRequest) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.lists[repo] = slices.Clone(prs)
@@ -192,21 +192,21 @@ func (c *Client) SetSearchResults(query string, prs []github.PullRequest) {
 func (c *Client) SetPullRequest(d github.PullRequestDetail) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.details[prKey{d.Repo, d.Number}] = cloneDetail(d)
+	c.details[pullRequestKey{d.Repository, d.Number}] = cloneDetail(d)
 }
 
 // SetDiff sets the raw diff returned for a pull request.
-func (c *Client) SetDiff(repo github.Repo, number int, diff string) {
+func (c *Client) SetDiff(repo github.Repository, number int, diff string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.diffs[prKey{repo, number}] = diff
+	c.diffs[pullRequestKey{repo, number}] = diff
 }
 
 // SetReviewThreads sets the threads returned for a pull request.
-func (c *Client) SetReviewThreads(repo github.Repo, number int, threads []github.ReviewThread) {
+func (c *Client) SetReviewThreads(repo github.Repository, number int, threads []github.ReviewThread) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.threads[prKey{repo, number}] = c.permissions(cloneThreads(threads))
+	c.threads[pullRequestKey{repo, number}] = c.permissions(cloneThreads(threads))
 }
 
 // SetError makes the named method fail with err until cleared with a nil err.
@@ -273,10 +273,10 @@ func paginate[T any](items []T, p github.PageRequest) (github.Page[T], error) {
 }
 
 // ListPullRequests implements github.Client.
-func (c *Client) ListPullRequests(ctx context.Context, repo github.Repo, page github.PageRequest) (github.Page[github.PullRequest], error) {
+func (c *Client) ListPullRequests(ctx context.Context, repo github.Repository, page github.PageRequest) (github.Page[github.PullRequest], error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if err := c.begin(ctx, Call{Method: MethodListPullRequests, Repo: repo, Page: page}); err != nil {
+	if err := c.begin(ctx, Call{Method: MethodListPullRequests, Repository: repo, Page: page}); err != nil {
 		return github.Page[github.PullRequest]{}, err
 	}
 	all, ok := c.lists[repo]
@@ -285,7 +285,7 @@ func (c *Client) ListPullRequests(ctx context.Context, repo github.Repo, page gi
 	}
 	var open []github.PullRequest
 	for _, pr := range all {
-		if pr.State == "" || pr.State == github.PRStateOpen {
+		if pr.State == "" || pr.State == github.PullRequestStateOpen {
 			open = append(open, pr)
 		}
 	}
@@ -304,13 +304,13 @@ func (c *Client) SearchPullRequests(ctx context.Context, query string, page gith
 }
 
 // GetPullRequest implements github.Client.
-func (c *Client) GetPullRequest(ctx context.Context, repo github.Repo, number int) (github.PullRequestDetail, error) {
+func (c *Client) GetPullRequest(ctx context.Context, repo github.Repository, number int) (github.PullRequestDetail, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if err := c.begin(ctx, Call{Method: MethodGetPullRequest, Repo: repo, Number: number}); err != nil {
+	if err := c.begin(ctx, Call{Method: MethodGetPullRequest, Repository: repo, Number: number}); err != nil {
 		return github.PullRequestDetail{}, err
 	}
-	d, ok := c.details[prKey{repo, number}]
+	d, ok := c.details[pullRequestKey{repo, number}]
 	if !ok {
 		return github.PullRequestDetail{}, fmt.Errorf("load pull request %s#%d: %w", repo, number, github.ErrNotFound)
 	}
@@ -318,13 +318,13 @@ func (c *Client) GetPullRequest(ctx context.Context, repo github.Repo, number in
 }
 
 // GetDiff implements github.Client.
-func (c *Client) GetDiff(ctx context.Context, repo github.Repo, number int) (string, error) {
+func (c *Client) GetDiff(ctx context.Context, repo github.Repository, number int) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if err := c.begin(ctx, Call{Method: MethodGetDiff, Repo: repo, Number: number}); err != nil {
+	if err := c.begin(ctx, Call{Method: MethodGetDiff, Repository: repo, Number: number}); err != nil {
 		return "", err
 	}
-	d, ok := c.diffs[prKey{repo, number}]
+	d, ok := c.diffs[pullRequestKey{repo, number}]
 	if !ok {
 		return "", fmt.Errorf("load diff of %s#%d: %w", repo, number, github.ErrNotFound)
 	}
@@ -333,13 +333,13 @@ func (c *Client) GetDiff(ctx context.Context, repo github.Repo, number int) (str
 
 // ListReviewThreads implements github.Client. A pull request with no threads
 // set yields an empty page.
-func (c *Client) ListReviewThreads(ctx context.Context, repo github.Repo, number int, page github.PageRequest) (github.Page[github.ReviewThread], error) {
+func (c *Client) ListReviewThreads(ctx context.Context, repo github.Repository, number int, page github.PageRequest) (github.Page[github.ReviewThread], error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if err := c.begin(ctx, Call{Method: MethodListReviewThreads, Repo: repo, Number: number, Page: page}); err != nil {
+	if err := c.begin(ctx, Call{Method: MethodListReviewThreads, Repository: repo, Number: number, Page: page}); err != nil {
 		return github.Page[github.ReviewThread]{}, err
 	}
-	p, err := paginate(c.threads[prKey{repo, number}], page)
+	p, err := paginate(c.threads[pullRequestKey{repo, number}], page)
 	p.Items = cloneThreads(p.Items)
 	return p, err
 }
@@ -349,7 +349,7 @@ func (c *Client) ListReviewThreads(ctx context.Context, repo github.Repo, number
 func (c *Client) ReplyToThread(ctx context.Context, threadID, body string) (github.ReviewComment, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if err := c.begin(ctx, Call{Method: MethodReplyToThread, ThreadID: threadID, Body: body}); err != nil {
+	if err := c.begin(ctx, Call{Method: MethodReplyToThread, ThreadIdentifier: threadID, Body: body}); err != nil {
 		return github.ReviewComment{}, err
 	}
 	if strings.TrimSpace(body) == "" {
@@ -357,21 +357,21 @@ func (c *Client) ReplyToThread(ctx context.Context, threadID, body string) (gith
 	}
 	for _, threads := range c.threads {
 		for i := range threads {
-			if threads[i].ID != threadID {
+			if threads[i].Identifier != threadID {
 				continue
 			}
-			c.nextID++
+			c.nextIdentifier++
 			rc := github.ReviewComment{
-				ID:        "fake-review-comment-" + strconv.Itoa(c.nextID),
-				Author:    c.Viewer,
-				Body:      body,
-				CreatedAt: c.Now(),
+				Identifier: "fake-review-comment-" + strconv.Itoa(c.nextIdentifier),
+				Author:     c.Viewer,
+				Body:       body,
+				CreatedAt:  c.Now(),
 
 				ViewerCanUpdate: true, ViewerCanDelete: true, ViewerDidAuthor: true,
 			}
 			// Build a fresh slice so slices handed out earlier are never written to.
 			threads[i].Comments = append(slices.Clip(threads[i].Comments), rc)
-			c.replies = append(c.replies, Reply{ThreadID: threadID, Body: body})
+			c.replies = append(c.replies, Reply{ThreadIdentifier: threadID, Body: body})
 			return rc, nil
 		}
 	}
@@ -381,21 +381,21 @@ func (c *Client) ReplyToThread(ctx context.Context, threadID, body string) (gith
 // AddComment implements github.Client. It fails with ErrNotFound for a pull
 // request the fake has no data for, and otherwise bumps the comment count in
 // the detail, the repo list and search results.
-func (c *Client) AddComment(ctx context.Context, repo github.Repo, number int, body string) (github.IssueComment, error) {
+func (c *Client) AddComment(ctx context.Context, repo github.Repository, number int, body string) (github.IssueComment, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if err := c.begin(ctx, Call{Method: MethodAddComment, Repo: repo, Number: number, Body: body}); err != nil {
+	if err := c.begin(ctx, Call{Method: MethodAddComment, Repository: repo, Number: number, Body: body}); err != nil {
 		return github.IssueComment{}, err
 	}
 	if strings.TrimSpace(body) == "" {
 		return github.IssueComment{}, fmt.Errorf("add comment to %s#%d: empty body", repo, number)
 	}
-	key := prKey{repo, number}
+	key := pullRequestKey{repo, number}
 	detail, hasDetail := c.details[key]
 	known := hasDetail
 	bump := func(prs []github.PullRequest) {
 		for i := range prs {
-			if prs[i].Repo == repo && prs[i].Number == number {
+			if prs[i].Repository == repo && prs[i].Number == number {
 				prs[i].CommentCount++
 				known = true
 			}
@@ -410,19 +410,19 @@ func (c *Client) AddComment(ctx context.Context, repo github.Repo, number int, b
 	if !known {
 		return github.IssueComment{}, fmt.Errorf("add comment to %s#%d: %w", repo, number, github.ErrNotFound)
 	}
-	c.nextID++
+	c.nextIdentifier++
 	ic := github.IssueComment{
-		ID:        "fake-comment-" + strconv.Itoa(c.nextID),
-		Author:    c.Viewer,
-		Body:      body,
-		CreatedAt: c.Now(),
+		Identifier: "fake-comment-" + strconv.Itoa(c.nextIdentifier),
+		Author:     c.Viewer,
+		Body:       body,
+		CreatedAt:  c.Now(),
 	}
 	if hasDetail {
 		detail.Comments = append(slices.Clip(detail.Comments), ic)
 		detail.CommentCount++
 		c.details[key] = detail
 	}
-	c.comments = append(c.comments, Comment{Repo: repo, Number: number, Body: body})
+	c.comments = append(c.comments, Comment{Repository: repo, Number: number, Body: body})
 	return ic, nil
 }
 
@@ -432,7 +432,7 @@ func (c *Client) AddComment(ctx context.Context, repo github.Repo, number int, b
 func (c *Client) SetFileViewed(ctx context.Context, pullRequestID, path string, viewed bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if err := c.begin(ctx, Call{Method: MethodSetFileViewed, PullRequestID: pullRequestID, Path: path, Viewed: viewed}); err != nil {
+	if err := c.begin(ctx, Call{Method: MethodSetFileViewed, PullRequestIdentifier: pullRequestID, Path: path, Viewed: viewed}); err != nil {
 		return err
 	}
 	state := github.FileUnviewed
@@ -440,7 +440,7 @@ func (c *Client) SetFileViewed(ctx context.Context, pullRequestID, path string, 
 		state = github.FileViewed
 	}
 	for key, d := range c.details {
-		if d.ID != pullRequestID {
+		if d.Identifier != pullRequestID {
 			continue
 		}
 		for i := range d.Files {

@@ -18,15 +18,15 @@ import (
 func TestStartReview(t *testing.T) {
 	s := &server{}
 	c := newTestClient(t, s)
-	got, err := c.StartReview(context.Background(), github.StartReviewInput{Repo: repo, Number: 27, PullRequestID: "PR_kwDOExample27", CommitOID: "abc123"})
+	got, err := c.StartReview(context.Background(), github.StartReviewInput{Repository: repository, Number: 27, PullRequestIdentifier: "PR_kwDOExample27", CommitObjectIdentifier: "abc123"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := (github.PendingReview{ID: "PRR_kwDOExample11"}); !cmp.Equal(got, want) {
+	if want := (github.PendingReview{Identifier: "PRR_kwDOExample11"}); !cmp.Equal(got, want) {
 		t.Errorf("review = %+v, want %+v", got, want)
 	}
 	want := map[string]any{"pullRequestId": "PR_kwDOExample27", "commitOID": "abc123"}
-	if diff := cmp.Diff(want, s.Calls()[0].Vars); diff != "" {
+	if diff := cmp.Diff(want, s.Calls()[0].Variables); diff != "" {
 		t.Errorf("variables (-want +got):\n%s", diff)
 	}
 }
@@ -35,21 +35,21 @@ func TestAddReviewThread(t *testing.T) {
 	s := &server{}
 	c := newTestClient(t, s)
 	in := github.AddThreadInput{
-		Repo: repo, Number: 27, PendingReviewID: "PRR_kwDOExample11", Path: "internal/github/client.go",
+		Repository: repository, Number: 27, PendingReviewIdentifier: "PRR_kwDOExample11", Path: "internal/github/client.go",
 		Line: 12, Side: github.SideRight, StartLine: 10, StartSide: github.SideRight, Body: "Consider a clearer name.",
 	}
 	got, err := c.AddReviewThread(context.Background(), in)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.ID != "PRRT_kwDOExample20" || got.Line != 12 || got.StartLine != 10 || len(got.Comments) != 1 || !got.Comments[0].Pending {
+	if got.Identifier != "PRRT_kwDOExample20" || got.Line != 12 || got.StartLine != 10 || len(got.Comments) != 1 || !got.Comments[0].Pending {
 		t.Errorf("thread = %+v", got)
 	}
 	want := map[string]any{
 		"reviewId": "PRR_kwDOExample11", "path": "internal/github/client.go", "body": "Consider a clearer name.",
 		"line": float64(12), "side": "RIGHT", "startLine": float64(10), "startSide": "RIGHT",
 	}
-	if diff := cmp.Diff(want, s.Calls()[0].Vars); diff != "" {
+	if diff := cmp.Diff(want, s.Calls()[0].Variables); diff != "" {
 		t.Errorf("variables (-want +got):\n%s", diff)
 	}
 }
@@ -57,11 +57,11 @@ func TestAddReviewThread(t *testing.T) {
 func TestAddReviewThreadSingleLine(t *testing.T) {
 	s := &server{}
 	c := newTestClient(t, s)
-	in := github.AddThreadInput{Repo: repo, Number: 27, PendingReviewID: "R", Path: "a.go", Line: 3, Side: github.SideLeft, Body: "x"}
+	in := github.AddThreadInput{Repository: repository, Number: 27, PendingReviewIdentifier: "R", Path: "a.go", Line: 3, Side: github.SideLeft, Body: "x"}
 	if _, err := c.AddReviewThread(context.Background(), in); err != nil {
 		t.Fatal(err)
 	}
-	vars := s.Calls()[0].Vars
+	vars := s.Calls()[0].Variables
 	if _, ok := vars["startLine"]; ok {
 		t.Errorf("single-line comment sent startLine: %v", vars)
 	}
@@ -77,18 +77,18 @@ func TestUpdateAndDeleteReviewComment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.ID != "PRRC_kwDOExample21" || got.Body != "Edited." || !got.Pending {
+	if got.Identifier != "PRRC_kwDOExample21" || got.Body != "Edited." || !got.Pending {
 		t.Errorf("comment = %+v", got)
 	}
 	if err := c.DeleteReviewComment(context.Background(), "PRRC_kwDOExample21"); err != nil {
 		t.Fatal(err)
 	}
 	calls := s.Calls()
-	if calls[0].Op != opUpdateReviewComment || calls[1].Op != opDeleteReviewComment {
-		t.Errorf("ops = %q, %q", calls[0].Op, calls[1].Op)
+	if calls[0].Operation != operationUpdateReviewComment || calls[1].Operation != operationDeleteReviewComment {
+		t.Errorf("ops = %q, %q", calls[0].Operation, calls[1].Operation)
 	}
-	if calls[1].Vars["commentId"] != "PRRC_kwDOExample21" {
-		t.Errorf("vars = %v", calls[1].Vars)
+	if calls[1].Variables["commentId"] != "PRRC_kwDOExample21" {
+		t.Errorf("vars = %v", calls[1].Variables)
 	}
 }
 
@@ -102,8 +102,8 @@ func TestGetReviewComment(t *testing.T) {
 	if got.Pending || !got.ViewerCanUpdate || got.ViewerCanDelete || !got.ViewerDidAuthor || got.Body != "Consider a clearer name." {
 		t.Errorf("comment = %+v", got)
 	}
-	if s.Calls()[0].Vars["id"] != "PRRC_kwDOExample21" {
-		t.Errorf("vars = %v", s.Calls()[0].Vars)
+	if s.Calls()[0].Variables["id"] != "PRRC_kwDOExample21" {
+		t.Errorf("vars = %v", s.Calls()[0].Variables)
 	}
 }
 
@@ -132,7 +132,7 @@ func TestNullPayloads(t *testing.T) {
 	ctx := context.Background()
 	t.Run("a thread GitHub did not create is rejected, naming the line", func(t *testing.T) {
 		c := newTestClient(t, jsonServer(`{"data":{"addPullRequestReviewThread":{"thread":null}}}`))
-		_, err := c.AddReviewThread(ctx, github.AddThreadInput{Repo: repo, Number: 27, PendingReviewID: "R", Path: "a/b.go", Line: 7, Side: github.SideRight, Body: "x"})
+		_, err := c.AddReviewThread(ctx, github.AddThreadInput{Repository: repository, Number: 27, PendingReviewIdentifier: "R", Path: "a/b.go", Line: 7, Side: github.SideRight, Body: "x"})
 		if !errors.Is(err, github.ErrCommentRejected) || errors.Is(err, github.ErrNotFound) {
 			t.Fatalf("err = %v, want ErrCommentRejected", err)
 		}
@@ -142,19 +142,19 @@ func TestNullPayloads(t *testing.T) {
 	})
 	t.Run("a null thread mutation payload", func(t *testing.T) {
 		c := newTestClient(t, jsonServer(`{"data":{"addPullRequestReviewThread":null}}`))
-		_, err := c.AddReviewThread(ctx, github.AddThreadInput{Repo: repo, Number: 27, Path: "a.go", Line: 1, Side: github.SideRight})
+		_, err := c.AddReviewThread(ctx, github.AddThreadInput{Repository: repository, Number: 27, Path: "a.go", Line: 1, Side: github.SideRight})
 		if !errors.Is(err, github.ErrCommentRejected) {
 			t.Errorf("err = %v", err)
 		}
 	})
 	t.Run("no review is started", func(t *testing.T) {
 		c := newTestClient(t, jsonServer(`{"data":{"addPullRequestReview":{"pullRequestReview":null}}}`))
-		_, err := c.StartReview(ctx, github.StartReviewInput{Repo: repo, Number: 27})
+		_, err := c.StartReview(ctx, github.StartReviewInput{Repository: repository, Number: 27})
 		if !errors.Is(err, github.ErrNotFound) {
 			t.Errorf("err = %v", err)
 		}
 		c = newTestClient(t, jsonServer(`{"data":{"addPullRequestReview":null}}`))
-		if _, err := c.StartReview(ctx, github.StartReviewInput{Repo: repo, Number: 27}); !errors.Is(err, github.ErrNotFound) {
+		if _, err := c.StartReview(ctx, github.StartReviewInput{Repository: repository, Number: 27}); !errors.Is(err, github.ErrNotFound) {
 			t.Errorf("null payload: err = %v", err)
 		}
 	})

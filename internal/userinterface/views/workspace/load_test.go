@@ -104,7 +104,7 @@ func TestStaleResultsIgnored(t *testing.T) {
 	for name, msg := range map[string]prLoadedMsg{
 		"old seq":      {owner: h.v, repo: testRepo, number: 7, seq: cur - 1, detail: other},
 		"other number": {owner: h.v, repo: testRepo, number: 8, seq: cur, detail: other},
-		"other repo":   {owner: h.v, repo: github.Repo{Owner: "x", Name: "y"}, number: 7, seq: cur, detail: other},
+		"other repo":   {owner: h.v, repo: github.Repository{Owner: "x", Name: "y"}, number: 7, seq: cur, detail: other},
 	} {
 		h.send(msg)
 		if h.v.detail.Title == "stale" {

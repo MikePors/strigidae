@@ -66,7 +66,7 @@ func (c *inliner) toThread(id string) {
 	c.t.Helper()
 	c.cursorTo("thread "+id, func(dv *diffview.Model) bool {
 		ts := dv.ThreadsAtCursor()
-		return len(ts) == 1 && ts[0].ID == id
+		return len(ts) == 1 && ts[0].Identifier == id
 	})
 }
 
@@ -120,12 +120,12 @@ func TestInlineCommentOnEachSide(t *testing.T) {
 				t.Error("a pending comment must not ask for confirmation")
 			}
 			started := c.client.StartedReviews()
-			if len(started) != 1 || started[0].CommitOID != headSHA {
+			if len(started) != 1 || started[0].CommitObjectIdentifier != headSHA {
 				t.Fatalf("started = %+v", started)
 			}
 			got := c.client.AddedThreads()
-			tt.want.Repo, tt.want.Number, tt.want.Body = testRepo, 7, "please rename"
-			tt.want.PendingReviewID = started[0].ReviewID
+			tt.want.Repository, tt.want.Number, tt.want.Body = testRepo, 7, "please rename"
+			tt.want.PendingReviewIdentifier = started[0].ReviewIdentifier
 			if diff := cmp.Diff([]github.AddThreadInput{tt.want}, got); diff != "" {
 				t.Errorf("added (-want +got):\n%s", diff)
 			}
@@ -154,8 +154,8 @@ func TestInlineCommentsJoinTheSamePendingReview(t *testing.T) {
 	if len(started) != 1 || len(added) != 2 {
 		t.Fatalf("started %d reviews, added %d threads", len(started), len(added))
 	}
-	if added[0].PendingReviewID != started[0].ReviewID || added[1].PendingReviewID != started[0].ReviewID {
-		t.Errorf("threads went to %q and %q, want %q", added[0].PendingReviewID, added[1].PendingReviewID, started[0].ReviewID)
+	if added[0].PendingReviewIdentifier != started[0].ReviewIdentifier || added[1].PendingReviewIdentifier != started[0].ReviewIdentifier {
+		t.Errorf("threads went to %q and %q, want %q", added[0].PendingReviewIdentifier, added[1].PendingReviewIdentifier, started[0].ReviewIdentifier)
 	}
 	if st, _ := c.client.GetReviewStatus(t.Context(), testRepo, 7); st.Pending == nil || st.Pending.CommentCount != 2 {
 		t.Errorf("pending = %+v", st.Pending)
@@ -164,14 +164,14 @@ func TestInlineCommentsJoinTheSamePendingReview(t *testing.T) {
 
 func TestInlineCommentJoinsAnExistingPendingReview(t *testing.T) {
 	c := newInliner(t)
-	c.client.SetPendingReview(testRepo, 7, &github.PendingReview{ID: "PRR_x", CommitOID: headSHA, CommentCount: 3})
+	c.client.SetPendingReview(testRepo, 7, &github.PendingReview{Identifier: "PRR_x", CommitObjectIdentifier: headSHA, CommentCount: 3})
 	c.body = "more"
 	c.moveTo(diffview.SideRight, 10)
 	c.press("c")
 	if len(c.client.StartedReviews()) != 0 {
 		t.Error("started a second review")
 	}
-	if got := c.client.AddedThreads(); len(got) != 1 || got[0].PendingReviewID != "PRR_x" {
+	if got := c.client.AddedThreads(); len(got) != 1 || got[0].PendingReviewIdentifier != "PRR_x" {
 		t.Errorf("added = %+v", got)
 	}
 }
@@ -193,9 +193,9 @@ func TestInlineMultiLineComment(t *testing.T) {
 		t.Error("visual mode still active after c")
 	}
 	want := github.AddThreadInput{
-		Repo: testRepo, Number: 7, Path: clientPath, Line: 16, Side: github.SideRight,
+		Repository: testRepo, Number: 7, Path: clientPath, Line: 16, Side: github.SideRight,
 		StartLine: 14, StartSide: github.SideRight, Body: "this whole block",
-		PendingReviewID: c.client.StartedReviews()[0].ReviewID,
+		PendingReviewIdentifier: c.client.StartedReviews()[0].ReviewIdentifier,
 	}
 	if diff := cmp.Diff([]github.AddThreadInput{want}, c.client.AddedThreads()); diff != "" {
 		t.Errorf("added (-want +got):\n%s", diff)
@@ -336,7 +336,7 @@ func TestInlineRefusals(t *testing.T) {
 	})
 	t.Run("pending review on another commit", func(t *testing.T) {
 		c := newInliner(t)
-		c.client.SetPendingReview(testRepo, 7, &github.PendingReview{ID: "PRR_old", CommitOID: "old1111"})
+		c.client.SetPendingReview(testRepo, 7, &github.PendingReview{Identifier: "PRR_old", CommitObjectIdentifier: "old1111"})
 		c.body = "x"
 		c.moveTo(diffview.SideRight, 10)
 		c.press("c")
@@ -362,7 +362,7 @@ func (c *inliner) addPending(body string) github.ReviewThread {
 	c.moveTo(diffview.SideRight, 10)
 	c.press("c")
 	th := c.pendingThread()
-	c.toThread(th.ID)
+	c.toThread(th.Identifier)
 	return th
 }
 
@@ -384,7 +384,7 @@ func TestEditPendingComment(t *testing.T) {
 	if diff := cmp.Diff([]string{"Comment updated"}, c.infos()); diff != "" {
 		t.Errorf("info (-want +got):\n%s", diff)
 	}
-	if th.ID != c.pendingThread().ID {
+	if th.Identifier != c.pendingThread().Identifier {
 		t.Error("edit changed the thread")
 	}
 }
@@ -445,11 +445,11 @@ func TestDeletePendingComment(t *testing.T) {
 		t.Fatal("deleted before the answer")
 	}
 	c.run(conf.OnYes)
-	if diff := cmp.Diff([]string{th.Comments[0].ID}, c.client.DeletedComments()); diff != "" {
+	if diff := cmp.Diff([]string{th.Comments[0].Identifier}, c.client.DeletedComments()); diff != "" {
 		t.Errorf("deleted (-want +got):\n%s", diff)
 	}
 	for _, t2 := range c.v.threads {
-		if t2.ID == th.ID {
+		if t2.Identifier == th.Identifier {
 			t.Error("deleted thread still shown")
 		}
 	}
@@ -493,8 +493,8 @@ func TestInlineKeysAreInHelp(t *testing.T) {
 func (c *inliner) submitElsewhere() {
 	c.t.Helper()
 	in := github.SubmitReviewInput{
-		Repo: testRepo, Number: 7, PullRequestID: prNodeID, Event: github.ReviewEventComment,
-		PendingReviewID: c.client.StartedReviews()[0].ReviewID,
+		Repository: testRepo, Number: 7, PullRequestIdentifier: prNodeID, Event: github.ReviewEventComment,
+		PendingReviewIdentifier: c.client.StartedReviews()[0].ReviewIdentifier,
 	}
 	if err := c.client.SubmitReview(c.t.Context(), in); err != nil {
 		c.t.Fatal(err)
@@ -509,7 +509,7 @@ func (c *inliner) serverBody(id string) string {
 	}
 	for _, th := range page.Items {
 		for _, cm := range th.Comments {
-			if cm.ID == id {
+			if cm.Identifier == id {
 				return cm.Body
 			}
 		}
@@ -524,13 +524,13 @@ const mineID = "t-mine"
 // mine returns a published thread by the viewer on new line 10 of client.go.
 func (c *inliner) mine(canUpdate, canDelete bool, comments ...github.ReviewComment) github.ReviewThread {
 	if len(comments) == 0 {
-		comments = []github.ReviewComment{{ID: "c-mine", Author: c.client.Viewer, Body: "published note"}}
+		comments = []github.ReviewComment{{Identifier: "c-mine", Author: c.client.Viewer, Body: "published note"}}
 	}
 	for i := range comments {
 		comments[i].Author = c.client.Viewer
 		comments[i].ViewerCanUpdate, comments[i].ViewerCanDelete = canUpdate, canDelete
 	}
-	return github.ReviewThread{ID: mineID, Path: clientPath, Line: 10, DiffSide: github.SideRight, Comments: comments}
+	return github.ReviewThread{Identifier: mineID, Path: clientPath, Line: 10, DiffSide: github.SideRight, Comments: comments}
 }
 
 // seed sets the server's threads (the shared ones plus extra) and refreshes the view.
@@ -589,7 +589,7 @@ func TestDeletePublishedCommentAsks(t *testing.T) {
 
 func TestEditPublishedUnchangedWithATrailingNewline(t *testing.T) {
 	c := newInliner(t)
-	c.seed(c.mine(true, true, github.ReviewComment{ID: "c-mine", Body: "published note\n"}))
+	c.seed(c.mine(true, true, github.ReviewComment{Identifier: "c-mine", Body: "published note\n"}))
 	c.toThread(mineID)
 	c.msgs, c.body = nil, "published note\n" // saved as it was offered
 	c.press("e")
@@ -606,7 +606,7 @@ func TestEditPublishedUnchangedWithATrailingNewline(t *testing.T) {
 // it has been published.
 func TestPendingTurnedPublishedWhileTheEditorIsOpen(t *testing.T) {
 	c := newInliner(t)
-	id := c.addPending("original").Comments[0].ID
+	id := c.addPending("original").Comments[0].Identifier
 	c.v.edit = func(_ string, done func(string, error) tea.Msg) tea.Cmd {
 		return func() tea.Msg {
 			c.submitElsewhere() // submitted on github.com while the editor is open
@@ -644,13 +644,13 @@ func TestPendingTurnedPublishedBeforeDeleteAsksTheRightQuestion(t *testing.T) {
 func (c *inliner) retitle() {
 	c.t.Helper()
 	d := testDetail()
-	d.ID, d.HeadSHA, d.Title = prNodeID, headSHA, "retitled"
+	d.Identifier, d.HeadSHA, d.Title = prNodeID, headSHA, "retitled"
 	c.client.SetPullRequest(d)
 }
 
 func (c *inliner) threadIDs() (ids []string) {
 	for _, th := range c.v.threads {
-		ids = append(ids, th.ID)
+		ids = append(ids, th.Identifier)
 	}
 	return ids
 }
@@ -673,10 +673,10 @@ func TestGoneOrCannotChangeIsRefusedAndRefreshed(t *testing.T) {
 			}
 		}},
 		{"can no longer be changed", func(c *inliner, id string) {
-			c.client.SetReviewThreads(testRepo, 7, append(testThreads(), c.mine(false, false, github.ReviewComment{ID: id, Body: "published note"})))
+			c.client.SetReviewThreads(testRepo, 7, append(testThreads(), c.mine(false, false, github.ReviewComment{Identifier: id, Body: "published note"})))
 		}, "you can no longer change that comment", func(t *testing.T, c *inliner) {
 			for _, th := range c.v.threads {
-				if th.ID == mineID && th.Comments[0].ViewerCanUpdate {
+				if th.Identifier == mineID && th.Comments[0].ViewerCanUpdate {
 					t.Error("the view still shows the comment as changeable")
 				}
 			}
@@ -742,7 +742,7 @@ func TestDeleteRechecksAfterTheAnswer(t *testing.T) {
 		t.Fatal("no confirmation")
 	}
 	// Someone deletes it while the question is open.
-	if err := c.client.DeleteReviewComment(t.Context(), c.pendingThread().Comments[0].ID); err != nil {
+	if err := c.client.DeleteReviewComment(t.Context(), c.pendingThread().Comments[0].Identifier); err != nil {
 		t.Fatal(err)
 	}
 	before := len(c.deletes())
@@ -761,8 +761,8 @@ func TestDeleteRechecksAfterTheAnswer(t *testing.T) {
 // A refused or failed edit never throws the text away.
 func TestRefusedEditKeepsTheText(t *testing.T) {
 	theirsFirst := func(c *inliner) github.ReviewThread {
-		th := c.mine(true, true, github.ReviewComment{ID: "c-mine", Body: "published note"})
-		th.Comments = append([]github.ReviewComment{{ID: "c-bob", Author: "bob", Body: "the question"}}, th.Comments...)
+		th := c.mine(true, true, github.ReviewComment{Identifier: "c-mine", Body: "published note"})
+		th.Comments = append([]github.ReviewComment{{Identifier: "c-bob", Author: "bob", Body: "the question"}}, th.Comments...)
 		return th
 	}
 	rewrite := func(c *inliner, during func()) {
@@ -841,7 +841,7 @@ func TestRefusedEditKeepsTheText(t *testing.T) {
 	t.Run("cannot be changed any more: the text becomes a reply draft", func(t *testing.T) {
 		c := setup(t)
 		rewrite(c, func() {
-			th := c.mine(false, false, github.ReviewComment{ID: "c-mine", Body: "published note"})
+			th := c.mine(false, false, github.ReviewComment{Identifier: "c-mine", Body: "published note"})
 			c.client.SetReviewThreads(testRepo, 7, append(testThreads(), th))
 		})
 		c.press("e")
@@ -873,7 +873,7 @@ func TestEditOpensOnTheFreshBody(t *testing.T) {
 	c.seed(c.mine(true, true))
 	c.toThread(mineID)
 	// The body was changed on github.com since the threads were loaded.
-	th := c.mine(true, true, github.ReviewComment{ID: "c-mine", Body: "edited on the web"})
+	th := c.mine(true, true, github.ReviewComment{Identifier: "c-mine", Body: "edited on the web"})
 	c.client.SetReviewThreads(testRepo, 7, append(testThreads(), th))
 	c.body = "edited on the web"
 	c.press("e")
@@ -902,7 +902,7 @@ func TestVisualModeEndsWhenTheFileGoes(t *testing.T) {
 	}
 	// A reload no longer lists the file: the Overview is shown.
 	d := testDetail()
-	d.ID = prNodeID
+	d.Identifier = prNodeID
 	d.Files = d.Files[:0]
 	d.Files = append(d.Files, github.ChangedFile{Path: "README.md", Additions: 2, Change: github.FileModified})
 	c.send(prLoadedMsg{owner: c.v, repo: testRepo, number: 7, seq: c.v.seq, detail: d})
@@ -964,7 +964,7 @@ func TestInlineCommentKeepsTheHeadOfItsDiff(t *testing.T) {
 
 func TestPendingReviewOnAnUnknownCommitIsRefused(t *testing.T) {
 	c := newInliner(t)
-	c.client.SetPendingReview(testRepo, 7, &github.PendingReview{ID: "PRR_x"}) // no commit
+	c.client.SetPendingReview(testRepo, 7, &github.PendingReview{Identifier: "PRR_x"}) // no commit
 	c.body = "x"
 	c.moveTo(diffview.SideRight, 10)
 	c.press("c")
@@ -1001,9 +1001,9 @@ func TestMultiLineCommentOnTheOldSide(t *testing.T) {
 	c.typ("j")
 	c.typ("c")
 	want := github.AddThreadInput{
-		Repo: testRepo, Number: 7, Path: clientPath, Line: 15, Side: github.SideLeft,
+		Repository: testRepo, Number: 7, Path: clientPath, Line: 15, Side: github.SideLeft,
 		StartLine: 14, StartSide: github.SideLeft, Body: "these two",
-		PendingReviewID: c.client.StartedReviews()[0].ReviewID,
+		PendingReviewIdentifier: c.client.StartedReviews()[0].ReviewIdentifier,
 	}
 	if diff := cmp.Diff([]github.AddThreadInput{want}, c.client.AddedThreads()); diff != "" {
 		t.Errorf("added (-want +got):\n%s", diff)
@@ -1051,7 +1051,7 @@ func TestCommentWriteFlagClears(t *testing.T) {
 	if c.v.writes > 0 {
 		t.Error("the flag stayed set after a failed write")
 	}
-	c.toThread(c.pendingThread().ID)
+	c.toThread(c.pendingThread().Identifier)
 	c.msgs = nil
 	c.press("D")
 	if _, asked := c.lastConfirm(); !asked || (c.v.writes > 0) {
@@ -1062,7 +1062,7 @@ func TestCommentWriteFlagClears(t *testing.T) {
 func TestCommandsBehaveLikeTheKeys(t *testing.T) {
 	t.Run("edit pending", func(t *testing.T) {
 		c := newInliner(t)
-		id := c.addPending("first draft").Comments[0].ID
+		id := c.addPending("first draft").Comments[0].Identifier
 		c.openedOn, c.msgs, c.body = nil, nil, "second draft"
 		c.command("edit-comment")
 		if diff := cmp.Diff([]string{"first draft"}, c.openedOn); diff != "" {
@@ -1132,11 +1132,11 @@ func TestEditAndDeleteRefusedWhileSubmitting(t *testing.T) {
 // comments (the fake models this), so authorship has to be checked too.
 func TestOtherPeoplesCommentsAreNeverTargeted(t *testing.T) {
 	theirs := func(id string) github.ReviewComment {
-		return github.ReviewComment{ID: id, Author: "bob", Body: "theirs"}
+		return github.ReviewComment{Identifier: id, Author: "bob", Body: "theirs"}
 	}
 	t.Run("only their comment in the thread", func(t *testing.T) {
 		c := newInliner(t)
-		c.seed(github.ReviewThread{ID: mineID, Path: clientPath, Line: 10, DiffSide: github.SideRight, Comments: []github.ReviewComment{theirs("c-bob")}})
+		c.seed(github.ReviewThread{Identifier: mineID, Path: clientPath, Line: 10, DiffSide: github.SideRight, Comments: []github.ReviewComment{theirs("c-bob")}})
 		c.toThread(mineID)
 		c.msgs = nil
 		c.press("e")
@@ -1151,7 +1151,7 @@ func TestOtherPeoplesCommentsAreNeverTargeted(t *testing.T) {
 	})
 	t.Run("their reply is the last comment", func(t *testing.T) {
 		c := newInliner(t)
-		th := c.mine(true, true, github.ReviewComment{ID: "c-mine", Body: "mine"})
+		th := c.mine(true, true, github.ReviewComment{Identifier: "c-mine", Body: "mine"})
 		th.Comments = append(th.Comments, theirs("c-bob-reply"))
 		c.seed(th)
 		c.toThread(mineID)
@@ -1178,7 +1178,7 @@ func TestOtherPeoplesCommentsAreNeverTargeted(t *testing.T) {
 		c.seed(c.mine(true, true))
 		c.toThread(mineID)
 		// On the server the comment is somebody else's now.
-		other := github.ReviewThread{ID: mineID, Path: clientPath, Line: 10, DiffSide: github.SideRight, Comments: []github.ReviewComment{theirs("c-mine")}}
+		other := github.ReviewThread{Identifier: mineID, Path: clientPath, Line: 10, DiffSide: github.SideRight, Comments: []github.ReviewComment{theirs("c-mine")}}
 		c.client.SetReviewThreads(testRepo, 7, append(testThreads(), other))
 		c.msgs, c.body = nil, "rewritten"
 		c.press("D")
@@ -1204,7 +1204,7 @@ func TestOtherPeoplesCommentsAreNeverTargeted(t *testing.T) {
 
 func TestDeleteMustNotDeleteAPublishedCommentThatWasAskedAboutAsPending(t *testing.T) {
 	c := newInliner(t)
-	id := c.addPending("original").Comments[0].ID
+	id := c.addPending("original").Comments[0].Identifier
 	c.msgs = nil
 	c.press("D")
 	conf, ok := c.lastConfirm()
@@ -1238,11 +1238,11 @@ func TestPublishedEditPromptIsDroppedWhenTheViewChanged(t *testing.T) {
 
 func TestPickComment(t *testing.T) {
 	mine := func(id string, pending bool) github.ReviewComment {
-		return github.ReviewComment{ID: id, Pending: pending, ViewerDidAuthor: true, ViewerCanUpdate: true, ViewerCanDelete: true}
+		return github.ReviewComment{Identifier: id, Pending: pending, ViewerDidAuthor: true, ViewerCanUpdate: true, ViewerCanDelete: true}
 	}
 	// A maintainer's flags are true on other people's comments.
-	theirs := github.ReviewComment{ID: "theirs", ViewerCanUpdate: true, ViewerCanDelete: true}
-	noFlags := github.ReviewComment{ID: "no-flags", ViewerDidAuthor: true}
+	theirs := github.ReviewComment{Identifier: "theirs", ViewerCanUpdate: true, ViewerCanDelete: true}
+	noFlags := github.ReviewComment{Identifier: "no-flags", ViewerDidAuthor: true}
 	tests := []struct {
 		name     string
 		comments []github.ReviewComment
@@ -1258,13 +1258,13 @@ func TestPickComment(t *testing.T) {
 		{"only another author's", []github.ReviewComment{theirs}, changeEdit, ""},
 		{"flags false", []github.ReviewComment{noFlags}, changeEdit, ""},
 		{"flags false is skipped", []github.ReviewComment{mine("a", false), noFlags}, changeDelete, "a"},
-		{"delete needs the delete flag", []github.ReviewComment{{ID: "a", ViewerDidAuthor: true, ViewerCanUpdate: true}}, changeDelete, ""},
+		{"delete needs the delete flag", []github.ReviewComment{{Identifier: "a", ViewerDidAuthor: true, ViewerCanUpdate: true}}, changeDelete, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, ok := pickComment(github.ReviewThread{Comments: tt.comments}, tt.change)
-			if (tt.want != "") != ok || got.ID != tt.want {
-				t.Errorf("picked %q (%v), want %q", got.ID, ok, tt.want)
+			if (tt.want != "") != ok || got.Identifier != tt.want {
+				t.Errorf("picked %q (%v), want %q", got.Identifier, ok, tt.want)
 			}
 		})
 	}
@@ -1375,7 +1375,7 @@ func TestWriteAfterYesIsInFlightUntilItsResult(t *testing.T) {
 		c.msgs = nil
 		c.press("D")
 		conf, _ := c.lastConfirm()
-		if err := c.client.DeleteReviewComment(t.Context(), c.pendingThread().Comments[0].ID); err != nil {
+		if err := c.client.DeleteReviewComment(t.Context(), c.pendingThread().Comments[0].Identifier); err != nil {
 			t.Fatal(err)
 		}
 		c.run(c.agree(conf))
@@ -1472,8 +1472,8 @@ func TestRefusedEditTextGoesToTheThreadOrTheLine(t *testing.T) {
 	lineKey := lineDraftKey(github.SideRight, 10)
 	topKey := target{}.draftKey()
 	twoComments := func(c *inliner) github.ReviewThread {
-		th := c.mine(true, true, github.ReviewComment{ID: "c-mine", Body: "published note"})
-		th.Comments = append([]github.ReviewComment{{ID: "c-bob", Author: "bob", Body: "the question"}}, th.Comments...)
+		th := c.mine(true, true, github.ReviewComment{Identifier: "c-mine", Body: "published note"})
+		th.Comments = append([]github.ReviewComment{{Identifier: "c-bob", Author: "bob", Body: "the question"}}, th.Comments...)
 		return th
 	}
 	single := func(c *inliner) github.ReviewThread { return c.mine(true, true) }
@@ -1493,10 +1493,10 @@ func TestRefusedEditTextGoesToTheThreadOrTheLine(t *testing.T) {
 		}
 	}
 	lock := func(c *inliner) {
-		c.client.SetReviewThreads(testRepo, 7, append(testThreads(), c.mine(false, false, github.ReviewComment{ID: "c-mine", Body: "published note"})))
+		c.client.SetReviewThreads(testRepo, 7, append(testThreads(), c.mine(false, false, github.ReviewComment{Identifier: "c-mine", Body: "published note"})))
 	}
 	notYours := func(c *inliner) {
-		th := c.mine(true, true, github.ReviewComment{ID: "c-mine", Body: "published note"})
+		th := c.mine(true, true, github.ReviewComment{Identifier: "c-mine", Body: "published note"})
 		th.Comments[0].Author = "bob"
 		c.client.SetReviewThreads(testRepo, 7, append(testThreads(), th))
 	}
@@ -1513,7 +1513,7 @@ func TestRefusedEditTextGoesToTheThreadOrTheLine(t *testing.T) {
 		{"gone, line not in the diff", offDiff, deleteIt, topKey, "your text is kept as a draft for a top-level comment"},
 		{"outdated thread that survives", func(c *inliner) github.ReviewThread {
 			th := outdated(c)
-			th.Comments = append([]github.ReviewComment{{ID: "c-bob", Author: "bob", Body: "the question"}}, th.Comments...)
+			th.Comments = append([]github.ReviewComment{{Identifier: "c-bob", Author: "bob", Body: "the question"}}, th.Comments...)
 			return th
 		}, deleteIt, replyKey, "your text is kept as a reply draft"},
 		{"locked, only comment", single, lock, replyKey, "your text is kept as a reply draft"},
@@ -1747,11 +1747,11 @@ func TestReviewAndMergeRefuseAtTheirYesWhileAWriteRuns(t *testing.T) {
 	c := newInliner(t)
 	c.v.writes = 1
 	before := len(c.client.Submissions())
-	c.send(reviewSendMsg{flow: &c.v.review, repo: testRepo, number: 7, event: github.ReviewEventApprove, status: github.ReviewStatus{PullRequestID: prNodeID, HeadSHA: headSHA}})
+	c.send(reviewSendMsg{flow: &c.v.review, repo: testRepo, number: 7, event: github.ReviewEventApprove, status: github.ReviewStatus{PullRequestIdentifier: prNodeID, HeadSHA: headSHA}})
 	if c.v.review.submitting || len(c.client.Submissions()) != before {
 		t.Errorf("a review started at its yes: submitting %v", c.v.review.submitting)
 	}
-	c.send(mergeSendMsg{flow: &c.v.merge, repo: testRepo, number: 7, method: github.MergeMethodMerge, status: github.MergeStatus{PullRequestID: prNodeID, HeadSHA: headSHA}})
+	c.send(mergeSendMsg{flow: &c.v.merge, repo: testRepo, number: 7, method: github.MergeMethodMerge, status: github.MergeStatus{PullRequestIdentifier: prNodeID, HeadSHA: headSHA}})
 	if c.v.merge.merging || len(c.client.Merges()) != 0 {
 		t.Errorf("a merge started at its yes: merging %v", c.v.merge.merging)
 	}

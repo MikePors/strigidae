@@ -327,7 +327,7 @@ func (v *View) editComment() tea.Cmd {
 		return cmd
 	}
 	o, client := v.origin(), v.client
-	tgt := target{kind: kindEdit, commentID: c.ID, threadID: t.ID, label: threadLocation(t), home: v.reachableHome(t)}
+	tgt := target{kind: kindEdit, commentID: c.Identifier, threadID: t.Identifier, label: threadLocation(t), home: v.reachableHome(t)}
 	v.cseq++ // a compose started meanwhile supersedes this read
 	seq := v.cseq
 	return func() tea.Msg {
@@ -394,7 +394,7 @@ func (v *View) deleteComment() tea.Cmd {
 	if cmd != nil {
 		return cmd
 	}
-	o, id, label := v.origin(), c.ID, terminaltext.Clean(threadLocation(t))
+	o, id, label := v.origin(), c.Identifier, terminaltext.Clean(threadLocation(t))
 	w := commentWrite{
 		origin: o, client: v.client, id: id, change: changeDelete,
 		ask: func(pending bool) string {
@@ -478,7 +478,7 @@ func (v *View) sendEdit(tgt target, body string) tea.Cmd {
 // threads cannot be listed it says no, which keeps the text where `c` finds it.
 func threadExists(client github.Client, o origin, threadID string) bool {
 	ts, err := loadThreads(context.Background(), client, o.repo, o.number)
-	return err == nil && slices.ContainsFunc(ts, func(t github.ReviewThread) bool { return t.ID == threadID })
+	return err == nil && slices.ContainsFunc(ts, func(t github.ReviewThread) bool { return t.Identifier == threadID })
 }
 
 // homeKey is the draft a refused edit's text goes to: the reply draft of its
@@ -551,8 +551,8 @@ func (v *View) sendInline(tgt target, body string) tea.Cmd {
 	// checked that the pull request is loaded.)
 	o, client := v.origin(), v.client
 	in := *tgt.inline
-	in.Repo, in.Number, in.Body = o.repo, o.number, body
-	prID := v.detail.ID
+	in.Repository, in.Number, in.Body = o.repo, o.number, body
+	prID := v.detail.Identifier
 	v.writeStarted()
 	return func() tea.Msg {
 		err := addPendingThread(context.Background(), client, in, prID, tgt.head)
@@ -569,7 +569,7 @@ func (v *View) sendInline(tgt target, body string) tea.Cmd {
 // of commit head, so it is refused when the pull request has moved on or the
 // existing pending review is anchored to another (or an unknown) commit.
 func addPendingThread(ctx context.Context, c github.Client, in github.AddThreadInput, prID, head string) error {
-	st, err := c.GetReviewStatus(ctx, in.Repo, in.Number)
+	st, err := c.GetReviewStatus(ctx, in.Repository, in.Number)
 	if err != nil {
 		return fmt.Errorf("check review state: %w", err)
 	}
@@ -579,17 +579,17 @@ func addPendingThread(ctx context.Context, c github.Client, in github.AddThreadI
 	pending := st.Pending
 	switch {
 	case pending == nil:
-		p, err := c.StartReview(ctx, github.StartReviewInput{Repo: in.Repo, Number: in.Number, PullRequestID: prID, CommitOID: head})
+		p, err := c.StartReview(ctx, github.StartReviewInput{Repository: in.Repository, Number: in.Number, PullRequestIdentifier: prID, CommitObjectIdentifier: head})
 		if err != nil {
 			return fmt.Errorf("start review: %w", err)
 		}
 		pending = &p
-	case pending.CommitOID == "":
+	case pending.CommitObjectIdentifier == "":
 		return errors.New("your pending review is on an unknown commit; submit or discard it on GitHub first")
-	case pending.CommitOID != head:
+	case pending.CommitObjectIdentifier != head:
 		return errors.New("your pending review is on an older commit; submit it first, or delete it on GitHub")
 	}
-	in.PendingReviewID = pending.ID
+	in.PendingReviewIdentifier = pending.Identifier
 	_, err = c.AddReviewThread(ctx, in)
 	return err
 }

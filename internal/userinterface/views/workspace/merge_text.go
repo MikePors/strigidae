@@ -65,7 +65,7 @@ func mergeQuestion(number int, method github.MergeMethod, st github.MergeStatus)
 	if st.DeleteBranchOnMerge {
 		branch = "Branch will be deleted."
 	}
-	return fmt.Sprintf("Merge #%d into %s (%s)? %s", number, terminaltext.Clean(st.BaseRef), methodNames[method], branch)
+	return fmt.Sprintf("Merge #%d into %s (%s)? %s", number, terminaltext.Clean(st.BaseBranch), methodNames[method], branch)
 }
 
 // mergedText is the success message.

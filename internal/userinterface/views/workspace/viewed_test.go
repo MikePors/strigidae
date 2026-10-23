@@ -84,7 +84,7 @@ func TestToggleViewed(t *testing.T) {
 				t.Errorf("state = %q, want %q", got, tt.want)
 			}
 			calls := viewedCalls(h.client)
-			if len(calls) != 1 || calls[0].PullRequestID != "PR_7" || calls[0].Path != firstFile || calls[0].Viewed != tt.wantView {
+			if len(calls) != 1 || calls[0].PullRequestIdentifier != "PR_7" || calls[0].Path != firstFile || calls[0].Viewed != tt.wantView {
 				t.Errorf("calls = %+v", calls)
 			}
 			if got := h.serverState(); got != tt.want {

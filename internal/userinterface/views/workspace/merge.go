@@ -23,7 +23,7 @@ type (
 	// mergeFreshMsg is the status fetched just before confirming.
 	mergeFreshMsg struct {
 		flow      *mergeFlow
-		repo      github.Repo
+		repo      github.Repository
 		number    int
 		seq       int
 		requested github.MergeMethod // "" for the default
@@ -34,14 +34,14 @@ type (
 	// marks the merge as in flight before the call starts.
 	mergeSendMsg struct {
 		flow   *mergeFlow
-		repo   github.Repo
+		repo   github.Repository
 		number int
 		method github.MergeMethod
 		status github.MergeStatus
 	}
 	mergedMsg struct {
 		flow   *mergeFlow
-		repo   github.Repo
+		repo   github.Repository
 		number int
 		method github.MergeMethod
 		err    error
@@ -49,12 +49,12 @@ type (
 	// mergeRefreshMsg asks the workspace to reload after its head moved.
 	mergeRefreshMsg struct {
 		flow   *mergeFlow
-		repo   github.Repo
+		repo   github.Repository
 		number int
 	}
 )
 
-func (f *mergeFlow) same(env reviewEnv, flow *mergeFlow, repo github.Repo, number int) bool {
+func (f *mergeFlow) same(env reviewEnv, flow *mergeFlow, repo github.Repository, number int) bool {
 	return flow == f && repo == env.repo && number == env.number
 }
 
@@ -147,8 +147,8 @@ func (f *mergeFlow) confirm(msg mergeFreshMsg, env reviewEnv) tea.Cmd {
 func (f *mergeFlow) merge(env reviewEnv, method github.MergeMethod, st github.MergeStatus) tea.Cmd {
 	flow := f
 	in := github.MergeInput{
-		Repo: env.repo, Number: env.number, PullRequestID: st.PullRequestID,
-		Method: method, ExpectedHeadOID: st.HeadSHA,
+		Repository: env.repo, Number: env.number, PullRequestIdentifier: st.PullRequestIdentifier,
+		Method: method, ExpectedHeadObjectIdentifier: st.HeadSHA,
 	}
 	return func() tea.Msg {
 		err := env.client.MergePullRequest(context.Background(), in)

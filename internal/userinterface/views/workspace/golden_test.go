@@ -98,7 +98,7 @@ func TestGolden(t *testing.T) {
 }
 
 func TestLoadingLineCleansRepo(t *testing.T) {
-	v := New(fake.New(), github.Repo{Owner: "o\x1b[2J\x1b]52;c;aGk=\x07", Name: "n\u202e"}, 7, WithTheme(theme.New(true)))
+	v := New(fake.New(), github.Repository{Owner: "o\x1b[2J\x1b]52;c;aGk=\x07", Name: "n\u202e"}, 7, WithTheme(theme.New(true)))
 	v.Update(tea.WindowSizeMsg{Width: 80, Height: 10})
 	assertTame(t, "loading line", v.Render(80, 10))
 }

@@ -66,7 +66,7 @@ func TestReviewDiffHeadIsTheCommit(t *testing.T) {
 	c.command("approve")
 	conf, _ := c.lastConfirm()
 	c.run(conf.OnYes)
-	if subs := c.client.Submissions(); len(subs) != 1 || subs[0].CommitOID != c.v.diffHead || c.v.diffHead != headSHA {
+	if subs := c.client.Submissions(); len(subs) != 1 || subs[0].CommitObjectIdentifier != c.v.diffHead || c.v.diffHead != headSHA {
 		t.Errorf("submissions = %+v, diff head %q", subs, c.v.diffHead)
 	}
 }

@@ -190,7 +190,7 @@ func TestViewedResultForOtherViewIgnored(t *testing.T) {
 		mut  func(m *viewedMsg)
 	}{
 		{"other number", func(m *viewedMsg) { m.number = 8 }},
-		{"other repo", func(m *viewedMsg) { m.repo = github.Repo{Owner: "x", Name: "y"} }},
+		{"other repo", func(m *viewedMsg) { m.repo = github.Repository{Owner: "x", Name: "y"} }},
 		{"other view", func(m *viewedMsg) { m.owner = New(nil, testRepo, 7) }},
 	}
 	for _, tt := range tests {

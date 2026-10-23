@@ -14,7 +14,7 @@ import (
 	"github.com/MikePors/strigidae/internal/github"
 )
 
-func TestHasPRQualifier(t *testing.T) {
+func TestHasPullRequestQualifier(t *testing.T) {
 	tests := []struct {
 		query string
 		want  bool
@@ -31,13 +31,13 @@ func TestHasPRQualifier(t *testing.T) {
 		{"", false},
 	}
 	for _, tt := range tests {
-		if got := hasPRQualifier(tt.query); got != tt.want {
+		if got := hasPullRequestQualifier(tt.query); got != tt.want {
 			t.Errorf("hasPRQualifier(%q) = %v, want %v", tt.query, got, tt.want)
 		}
 	}
 }
 
-func TestSearchAddsPRQualifierOnce(t *testing.T) {
+func TestSearchAddsPullRequestQualifierOnce(t *testing.T) {
 	tests := []struct{ in, want string }{
 		{"review-requested:@me", "is:pr review-requested:@me"},
 		{"is:pr author:octocat", "is:pr author:octocat"},
@@ -50,7 +50,7 @@ func TestSearchAddsPRQualifierOnce(t *testing.T) {
 		if _, err := c.SearchPullRequests(context.Background(), tt.in, github.PageRequest{}); err != nil {
 			t.Fatal(err)
 		}
-		if got := s.Calls()[0].Vars["query"]; got != tt.want {
+		if got := s.Calls()[0].Variables["query"]; got != tt.want {
 			t.Errorf("query for %q = %v, want %q", tt.in, got, tt.want)
 		}
 	}
@@ -60,11 +60,11 @@ func TestGetPullRequestWithoutTeamScope(t *testing.T) {
 	s := &server{}
 	s.override = func(c call, w http.ResponseWriter) bool {
 		// Only the query that asks for team slugs is refused.
-		if c.Op == opPullRequestDetail && strings.Contains(c.Query, "... on Team") {
+		if c.Operation == operationPullRequestDetail && strings.Contains(c.Query, "... on Team") {
 			s.fixture(w, http.StatusOK, "error_insufficient_scopes.json")
 			return true
 		}
-		if c.Op == opPullRequestDetail {
+		if c.Operation == operationPullRequestDetail {
 			// The fallback query cannot read the slug, so GitHub omits it.
 			b, err := os.ReadFile("testdata/PullRequestDetail.json")
 			if err != nil {
@@ -78,7 +78,7 @@ func TestGetPullRequestWithoutTeamScope(t *testing.T) {
 		return false
 	}
 	c := newTestClient(t, s)
-	got, err := c.GetPullRequest(context.Background(), repo, 27)
+	got, err := c.GetPullRequest(context.Background(), repository, 27)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestGetPullRequestWithoutTeamScope(t *testing.T) {
 	}
 	var detailCalls int
 	for _, c := range s.Calls() {
-		if c.Op == opPullRequestDetail {
+		if c.Operation == operationPullRequestDetail {
 			detailCalls++
 		}
 	}
@@ -105,7 +105,7 @@ func TestScopeErrorOnOtherQueriesIsForbidden(t *testing.T) {
 		return true
 	}
 	c := newTestClient(t, s)
-	_, err := c.ListReviewThreads(context.Background(), repo, 27, github.PageRequest{})
+	_, err := c.ListReviewThreads(context.Background(), repository, 27, github.PageRequest{})
 	if !errors.Is(err, github.ErrForbidden) {
 		t.Errorf("want ErrForbidden, got %v", err)
 	}
@@ -119,7 +119,7 @@ func TestGetDiffTooLarge(t *testing.T) {
 		return true
 	}
 	c := newTestClient(t, s)
-	_, err := c.GetDiff(context.Background(), repo, 27)
+	_, err := c.GetDiff(context.Background(), repository, 27)
 	if !errors.Is(err, github.ErrDiffTooLarge) {
 		t.Errorf("want ErrDiffTooLarge, got %v", err)
 	}
@@ -132,7 +132,7 @@ func TestPartialGraphQLErrorsFail(t *testing.T) {
 		return true
 	}
 	c := newTestClient(t, s)
-	page, err := c.ListPullRequests(context.Background(), repo, github.PageRequest{})
+	page, err := c.ListPullRequests(context.Background(), repository, github.PageRequest{})
 	if err == nil {
 		t.Fatalf("partial data with errors must fail, got %+v", page)
 	}
@@ -148,8 +148,8 @@ func TestRateLimitBucketsAreIndependent(t *testing.T) {
 	graphqlReset, coreReset := "2000", "3000"
 	s := &server{}
 	s.override = func(c call, w http.ResponseWriter) bool {
-		switch c.Op {
-		case opPullRequestList:
+		switch c.Operation {
+		case operationPullRequestList:
 			w.Header().Set("X-RateLimit-Resource", "graphql")
 			w.Header().Set("X-RateLimit-Remaining", "5")
 			w.Header().Set("X-RateLimit-Reset", graphqlReset)
@@ -171,15 +171,15 @@ func TestRateLimitBucketsAreIndependent(t *testing.T) {
 
 	// Prime the graphql bucket, then take a REST response, then fail again
 	// from a response carrying no headers at all.
-	_, _ = c.ListPullRequests(ctx, repo, github.PageRequest{})
-	if _, err := c.GetDiff(ctx, repo, 27); err != nil {
+	_, _ = c.ListPullRequests(ctx, repository, github.PageRequest{})
+	if _, err := c.GetDiff(ctx, repository, 27); err != nil {
 		t.Fatal(err)
 	}
 	s.override = func(_ call, w http.ResponseWriter) bool {
 		s.fixture(w, http.StatusOK, "error_rate_limited.json")
 		return true
 	}
-	_, err := c.ListPullRequests(ctx, repo, github.PageRequest{})
+	_, err := c.ListPullRequests(ctx, repository, github.PageRequest{})
 	var rl *github.RateLimitError
 	if !errors.As(err, &rl) {
 		t.Fatalf("want RateLimitError, got %v", err)
@@ -193,7 +193,7 @@ func TestCollectMoreRejectsRepeatedCursor(t *testing.T) {
 	s := &server{}
 	s.override = func(c call, w http.ResponseWriter) bool {
 		// Every follow-up page claims there is another page with the same cursor.
-		if c.Op == "PullRequestFiles" {
+		if c.Operation == "PullRequestFiles" {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			_, _ = w.Write([]byte(`{"data":{"repository":{"pullRequest":{"conn":{"pageInfo":{"hasNextPage":true,"endCursor":"FILES1"},"nodes":[]}}}}}`))
 			return true
@@ -201,7 +201,7 @@ func TestCollectMoreRejectsRepeatedCursor(t *testing.T) {
 		return false
 	}
 	c := newTestClient(t, s)
-	_, err := c.GetPullRequest(context.Background(), repo, 27)
+	_, err := c.GetPullRequest(context.Background(), repository, 27)
 	if err == nil || !strings.Contains(err.Error(), "files:") || !strings.Contains(err.Error(), "repeated cursor") {
 		t.Fatalf("want a files pagination error, got %v", err)
 	}
@@ -210,7 +210,7 @@ func TestCollectMoreRejectsRepeatedCursor(t *testing.T) {
 func TestFollowUpFailureNamesTheConnection(t *testing.T) {
 	s := &server{}
 	s.override = func(c call, w http.ResponseWriter) bool {
-		if c.Op == "PullRequestComments" {
+		if c.Operation == "PullRequestComments" {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.WriteHeader(http.StatusBadGateway)
 			_, _ = w.Write([]byte(`{"message":"bad gateway"}`))
@@ -219,7 +219,7 @@ func TestFollowUpFailureNamesTheConnection(t *testing.T) {
 		return false
 	}
 	c := newTestClient(t, s)
-	_, err := c.GetPullRequest(context.Background(), repo, 27)
+	_, err := c.GetPullRequest(context.Background(), repository, 27)
 	if err == nil || !strings.Contains(err.Error(), "comments:") {
 		t.Fatalf("want an error naming comments, got %v", err)
 	}

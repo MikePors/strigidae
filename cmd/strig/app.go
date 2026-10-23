@@ -14,7 +14,7 @@ import (
 // app is everything the TUI needs, resolved before it starts.
 type app struct {
 	client github.Client
-	repo   github.Repo
+	repo   github.Repository
 	theme  theme.Theme
 	// config holds the tabs and sections the dashboard (#12) will show.
 	config config.Config
@@ -40,7 +40,7 @@ func newApp(repoFlag string, cfg config.Config, d deps) (app, error) {
 // current checkout's remote.
 func resolveTarget(repoFlag string, d deps) (gitrepository.Remote, error) {
 	if repoFlag != "" {
-		repo, err := github.ParseRepo(repoFlag)
+		repo, err := github.ParseRepository(repoFlag)
 		if err != nil {
 			return gitrepository.Remote{}, &usageError{fmt.Sprintf("-R: %v", err)}
 		}

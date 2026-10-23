@@ -10,11 +10,11 @@ import (
 	"github.com/MikePors/strigidae/internal/github"
 )
 
-func mergeFake() (*Client, github.Repo) {
+func mergeFake() (*Client, github.Repository) {
 	c := New()
-	repo := github.Repo{Owner: "acme", Name: "widgets"}
+	repo := github.Repository{Owner: "acme", Name: "widgets"}
 	c.SetPullRequest(github.PullRequestDetail{
-		PullRequest: github.PullRequest{ID: "PR_1", Repo: repo, Number: 1, State: github.PRStateOpen, BaseRef: "main", HeadSHA: "h1"},
+		PullRequest: github.PullRequest{Identifier: "PR_1", Repository: repo, Number: 1, State: github.PullRequestStateOpen, BaseBranch: "main", HeadSHA: "h1"},
 	})
 	return c, repo
 }
@@ -25,7 +25,7 @@ func TestMergeStatusDefaultsAndSettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := github.MergeStatus{PullRequestID: "PR_1", HeadSHA: "h1", BaseRef: "main", Allowed: github.MergeMethods}
+	want := github.MergeStatus{PullRequestIdentifier: "PR_1", HeadSHA: "h1", BaseBranch: "main", Allowed: github.MergeMethods}
 	if diff := cmp.Diff(want, st); diff != "" {
 		t.Errorf("default (-want +got):\n%s", diff)
 	}
@@ -42,23 +42,23 @@ func TestMergeStatusDefaultsAndSettings(t *testing.T) {
 func TestMergePullRequest(t *testing.T) {
 	tests := []struct {
 		name   string
-		mutate func(*Client, github.Repo, *github.MergeInput)
+		mutate func(*Client, github.Repository, *github.MergeInput)
 		fail   bool
 	}{
-		{"ok", func(*Client, github.Repo, *github.MergeInput) {}, false},
-		{"wrong id", func(_ *Client, _ github.Repo, in *github.MergeInput) { in.PullRequestID = "x" }, true},
-		{"head moved", func(c *Client, r github.Repo, _ *github.MergeInput) { c.SetHeadSHA(r, 1, "h2") }, true},
-		{"method not allowed", func(c *Client, r github.Repo, _ *github.MergeInput) {
+		{"ok", func(*Client, github.Repository, *github.MergeInput) {}, false},
+		{"wrong id", func(_ *Client, _ github.Repository, in *github.MergeInput) { in.PullRequestIdentifier = "x" }, true},
+		{"head moved", func(c *Client, r github.Repository, _ *github.MergeInput) { c.SetHeadSHA(r, 1, "h2") }, true},
+		{"method not allowed", func(c *Client, r github.Repository, _ *github.MergeInput) {
 			c.SetMergeSettings(r, MergeSettings{Allowed: []github.MergeMethod{github.MergeMethodMerge}})
 		}, true},
-		{"injected refusal", func(c *Client, _ github.Repo, _ *github.MergeInput) {
+		{"injected refusal", func(c *Client, _ github.Repository, _ *github.MergeInput) {
 			c.SetError(MethodMergePullRequest, errors.New("checks failing"))
 		}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c, repo := mergeFake()
-			in := github.MergeInput{Repo: repo, PullRequestID: "PR_1", Number: 1, Method: github.MergeMethodSquash, ExpectedHeadOID: "h1"}
+			in := github.MergeInput{Repository: repo, PullRequestIdentifier: "PR_1", Number: 1, Method: github.MergeMethodSquash, ExpectedHeadObjectIdentifier: "h1"}
 			tt.mutate(c, repo, &in)
 			err := c.MergePullRequest(context.Background(), in)
 			if (err != nil) != tt.fail {

@@ -17,16 +17,16 @@ type MergeSettings struct {
 
 // Merge is a recorded successful MergePullRequest call.
 type Merge struct {
-	Repo            github.Repo
-	Number          int
-	PullRequestID   string
-	Method          github.MergeMethod
-	ExpectedHeadOID string
+	Repository                   github.Repository
+	Number                       int
+	PullRequestIdentifier        string
+	Method                       github.MergeMethod
+	ExpectedHeadObjectIdentifier string
 }
 
 // SetMergeSettings sets the merge settings of repo. Without it every method
 // is allowed and head branches are not deleted automatically.
-func (c *Client) SetMergeSettings(repo github.Repo, s MergeSettings) {
+func (c *Client) SetMergeSettings(repo github.Repository, s MergeSettings) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	s.Allowed = slices.Clone(s.Allowed)
@@ -40,7 +40,7 @@ func (c *Client) Merges() []Merge {
 	return slices.Clone(c.merges)
 }
 
-func (c *Client) mergeSettings(repo github.Repo) MergeSettings {
+func (c *Client) mergeSettings(repo github.Repository) MergeSettings {
 	if s, ok := c.merge[repo]; ok {
 		return s
 	}
@@ -49,19 +49,19 @@ func (c *Client) mergeSettings(repo github.Repo) MergeSettings {
 
 // GetMergeStatus implements github.Client. It answers ErrNotFound for a pull
 // request the fake has no detail for.
-func (c *Client) GetMergeStatus(ctx context.Context, repo github.Repo, number int) (github.MergeStatus, error) {
+func (c *Client) GetMergeStatus(ctx context.Context, repo github.Repository, number int) (github.MergeStatus, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if err := c.begin(ctx, Call{Method: MethodGetMergeStatus, Repo: repo, Number: number}); err != nil {
+	if err := c.begin(ctx, Call{Method: MethodGetMergeStatus, Repository: repo, Number: number}); err != nil {
 		return github.MergeStatus{}, err
 	}
-	d, ok := c.details[prKey{repo, number}]
+	d, ok := c.details[pullRequestKey{repo, number}]
 	if !ok {
 		return github.MergeStatus{}, fmt.Errorf("load merge status of %s#%d: %w", repo, number, github.ErrNotFound)
 	}
 	s := c.mergeSettings(repo)
 	return github.MergeStatus{
-		PullRequestID: d.ID, HeadSHA: d.HeadSHA, BaseRef: d.BaseRef,
+		PullRequestIdentifier: d.Identifier, HeadSHA: d.HeadSHA, BaseBranch: d.BaseBranch,
 		Allowed: slices.Clone(s.Allowed), DeleteBranchOnMerge: s.DeleteBranchOnMerge,
 	}, nil
 }
@@ -73,28 +73,28 @@ func (c *Client) GetMergeStatus(ctx context.Context, repo github.Repo, number in
 func (c *Client) MergePullRequest(ctx context.Context, in github.MergeInput) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if err := c.begin(ctx, Call{Method: MethodMergePullRequest, Repo: in.Repo, Number: in.Number, PullRequestID: in.PullRequestID}); err != nil {
+	if err := c.begin(ctx, Call{Method: MethodMergePullRequest, Repository: in.Repository, Number: in.Number, PullRequestIdentifier: in.PullRequestIdentifier}); err != nil {
 		return err
 	}
-	key := prKey{in.Repo, in.Number}
+	key := pullRequestKey{in.Repository, in.Number}
 	d, ok := c.details[key]
 	if !ok {
-		return fmt.Errorf("merge %s#%d: %w", in.Repo, in.Number, github.ErrNotFound)
+		return fmt.Errorf("merge %s#%d: %w", in.Repository, in.Number, github.ErrNotFound)
 	}
 	switch {
-	case in.PullRequestID == "" || in.PullRequestID != d.ID:
-		return fmt.Errorf("merge %s#%d: unknown pull request ID %q", in.Repo, in.Number, in.PullRequestID)
-	case !slices.Contains(c.mergeSettings(in.Repo).Allowed, in.Method):
-		return fmt.Errorf("merge %s#%d: %s merges are not allowed", in.Repo, in.Number, in.Method)
-	case in.ExpectedHeadOID != d.HeadSHA:
-		return fmt.Errorf("merge %s#%d: head branch was modified", in.Repo, in.Number)
-	case d.State != github.PRStateOpen:
-		return fmt.Errorf("merge %s#%d: pull request is not open", in.Repo, in.Number)
+	case in.PullRequestIdentifier == "" || in.PullRequestIdentifier != d.Identifier:
+		return fmt.Errorf("merge %s#%d: unknown pull request ID %q", in.Repository, in.Number, in.PullRequestIdentifier)
+	case !slices.Contains(c.mergeSettings(in.Repository).Allowed, in.Method):
+		return fmt.Errorf("merge %s#%d: %s merges are not allowed", in.Repository, in.Number, in.Method)
+	case in.ExpectedHeadObjectIdentifier != d.HeadSHA:
+		return fmt.Errorf("merge %s#%d: head branch was modified", in.Repository, in.Number)
+	case d.State != github.PullRequestStateOpen:
+		return fmt.Errorf("merge %s#%d: pull request is not open", in.Repository, in.Number)
 	}
-	d.State = github.PRStateMerged
+	d.State = github.PullRequestStateMerged
 	c.details[key] = d
 	c.merges = append(c.merges, Merge{
-		Repo: in.Repo, Number: in.Number, PullRequestID: in.PullRequestID, Method: in.Method, ExpectedHeadOID: in.ExpectedHeadOID,
+		Repository: in.Repository, Number: in.Number, PullRequestIdentifier: in.PullRequestIdentifier, Method: in.Method, ExpectedHeadObjectIdentifier: in.ExpectedHeadObjectIdentifier,
 	})
 	return nil
 }

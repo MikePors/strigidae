@@ -32,7 +32,7 @@ var remoteNames = []string{"upstream", "origin"}
 type Remote struct {
 	// Host is the GitHub host, e.g. "github.com" or a GitHub Enterprise host.
 	Host string
-	Repo github.Repo
+	Repo github.Repository
 }
 
 // Runner runs git with args in dir and returns its trimmed standard output.
@@ -109,7 +109,7 @@ func ParseURL(raw string) (Remote, error) {
 		return Remote{}, fmt.Errorf("parse remote %q: %w", raw, err)
 	}
 	path = strings.TrimSuffix(strings.Trim(path, "/"), ".git")
-	repo, err := github.ParseRepo(path)
+	repo, err := github.ParseRepository(path)
 	if err != nil || host == "" {
 		return Remote{}, fmt.Errorf("parse remote %q: want host and owner/repo", raw)
 	}

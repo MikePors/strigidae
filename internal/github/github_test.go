@@ -7,15 +7,15 @@ import (
 	"time"
 )
 
-func TestParseRepo(t *testing.T) {
+func TestParseRepository(t *testing.T) {
 	tests := []struct {
 		in      string
-		want    Repo
+		want    Repository
 		wantErr bool
 	}{
-		{in: "MikePors/strigidae", want: Repo{"MikePors", "strigidae"}},
-		{in: " octo/widgets ", want: Repo{"octo", "widgets"}},
-		{in: "a/b.c-d_e", want: Repo{"a", "b.c-d_e"}},
+		{in: "MikePors/strigidae", want: Repository{"MikePors", "strigidae"}},
+		{in: " octo/widgets ", want: Repository{"octo", "widgets"}},
+		{in: "a/b.c-d_e", want: Repository{"a", "b.c-d_e"}},
 		{in: "", wantErr: true},
 		{in: "noslash", wantErr: true},
 		{in: "/name", wantErr: true},
@@ -24,7 +24,7 @@ func TestParseRepo(t *testing.T) {
 		{in: "a b/c", wantErr: true},
 	}
 	for _, tt := range tests {
-		got, err := ParseRepo(tt.in)
+		got, err := ParseRepository(tt.in)
 		if (err != nil) != tt.wantErr {
 			t.Errorf("ParseRepo(%q) error = %v, wantErr %v", tt.in, err, tt.wantErr)
 			continue

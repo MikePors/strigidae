@@ -11,7 +11,7 @@ import (
 )
 
 func TestParseURL(t *testing.T) {
-	repo := func(o, n string) github.Repo { return github.Repo{Owner: o, Name: n} }
+	repo := func(o, n string) github.Repository { return github.Repository{Owner: o, Name: n} }
 	tests := []struct {
 		raw     string
 		want    Remote
@@ -88,16 +88,16 @@ func TestInferKnownHosts(t *testing.T) {
 		want      Remote
 		wantHosts []string // set when an UnknownHostError is expected
 	}{
-		{"known origin", map[string]string{"origin": "git@github.com:o/r.git"}, Remote{"github.com", github.Repo{Owner: "o", Name: "r"}}, nil},
+		{"known origin", map[string]string{"origin": "git@github.com:o/r.git"}, Remote{"github.com", github.Repository{Owner: "o", Name: "r"}}, nil},
 		{
 			"gitlab upstream falls back to github origin",
 			map[string]string{"upstream": "git@gitlab.com:o/r.git", "origin": "git@github.com:me/r.git"},
-			Remote{"github.com", github.Repo{Owner: "me", Name: "r"}},
+			Remote{"github.com", github.Repository{Owner: "me", Name: "r"}},
 			nil,
 		},
 		{"ssh alias only", map[string]string{"origin": "github-work:acme/app.git"}, Remote{}, []string{"github-work"}},
 		{"both unknown", map[string]string{"upstream": "git@gitlab.com:o/r.git", "origin": "github-work:acme/app.git"}, Remote{}, []string{"gitlab.com", "github-work"}},
-		{"enterprise host", map[string]string{"origin": "https://ghe.example.com/o/r"}, Remote{"ghe.example.com", github.Repo{Owner: "o", Name: "r"}}, nil},
+		{"enterprise host", map[string]string{"origin": "https://ghe.example.com/o/r"}, Remote{"ghe.example.com", github.Repository{Owner: "o", Name: "r"}}, nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -129,15 +129,15 @@ func TestInfer(t *testing.T) {
 		name     string
 		toplevel bool
 		remotes  map[string]string
-		want     github.Repo
+		want     github.Repository
 		wantErr  error
 	}{
-		{"origin only", true, map[string]string{"origin": origin}, github.Repo{Owner: "fork-owner", Name: "repo"}, nil},
-		{"upstream preferred", true, map[string]string{"origin": origin, "upstream": up}, github.Repo{Owner: "upstream-owner", Name: "repo"}, nil},
-		{"unparsable upstream falls back", true, map[string]string{"origin": origin, "upstream": "/local/path"}, github.Repo{Owner: "fork-owner", Name: "repo"}, nil},
-		{"no remotes", true, nil, github.Repo{}, ErrNoGitHubRemote},
-		{"other remote names ignored", true, map[string]string{"fork": origin}, github.Repo{}, ErrNoGitHubRemote},
-		{"outside checkout", false, map[string]string{"origin": origin}, github.Repo{}, ErrNotCheckout},
+		{"origin only", true, map[string]string{"origin": origin}, github.Repository{Owner: "fork-owner", Name: "repo"}, nil},
+		{"upstream preferred", true, map[string]string{"origin": origin, "upstream": up}, github.Repository{Owner: "upstream-owner", Name: "repo"}, nil},
+		{"unparsable upstream falls back", true, map[string]string{"origin": origin, "upstream": "/local/path"}, github.Repository{Owner: "fork-owner", Name: "repo"}, nil},
+		{"no remotes", true, nil, github.Repository{}, ErrNoGitHubRemote},
+		{"other remote names ignored", true, map[string]string{"fork": origin}, github.Repository{}, ErrNoGitHubRemote},
+		{"outside checkout", false, map[string]string{"origin": origin}, github.Repository{}, ErrNotCheckout},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

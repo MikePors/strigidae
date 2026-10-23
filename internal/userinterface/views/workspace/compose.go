@@ -81,7 +81,7 @@ func (t target) draftKey() string {
 type (
 	editedMsg struct {
 		owner  *View
-		repo   github.Repo
+		repo   github.Repository
 		number int
 		seq    int
 		tgt    target
@@ -104,7 +104,7 @@ type (
 // that are not its own.
 type origin struct {
 	owner  *View // compared, never dereferenced
-	repo   github.Repo
+	repo   github.Repository
 	number int
 }
 
@@ -124,7 +124,7 @@ func (v *View) reply() tea.Cmd {
 	if !ok {
 		return hint
 	}
-	return v.compose(target{kind: kindReply, threadID: t.ID, label: threadLocation(t)})
+	return v.compose(target{kind: kindReply, threadID: t.Identifier, label: threadLocation(t)})
 }
 
 // comment starts a top-level comment from the Overview, or an inline one on a

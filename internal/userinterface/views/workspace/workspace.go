@@ -50,7 +50,7 @@ func WithFilePane(p FilePane) Option { return func(v *View) { v.filePane = p } }
 // View is the PR workspace screen.
 type View struct {
 	client github.Client
-	repo   github.Repo
+	repo   github.Repository
 	number int
 
 	now      func() time.Time
@@ -110,7 +110,7 @@ var (
 )
 
 // New returns the workspace for pull request number in repo.
-func New(client github.Client, repo github.Repo, number int, opts ...Option) *View {
+func New(client github.Client, repo github.Repository, number int, opts ...Option) *View {
 	v := &View{
 		client:      client,
 		repo:        repo,

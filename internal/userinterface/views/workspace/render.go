@@ -150,7 +150,7 @@ func (v *View) renderHeader(width int) []string {
 	}
 	// Branches are the least glanceable part, so they come after the states
 	// and are what truncation eats first.
-	parts = append(parts, v.th.Muted.Render(terminaltext.Clean(d.BaseRef)+" ← "+terminaltext.Clean(d.HeadRef)))
+	parts = append(parts, v.th.Muted.Render(terminaltext.Clean(d.BaseBranch)+" ← "+terminaltext.Clean(d.HeadBranch)))
 	if len(d.Labels) > 0 {
 		names := make([]string, len(d.Labels))
 		for i, l := range d.Labels {
@@ -175,9 +175,9 @@ func (v *View) renderHeader(width int) []string {
 func (v *View) stateBadge() string {
 	d := v.detail
 	switch {
-	case d.State == github.PRStateMerged:
+	case d.State == github.PullRequestStateMerged:
 		return v.th.StateMerged.Render("merged")
-	case d.State == github.PRStateClosed:
+	case d.State == github.PullRequestStateClosed:
 		return v.th.StateClosed.Render("closed")
 	case d.Draft:
 		return v.th.StateDraft.Render("draft")

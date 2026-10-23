@@ -22,18 +22,18 @@ import (
 	"github.com/MikePors/strigidae/internal/github"
 )
 
-var opRE = regexp.MustCompile(`(?:query|mutation)\s+(\w+)`)
+var operationPattern = regexp.MustCompile(`(?:query|mutation)\s+(\w+)`)
 
 // call is one request seen by the fake server.
 type call struct {
-	Method  string
-	Path    string
-	Query   string
-	Op      string
-	Vars    map[string]any
-	Accept  string
-	Auth    string
-	RESTRaw string
+	Method        string
+	Path          string
+	Query         string
+	Operation     string
+	Variables     map[string]any
+	Accept        string
+	Authorization string
+	RESTRaw       string
 }
 
 // server serves testdata fixtures in place of GitHub. It never opens a socket:
@@ -66,7 +66,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Body != nil {
 		raw, _ = io.ReadAll(r.Body)
 	}
-	c := call{Method: r.Method, Path: r.URL.Path, Accept: r.Header.Get("Accept"), Auth: r.Header.Get("Authorization"), RESTRaw: string(raw)}
+	c := call{Method: r.Method, Path: r.URL.Path, Accept: r.Header.Get("Accept"), Authorization: r.Header.Get("Authorization"), RESTRaw: string(raw)}
 	if r.URL.Path == "/graphql" {
 		var req struct {
 			Query     string
@@ -75,10 +75,10 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err := json.Unmarshal(raw, &req); err != nil {
 			s.t.Errorf("bad graphql request: %v", err)
 		}
-		c.Vars = req.Variables
+		c.Variables = req.Variables
 		c.Query = req.Query
-		if m := opRE.FindStringSubmatch(req.Query); m != nil {
-			c.Op = m[1]
+		if m := operationPattern.FindStringSubmatch(req.Query); m != nil {
+			c.Operation = m[1]
 		}
 	}
 	s.mu.Lock()
@@ -89,10 +89,10 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch {
-	case c.Op != "":
-		name := c.Op + ".json"
-		if after, _ := c.Vars["after"].(string); after != "" {
-			name = c.Op + ".after_" + after + ".json"
+	case c.Operation != "":
+		name := c.Operation + ".json"
+		if after, _ := c.Variables["after"].(string); after != "" {
+			name = c.Operation + ".after_" + after + ".json"
 		}
 		s.fixture(w, http.StatusOK, name)
 	case c.Method == "GET" && c.Path == "/repos/MikePors/strigidae/pulls/27":
@@ -137,7 +137,7 @@ func newTestClient(t *testing.T, s *server) *Client {
 	return c
 }
 
-var repo = github.Repo{Owner: "MikePors", Name: "strigidae"}
+var repository = github.Repository{Owner: "MikePors", Name: "strigidae"}
 
 func sha(n int) string { return fmt.Sprintf("%040x", n*0x1111) }
 
@@ -155,7 +155,7 @@ func TestListPullRequestsPagination(t *testing.T) {
 	c := newTestClient(t, s)
 	ctx := context.Background()
 
-	p1, err := c.ListPullRequests(ctx, repo, github.PageRequest{Limit: 2})
+	p1, err := c.ListPullRequests(ctx, repository, github.PageRequest{Limit: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,16 +164,16 @@ func TestListPullRequestsPagination(t *testing.T) {
 		Next:  "Y3Vyc29yOnYyOpHOAAAAAg==",
 		Items: []github.PullRequest{
 			{
-				ID: "PR_kwDOExample01", HeadSHA: sha(1), Repo: repo, Number: 27, Title: "feat(api): add GitHub client layer", Author: "MikePors",
-				State: github.PRStateOpen, Draft: true, CommentCount: 2, Checks: github.ChecksPassing,
+				Identifier: "PR_kwDOExample01", HeadSHA: sha(1), Repository: repository, Number: 27, Title: "feat(api): add GitHub client layer", Author: "MikePors",
+				State: github.PullRequestStateOpen, Draft: true, CommentCount: 2, Checks: github.ChecksPassing,
 				CreatedAt: mustTime(t, "2026-10-18T09:00:00Z"), UpdatedAt: mustTime(t, "2026-10-19T08:30:00Z"),
-				URL: "https://github.com/MikePors/strigidae/pull/27", HeadRef: "feat/4-github-client", BaseRef: "main",
+				URL: "https://github.com/MikePors/strigidae/pull/27", HeadBranch: "feat/4-github-client", BaseBranch: "main",
 			},
 			{
-				ID: "PR_kwDOExample02", HeadSHA: sha(2), Repo: repo, Number: 26, Title: "chore: add issue forms and PR template", Author: "ghost",
-				State: github.PRStateOpen, ReviewDecision: github.ReviewDecisionApproved, Checks: github.ChecksFailing,
+				Identifier: "PR_kwDOExample02", HeadSHA: sha(2), Repository: repository, Number: 26, Title: "chore: add issue forms and PR template", Author: "ghost",
+				State: github.PullRequestStateOpen, ReviewDecision: github.ReviewDecisionApproved, Checks: github.ChecksFailing,
 				CreatedAt: mustTime(t, "2026-10-17T12:00:00Z"), UpdatedAt: mustTime(t, "2026-10-18T10:15:00Z"),
-				URL: "https://github.com/MikePors/strigidae/pull/26", HeadRef: "chore/3-templates", BaseRef: "main",
+				URL: "https://github.com/MikePors/strigidae/pull/26", HeadBranch: "chore/3-templates", BaseBranch: "main",
 			},
 		},
 	}
@@ -184,7 +184,7 @@ func TestListPullRequestsPagination(t *testing.T) {
 		t.Error("page 1 should have more")
 	}
 
-	p2, err := c.ListPullRequests(ctx, repo, github.PageRequest{After: p1.Next})
+	p2, err := c.ListPullRequests(ctx, repository, github.PageRequest{After: p1.Next})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,16 +196,16 @@ func TestListPullRequestsPagination(t *testing.T) {
 	if len(calls) != 2 {
 		t.Fatalf("got %d calls, want 2", len(calls))
 	}
-	if got := calls[0].Vars["first"]; got != float64(2) {
+	if got := calls[0].Variables["first"]; got != float64(2) {
 		t.Errorf("first = %v, want 2", got)
 	}
-	if got := calls[0].Vars["after"]; got != nil {
+	if got := calls[0].Variables["after"]; got != nil {
 		t.Errorf("first page sent after = %v", got)
 	}
-	if got := calls[1].Vars["first"]; got != float64(github.DefaultPageSize) {
+	if got := calls[1].Variables["first"]; got != float64(github.DefaultPageSize) {
 		t.Errorf("default page size = %v", got)
 	}
-	if got := calls[0].Auth; got != "token tok" {
+	if got := calls[0].Authorization; got != "token tok" {
 		t.Errorf("authorization = %q", got)
 	}
 }
@@ -217,7 +217,7 @@ func TestSearchPullRequests(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := s.Calls()[0].Vars["query"]; got != "is:pr review-requested:@me" {
+	if got := s.Calls()[0].Variables["query"]; got != "is:pr review-requested:@me" {
 		t.Errorf("query = %v", got)
 	}
 	// The empty node (an inaccessible result) is skipped.
@@ -225,10 +225,10 @@ func TestSearchPullRequests(t *testing.T) {
 		t.Fatalf("unexpected page: %+v", page)
 	}
 	want := github.PullRequest{
-		ID: "PR_kwDOOther01", HeadSHA: sha(1), Repo: github.Repo{Owner: "octo", Name: "widgets"}, Number: 5, Title: "Fix typo in README", Author: "octocat",
-		State: github.PRStateOpen, ReviewDecision: github.ReviewDecisionChangesRequested, CommentCount: 4, Checks: github.ChecksRunning,
+		Identifier: "PR_kwDOOther01", HeadSHA: sha(1), Repository: github.Repository{Owner: "octo", Name: "widgets"}, Number: 5, Title: "Fix typo in README", Author: "octocat",
+		State: github.PullRequestStateOpen, ReviewDecision: github.ReviewDecisionChangesRequested, CommentCount: 4, Checks: github.ChecksRunning,
 		CreatedAt: mustTime(t, "2026-09-01T10:00:00Z"), UpdatedAt: mustTime(t, "2026-09-02T10:00:00Z"),
-		URL: "https://github.com/octo/widgets/pull/5", HeadRef: "fix-typo", BaseRef: "main",
+		URL: "https://github.com/octo/widgets/pull/5", HeadBranch: "fix-typo", BaseBranch: "main",
 	}
 	if diff := cmp.Diff(want, page.Items[0]); diff != "" {
 		t.Errorf("mismatch (-want +got):\n%s", diff)
@@ -238,16 +238,16 @@ func TestSearchPullRequests(t *testing.T) {
 func TestGetPullRequest(t *testing.T) {
 	s := &server{}
 	c := newTestClient(t, s)
-	got, err := c.GetPullRequest(context.Background(), repo, 27)
+	got, err := c.GetPullRequest(context.Background(), repository, 27)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := github.PullRequestDetail{
 		PullRequest: github.PullRequest{
-			ID: "PR_kwDOExample01", HeadSHA: sha(1), Repo: repo, Number: 27, Title: "feat(api): add GitHub client layer", Author: "MikePors",
-			State: github.PRStateOpen, ReviewDecision: github.ReviewDecisionChangesRequested, CommentCount: 2,
+			Identifier: "PR_kwDOExample01", HeadSHA: sha(1), Repository: repository, Number: 27, Title: "feat(api): add GitHub client layer", Author: "MikePors",
+			State: github.PullRequestStateOpen, ReviewDecision: github.ReviewDecisionChangesRequested, CommentCount: 2,
 			CreatedAt: mustTime(t, "2026-10-18T09:00:00Z"), UpdatedAt: mustTime(t, "2026-10-19T08:30:00Z"),
-			URL: "https://github.com/MikePors/strigidae/pull/27", HeadRef: "feat/4-github-client", BaseRef: "main",
+			URL: "https://github.com/MikePors/strigidae/pull/27", HeadBranch: "feat/4-github-client", BaseBranch: "main",
 		},
 		Body:      "Closes #4\n\n## Summary\nAdds the client layer.\n",
 		Additions: 120, Deletions: 7,
@@ -261,18 +261,18 @@ func TestGetPullRequest(t *testing.T) {
 		},
 		Comments: []github.IssueComment{
 			{
-				ID: "IC_kwDOExample01", Author: "octocat", Body: "Looks good overall.",
+				Identifier: "IC_kwDOExample01", Author: "octocat", Body: "Looks good overall.",
 				CreatedAt: mustTime(t, "2026-10-18T11:00:00Z"),
 				URL:       "https://github.com/MikePors/strigidae/pull/27#issuecomment-1",
 				Reactions: []github.ReactionSummary{{Content: github.ReactionThumbsUp, Count: 2, ViewerReacted: true}},
 			},
 			{
-				ID: "IC_kwDOExample02", Author: "ghost", Body: "Thanks!",
+				Identifier: "IC_kwDOExample02", Author: "ghost", Body: "Thanks!",
 				CreatedAt: mustTime(t, "2026-10-18T12:00:00Z"),
 				URL:       "https://github.com/MikePors/strigidae/pull/27#issuecomment-2",
 			},
 			{
-				ID: "IC_kwDOExample04", Author: "octocat", Body: "One more thing.",
+				Identifier: "IC_kwDOExample04", Author: "octocat", Body: "One more thing.",
 				CreatedAt: mustTime(t, "2026-10-18T15:00:00Z"),
 				URL:       "https://github.com/MikePors/strigidae/pull/27#issuecomment-3",
 				Reactions: []github.ReactionSummary{{Content: github.ReactionRocket, Count: 1}},
@@ -280,11 +280,11 @@ func TestGetPullRequest(t *testing.T) {
 		},
 		Reviews: []github.Review{
 			{
-				ID: "PRR_kwDOExample01", Author: "octocat", State: github.ReviewChangesRequested,
+				Identifier: "PRR_kwDOExample01", Author: "octocat", State: github.ReviewChangesRequested,
 				Body: "Please add tests.", SubmittedAt: mustTime(t, "2026-10-18T13:00:00Z"),
 			},
 			// The viewer's draft review is kept; its SubmittedAt is zero.
-			{ID: "PRR_kwDOExample02", Author: "MikePors", State: github.ReviewPending},
+			{Identifier: "PRR_kwDOExample02", Author: "MikePors", State: github.ReviewPending},
 		},
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
@@ -298,7 +298,7 @@ func TestGetPullRequest(t *testing.T) {
 func TestGetDiff(t *testing.T) {
 	s := &server{}
 	c := newTestClient(t, s)
-	got, err := c.GetDiff(context.Background(), repo, 27)
+	got, err := c.GetDiff(context.Background(), repository, 27)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -319,7 +319,7 @@ func TestListReviewThreads(t *testing.T) {
 	c := newTestClient(t, s)
 	ctx := context.Background()
 
-	p1, err := c.ListReviewThreads(ctx, repo, 27, github.PageRequest{})
+	p1, err := c.ListReviewThreads(ctx, repository, 27, github.PageRequest{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -327,19 +327,19 @@ func TestListReviewThreads(t *testing.T) {
 		t.Fatalf("unexpected page 1: next=%q total=%d items=%d", p1.Next, p1.Total, len(p1.Items))
 	}
 	open := github.ReviewThread{
-		ID: "PRRT_kwDOExample01", SubjectType: github.SubjectLine, Path: "internal/github/client.go",
+		Identifier: "PRRT_kwDOExample01", SubjectType: github.SubjectLine, Path: "internal/github/client.go",
 		Line: 12, OriginalLine: 12, StartLine: 10, OriginalStartLine: 10,
 		DiffSide: github.SideRight, StartDiffSide: github.SideRight,
 		Comments: []github.ReviewComment{
 			{
-				ID: "PRRC_kwDOExample01", Author: "octocat", Body: "Should this take a context?",
+				Identifier: "PRRC_kwDOExample01", Author: "octocat", Body: "Should this take a context?",
 				CreatedAt: mustTime(t, "2026-10-18T13:05:00Z"),
 				URL:       "https://github.com/MikePors/strigidae/pull/27#discussion_r1",
 				DiffHunk:  "@@ -0,0 +1,20 @@\n+package github\n",
 				Reactions: []github.ReactionSummary{{Content: github.ReactionEyes, Count: 1, ViewerReacted: true}},
 			},
 			{
-				ID: "PRRC_kwDOExample02", Author: "MikePors", Body: "Yes, fixed.",
+				Identifier: "PRRC_kwDOExample02", Author: "MikePors", Body: "Yes, fixed.",
 				CreatedAt: mustTime(t, "2026-10-18T14:00:00Z"),
 				URL:       "https://github.com/MikePors/strigidae/pull/27#discussion_r2",
 				DiffHunk:  "@@ -0,0 +1,20 @@\n+package github\n",
@@ -356,7 +356,7 @@ func TestListReviewThreads(t *testing.T) {
 		t.Errorf("unexpected resolved+outdated thread: %+v", resolved)
 	}
 
-	p2, err := c.ListReviewThreads(ctx, repo, 27, github.PageRequest{After: p1.Next})
+	p2, err := c.ListReviewThreads(ctx, repository, 27, github.PageRequest{After: p1.Next})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -384,10 +384,10 @@ func TestReplyToThread(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.ID != "PRRC_kwDOExample05" || got.Body != "Done." || got.Author != "MikePors" {
+	if got.Identifier != "PRRC_kwDOExample05" || got.Body != "Done." || got.Author != "MikePors" {
 		t.Errorf("unexpected comment: %+v", got)
 	}
-	vars := s.Calls()[0].Vars
+	vars := s.Calls()[0].Variables
 	if vars["threadId"] != "PRRT_kwDOExample01" || vars["body"] != "Done." {
 		t.Errorf("unexpected variables: %v", vars)
 	}
@@ -396,12 +396,12 @@ func TestReplyToThread(t *testing.T) {
 func TestAddComment(t *testing.T) {
 	s := &server{}
 	c := newTestClient(t, s)
-	got, err := c.AddComment(context.Background(), repo, 27, "Ship it.")
+	got, err := c.AddComment(context.Background(), repository, 27, "Ship it.")
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := github.IssueComment{
-		ID: "IC_kwDOExample03", Author: "MikePors", Body: "Ship it.",
+		Identifier: "IC_kwDOExample03", Author: "MikePors", Body: "Ship it.",
 		CreatedAt: mustTime(t, "2026-10-19T09:30:00Z"),
 		URL:       "https://github.com/MikePors/strigidae/pull/27#issuecomment-2001",
 	}
@@ -444,7 +444,7 @@ func TestErrors(t *testing.T) {
 			override: func(s *server) func(call, http.ResponseWriter) bool {
 				return fixtureError(s, "error_not_found.json", nil)
 			},
-			run: func(c *Client) error { _, err := c.GetPullRequest(context.Background(), repo, 9999); return err },
+			run: func(c *Client) error { _, err := c.GetPullRequest(context.Background(), repository, 9999); return err },
 			check: func(t *testing.T, err error) {
 				if !errors.Is(err, github.ErrNotFound) {
 					t.Errorf("want ErrNotFound, got %v", err)
@@ -459,7 +459,7 @@ func TestErrors(t *testing.T) {
 				})
 			},
 			run: func(c *Client) error {
-				_, err := c.ListPullRequests(context.Background(), repo, github.PageRequest{})
+				_, err := c.ListPullRequests(context.Background(), repository, github.PageRequest{})
 				return err
 			},
 			check: func(t *testing.T, err error) {
@@ -580,10 +580,10 @@ func TestErrors(t *testing.T) {
 				return true
 			}}
 			c := newTestClient(t, s)
-			_, err := c.AddComment(context.Background(), repo, 27, "x")
+			_, err := c.AddComment(context.Background(), repository, 27, "x")
 			tt.check(t, err)
 			// GraphQL goes through the same mapping.
-			_, err = c.ListPullRequests(context.Background(), repo, github.PageRequest{})
+			_, err = c.ListPullRequests(context.Background(), repository, github.PageRequest{})
 			tt.check(t, err)
 		})
 	}
@@ -641,11 +641,11 @@ func TestSetFileViewed(t *testing.T) {
 				t.Fatal(err)
 			}
 			got := s.Calls()[0]
-			if got.Op != tt.op || !strings.Contains(got.Query, tt.field+"(input:") {
-				t.Errorf("op = %q, query = %q", got.Op, got.Query)
+			if got.Operation != tt.op || !strings.Contains(got.Query, tt.field+"(input:") {
+				t.Errorf("op = %q, query = %q", got.Operation, got.Query)
 			}
-			if got.Vars["pullRequestId"] != "PR_kwDOExample01" || got.Vars["path"] != "go.mod" {
-				t.Errorf("unexpected variables: %v", got.Vars)
+			if got.Variables["pullRequestId"] != "PR_kwDOExample01" || got.Variables["path"] != "go.mod" {
+				t.Errorf("unexpected variables: %v", got.Variables)
 			}
 		})
 	}

@@ -33,7 +33,7 @@ func (m *Model) capture() position {
 	i := m.win.Cursor()
 	p.off = m.win.Cursor() - m.win.Top()
 	if r := m.rows[i]; r.tr != nil {
-		p.thread, p.toff = m.fthreads[r.tr.t].ID, r.tr.i
+		p.thread, p.toff = m.fthreads[r.tr.t].Identifier, r.tr.i
 	}
 	for i > 0 && m.rows[i].tr != nil {
 		i-- // a thread row: anchor to the diff row it follows

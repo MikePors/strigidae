@@ -19,7 +19,7 @@ import (
 type (
 	prLoadedMsg struct {
 		owner  *View // the workspace that asked; compared, never dereferenced
-		repo   github.Repo
+		repo   github.Repository
 		number int
 		seq    int
 		detail github.PullRequestDetail
@@ -31,7 +31,7 @@ type (
 	}
 	diffLoadedMsg struct {
 		owner  *View
-		repo   github.Repo
+		repo   github.Repository
 		number int
 		seq    int
 		// head is the detail's head SHA this diff followed; empty when the
@@ -46,7 +46,7 @@ type (
 	}
 	threadsLoadedMsg struct {
 		owner   *View
-		repo    github.Repo
+		repo    github.Repository
 		number  int
 		seq     int
 		threads []github.ReviewThread
@@ -60,7 +60,7 @@ const maxThreadPages = 100
 
 // loadThreads fetches every review thread, page by page. Any failure discards
 // the partial result: a half-list would hide threads without saying so.
-func loadThreads(ctx context.Context, c github.Client, repo github.Repo, number int) ([]github.ReviewThread, error) {
+func loadThreads(ctx context.Context, c github.Client, repo github.Repository, number int) ([]github.ReviewThread, error) {
 	var all []github.ReviewThread
 	var req github.PageRequest
 	for range maxThreadPages {
@@ -135,7 +135,7 @@ func (v *View) reloadThreads() tea.Cmd {
 // The owner check matters because results go to every view in the stack: a
 // closed workspace's commands may still be running when a new workspace for
 // the same pull request starts counting its requests from 1 again.
-func (v *View) mine(owner *View, repo github.Repo, number, seq int) bool {
+func (v *View) mine(owner *View, repo github.Repository, number, seq int) bool {
 	return owner == v && repo == v.repo && number == v.number && seq == v.seq
 }
 

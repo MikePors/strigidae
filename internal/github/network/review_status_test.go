@@ -22,11 +22,11 @@ func respondWith(body string) func(call, http.ResponseWriter) bool {
 func TestGetReviewStatusNoPendingReview(t *testing.T) {
 	s := &server{override: respondWith(`{"data":{"repository":{"pullRequest":{"id":"PR_1","headRefOid":"abc","reviews":{"nodes":[]}}}}}`)}
 	c := newTestClient(t, s)
-	got, err := c.GetReviewStatus(context.Background(), repo, 27)
+	got, err := c.GetReviewStatus(context.Background(), repository, 27)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if diff := cmp.Diff(github.ReviewStatus{PullRequestID: "PR_1", HeadSHA: "abc"}, got); diff != "" {
+	if diff := cmp.Diff(github.ReviewStatus{PullRequestIdentifier: "PR_1", HeadSHA: "abc"}, got); diff != "" {
 		t.Errorf("status (-want +got):\n%s", diff)
 	}
 }
@@ -38,7 +38,7 @@ func TestGetReviewStatusNotFound(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			c := newTestClient(t, &server{override: respondWith(body)})
-			_, err := c.GetReviewStatus(context.Background(), repo, 27)
+			_, err := c.GetReviewStatus(context.Background(), repository, 27)
 			if !errors.Is(err, github.ErrNotFound) {
 				t.Errorf("err = %v, want ErrNotFound", err)
 			}

@@ -13,19 +13,19 @@ import (
 	"github.com/MikePors/strigidae/internal/github/fake"
 )
 
-var repo = github.Repo{Owner: "o", Name: "r"}
+var repository = github.Repository{Owner: "o", Name: "r"}
 
 func seeded() *fake.Client {
 	c := fake.New()
 	c.Now = func() time.Time { return time.Unix(100, 0) }
 	var prs []github.PullRequest
 	for i := 1; i <= 5; i++ {
-		prs = append(prs, github.PullRequest{Repo: repo, Number: i, State: github.PRStateOpen, UpdatedAt: time.Unix(int64(1000-i), 0)})
+		prs = append(prs, github.PullRequest{Repository: repository, Number: i, State: github.PullRequestStateOpen, UpdatedAt: time.Unix(int64(1000-i), 0)})
 	}
-	c.SetPullRequests(repo, prs)
-	c.SetPullRequest(github.PullRequestDetail{PullRequest: github.PullRequest{ID: "PR_1", Repo: repo, Number: 1}})
-	c.SetDiff(repo, 1, "diff")
-	c.SetReviewThreads(repo, 1, []github.ReviewThread{{ID: "t1"}, {ID: "t2"}})
+	c.SetPullRequests(repository, prs)
+	c.SetPullRequest(github.PullRequestDetail{PullRequest: github.PullRequest{Identifier: "PR_1", Repository: repository, Number: 1}})
+	c.SetDiff(repository, 1, "diff")
+	c.SetReviewThreads(repository, 1, []github.ReviewThread{{Identifier: "t1"}, {Identifier: "t2"}})
 	return c
 }
 
@@ -37,7 +37,7 @@ func TestPagination(t *testing.T) {
 	req.Limit = 2
 	pages := 0
 	for {
-		p, err := c.ListPullRequests(ctx, repo, req)
+		p, err := c.ListPullRequests(ctx, repository, req)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -56,7 +56,7 @@ func TestPagination(t *testing.T) {
 	if pages != 3 {
 		t.Errorf("pages = %d, want 3", pages)
 	}
-	if _, err := c.ListPullRequests(ctx, repo, github.PageRequest{After: "bogus"}); err == nil {
+	if _, err := c.ListPullRequests(ctx, repository, github.PageRequest{After: "bogus"}); err == nil {
 		t.Error("want error for bad cursor")
 	}
 }
@@ -72,10 +72,10 @@ func TestReplyAndCommentAreRecorded(t *testing.T) {
 	if rc.Author != "me" || rc.Body != "hello" || !rc.CreatedAt.Equal(time.Unix(100, 0)) {
 		t.Errorf("unexpected reply: %+v", rc)
 	}
-	if diff := cmp.Diff([]fake.Reply{{ThreadID: "t2", Body: "hello"}}, c.Replies()); diff != "" {
+	if diff := cmp.Diff([]fake.Reply{{ThreadIdentifier: "t2", Body: "hello"}}, c.Replies()); diff != "" {
 		t.Errorf("replies mismatch:\n%s", diff)
 	}
-	threads, err := c.ListReviewThreads(ctx, repo, 1, github.PageRequest{})
+	threads, err := c.ListReviewThreads(ctx, repository, 1, github.PageRequest{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,13 +83,13 @@ func TestReplyAndCommentAreRecorded(t *testing.T) {
 		t.Errorf("reply not visible in thread: %d comments", got)
 	}
 
-	if _, err := c.AddComment(ctx, repo, 1, "top"); err != nil {
+	if _, err := c.AddComment(ctx, repository, 1, "top"); err != nil {
 		t.Fatal(err)
 	}
-	if diff := cmp.Diff([]fake.Comment{{Repo: repo, Number: 1, Body: "top"}}, c.Comments()); diff != "" {
+	if diff := cmp.Diff([]fake.Comment{{Repository: repository, Number: 1, Body: "top"}}, c.Comments()); diff != "" {
 		t.Errorf("comments mismatch:\n%s", diff)
 	}
-	d, err := c.GetPullRequest(ctx, repo, 1)
+	d, err := c.GetPullRequest(ctx, repository, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,14 +105,14 @@ func TestErrors(t *testing.T) {
 	t.Run("per method", func(t *testing.T) {
 		c := seeded()
 		c.SetError(fake.MethodGetDiff, boom)
-		if _, err := c.GetDiff(ctx, repo, 1); !errors.Is(err, boom) {
+		if _, err := c.GetDiff(ctx, repository, 1); !errors.Is(err, boom) {
 			t.Errorf("want boom, got %v", err)
 		}
-		if _, err := c.ListPullRequests(ctx, repo, github.PageRequest{}); err != nil {
+		if _, err := c.ListPullRequests(ctx, repository, github.PageRequest{}); err != nil {
 			t.Errorf("other methods should work: %v", err)
 		}
 		c.SetError(fake.MethodGetDiff, nil)
-		if _, err := c.GetDiff(ctx, repo, 1); err != nil {
+		if _, err := c.GetDiff(ctx, repository, 1); err != nil {
 			t.Errorf("error should be cleared: %v", err)
 		}
 	})
@@ -120,7 +120,7 @@ func TestErrors(t *testing.T) {
 	t.Run("all methods", func(t *testing.T) {
 		c := seeded()
 		c.SetError("", &github.RateLimitError{})
-		_, err := c.ListReviewThreads(ctx, repo, 1, github.PageRequest{})
+		_, err := c.ListReviewThreads(ctx, repository, 1, github.PageRequest{})
 		var rl *github.RateLimitError
 		if !errors.As(err, &rl) {
 			t.Errorf("want RateLimitError, got %v", err)
@@ -135,7 +135,7 @@ func TestErrors(t *testing.T) {
 
 	t.Run("not found", func(t *testing.T) {
 		c := seeded()
-		if _, err := c.GetPullRequest(ctx, repo, 99); !errors.Is(err, github.ErrNotFound) {
+		if _, err := c.GetPullRequest(ctx, repository, 99); !errors.Is(err, github.ErrNotFound) {
 			t.Errorf("want ErrNotFound, got %v", err)
 		}
 		if _, err := c.ReplyToThread(ctx, "nope", "x"); !errors.Is(err, github.ErrNotFound) {
@@ -147,7 +147,7 @@ func TestErrors(t *testing.T) {
 		c := seeded()
 		cctx, cancel := context.WithCancel(ctx)
 		cancel()
-		if _, err := c.GetDiff(cctx, repo, 1); !errors.Is(err, context.Canceled) {
+		if _, err := c.GetDiff(cctx, repository, 1); !errors.Is(err, context.Canceled) {
 			t.Errorf("want context.Canceled, got %v", err)
 		}
 	})
@@ -156,10 +156,10 @@ func TestErrors(t *testing.T) {
 func TestCalls(t *testing.T) {
 	c := seeded()
 	ctx := context.Background()
-	_, _ = c.GetDiff(ctx, repo, 1)
+	_, _ = c.GetDiff(ctx, repository, 1)
 	_, _ = c.SearchPullRequests(ctx, "q", github.PageRequest{After: "3", Limit: 5})
 	want := []fake.Call{
-		{Method: fake.MethodGetDiff, Repo: repo, Number: 1},
+		{Method: fake.MethodGetDiff, Repository: repository, Number: 1},
 		{Method: fake.MethodSearchPullRequests, Query: "q", Page: github.PageRequest{After: "3", Limit: 5}},
 	}
 	if diff := cmp.Diff(want, c.Calls()); diff != "" {
@@ -170,7 +170,7 @@ func TestCalls(t *testing.T) {
 func TestSearchIsKeyedByQuery(t *testing.T) {
 	c := seeded()
 	ctx := context.Background()
-	c.SetSearchResults("review-requested:@me", []github.PullRequest{{Repo: repo, Number: 7}})
+	c.SetSearchResults("review-requested:@me", []github.PullRequest{{Repository: repository, Number: 7}})
 	got, err := c.SearchPullRequests(ctx, "review-requested:@me", github.PageRequest{})
 	if err != nil || len(got.Items) != 1 || got.Items[0].Number != 7 {
 		t.Fatalf("seeded query: %+v, %v", got, err)
@@ -183,13 +183,13 @@ func TestSearchIsKeyedByQuery(t *testing.T) {
 
 func TestListIsOpenOnlyNewestFirst(t *testing.T) {
 	c := fake.New()
-	c.SetPullRequests(repo, []github.PullRequest{
-		{Repo: repo, Number: 1, State: github.PRStateOpen, UpdatedAt: time.Unix(10, 0)},
-		{Repo: repo, Number: 2, State: github.PRStateClosed, UpdatedAt: time.Unix(50, 0)},
-		{Repo: repo, Number: 3, State: github.PRStateOpen, UpdatedAt: time.Unix(30, 0)},
-		{Repo: repo, Number: 4, State: github.PRStateMerged, UpdatedAt: time.Unix(40, 0)},
+	c.SetPullRequests(repository, []github.PullRequest{
+		{Repository: repository, Number: 1, State: github.PullRequestStateOpen, UpdatedAt: time.Unix(10, 0)},
+		{Repository: repository, Number: 2, State: github.PullRequestStateClosed, UpdatedAt: time.Unix(50, 0)},
+		{Repository: repository, Number: 3, State: github.PullRequestStateOpen, UpdatedAt: time.Unix(30, 0)},
+		{Repository: repository, Number: 4, State: github.PullRequestStateMerged, UpdatedAt: time.Unix(40, 0)},
 	})
-	p, err := c.ListPullRequests(context.Background(), repo, github.PageRequest{})
+	p, err := c.ListPullRequests(context.Background(), repository, github.PageRequest{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +210,7 @@ func TestAddCommentFidelity(t *testing.T) {
 
 	t.Run("unknown pull request", func(t *testing.T) {
 		c := seeded()
-		if _, err := c.AddComment(ctx, repo, 99, "x"); !errors.Is(err, github.ErrNotFound) {
+		if _, err := c.AddComment(ctx, repository, 99, "x"); !errors.Is(err, github.ErrNotFound) {
 			t.Errorf("want ErrNotFound, got %v", err)
 		}
 		if len(c.Comments()) != 0 {
@@ -220,13 +220,13 @@ func TestAddCommentFidelity(t *testing.T) {
 
 	t.Run("empty body", func(t *testing.T) {
 		c := seeded()
-		if _, err := c.AddComment(ctx, repo, 1, "  \n"); err == nil {
+		if _, err := c.AddComment(ctx, repository, 1, "  \n"); err == nil {
 			t.Error("want error for empty body")
 		}
 		if _, err := c.ReplyToThread(ctx, "t1", ""); err == nil {
 			t.Error("want error for empty reply")
 		}
-		l, _ := c.ListPullRequests(ctx, repo, github.PageRequest{})
+		l, _ := c.ListPullRequests(ctx, repository, github.PageRequest{})
 		if l.Items[0].CommentCount != 0 {
 			t.Error("rejected comment must not change counts")
 		}
@@ -234,12 +234,12 @@ func TestAddCommentFidelity(t *testing.T) {
 
 	t.Run("comment counts follow", func(t *testing.T) {
 		c := seeded()
-		c.SetSearchResults("q", []github.PullRequest{{Repo: repo, Number: 1}})
-		if _, err := c.AddComment(ctx, repo, 1, "hi"); err != nil {
+		c.SetSearchResults("q", []github.PullRequest{{Repository: repository, Number: 1}})
+		if _, err := c.AddComment(ctx, repository, 1, "hi"); err != nil {
 			t.Fatal(err)
 		}
-		l, _ := c.ListPullRequests(ctx, repo, github.PageRequest{})
-		d, _ := c.GetPullRequest(ctx, repo, 1)
+		l, _ := c.ListPullRequests(ctx, repository, github.PageRequest{})
+		d, _ := c.GetPullRequest(ctx, repository, 1)
 		s, _ := c.SearchPullRequests(ctx, "q", github.PageRequest{})
 		if l.Items[0].CommentCount != 1 || d.CommentCount != 1 || s.Items[0].CommentCount != 1 {
 			t.Errorf("counts: list=%d detail=%d search=%d", l.Items[0].CommentCount, d.CommentCount, s.Items[0].CommentCount)
@@ -248,7 +248,7 @@ func TestAddCommentFidelity(t *testing.T) {
 
 	t.Run("list-only pull request", func(t *testing.T) {
 		c := seeded()
-		if _, err := c.AddComment(ctx, repo, 3, "hi"); err != nil {
+		if _, err := c.AddComment(ctx, repository, 3, "hi"); err != nil {
 			t.Errorf("a PR known from the list can be commented on: %v", err)
 		}
 	})
@@ -260,18 +260,18 @@ func TestReturnedValuesAreNotAliased(t *testing.T) {
 	ctx := context.Background()
 	c := seeded()
 	seed := github.PullRequestDetail{
-		PullRequest: github.PullRequest{Repo: repo, Number: 1},
+		PullRequest: github.PullRequest{Repository: repository, Number: 1},
 		Comments:    make([]github.IssueComment, 1, 8), // spare capacity invites aliasing
 		Labels:      []github.Label{{Name: "a"}},
 		Files:       []github.ChangedFile{{Path: "f"}},
 	}
-	seed.Comments[0] = github.IssueComment{ID: "c0", Reactions: []github.ReactionSummary{{Content: github.ReactionEyes, Count: 1}}}
+	seed.Comments[0] = github.IssueComment{Identifier: "c0", Reactions: []github.ReactionSummary{{Content: github.ReactionEyes, Count: 1}}}
 	c.SetPullRequest(seed)
 	// Mutating the seed after the fact must not leak in.
 	seed.Comments[0].Body = "mutated seed"
 	seed.Labels[0].Name = "mutated seed"
 
-	got, err := c.GetPullRequest(ctx, repo, 1)
+	got, err := c.GetPullRequest(ctx, repository, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,18 +280,18 @@ func TestReturnedValuesAreNotAliased(t *testing.T) {
 	}
 
 	// Optimistic UI append plus an in-place edit...
-	got.Comments = append(got.Comments, github.IssueComment{ID: "optimistic"})
+	got.Comments = append(got.Comments, github.IssueComment{Identifier: "optimistic"})
 	got.Comments[0].Reactions[0].Count = 99
 	got.Labels[0].Name = "edited"
 	// ...then the fake gains a comment.
-	if _, err := c.AddComment(ctx, repo, 1, "real"); err != nil {
+	if _, err := c.AddComment(ctx, repository, 1, "real"); err != nil {
 		t.Fatal(err)
 	}
-	if got.Comments[1].ID != "optimistic" {
+	if got.Comments[1].Identifier != "optimistic" {
 		t.Errorf("fake overwrote the caller's slice: %+v", got.Comments)
 	}
 
-	again, err := c.GetPullRequest(ctx, repo, 1)
+	again, err := c.GetPullRequest(ctx, repository, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -306,27 +306,27 @@ func TestReturnedValuesAreNotAliased(t *testing.T) {
 func TestThreadsAreNotAliased(t *testing.T) {
 	ctx := context.Background()
 	c := fake.New()
-	threads := []github.ReviewThread{{ID: "t1", Comments: make([]github.ReviewComment, 1, 8)}}
-	c.SetReviewThreads(repo, 1, threads)
+	threads := []github.ReviewThread{{Identifier: "t1", Comments: make([]github.ReviewComment, 1, 8)}}
+	c.SetReviewThreads(repository, 1, threads)
 	threads[0].Comments[0].Body = "mutated seed"
 
-	p, err := c.ListReviewThreads(ctx, repo, 1, github.PageRequest{})
+	p, err := c.ListReviewThreads(ctx, repository, 1, github.PageRequest{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if p.Items[0].Comments[0].Body != "" {
 		t.Fatal("seed leaked into the fake")
 	}
-	p.Items[0].Comments = append(p.Items[0].Comments, github.ReviewComment{ID: "optimistic"})
+	p.Items[0].Comments = append(p.Items[0].Comments, github.ReviewComment{Identifier: "optimistic"})
 	mine := p.Items[0].Comments
 	p.Items[0].Comments[0].Body = "edited"
 	if _, err := c.ReplyToThread(ctx, "t1", "real"); err != nil {
 		t.Fatal(err)
 	}
-	if mine[1].ID != "optimistic" {
+	if mine[1].Identifier != "optimistic" {
 		t.Error("fake overwrote the caller's slice")
 	}
-	again, _ := c.ListReviewThreads(ctx, repo, 1, github.PageRequest{})
+	again, _ := c.ListReviewThreads(ctx, repository, 1, github.PageRequest{})
 	if got := again.Items[0].Comments; len(got) != 2 || got[0].Body != "" || got[1].Body != "real" {
 		t.Errorf("unexpected comments: %+v", got)
 	}
@@ -344,14 +344,14 @@ func TestConcurrentUse(t *testing.T) {
 			for range 20 {
 				switch i % 4 {
 				case 0:
-					_, _ = c.AddComment(ctx, repo, 1, "x")
+					_, _ = c.AddComment(ctx, repository, 1, "x")
 				case 1:
-					_, _ = c.GetPullRequest(ctx, repo, 1)
+					_, _ = c.GetPullRequest(ctx, repository, 1)
 				case 2:
 					_, _ = c.ReplyToThread(ctx, "t1", "x")
 				default:
-					_, _ = c.ListReviewThreads(ctx, repo, 1, github.PageRequest{})
-					_, _ = c.ListPullRequests(ctx, repo, github.PageRequest{})
+					_, _ = c.ListReviewThreads(ctx, repository, 1, github.PageRequest{})
+					_, _ = c.ListPullRequests(ctx, repository, github.PageRequest{})
 				}
 				_ = c.Calls()
 			}
@@ -366,21 +366,21 @@ func TestConcurrentUse(t *testing.T) {
 func TestSetFileViewed(t *testing.T) {
 	c := fake.New()
 	c.SetPullRequest(github.PullRequestDetail{
-		PullRequest: github.PullRequest{ID: "PR_1", Repo: repo, Number: 1},
+		PullRequest: github.PullRequest{Identifier: "PR_1", Repository: repository, Number: 1},
 		Files:       []github.ChangedFile{{Path: "a.go", Viewed: github.FileDismissed}, {Path: "b.go"}},
 	})
 	ctx := context.Background()
 	if err := c.SetFileViewed(ctx, "PR_1", "a.go", true); err != nil {
 		t.Fatal(err)
 	}
-	d, _ := c.GetPullRequest(ctx, repo, 1)
+	d, _ := c.GetPullRequest(ctx, repository, 1)
 	if d.Files[0].Viewed != github.FileViewed || d.Files[1].Viewed != "" {
 		t.Errorf("files = %+v", d.Files)
 	}
 	if err := c.SetFileViewed(ctx, "PR_1", "a.go", false); err != nil {
 		t.Fatal(err)
 	}
-	d, _ = c.GetPullRequest(ctx, repo, 1)
+	d, _ = c.GetPullRequest(ctx, repository, 1)
 	if d.Files[0].Viewed != github.FileUnviewed {
 		t.Errorf("files = %+v", d.Files)
 	}
@@ -397,7 +397,7 @@ func TestSetFileViewed(t *testing.T) {
 	}
 	calls := c.Calls()
 	last := calls[len(calls)-1]
-	if last.Method != fake.MethodSetFileViewed || last.PullRequestID != "PR_1" || last.Path != "a.go" || !last.Viewed {
+	if last.Method != fake.MethodSetFileViewed || last.PullRequestIdentifier != "PR_1" || last.Path != "a.go" || !last.Viewed {
 		t.Errorf("last call = %+v", last)
 	}
 }

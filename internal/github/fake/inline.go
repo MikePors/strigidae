@@ -22,10 +22,10 @@ const (
 
 // StartedReview is a recorded successful StartReview call.
 type StartedReview struct {
-	Repo      github.Repo
-	Number    int
-	ReviewID  string
-	CommitOID string
+	Repository             github.Repository
+	Number                 int
+	ReviewIdentifier       string
+	CommitObjectIdentifier string
 }
 
 // AddedThreads returns the inputs of the successful AddReviewThread calls.
@@ -47,27 +47,27 @@ func (c *Client) StartedReviews() []StartedReview {
 func (c *Client) StartReview(ctx context.Context, in github.StartReviewInput) (github.PendingReview, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if err := c.begin(ctx, Call{Method: MethodStartReview, Repo: in.Repo, Number: in.Number, PullRequestID: in.PullRequestID}); err != nil {
+	if err := c.begin(ctx, Call{Method: MethodStartReview, Repository: in.Repository, Number: in.Number, PullRequestIdentifier: in.PullRequestIdentifier}); err != nil {
 		return github.PendingReview{}, err
 	}
-	key := prKey{in.Repo, in.Number}
+	key := pullRequestKey{in.Repository, in.Number}
 	d, ok := c.details[key]
 	if !ok {
-		return github.PendingReview{}, fmt.Errorf("start review on %s#%d: %w", in.Repo, in.Number, github.ErrNotFound)
+		return github.PendingReview{}, fmt.Errorf("start review on %s#%d: %w", in.Repository, in.Number, github.ErrNotFound)
 	}
-	if in.PullRequestID == "" || in.PullRequestID != d.ID {
-		return github.PendingReview{}, fmt.Errorf("start review on %s#%d: unknown pull request ID %q", in.Repo, in.Number, in.PullRequestID)
+	if in.PullRequestIdentifier == "" || in.PullRequestIdentifier != d.Identifier {
+		return github.PendingReview{}, fmt.Errorf("start review on %s#%d: unknown pull request ID %q", in.Repository, in.Number, in.PullRequestIdentifier)
 	}
-	if in.CommitOID == "" {
-		return github.PendingReview{}, fmt.Errorf("start review on %s#%d: commit is required", in.Repo, in.Number)
+	if in.CommitObjectIdentifier == "" {
+		return github.PendingReview{}, fmt.Errorf("start review on %s#%d: commit is required", in.Repository, in.Number)
 	}
 	if _, exists := c.pending[key]; exists {
-		return github.PendingReview{}, fmt.Errorf("start review on %s#%d: user can only have one pending review per pull request", in.Repo, in.Number)
+		return github.PendingReview{}, fmt.Errorf("start review on %s#%d: user can only have one pending review per pull request", in.Repository, in.Number)
 	}
-	c.nextID++
-	p := github.PendingReview{ID: "fake-pending-review-" + strconv.Itoa(c.nextID), CommitOID: in.CommitOID}
+	c.nextIdentifier++
+	p := github.PendingReview{Identifier: "fake-pending-review-" + strconv.Itoa(c.nextIdentifier), CommitObjectIdentifier: in.CommitObjectIdentifier}
 	c.pending[key] = p
-	c.started = append(c.started, StartedReview{Repo: in.Repo, Number: in.Number, ReviewID: p.ID, CommitOID: in.CommitOID})
+	c.started = append(c.started, StartedReview{Repository: in.Repository, Number: in.Number, ReviewIdentifier: p.Identifier, CommitObjectIdentifier: in.CommitObjectIdentifier})
 	return p, nil
 }
 
@@ -78,26 +78,26 @@ func (c *Client) StartReview(ctx context.Context, in github.StartReviewInput) (g
 func (c *Client) AddReviewThread(ctx context.Context, in github.AddThreadInput) (github.ReviewThread, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if err := c.begin(ctx, Call{Method: MethodAddReviewThread, Repo: in.Repo, Number: in.Number, Path: in.Path, Body: in.Body}); err != nil {
+	if err := c.begin(ctx, Call{Method: MethodAddReviewThread, Repository: in.Repository, Number: in.Number, Path: in.Path, Body: in.Body}); err != nil {
 		return github.ReviewThread{}, err
 	}
-	key := prKey{in.Repo, in.Number}
+	key := pullRequestKey{in.Repository, in.Number}
 	p, ok := c.pending[key]
-	if !ok || p.ID != in.PendingReviewID {
-		return github.ReviewThread{}, fmt.Errorf("add review comment on %s#%d: %w", in.Repo, in.Number, github.ErrNotFound)
+	if !ok || p.Identifier != in.PendingReviewIdentifier {
+		return github.ReviewThread{}, fmt.Errorf("add review comment on %s#%d: %w", in.Repository, in.Number, github.ErrNotFound)
 	}
 	if strings.TrimSpace(in.Body) == "" {
-		return github.ReviewThread{}, fmt.Errorf("add review comment on %s#%d: empty body", in.Repo, in.Number)
+		return github.ReviewThread{}, fmt.Errorf("add review comment on %s#%d: empty body", in.Repository, in.Number)
 	}
 	if err := checkRange(in); err != nil {
-		return github.ReviewThread{}, fmt.Errorf("add review comment on %s#%d: %w", in.Repo, in.Number, err)
+		return github.ReviewThread{}, fmt.Errorf("add review comment on %s#%d: %w", in.Repository, in.Number, err)
 	}
-	c.nextID++
+	c.nextIdentifier++
 	t := github.ReviewThread{
-		ID: "fake-thread-" + strconv.Itoa(c.nextID), SubjectType: github.SubjectLine, Path: in.Path,
+		Identifier: "fake-thread-" + strconv.Itoa(c.nextIdentifier), SubjectType: github.SubjectLine, Path: in.Path,
 		Line: in.Line, OriginalLine: in.Line, DiffSide: in.Side,
 		Comments: []github.ReviewComment{{
-			ID: "fake-review-comment-" + strconv.Itoa(c.nextID), Author: c.Viewer, Body: in.Body, CreatedAt: c.Now(), Pending: true,
+			Identifier: "fake-review-comment-" + strconv.Itoa(c.nextIdentifier), Author: c.Viewer, Body: in.Body, CreatedAt: c.Now(), Pending: true,
 			ViewerCanUpdate: true, ViewerCanDelete: true, ViewerDidAuthor: true,
 		}},
 	}
@@ -127,36 +127,36 @@ func checkRange(in github.AddThreadInput) error {
 }
 
 // findComment locates a comment among the pull requests' threads.
-func (c *Client) findComment(id string) (key prKey, ti, ci int, ok bool) {
+func (c *Client) findComment(id string) (key pullRequestKey, ti, ci int, ok bool) {
 	for k, ts := range c.threads {
 		for i, t := range ts {
 			for j, cm := range t.Comments {
-				if cm.ID == id {
+				if cm.Identifier == id {
 					return k, i, j, true
 				}
 			}
 		}
 	}
-	return prKey{}, 0, 0, false
+	return pullRequestKey{}, 0, 0, false
 }
 
 // findAllowed locates a comment the viewer may change as GitHub reports it
 // (the can-flags, so also other people's when the viewer has write access).
 // An unknown comment is ErrNotFound, a refused one ErrForbidden.
-func (c *Client) findAllowed(id string, allowed func(github.ReviewComment) bool) (key prKey, ti, ci int, err error) {
+func (c *Client) findAllowed(id string, allowed func(github.ReviewComment) bool) (key pullRequestKey, ti, ci int, err error) {
 	key, ti, ci, ok := c.findComment(id)
 	switch {
 	case !ok:
-		return prKey{}, 0, 0, fmt.Errorf("comment %s: %w", id, github.ErrNotFound)
+		return pullRequestKey{}, 0, 0, fmt.Errorf("comment %s: %w", id, github.ErrNotFound)
 	case !allowed(c.threads[key][ti].Comments[ci]):
-		return prKey{}, 0, 0, fmt.Errorf("comment %s: %w", id, github.ErrForbidden)
+		return pullRequestKey{}, 0, 0, fmt.Errorf("comment %s: %w", id, github.ErrForbidden)
 	}
 	return key, ti, ci, nil
 }
 
 // publishPending marks the pending comments of a pull request as published,
 // as submitting the review does.
-func (c *Client) publishPending(key prKey) {
+func (c *Client) publishPending(key pullRequestKey) {
 	ts := cloneThreads(c.threads[key])
 	for i := range ts {
 		for j := range ts[i].Comments {

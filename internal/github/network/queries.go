@@ -4,13 +4,13 @@ import "fmt"
 
 // Operation names double as keys for fixtures in tests.
 const (
-	opPullRequestList   = "PullRequestList"
-	opPullRequestSearch = "PullRequestSearch"
-	opPullRequestDetail = "PullRequestDetail"
-	opReviewThreads     = "ReviewThreads"
-	opReplyToThread     = "ReplyToThread"
-	opMarkFileViewed    = "MarkFileViewed"
-	opUnmarkFileViewed  = "UnmarkFileViewed"
+	operationPullRequestList   = "PullRequestList"
+	operationPullRequestSearch = "PullRequestSearch"
+	operationPullRequestDetail = "PullRequestDetail"
+	operationReviewThreads     = "ReviewThreads"
+	operationReplyToThread     = "ReplyToThread"
+	operationMarkFileViewed    = "MarkFileViewed"
+	operationUnmarkFileViewed  = "UnmarkFileViewed"
 )
 
 const reactionSelection = `reactionGroups { content viewerHasReacted reactors { totalCount } }`
@@ -36,7 +36,7 @@ const (
 )
 
 const listPullRequestsQuery = `
-query ` + opPullRequestList + `($owner: String!, $name: String!, $first: Int!, $after: String) {
+query ` + operationPullRequestList + `($owner: String!, $name: String!, $first: Int!, $after: String) {
   repository(owner: $owner, name: $name) {
     pullRequests(states: OPEN, first: $first, after: $after, orderBy: {field: UPDATED_AT, direction: DESC}) {
       totalCount
@@ -47,7 +47,7 @@ query ` + opPullRequestList + `($owner: String!, $name: String!, $first: Int!, $
 }` + pullRequestFields
 
 const searchPullRequestsQuery = `
-query ` + opPullRequestSearch + `($query: String!, $first: Int!, $after: String) {
+query ` + operationPullRequestSearch + `($query: String!, $first: Int!, $after: String) {
   search(query: $query, type: ISSUE, first: $first, after: $after) {
     issueCount
     pageInfo { hasNextPage endCursor }
@@ -67,7 +67,7 @@ func detailQuery(withTeams bool) string {
 }
 
 const pullRequestDetailQueryFmt = `
-query ` + opPullRequestDetail + `($owner: String!, $name: String!, $number: Int!) {
+query ` + operationPullRequestDetail + `($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
       ...PullRequestFields
@@ -109,7 +109,7 @@ const threadSelection = `id subjectType isResolved isOutdated path line original
           comments(first: 100) { nodes { ` + reviewCommentSelection + ` } }`
 
 const reviewThreadsQuery = `
-query ` + opReviewThreads + `($owner: String!, $name: String!, $number: Int!, $first: Int!, $after: String) {
+query ` + operationReviewThreads + `($owner: String!, $name: String!, $number: Int!, $first: Int!, $after: String) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
       reviewThreads(first: $first, after: $after) {
@@ -122,18 +122,18 @@ query ` + opReviewThreads + `($owner: String!, $name: String!, $number: Int!, $f
 }`
 
 const replyToThreadMutation = `
-mutation ` + opReplyToThread + `($threadId: ID!, $body: String!) {
+mutation ` + operationReplyToThread + `($threadId: ID!, $body: String!) {
   addPullRequestReviewThreadReply(input: {pullRequestReviewThreadId: $threadId, body: $body}) {
     comment { ` + reviewCommentSelection + ` }
   }
 }`
 
 const markFileViewedMutation = `
-mutation ` + opMarkFileViewed + `($pullRequestId: ID!, $path: String!) {
+mutation ` + operationMarkFileViewed + `($pullRequestId: ID!, $path: String!) {
   markFileAsViewed(input: {pullRequestId: $pullRequestId, path: $path}) { clientMutationId }
 }`
 
 const unmarkFileViewedMutation = `
-mutation ` + opUnmarkFileViewed + `($pullRequestId: ID!, $path: String!) {
+mutation ` + operationUnmarkFileViewed + `($pullRequestId: ID!, $path: String!) {
   unmarkFileAsViewed(input: {pullRequestId: $pullRequestId, path: $path}) { clientMutationId }
 }`

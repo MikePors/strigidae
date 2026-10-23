@@ -54,8 +54,8 @@ func hostileDetail() github.PullRequestDetail {
 	d := testDetail()
 	d.Title = "title " + hostile
 	d.Author = "author" + hostile
-	d.HeadRef = "head" + hostile
-	d.BaseRef = "base" + hostile
+	d.HeadBranch = "head" + hostile
+	d.BaseBranch = "base" + hostile
 	d.Body = "# body " + hostile + "\n\n[click](http://x)\x1b[31m red\r\n" + hostile + refsBody
 	d.Labels = []github.Label{{Name: "label" + hostile}}
 	d.ReviewRequests = []github.Reviewer{{Name: "rev" + hostile}, {Name: "team" + hostile, IsTeam: true}}
@@ -76,15 +76,15 @@ func hostileDetail() github.PullRequestDetail {
 func hostileThreads() []github.ReviewThread {
 	cmt := func(who string) github.ReviewComment {
 		return github.ReviewComment{
-			ID: who, Author: who + hostile, Body: hostile + refsBody, CreatedAt: testNow.Add(-time.Hour),
+			Identifier: who, Author: who + hostile, Body: hostile + refsBody, CreatedAt: testNow.Add(-time.Hour),
 			Reactions: []github.ReactionSummary{{Content: "X" + github.ReactionContent(hostile), Count: 2}},
 		}
 	}
 	return []github.ReviewThread{
-		{ID: "h1", Path: hostileGoPath, Line: 1, DiffSide: github.SideRight, Comments: []github.ReviewComment{cmt("a"), cmt("b")}},
-		{ID: "h2", Path: hostileGoPath, OriginalLine: 1, IsOutdated: true, Comments: []github.ReviewComment{cmt("c")}},
-		{ID: "h3", Path: hostileGoPath, Line: 1, DiffSide: github.SideLeft, IsResolved: true, Comments: []github.ReviewComment{cmt("d")}},
-		{ID: "h4", Path: "elsewhere/" + hostile, Line: 3, Comments: []github.ReviewComment{cmt("e")}},
+		{Identifier: "h1", Path: hostileGoPath, Line: 1, DiffSide: github.SideRight, Comments: []github.ReviewComment{cmt("a"), cmt("b")}},
+		{Identifier: "h2", Path: hostileGoPath, OriginalLine: 1, IsOutdated: true, Comments: []github.ReviewComment{cmt("c")}},
+		{Identifier: "h3", Path: hostileGoPath, Line: 1, DiffSide: github.SideLeft, IsResolved: true, Comments: []github.ReviewComment{cmt("d")}},
+		{Identifier: "h4", Path: "elsewhere/" + hostile, Line: 3, Comments: []github.ReviewComment{cmt("e")}},
 	}
 }
 

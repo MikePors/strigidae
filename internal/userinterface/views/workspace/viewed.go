@@ -27,7 +27,7 @@ type viewedToggle struct {
 // result irrelevant.
 type viewedMsg struct {
 	owner  *View
-	repo   github.Repo
+	repo   github.Repository
 	number int
 	path   string
 	sent   github.ViewedState // state the mutation asked for
@@ -63,7 +63,7 @@ func (v *View) toggleViewed() tea.Cmd {
 	if s == 0 || s > len(v.files()) {
 		return nil
 	}
-	if v.detail.ID == "" {
+	if v.detail.Identifier == "" {
 		return userinterface.Error(errors.New("mark file as viewed: pull request ID unknown"))
 	}
 	f := &v.detail.Files[s-1]
@@ -87,7 +87,7 @@ func (v *View) toggleViewed() tea.Cmd {
 // sendViewed is the command that runs one mutation. On failure it also
 // returns the error itself, so it shows even if the view was left meanwhile.
 func (v *View) sendViewed(path string, state github.ViewedState) tea.Cmd {
-	client, repo, number, owner, prID := v.client, v.repo, v.number, v, v.detail.ID
+	client, repo, number, owner, prID := v.client, v.repo, v.number, v, v.detail.Identifier
 	return func() tea.Msg {
 		err := client.SetFileViewed(context.Background(), prID, path, state == github.FileViewed)
 		res := viewedMsg{owner: owner, repo: repo, number: number, path: path, sent: state, err: err}

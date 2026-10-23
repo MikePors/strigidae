@@ -21,7 +21,7 @@ import (
 )
 
 var (
-	testRepo = github.Repo{Owner: "acme", Name: "widgets"}
+	testRepo = github.Repository{Owner: "acme", Name: "widgets"}
 	testNow  = time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC)
 )
 
@@ -29,13 +29,13 @@ func makePRs(n int) []github.PullRequest {
 	prs := make([]github.PullRequest, n)
 	for i := range prs {
 		prs[i] = github.PullRequest{
-			Repo:      testRepo,
-			Number:    n - i,
-			Title:     fmt.Sprintf("Change number %d", n-i),
-			Author:    "alice",
-			State:     github.PRStateOpen,
-			URL:       fmt.Sprintf("https://github.com/acme/widgets/pull/%d", n-i),
-			UpdatedAt: testNow.Add(-time.Duration(i) * time.Hour),
+			Repository: testRepo,
+			Number:     n - i,
+			Title:      fmt.Sprintf("Change number %d", n-i),
+			Author:     "alice",
+			State:      github.PullRequestStateOpen,
+			URL:        fmt.Sprintf("https://github.com/acme/widgets/pull/%d", n-i),
+			UpdatedAt:  testNow.Add(-time.Duration(i) * time.Hour),
 		}
 	}
 	return prs
@@ -90,7 +90,7 @@ func TestFirstLoad(t *testing.T) {
 	if v.Loading() || len(v.prs) != 3 {
 		t.Errorf("loading=%v prs=%d, want loaded with 3", v.Loading(), len(v.prs))
 	}
-	want := []fake.Call{{Method: fake.MethodListPullRequests, Repo: testRepo}}
+	want := []fake.Call{{Method: fake.MethodListPullRequests, Repository: testRepo}}
 	if diff := cmp.Diff(want, c.Calls()); diff != "" {
 		t.Errorf("calls (-want +got):\n%s", diff)
 	}
@@ -143,7 +143,7 @@ func TestStaleResultsIgnored(t *testing.T) {
 		t.Errorf("stale result applied: prs=%d loading=%v", len(v.prs), v.Loading())
 	}
 	// A result for another repository is not ours either.
-	v.Update(prsLoadedMsg{repo: github.Repo{Owner: "x", Name: "y"}, seq: v.seq, page: github.Page[github.PullRequest]{Items: makePRs(1)}})
+	v.Update(prsLoadedMsg{repo: github.Repository{Owner: "x", Name: "y"}, seq: v.seq, page: github.Page[github.PullRequest]{Items: makePRs(1)}})
 	if len(v.prs) != 0 {
 		t.Error("other repo's result applied")
 	}
@@ -205,7 +205,7 @@ func TestRefreshCapsAtMaxPageSize(t *testing.T) {
 }
 
 func TestUntrustedTextIsCleaned(t *testing.T) {
-	repo := github.Repo{Owner: "ev\x1b[2Jil", Name: "re\x07po"}
+	repo := github.Repository{Owner: "ev\x1b[2Jil", Name: "re\x07po"}
 	c := fake.New()
 	c.SetError(fake.MethodListPullRequests, errors.New("boom\x1b]52;c;aGk=\x07\u202e\u009b"))
 	v := New(c, repo, theme.Default(), Options{})

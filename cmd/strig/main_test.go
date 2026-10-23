@@ -22,13 +22,13 @@ import (
 type harness struct {
 	deps       deps
 	clientHost *string
-	started    *github.Repo
+	started    *github.Repository
 }
 
 // newHarness returns deps whose checkout has the given remotes ("" key
 // "toplevel" absent means not a checkout).
 func newHarness(remotes map[string]string, checkout bool, clientErr error) harness {
-	h := harness{clientHost: new(string), started: new(github.Repo)}
+	h := harness{clientHost: new(string), started: new(github.Repository)}
 	h.deps = deps{
 		getwd: func() (string, error) { return "/work", nil },
 		// Directories that don't exist, so tests never read a real config.

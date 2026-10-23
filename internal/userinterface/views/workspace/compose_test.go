@@ -78,7 +78,7 @@ func TestReplyAsksThenPosts(t *testing.T) {
 		t.Fatal("posted before the answer")
 	}
 	c.run(conf.OnYes)
-	want := []fake.Reply{{ThreadID: "t-resolved", Body: "Thanks, fixed.\nmore"}}
+	want := []fake.Reply{{ThreadIdentifier: "t-resolved", Body: "Thanks, fixed.\nmore"}}
 	if diff := cmp.Diff(want, c.client.Replies()); diff != "" {
 		t.Errorf("replies (-want +got):\n%s", diff)
 	}
@@ -90,7 +90,7 @@ func TestReplyAsksThenPosts(t *testing.T) {
 	}
 	var n int
 	for _, th := range c.v.threads {
-		if th.ID == "t-resolved" {
+		if th.Identifier == "t-resolved" {
 			n = len(th.Comments)
 		}
 	}
@@ -210,7 +210,7 @@ func TestStaleComposeResultsIgnored(t *testing.T) {
 	other := stale
 	other.owner, other.seq = &View{}, c.v.cseq
 	c.send(other)
-	c.send(editedMsg{owner: c.v, repo: github.Repo{Owner: "x", Name: "y"}, number: 7, seq: c.v.cseq, body: "late"})
+	c.send(editedMsg{owner: c.v, repo: github.Repository{Owner: "x", Name: "y"}, number: 7, seq: c.v.cseq, body: "late"})
 	c.send(editedMsg{owner: c.v, repo: testRepo, number: 8, seq: c.v.cseq, body: "late"})
 	if _, ok := c.lastConfirm(); ok || c.v.drafts["t-resolved"] == "late" {
 		t.Error("foreign edit result was accepted")
@@ -265,9 +265,9 @@ func (c *composer) drafts(d map[string]string) { c.v.drafts = d }
 func TestReplyWithZeroOneAndSeveralThreads(t *testing.T) {
 	c := newComposer(t)
 	two := []github.ReviewThread{
-		{ID: "a", Path: "internal/sync/client.go", Line: 14, DiffSide: github.SideRight, Comments: []github.ReviewComment{tc("bob", "one", time.Hour)}},
-		{ID: "b", Path: "internal/sync/client.go", Line: 14, DiffSide: github.SideRight, Comments: []github.ReviewComment{tc("eve", "two", time.Hour)}},
-		{ID: "c", Path: "internal/sync/client.go", Line: 12, DiffSide: github.SideRight, Comments: []github.ReviewComment{tc("dan", "three", time.Hour)}},
+		{Identifier: "a", Path: "internal/sync/client.go", Line: 14, DiffSide: github.SideRight, Comments: []github.ReviewComment{tc("bob", "one", time.Hour)}},
+		{Identifier: "b", Path: "internal/sync/client.go", Line: 14, DiffSide: github.SideRight, Comments: []github.ReviewComment{tc("eve", "two", time.Hour)}},
+		{Identifier: "c", Path: "internal/sync/client.go", Line: 12, DiffSide: github.SideRight, Comments: []github.ReviewComment{tc("dan", "three", time.Hour)}},
 	}
 	c.client.SetReviewThreads(testRepo, 7, two)
 	c.run(c.v.load())
@@ -287,7 +287,7 @@ func TestReplyWithZeroOneAndSeveralThreads(t *testing.T) {
 	}
 	conf, _ := c.lastConfirm()
 	c.run(conf.OnYes)
-	if r := c.client.Replies(); len(r) != 1 || r[0].ThreadID != "c" {
+	if r := c.client.Replies(); len(r) != 1 || r[0].ThreadIdentifier != "c" {
 		t.Errorf("replies = %v", r)
 	}
 
@@ -342,7 +342,7 @@ func TestTopLevelCommentIsPostedFromTheOverview(t *testing.T) {
 		t.Fatalf("confirmation = %q (%v)", conf.Text, ok)
 	}
 	c.run(conf.OnYes)
-	want := []fake.Comment{{Repo: testRepo, Number: 7, Body: "LGTM, one question\nbelow"}}
+	want := []fake.Comment{{Repository: testRepo, Number: 7, Body: "LGTM, one question\nbelow"}}
 	if diff := cmp.Diff(want, c.client.Comments()); diff != "" {
 		t.Errorf("comments (-want +got):\n%s", diff)
 	}

@@ -15,7 +15,7 @@ func TestHeaderChecksSurviveTruncation(t *testing.T) {
 	h := newHarness(t, 80, 24)
 	d := testDetail()
 	d.Author = "dependabot[bot]"
-	d.BaseRef, d.HeadRef = "main", "dependabot/github_actions/actions-1c0c2ed584"
+	d.BaseBranch, d.HeadBranch = "main", "dependabot/github_actions/actions-1c0c2ed584"
 	d.ReviewDecision = github.ReviewDecisionReviewRequired
 	d.Checks = github.ChecksPassing
 	h.client.SetPullRequest(d)

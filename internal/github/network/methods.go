@@ -20,11 +20,11 @@ import (
 
 // prQualifiers are the search tokens that already restrict results to pull
 // requests. Whole tokens are compared: "is:private" and "-is:pr" do not count.
-var prQualifiers = []string{"is:pr", "type:pr", "is:pull-request", "type:pull-request"}
+var pullRequestQualifiers = []string{"is:pr", "type:pr", "is:pull-request", "type:pull-request"}
 
-func hasPRQualifier(query string) bool {
+func hasPullRequestQualifier(query string) bool {
 	for _, f := range strings.Fields(query) {
-		if slices.Contains(prQualifiers, f) {
+		if slices.Contains(pullRequestQualifiers, f) {
 			return true
 		}
 	}
@@ -39,10 +39,10 @@ func afterVar(p github.PageRequest) any {
 }
 
 // ListPullRequests implements github.Client.
-func (c *Client) ListPullRequests(ctx context.Context, repo github.Repo, page github.PageRequest) (github.Page[github.PullRequest], error) {
+func (c *Client) ListPullRequests(ctx context.Context, repo github.Repository, page github.PageRequest) (github.Page[github.PullRequest], error) {
 	var resp struct {
 		Repository *struct {
-			PullRequests gqlConn[gqlPullRequest]
+			PullRequests graphqlConnection[graphqlPullRequest]
 		}
 	}
 	vars := map[string]any{"owner": repo.Owner, "name": repo.Name, "first": page.Size(), "after": afterVar(page)}
@@ -65,12 +65,12 @@ func (c *Client) SearchPullRequests(ctx context.Context, query string, page gith
 	var resp struct {
 		Search struct {
 			IssueCount int
-			PageInfo   gqlPageInfo
-			Nodes      []gqlPullRequest
+			PageInfo   graphqlPageInfo
+			Nodes      []graphqlPullRequest
 		}
 	}
 	q := query
-	if !hasPRQualifier(q) {
+	if !hasPullRequestQualifier(q) {
 		q = "is:pr " + q
 	}
 	vars := map[string]any{"query": q, "first": page.Size(), "after": afterVar(page)}
@@ -86,7 +86,7 @@ func (c *Client) SearchPullRequests(ctx context.Context, query string, page gith
 
 // GetPullRequest implements github.Client. Files, comments and reviews beyond
 // the first 100 are fetched with follow-up requests.
-func (c *Client) GetPullRequest(ctx context.Context, repo github.Repo, number int) (github.PullRequestDetail, error) {
+func (c *Client) GetPullRequest(ctx context.Context, repo github.Repository, number int) (github.PullRequestDetail, error) {
 	d, err := c.getPullRequest(ctx, repo, number)
 	if err != nil {
 		return github.PullRequestDetail{}, fmt.Errorf("load pull request %s#%d: %w", repo, number, err)
@@ -94,10 +94,10 @@ func (c *Client) GetPullRequest(ctx context.Context, repo github.Repo, number in
 	return d, nil
 }
 
-func (c *Client) getPullRequest(ctx context.Context, repo github.Repo, number int) (github.PullRequestDetail, error) {
+func (c *Client) getPullRequest(ctx context.Context, repo github.Repository, number int) (github.PullRequestDetail, error) {
 	var resp struct {
 		Repository *struct {
-			PullRequest *gqlPullRequestDetail
+			PullRequest *graphqlPullRequestDetail
 		}
 	}
 	vars := map[string]any{"owner": repo.Owner, "name": repo.Name, "number": number}
@@ -132,7 +132,7 @@ func (c *Client) getPullRequest(ctx context.Context, repo github.Repo, number in
 }
 
 // collectMore returns all nodes of a connection, following its cursor.
-func collectMore[N any](ctx context.Context, c *Client, repo github.Repo, number int, query string, first gqlConn[N]) ([]N, error) {
+func collectMore[N any](ctx context.Context, c *Client, repo github.Repository, number int, query string, first graphqlConnection[N]) ([]N, error) {
 	nodes := first.Nodes
 	cursor := first.PageInfo.next()
 	seen := map[string]bool{}
@@ -143,7 +143,7 @@ func collectMore[N any](ctx context.Context, c *Client, repo github.Repo, number
 		seen[cursor] = true
 		var resp struct {
 			Repository *struct {
-				PullRequest *struct{ Conn gqlConn[N] }
+				PullRequest *struct{ Conn graphqlConnection[N] }
 			}
 		}
 		vars := map[string]any{"owner": repo.Owner, "name": repo.Name, "number": number, "after": cursor}
@@ -161,7 +161,7 @@ func collectMore[N any](ctx context.Context, c *Client, repo github.Repo, number
 }
 
 // GetDiff implements github.Client.
-func (c *Client) GetDiff(ctx context.Context, repo github.Repo, number int) (string, error) {
+func (c *Client) GetDiff(ctx context.Context, repo github.Repository, number int) (string, error) {
 	path := fmt.Sprintf("repos/%s/%s/pulls/%d", url.PathEscape(repo.Owner), url.PathEscape(repo.Name), number)
 	resp, err := c.diff.RequestWithContext(ctx, "GET", path, nil)
 	if err != nil {
@@ -180,10 +180,12 @@ func (c *Client) GetDiff(ctx context.Context, repo github.Repo, number int) (str
 }
 
 // ListReviewThreads implements github.Client.
-func (c *Client) ListReviewThreads(ctx context.Context, repo github.Repo, number int, page github.PageRequest) (github.Page[github.ReviewThread], error) {
+func (c *Client) ListReviewThreads(ctx context.Context, repo github.Repository, number int, page github.PageRequest) (github.Page[github.ReviewThread], error) {
 	var resp struct {
 		Repository *struct {
-			PullRequest *struct{ ReviewThreads gqlConn[gqlThread] }
+			PullRequest *struct {
+				ReviewThreads graphqlConnection[graphqlThread]
+			}
 		}
 	}
 	vars := map[string]any{"owner": repo.Owner, "name": repo.Name, "number": number, "first": page.Size(), "after": afterVar(page)}
@@ -204,7 +206,7 @@ func (c *Client) ListReviewThreads(ctx context.Context, repo github.Repo, number
 // ReplyToThread implements github.Client.
 func (c *Client) ReplyToThread(ctx context.Context, threadID, body string) (github.ReviewComment, error) {
 	var resp struct {
-		AddPullRequestReviewThreadReply *struct{ Comment *gqlReviewComment }
+		AddPullRequestReviewThreadReply *struct{ Comment *graphqlReviewComment }
 	}
 	vars := map[string]any{"threadId": threadID, "body": body}
 	if err := c.query(ctx, replyToThreadMutation, vars, &resp); err != nil {
@@ -218,7 +220,7 @@ func (c *Client) ReplyToThread(ctx context.Context, threadID, body string) (gith
 
 // AddComment implements github.Client. It uses REST because that call needs
 // only the repository and number, not the pull request's node ID.
-func (c *Client) AddComment(ctx context.Context, repo github.Repo, number int, body string) (github.IssueComment, error) {
+func (c *Client) AddComment(ctx context.Context, repo github.Repository, number int, body string) (github.IssueComment, error) {
 	payload, err := json.Marshal(map[string]string{"body": body})
 	if err != nil {
 		return github.IssueComment{}, fmt.Errorf("add comment: %w", err)
@@ -228,13 +230,13 @@ func (c *Client) AddComment(ctx context.Context, repo github.Repo, number int, b
 		HTMLURL   string `json:"html_url"`
 		Body      string
 		CreatedAt time.Time `json:"created_at"`
-		User      *gqlActor
+		User      *graphqlActor
 	}
 	path := fmt.Sprintf("repos/%s/%s/issues/%d/comments", url.PathEscape(repo.Owner), url.PathEscape(repo.Name), number)
 	if err := c.rest.DoWithContext(ctx, "POST", path, bytes.NewReader(payload), &resp); err != nil {
 		return github.IssueComment{}, fmt.Errorf("add comment to %s#%d: %w", repo, number, c.mapError(err))
 	}
-	return github.IssueComment{ID: resp.NodeID, Author: resp.User.login(), Body: resp.Body, CreatedAt: resp.CreatedAt, URL: resp.HTMLURL}, nil
+	return github.IssueComment{Identifier: resp.NodeID, Author: resp.User.login(), Body: resp.Body, CreatedAt: resp.CreatedAt, URL: resp.HTMLURL}, nil
 }
 
 // SetFileViewed implements github.Client.

@@ -27,7 +27,7 @@ const commentSavingText = "a comment is being saved; try again"
 const headMovedText = "Head moved since you loaded it; refresh first."
 
 // reviewQuestion is the confirmation text.
-func reviewQuestion(event github.ReviewEvent, repo github.Repo, number int, pending *github.PendingReview) string {
+func reviewQuestion(event github.ReviewEvent, repo github.Repository, number int, pending *github.PendingReview) string {
 	where := fmt.Sprintf("#%d in %s", number, terminaltext.Clean(repo.String()))
 	var q string
 	switch event {

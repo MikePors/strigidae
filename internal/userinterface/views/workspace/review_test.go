@@ -23,7 +23,7 @@ const (
 func newReviewer(t *testing.T) *composer {
 	c := newComposer(t)
 	d := testDetail()
-	d.ID = prNodeID
+	d.Identifier = prNodeID
 	c.client.SetPullRequest(d)
 	c.setHead(headSHA)
 	return c
@@ -63,19 +63,19 @@ func TestReviewVerdicts(t *testing.T) {
 		{
 			name: "approve with no comment", command: "approve", body: "",
 			wantText: "Approve #7 in acme/widgets?",
-			want:     fake.Submission{Repo: testRepo, Number: 7, PullRequestID: prNodeID, Event: github.ReviewEventApprove, CommitOID: headSHA},
+			want:     fake.Submission{Repository: testRepo, Number: 7, PullRequestIdentifier: prNodeID, Event: github.ReviewEventApprove, CommitObjectIdentifier: headSHA},
 			info:     "Approved #7",
 		},
 		{
 			name: "approve with a summary", command: "approve", body: "Nice.\n",
 			wantText: "Approve #7 in acme/widgets?",
-			want:     fake.Submission{Repo: testRepo, Number: 7, PullRequestID: prNodeID, Event: github.ReviewEventApprove, Body: "Nice.", CommitOID: headSHA},
+			want:     fake.Submission{Repository: testRepo, Number: 7, PullRequestIdentifier: prNodeID, Event: github.ReviewEventApprove, Body: "Nice.", CommitObjectIdentifier: headSHA},
 			info:     "Approved #7",
 		},
 		{
 			name: "request changes", command: "request-changes", body: "Please fix.",
 			wantText: "Request changes on #7 in acme/widgets?",
-			want:     fake.Submission{Repo: testRepo, Number: 7, PullRequestID: prNodeID, Event: github.ReviewEventRequestChanges, Body: "Please fix.", CommitOID: headSHA},
+			want:     fake.Submission{Repository: testRepo, Number: 7, PullRequestIdentifier: prNodeID, Event: github.ReviewEventRequestChanges, Body: "Please fix.", CommitObjectIdentifier: headSHA},
 			info:     "Requested changes on #7",
 		},
 	}
@@ -212,7 +212,7 @@ func TestReviewEmptyBodyIsAnError(t *testing.T) {
 
 func TestReviewWithPendingReview(t *testing.T) {
 	c := newReviewer(t)
-	c.client.SetPendingReview(testRepo, 7, &github.PendingReview{ID: "PRR_1", Body: "draft on github", CommentCount: 3})
+	c.client.SetPendingReview(testRepo, 7, &github.PendingReview{Identifier: "PRR_1", Body: "draft on github", CommentCount: 3})
 	c.body = "" // an empty body is fine with inline comments
 	cmd := c.v.review.start(c.v.reviewEnv(), github.ReviewEventComment)
 	c.run(cmd)
@@ -227,7 +227,7 @@ func TestReviewWithPendingReview(t *testing.T) {
 		t.Errorf("text = %q, want %q", conf.Text, want)
 	}
 	c.run(conf.OnYes)
-	want := []fake.Submission{{Repo: testRepo, Number: 7, PullRequestID: prNodeID, Event: github.ReviewEventComment, CommitOID: headSHA, PendingReviewID: "PRR_1"}}
+	want := []fake.Submission{{Repository: testRepo, Number: 7, PullRequestIdentifier: prNodeID, Event: github.ReviewEventComment, CommitObjectIdentifier: headSHA, PendingReviewIdentifier: "PRR_1"}}
 	if diff := cmp.Diff(want, c.client.Submissions()); diff != "" {
 		t.Errorf("submissions (-want +got):\n%s", diff)
 	}
@@ -235,7 +235,7 @@ func TestReviewWithPendingReview(t *testing.T) {
 
 func TestReviewPendingGoneAtSubmit(t *testing.T) {
 	c := newReviewer(t)
-	c.client.SetPendingReview(testRepo, 7, &github.PendingReview{ID: "PRR_1", CommentCount: 1})
+	c.client.SetPendingReview(testRepo, 7, &github.PendingReview{Identifier: "PRR_1", CommentCount: 1})
 	c.body = "my summary"
 	c.command("approve")
 	conf, ok := c.lastConfirm()
@@ -399,7 +399,7 @@ func TestReviewQuestion(t *testing.T) {
 		{github.ReviewEventComment, nil, "Comment on #42 in o/r?"},
 	}
 	for _, tt := range tests {
-		got := reviewQuestion(tt.event, github.Repo{Owner: "o", Name: "r"}, 42, tt.pending)
+		got := reviewQuestion(tt.event, github.Repository{Owner: "o", Name: "r"}, 42, tt.pending)
 		if got != tt.want {
 			t.Errorf("%s: got %q, want %q", tt.event, got, tt.want)
 		}

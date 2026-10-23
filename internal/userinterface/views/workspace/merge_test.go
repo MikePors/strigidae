@@ -98,14 +98,14 @@ func TestMergeConfirmationAndSuccess(t *testing.T) {
 				t.Fatal("merged before the answer")
 			}
 			c.run(conf.OnYes)
-			want := []fake.Merge{{Repo: testRepo, Number: 7, PullRequestID: prNodeID, Method: tt.method, ExpectedHeadOID: headSHA}}
+			want := []fake.Merge{{Repository: testRepo, Number: 7, PullRequestIdentifier: prNodeID, Method: tt.method, ExpectedHeadObjectIdentifier: headSHA}}
 			if diff := cmp.Diff(want, c.client.Merges()); diff != "" {
 				t.Errorf("merges (-want +got):\n%s", diff)
 			}
 			if diff := cmp.Diff([]string{"Merging…", tt.info}, c.infos()); diff != "" {
 				t.Errorf("info (-want +got):\n%s", diff)
 			}
-			if c.v.detail.State != github.PRStateMerged {
+			if c.v.detail.State != github.PullRequestStateMerged {
 				t.Errorf("workspace not refreshed after success: state %v", c.v.detail.State)
 			}
 			if c.v.Loading() {
@@ -263,7 +263,7 @@ func TestMergeFlowIgnoresOtherFlowsAndStaleResults(t *testing.T) {
 }
 
 func TestMergeQuestionCleansBaseRef(t *testing.T) {
-	q := mergeQuestion(7, github.MergeMethodMerge, github.MergeStatus{BaseRef: "ma\x1b[31min"})
+	q := mergeQuestion(7, github.MergeMethodMerge, github.MergeStatus{BaseBranch: "ma\x1b[31min"})
 	if strings.Contains(q, "\x1b") {
 		t.Errorf("question = %q", q)
 	}

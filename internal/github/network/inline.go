@@ -9,43 +9,43 @@ import (
 
 // Operation names for the inline comment calls; they double as fixture keys.
 const (
-	opStartReview         = "StartReview"
-	opAddReviewThread     = "AddReviewThread"
-	opUpdateReviewComment = "UpdateReviewComment"
-	opDeleteReviewComment = "DeleteReviewComment"
-	opGetReviewComment    = "GetReviewComment"
+	operationStartReview         = "StartReview"
+	operationAddReviewThread     = "AddReviewThread"
+	operationUpdateReviewComment = "UpdateReviewComment"
+	operationDeleteReviewComment = "DeleteReviewComment"
+	operationGetReviewComment    = "GetReviewComment"
 )
 
 const getReviewCommentQuery = `
-query ` + opGetReviewComment + `($id: ID!) {
+query ` + operationGetReviewComment + `($id: ID!) {
   node(id: $id) { ... on PullRequestReviewComment { ` + reviewCommentSelection + ` } }
 }`
 
 // startReviewMutation creates a pending review: without event, GitHub leaves
 // the review in the PENDING state.
 const startReviewMutation = `
-mutation ` + opStartReview + `($pullRequestId: ID!, $commitOID: GitObjectID!) {
+mutation ` + operationStartReview + `($pullRequestId: ID!, $commitOID: GitObjectID!) {
   addPullRequestReview(input: {pullRequestId: $pullRequestId, commitOID: $commitOID}) {
     pullRequestReview { id body }
   }
 }`
 
 const addReviewThreadMutation = `
-mutation ` + opAddReviewThread + `($reviewId: ID!, $path: String!, $body: String!, $line: Int!, $side: DiffSide!, $startLine: Int, $startSide: DiffSide) {
+mutation ` + operationAddReviewThread + `($reviewId: ID!, $path: String!, $body: String!, $line: Int!, $side: DiffSide!, $startLine: Int, $startSide: DiffSide) {
   addPullRequestReviewThread(input: {pullRequestReviewId: $reviewId, path: $path, body: $body, line: $line, side: $side, startLine: $startLine, startSide: $startSide}) {
     thread { ` + threadSelection + ` }
   }
 }`
 
 const updateReviewCommentMutation = `
-mutation ` + opUpdateReviewComment + `($commentId: ID!, $body: String!) {
+mutation ` + operationUpdateReviewComment + `($commentId: ID!, $body: String!) {
   updatePullRequestReviewComment(input: {pullRequestReviewCommentId: $commentId, body: $body}) {
     pullRequestReviewComment { ` + reviewCommentSelection + ` }
   }
 }`
 
 const deleteReviewCommentMutation = `
-mutation ` + opDeleteReviewComment + `($commentId: ID!) {
+mutation ` + operationDeleteReviewComment + `($commentId: ID!) {
   deletePullRequestReviewComment(input: {id: $commentId}) { clientMutationId }
 }`
 
@@ -56,37 +56,37 @@ func (c *Client) StartReview(ctx context.Context, in github.StartReviewInput) (g
 			PullRequestReview *struct{ ID, Body string }
 		}
 	}
-	vars := map[string]any{"pullRequestId": in.PullRequestID, "commitOID": in.CommitOID}
+	vars := map[string]any{"pullRequestId": in.PullRequestIdentifier, "commitOID": in.CommitObjectIdentifier}
 	if err := c.query(ctx, startReviewMutation, vars, &resp); err != nil {
-		return github.PendingReview{}, fmt.Errorf("start review on %s#%d: %w", in.Repo, in.Number, err)
+		return github.PendingReview{}, fmt.Errorf("start review on %s#%d: %w", in.Repository, in.Number, err)
 	}
 	if resp.AddPullRequestReview == nil || resp.AddPullRequestReview.PullRequestReview == nil {
-		return github.PendingReview{}, fmt.Errorf("start review on %s#%d: %w", in.Repo, in.Number, github.ErrNotFound)
+		return github.PendingReview{}, fmt.Errorf("start review on %s#%d: %w", in.Repository, in.Number, github.ErrNotFound)
 	}
 	r := resp.AddPullRequestReview.PullRequestReview
-	return github.PendingReview{ID: r.ID, Body: r.Body}, nil
+	return github.PendingReview{Identifier: r.ID, Body: r.Body}, nil
 }
 
 // AddReviewThread implements github.Client.
 func (c *Client) AddReviewThread(ctx context.Context, in github.AddThreadInput) (github.ReviewThread, error) {
 	var resp struct {
-		AddPullRequestReviewThread *struct{ Thread *gqlThread }
+		AddPullRequestReviewThread *struct{ Thread *graphqlThread }
 	}
 	vars := map[string]any{
-		"reviewId": in.PendingReviewID, "path": in.Path, "body": in.Body,
+		"reviewId": in.PendingReviewIdentifier, "path": in.Path, "body": in.Body,
 		"line": in.Line, "side": string(in.Side),
 	}
 	if in.StartLine > 0 {
 		vars["startLine"], vars["startSide"] = in.StartLine, string(in.StartSide)
 	}
 	if err := c.query(ctx, addReviewThreadMutation, vars, &resp); err != nil {
-		return github.ReviewThread{}, fmt.Errorf("add review comment on %s#%d: %w", in.Repo, in.Number, err)
+		return github.ReviewThread{}, fmt.Errorf("add review comment on %s#%d: %w", in.Repository, in.Number, err)
 	}
 	// GitHub answers a null thread, without errors, when it does not accept the
 	// position (as far as known: to be confirmed live).
 	if resp.AddPullRequestReviewThread == nil || resp.AddPullRequestReviewThread.Thread == nil {
 		return github.ReviewThread{}, fmt.Errorf("add review comment on %s#%d: %w: GitHub did not accept it on %s:%d, which may not be in the diff",
-			in.Repo, in.Number, github.ErrCommentRejected, in.Path, in.Line)
+			in.Repository, in.Number, github.ErrCommentRejected, in.Path, in.Line)
 	}
 	return mapThread(*resp.AddPullRequestReviewThread.Thread), nil
 }
@@ -94,7 +94,7 @@ func (c *Client) AddReviewThread(ctx context.Context, in github.AddThreadInput) 
 // UpdateReviewComment implements github.Client.
 func (c *Client) UpdateReviewComment(ctx context.Context, commentID, body string) (github.ReviewComment, error) {
 	var resp struct {
-		UpdatePullRequestReviewComment *struct{ PullRequestReviewComment *gqlReviewComment }
+		UpdatePullRequestReviewComment *struct{ PullRequestReviewComment *graphqlReviewComment }
 	}
 	vars := map[string]any{"commentId": commentID, "body": body}
 	if err := c.query(ctx, updateReviewCommentMutation, vars, &resp); err != nil {
@@ -117,7 +117,7 @@ func (c *Client) DeleteReviewComment(ctx context.Context, commentID string) erro
 
 // GetReviewComment implements github.Client.
 func (c *Client) GetReviewComment(ctx context.Context, commentID string) (github.ReviewComment, error) {
-	var resp struct{ Node *gqlReviewComment }
+	var resp struct{ Node *graphqlReviewComment }
 	if err := c.query(ctx, getReviewCommentQuery, map[string]any{"id": commentID}, &resp); err != nil {
 		return github.ReviewComment{}, fmt.Errorf("load review comment: %w", err)
 	}

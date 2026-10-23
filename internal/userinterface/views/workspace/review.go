@@ -29,7 +29,7 @@ type reviewFlow struct {
 // reviewEnv is what the flow needs from the workspace at one moment.
 type reviewEnv struct {
 	client      github.Client
-	repo        github.Repo
+	repo        github.Repository
 	number      int
 	theme       theme.Theme
 	edit        EditFunc
@@ -49,7 +49,7 @@ type (
 	// reviewPendingMsg is the pending review fetched to pre-fill the editor.
 	reviewPendingMsg struct {
 		flow    *reviewFlow
-		repo    github.Repo
+		repo    github.Repository
 		number  int
 		seq     int
 		event   github.ReviewEvent
@@ -58,7 +58,7 @@ type (
 	}
 	reviewEditedMsg struct {
 		flow   *reviewFlow
-		repo   github.Repo
+		repo   github.Repository
 		number int
 		seq    int
 		event  github.ReviewEvent
@@ -68,7 +68,7 @@ type (
 	// reviewFreshMsg is the status fetched just before confirming.
 	reviewFreshMsg struct {
 		flow   *reviewFlow
-		repo   github.Repo
+		repo   github.Repository
 		number int
 		seq    int
 		event  github.ReviewEvent
@@ -80,7 +80,7 @@ type (
 	// marks the submission as in flight before the call starts.
 	reviewSendMsg struct {
 		flow   *reviewFlow
-		repo   github.Repo
+		repo   github.Repository
 		number int
 		event  github.ReviewEvent
 		body   string
@@ -88,7 +88,7 @@ type (
 	}
 	reviewSubmittedMsg struct {
 		flow   *reviewFlow
-		repo   github.Repo
+		repo   github.Repository
 		number int
 		event  github.ReviewEvent
 		body   string
@@ -97,7 +97,7 @@ type (
 	// refreshMsg asks the workspace to reload after its head moved.
 	refreshMsg struct {
 		flow   *reviewFlow
-		repo   github.Repo
+		repo   github.Repository
 		number int
 	}
 )
@@ -144,11 +144,11 @@ func (f *reviewFlow) command(name string, env reviewEnv) (tea.Cmd, bool) {
 }
 
 // mine reports whether a result belongs to this flow's latest attempt.
-func (f *reviewFlow) mine(env reviewEnv, flow *reviewFlow, repo github.Repo, number, seq int) bool {
+func (f *reviewFlow) mine(env reviewEnv, flow *reviewFlow, repo github.Repository, number, seq int) bool {
 	return f.same(env, flow, repo, number) && seq == f.seq
 }
 
-func (f *reviewFlow) same(env reviewEnv, flow *reviewFlow, repo github.Repo, number int) bool {
+func (f *reviewFlow) same(env reviewEnv, flow *reviewFlow, repo github.Repository, number int) bool {
 	return flow == f && repo == env.repo && number == env.number
 }
 
@@ -319,11 +319,11 @@ func (f *reviewFlow) confirm(msg reviewFreshMsg, env reviewEnv) tea.Cmd {
 func (f *reviewFlow) submit(env reviewEnv, event github.ReviewEvent, body string, st github.ReviewStatus) tea.Cmd {
 	flow := f
 	in := github.SubmitReviewInput{
-		Repo: env.repo, Number: env.number, PullRequestID: st.PullRequestID,
-		Event: event, Body: body, CommitOID: st.HeadSHA,
+		Repository: env.repo, Number: env.number, PullRequestIdentifier: st.PullRequestIdentifier,
+		Event: event, Body: body, CommitObjectIdentifier: st.HeadSHA,
 	}
 	if st.Pending != nil {
-		in.PendingReviewID = st.Pending.ID
+		in.PendingReviewIdentifier = st.Pending.Identifier
 	}
 	return func() tea.Msg {
 		err := env.client.SubmitReview(context.Background(), in)
@@ -331,7 +331,7 @@ func (f *reviewFlow) submit(env reviewEnv, event github.ReviewEvent, body string
 		if err == nil {
 			return res
 		}
-		shown := userinterface.ErrorMsg{Err: submitFailure(err, in.PendingReviewID != "")}
+		shown := userinterface.ErrorMsg{Err: submitFailure(err, in.PendingReviewIdentifier != "")}
 		return tea.BatchMsg{func() tea.Msg { return res }, func() tea.Msg { return shown }}
 	}
 }

@@ -31,7 +31,7 @@ const (
 // the request: every view receives every command result, and a refresh
 // supersedes any page still in flight.
 type prsLoadedMsg struct {
-	repo github.Repo
+	repo github.Repository
 	seq  int
 	// more is true for a next-page fetch that is appended to the list, false
 	// for a first-page fetch that replaces it.
@@ -51,7 +51,7 @@ type Options struct {
 // View lists one repository's open pull requests.
 type View struct {
 	client github.Client
-	repo   github.Repo
+	repo   github.Repository
 	th     theme.Theme
 	km     keys.Global
 	now    func() time.Time
@@ -75,7 +75,7 @@ var (
 )
 
 // New returns the PR list for repo. It starts loading when pushed (Init).
-func New(client github.Client, repo github.Repo, th theme.Theme, opts Options) *View {
+func New(client github.Client, repo github.Repository, th theme.Theme, opts Options) *View {
 	if opts.Now == nil {
 		opts.Now = time.Now
 	}

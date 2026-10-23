@@ -72,7 +72,7 @@ func (m *Model) placeThreads() {
 }
 
 func (m *Model) expanded(t github.ReviewThread) bool {
-	if v, ok := m.open[t.ID]; ok {
+	if v, ok := m.open[t.Identifier]; ok {
 		return v
 	}
 	return thread.DefaultExpanded(t)
@@ -100,7 +100,7 @@ func (m *Model) renderBlock(ti int) []string {
 	if m.bcache == nil || sig != m.bsig {
 		m.bcache, m.bsig = map[blockKey][]string{}, sig
 	}
-	key := blockKey{id: t.ID, expanded: m.expanded(t), location: slices.Contains(m.orphans, ti)}
+	key := blockKey{id: t.Identifier, expanded: m.expanded(t), location: slices.Contains(m.orphans, ti)}
 	if lines, ok := m.bcache[key]; ok {
 		return lines
 	}
@@ -161,7 +161,7 @@ func (m *Model) setExpanded(ts []int, v bool) {
 		return
 	}
 	for _, ti := range ts {
-		m.open[m.fthreads[ti].ID] = v
+		m.open[m.fthreads[ti].Identifier] = v
 	}
 	m.layout()
 }

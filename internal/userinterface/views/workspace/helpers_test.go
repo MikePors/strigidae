@@ -16,7 +16,7 @@ import (
 
 var (
 	testNow  = time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)
-	testRepo = github.Repo{Owner: "acme", Name: "widgets"}
+	testRepo = github.Repository{Owner: "acme", Name: "widgets"}
 )
 
 const longBody = `## Summary
@@ -52,11 +52,11 @@ follow-up issue for making the policy configurable.
 func testDetail() github.PullRequestDetail {
 	return github.PullRequestDetail{
 		PullRequest: github.PullRequest{
-			ID:   "PR_7",
-			Repo: testRepo, Number: 7, Title: "Add retry policy to sync client",
-			Author: "alice", State: github.PRStateOpen,
+			Identifier: "PR_7",
+			Repository: testRepo, Number: 7, Title: "Add retry policy to sync client",
+			Author: "alice", State: github.PullRequestStateOpen,
 			ReviewDecision: github.ReviewDecisionChangesRequested,
-			HeadRef:        "feat/retry", BaseRef: "main",
+			HeadBranch:     "feat/retry", BaseBranch: "main",
 			URL: "https://example.test/acme/widgets/pull/7",
 		},
 		Body:           longBody,

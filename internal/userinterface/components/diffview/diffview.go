@@ -305,7 +305,7 @@ func (m *Model) cursorKey() (cursorKey, bool) {
 	r := m.rows[c]
 	k := cursorKey{bi: r.bi}
 	if r.tr != nil {
-		k.thread, k.off = m.fthreads[r.tr.t].ID, r.tr.i
+		k.thread, k.off = m.fthreads[r.tr.t].Identifier, r.tr.i
 	}
 	return k, true
 }
@@ -331,7 +331,7 @@ func (m *Model) keyRow(k cursorKey) int {
 func (m *Model) threadRowFor(id string, off int) int {
 	best := -1
 	for i, r := range m.rows {
-		if r.tr != nil && m.fthreads[r.tr.t].ID == id && r.tr.i <= off {
+		if r.tr != nil && m.fthreads[r.tr.t].Identifier == id && r.tr.i <= off {
 			best = i
 		}
 	}

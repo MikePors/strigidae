@@ -16,7 +16,7 @@ import (
 
 func tc(author, body string, ago time.Duration) github.ReviewComment {
 	return github.ReviewComment{
-		ID: author + body, Author: author, Body: body, CreatedAt: testNow.Add(-ago),
+		Identifier: author + body, Author: author, Body: body, CreatedAt: testNow.Add(-ago),
 		Reactions: []github.ReactionSummary{{Content: github.ReactionHeart, Count: 1}},
 	}
 }
@@ -27,19 +27,19 @@ func tc(author, body string, ago time.Duration) github.ReviewComment {
 func testThreads() []github.ReviewThread {
 	return []github.ReviewThread{
 		{
-			ID: "t-open", Path: "internal/sync/client.go", Line: 14, DiffSide: github.SideRight,
+			Identifier: "t-open", Path: "internal/sync/client.go", Line: 14, DiffSide: github.SideRight,
 			Comments: []github.ReviewComment{tc("bob", "Why retry here?", 5*time.Hour), tc("alice", "Handles flaky links.", 4*time.Hour)},
 		},
 		{
-			ID: "t-resolved", Path: "internal/sync/client.go", Line: 12, DiffSide: github.SideRight, IsResolved: true,
+			Identifier: "t-resolved", Path: "internal/sync/client.go", Line: 12, DiffSide: github.SideRight, IsResolved: true,
 			Comments: []github.ReviewComment{tc("carol", "Nit: unused import.", 30*time.Hour)},
 		},
 		{
-			ID: "t-outdated", Path: "internal/sync/client.go", OriginalLine: 3, DiffSide: github.SideRight, IsOutdated: true,
+			Identifier: "t-outdated", Path: "internal/sync/client.go", OriginalLine: 3, DiffSide: github.SideRight, IsOutdated: true,
 			Comments: []github.ReviewComment{tc("dave", "This moved.", 70*time.Hour)},
 		},
 		{
-			ID: "t-readme", Path: "README.md", Line: 1, DiffSide: github.SideRight,
+			Identifier: "t-readme", Path: "README.md", Line: 1, DiffSide: github.SideRight,
 			Comments: []github.ReviewComment{tc("erin", "Typo.", time.Hour)},
 		},
 	}
@@ -57,7 +57,7 @@ func TestThreadsLoadedAndSorted(t *testing.T) {
 	h := threadHarness(t, 100, 40)
 	var ids []string
 	for _, th := range h.v.threads {
-		ids = append(ids, th.ID)
+		ids = append(ids, th.Identifier)
 	}
 	want := "t-readme,t-outdated,t-resolved,t-open" // by path, then line (outdated by original line)
 	if got := strings.Join(ids, ","); got != want {
@@ -72,7 +72,7 @@ func TestThreadsPagedLoad(t *testing.T) {
 	h := newHarness(t, 100, 40)
 	var many []github.ReviewThread
 	for i := range 75 {
-		many = append(many, github.ReviewThread{ID: fmt.Sprintf("t%02d", i), Path: "README.md", Line: i + 1, Comments: []github.ReviewComment{tc("x", "y", time.Hour)}})
+		many = append(many, github.ReviewThread{Identifier: fmt.Sprintf("t%02d", i), Path: "README.md", Line: i + 1, Comments: []github.ReviewComment{tc("x", "y", time.Hour)}})
 	}
 	h.client.SetReviewThreads(testRepo, 7, many)
 	h.run(h.v.Init())
@@ -133,7 +133,7 @@ func TestThreadErrorKeepsPullRequestUsable(t *testing.T) {
 func TestStaleThreadsIgnored(t *testing.T) {
 	h := loaded(t, 100, 30)
 	cur := h.v.seq
-	stale := []github.ReviewThread{{ID: "stale", Path: "x"}}
+	stale := []github.ReviewThread{{Identifier: "stale", Path: "x"}}
 	for name, msg := range map[string]threadsLoadedMsg{
 		"old seq":      {owner: h.v, repo: testRepo, number: 7, seq: cur - 1, threads: stale},
 		"other number": {owner: h.v, repo: testRepo, number: 8, seq: cur, threads: stale},

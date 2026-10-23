@@ -18,11 +18,11 @@ var MergeMethods = []MergeMethod{MergeMethodMerge, MergeMethodSquash, MergeMetho
 // MergeStatus is the state a merge depends on.
 type MergeStatus struct {
 	// PullRequestID is the pull request's node ID.
-	PullRequestID string
+	PullRequestIdentifier string
 	// HeadSHA is the pull request's current head commit.
 	HeadSHA string
 	// BaseRef is the branch the pull request merges into.
-	BaseRef string
+	BaseBranch string
 	// Allowed lists the merge methods the repository allows, in the order of
 	// MergeMethods.
 	Allowed []MergeMethod
@@ -36,11 +36,11 @@ func (s MergeStatus) Allows(method MergeMethod) bool { return slices.Contains(s.
 
 // MergeInput describes a merge.
 type MergeInput struct {
-	Repo          Repo
-	Number        int
-	PullRequestID string
-	Method        MergeMethod
+	Repository            Repository
+	Number                int
+	PullRequestIdentifier string
+	Method                MergeMethod
 	// ExpectedHeadOID is the head commit the caller reviewed; GitHub refuses
 	// the merge if the head has moved.
-	ExpectedHeadOID string
+	ExpectedHeadObjectIdentifier string
 }
