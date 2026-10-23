@@ -169,7 +169,7 @@ func (model *Model) noteLines(width int) []string {
 	if model.note == "" || width < 1 {
 		return nil
 	}
-	return strings.Split(ansi.Wordwrap(model.note, width, ""), "\n")
+	return strings.Split(ansi.Wrap(model.note, width, ""), "\n")
 }
 
 // titled puts the title in the top edge of the box.
