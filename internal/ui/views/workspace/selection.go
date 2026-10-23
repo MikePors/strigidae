@@ -29,12 +29,18 @@ func (v *View) selectedPath() string {
 }
 
 func (v *View) selectionChanged() {
-	if s := v.sel(); s > 0 && s <= len(v.files()) {
-		f := v.files()[s-1]
-		if f != v.paneFile {
-			v.paneFile = f
-			v.filePane.SetFile(f)
-		}
+	s := v.sel()
+	if s == 0 || s > len(v.files()) {
+		v.filePane.VisualEnd() // left the diff
+		return
+	}
+	f := v.files()[s-1]
+	if f.Path != v.paneFile.Path {
+		v.filePane.VisualEnd() // another file
+	}
+	if f != v.paneFile {
+		v.paneFile = f
+		v.filePane.SetFile(f)
 	}
 }
 

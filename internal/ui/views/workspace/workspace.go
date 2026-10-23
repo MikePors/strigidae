@@ -76,8 +76,11 @@ type View struct {
 	err         error  // load failure while there is nothing to show
 	notFound    bool
 
-	cseq   int               // latest compose request; older results are stale
-	drafts map[string]string // unposted bodies, by thread ID or topLevelDraft
+	cseq int // latest compose request; older results are stale
+	// commentWriting is set from when a comment write starts until its result
+	// (or its question) arrives; reviews and merges wait for it.
+	commentWriting bool
+	drafts         map[string]string // unposted bodies, by thread ID or topLevelDraft
 
 	viewedState map[string]*viewedToggle // by path; see viewedToggle
 
@@ -144,8 +147,12 @@ func (v *View) Loading() bool {
 // CapturesKeys implements ui.KeyCapturer: the file picker, the verdict
 // chooser and a visual-line selection own the keyboard while they are open.
 func (v *View) CapturesKeys() bool {
-	return v.picker != nil || v.review.chooser != nil || v.filePane.VisualActive()
+	return v.picker != nil || v.review.chooser != nil || v.visualActive()
 }
+
+// visualActive reports whether a line selection is open on a file's diff. One
+// that outlived its file (the Overview is showing) does not count.
+func (v *View) visualActive() bool { return v.sel() > 0 && v.filePane.VisualActive() }
 
 // Init implements ui.View.
 func (v *View) Init() tea.Cmd { return v.load() }
@@ -232,11 +239,17 @@ func (v *View) Update(msg tea.Msg) (ui.View, tea.Cmd) {
 		if !v.owns(msg.origin) {
 			return v, nil
 		}
+		v.commentWriting = false // the write waits for the answer
 		return v, ui.Confirm(msg.question, msg.onYes)
+	case commentReadMsg:
+		if !v.owns(msg.origin) {
+			return v, nil
+		}
+		return v, v.commentRead(msg)
 	case keys.Msg:
 		return v, v.handleKey(msg)
 	case tea.KeyPressMsg:
-		if v.filePane.VisualActive() {
+		if v.visualActive() {
 			return v, v.visualKey(msg)
 		}
 		if v.review.chooser != nil {

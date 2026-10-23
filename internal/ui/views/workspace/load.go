@@ -158,6 +158,9 @@ func (v *View) prLoaded(msg prLoadedMsg) tea.Cmd {
 	}
 	v.fw.SetRows(v.entries())
 	v.fw.Restore(sel, top, 0) // a refresh must not scroll the Files list
+	if sel == 0 {
+		v.filePane.VisualEnd() // the file is gone: so is its selection
+	}
 	v.ov.invalidate()
 	v.selectionChanged()
 	v.layout()
@@ -188,6 +191,7 @@ func (v *View) diffLoaded(msg diffLoadedMsg) tea.Cmd {
 		v.diff = DiffState{Raw: msg.raw, Parsed: msg.parsed, ParseErr: msg.parseErr, Err: msg.err}
 		v.diffHead = msg.head
 	}
+	v.filePane.VisualEnd() // a reload makes the selected lines stale
 	v.filePane.SetDiff(v.diff)
 	if msg.parseErr != nil {
 		// Files that parsed still show; the problem is reported once here.

@@ -67,6 +67,8 @@ func (f *mergeFlow) command(args string, env reviewEnv) tea.Cmd {
 	switch {
 	case f.merging:
 		return ui.Info("a merge is in progress")
+	case env.commentWriting:
+		return ui.Info(commentSavingText)
 	case !env.loaded:
 		return ui.Info("pull request not loaded yet")
 	case !env.diffReady:

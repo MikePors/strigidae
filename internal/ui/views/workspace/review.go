@@ -38,6 +38,8 @@ type reviewEnv struct {
 	diffHead    string         // head SHA the diff on screen was loaded for
 	diffPending bool           // a diff load is in flight
 	diffReady   bool           // a diff is loaded and shown
+	// commentWriting is set while a comment is being saved.
+	commentWriting bool
 }
 
 // Results carry the identity of the flow, repo and number that asked. The
@@ -108,6 +110,8 @@ func (v *View) reviewEnv() reviewEnv {
 		diffHead:    v.diffHead,
 		diffPending: v.diffPending,
 		diffReady:   !v.diffPending && v.diff.Parsed != nil && v.diff.Err == nil,
+
+		commentWriting: v.commentWriting,
 	}
 }
 
@@ -192,6 +196,8 @@ func (f *reviewFlow) blocked(env reviewEnv) tea.Cmd {
 	switch {
 	case f.submitting:
 		return ui.Info("a review is being submitted")
+	case env.commentWriting:
+		return ui.Info(commentSavingText)
 	case !env.loaded:
 		return ui.Info("pull request not loaded yet")
 	case !env.diffReady:

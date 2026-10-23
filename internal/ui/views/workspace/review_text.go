@@ -18,6 +18,10 @@ var verdicts = []struct {
 	{"Comment", github.ReviewEventComment},
 }
 
+// commentSavingText is shown when a review or merge is asked for while a
+// comment is being saved.
+const commentSavingText = "a comment is being saved; try again"
+
 // headMovedText is the notice shown when the review would not apply to the
 // commit whose diff is on screen.
 const headMovedText = "Head moved since you loaded it; refresh first."

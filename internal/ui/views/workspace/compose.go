@@ -29,30 +29,46 @@ type EditFunc func(initial string, done func(body string, err error) tea.Msg) te
 // WithEditor replaces how comment bodies are edited.
 func WithEditor(e EditFunc) Option { return func(v *View) { v.edit = e } }
 
-// target is what a comment is written for.
+// targetKind says what a comment being written is for.
+type targetKind int
+
+const (
+	kindTopLevel targetKind = iota // a comment on the pull request
+	kindReply                      // a reply to a review thread
+	kindInline                     // a new inline comment in the pending review
+	kindEdit                       // a change to one of the viewer's own comments
+)
+
+// target is what a comment is written for; kind says which fields apply.
 type target struct {
-	threadID string // empty for a top-level comment
-	label    string // "path:line" of the thread, for the confirmation
-	// inline, when set, is a new inline comment for the pending review; the
-	// repo, number and pending review are filled in when it is sent.
+	kind targetKind
+	// threadID is the thread replied to (kindReply) or the one the edited
+	// comment is in (kindEdit).
+	threadID string
+	label    string // "path:line" of the thread, for the reply confirmation
+	// inline (kindInline) is the new comment's position; the repo, number and
+	// pending review are filled in when it is sent. head is the commit of the
+	// diff the lines were picked on.
 	inline *github.AddThreadInput
-	// commentID, when set, is the comment (pending or published) being edited;
-	// initial is its current body, shown when no draft is kept.
+	head   string
+	// commentID (kindEdit) is the comment, pending or published, being
+	// edited; initial is its body when the editor was opened, shown there
+	// when no draft is kept.
 	commentID string
 	initial   string
 }
 
 func (t target) draftKey() string {
-	switch {
-	case t.inline != nil:
+	switch t.kind {
+	case kindInline:
 		in := t.inline
 		return fmt.Sprintf("inline:%s:%s:%d-%d", in.Path, in.Side, in.StartLine, in.Line)
-	case t.commentID != "":
+	case kindEdit:
 		return "edit:" + t.commentID
-	case t.threadID == "":
-		return topLevelDraft
+	case kindReply:
+		return t.threadID
 	}
-	return t.threadID
+	return topLevelDraft
 }
 
 // Results of composing carry the same identity as load results. An edit
@@ -99,7 +115,7 @@ func (v *View) reply() tea.Cmd {
 	if !ok {
 		return hint
 	}
-	return v.compose(target{threadID: t.ID, label: threadLocation(t)})
+	return v.compose(target{kind: kindReply, threadID: t.ID, label: threadLocation(t)})
 }
 
 // comment starts a top-level comment from the Overview, or an inline one on a
@@ -140,9 +156,12 @@ func (v *View) edited(msg editedMsg) tea.Cmd {
 	// Kept until the post succeeds, so declining or a failure loses nothing.
 	v.drafts[msg.tgt.draftKey()] = body
 	// A pending comment is a private draft, so it is sent without asking;
-	// commentSend asks before changing a published one.
-	if msg.tgt.inline != nil || msg.tgt.commentID != "" {
-		return v.commentSend(msg.tgt, body)
+	// sendEdit asks before changing a published one.
+	switch msg.tgt.kind {
+	case kindInline:
+		return v.sendInline(msg.tgt, body)
+	case kindEdit:
+		return v.sendEdit(msg.tgt, body)
 	}
 	return ui.Confirm(v.question(msg.tgt, body), v.post(msg.tgt, body))
 }
@@ -150,7 +169,7 @@ func (v *View) edited(msg editedMsg) tea.Cmd {
 // question is the confirmation text: where the text goes and its first line.
 func (v *View) question(tgt target, body string) string {
 	prefix := "Post comment?"
-	if tgt.threadID != "" {
+	if tgt.kind == kindReply {
 		prefix = "Post reply to " + termtext.Clean(tgt.label) + "?"
 	}
 	first := firstLine(body)
@@ -174,7 +193,7 @@ func (v *View) post(tgt target, body string) tea.Cmd {
 	client, o := v.client, v.origin()
 	return func() tea.Msg {
 		var err error
-		if tgt.threadID != "" {
+		if tgt.kind == kindReply {
 			_, err = client.ReplyToThread(context.Background(), tgt.threadID, body)
 		} else {
 			_, err = client.AddComment(context.Background(), o.repo, o.number, body)
@@ -184,7 +203,7 @@ func (v *View) post(tgt target, body string) tea.Cmd {
 			return res
 		}
 		what := "comment"
-		if tgt.threadID != "" {
+		if tgt.kind == kindReply {
 			what = "reply"
 		}
 		shown := ui.ErrorMsg{Err: termtext.SafeError(fmt.Errorf("post %s: %w", what, err))}
@@ -193,10 +212,9 @@ func (v *View) post(tgt target, body string) tea.Cmd {
 }
 
 func (v *View) posted(msg postedMsg) tea.Cmd {
+	v.commentWriting = false
 	if isStale(msg.err) {
-		// The comment cannot be edited any more, so its draft is useless.
-		delete(v.drafts, msg.tgt.draftKey())
-		return v.reloadPendingComments()
+		return v.staleEdit(msg)
 	}
 	if msg.err != nil {
 		return nil // the draft stays; the command already reported the error
@@ -205,12 +223,12 @@ func (v *View) posted(msg postedMsg) tea.Cmd {
 	if v.drafts[msg.tgt.draftKey()] == msg.body {
 		delete(v.drafts, msg.tgt.draftKey())
 	}
-	switch {
-	case msg.tgt.threadID != "":
+	switch msg.tgt.kind {
+	case kindReply:
 		return tea.Batch(ui.Info("Reply posted"), v.reloadThreads())
-	case msg.tgt.inline != nil:
+	case kindInline:
 		return tea.Batch(ui.Info("Pending comment added"), v.reloadPendingComments())
-	case msg.tgt.commentID != "":
+	case kindEdit:
 		return tea.Batch(ui.Info("Comment updated"), v.reloadPendingComments())
 	}
 	return tea.Batch(ui.Info("Comment posted"), v.reloadPR())
