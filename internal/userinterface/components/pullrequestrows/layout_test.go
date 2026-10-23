@@ -17,7 +17,11 @@ func TestShortRepository(test *testing.T) {
 		{"acme/widgets", 12, "acme/widgets"},
 		{"acme/widgets", 10, "…/widgets"},
 		{"acme/widgets", 9, "…/widgets"},
-		{"acme/widgets", 6, "acme/…"},
+		{"acme/widgets", 6, "…/wid…"},
+		{"kubernetes/kubernetes", 10, "…/kuberne…"},
+		{"octo-org/really-long-repo-name", 10, "…/really-…"},
+		{"octo-org/really-long-repository-name", 24, "…/really-long-repositor…"},
+		{"acme/widgets", 2, "a…"},
 		{"widgets", 4, "wid…"},
 	}
 	for _, testCase := range tests {

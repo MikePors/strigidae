@@ -105,10 +105,11 @@ func shortRepository(text string, width int) string {
 	if ansi.StringWidth(text) <= width {
 		return text
 	}
-	if slash := strings.LastIndex(text, "/"); slash >= 0 {
-		if short := "…" + text[slash:]; ansi.StringWidth(short) <= width {
-			return short
-		}
+	const ownerGap = "…/" // stands in for the owner
+	if slash := strings.LastIndex(text, "/"); slash >= 0 && width > ansi.StringWidth(ownerGap) {
+		// Keep the name and give up the owner, cutting the name only when it
+		// alone does not fit.
+		return ownerGap + ansi.Truncate(text[slash+1:], width-ansi.StringWidth(ownerGap), "…")
 	}
 	return ansi.Truncate(text, width, "…")
 }

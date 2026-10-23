@@ -29,7 +29,7 @@ func padLeft(text string, width int) string {
 	return text
 }
 
-// relativeAge formats how long ago t was: "now", "5m", "3h", "2d", "4mo", "2y".
+// relativeAge formats how long ago timestamp was: "now", "5m", "3h", "2d", "4mo", "2y".
 func relativeAge(now, timestamp time.Time) string {
 	duration := now.Sub(timestamp)
 	switch {
