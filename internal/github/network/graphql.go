@@ -273,7 +273,7 @@ func mapDetail(node graphqlPullRequestDetail, files []graphqlFile, comments []gr
 	return detail, nil
 }
 
-func intOrZero(pointer *int) int {
+func integerOrZero(pointer *int) int {
 	if pointer == nil {
 		return 0
 	}
@@ -287,10 +287,10 @@ func mapThread(node graphqlThread) github.ReviewThread {
 		IsResolved:        node.IsResolved,
 		IsOutdated:        node.IsOutdated,
 		Path:              node.Path,
-		Line:              intOrZero(node.Line),
-		OriginalLine:      intOrZero(node.OriginalLine),
-		StartLine:         intOrZero(node.StartLine),
-		OriginalStartLine: intOrZero(node.OriginalStartLine),
+		Line:              integerOrZero(node.Line),
+		OriginalLine:      integerOrZero(node.OriginalLine),
+		StartLine:         integerOrZero(node.StartLine),
+		OriginalStartLine: integerOrZero(node.OriginalStartLine),
 		DiffSide:          github.DiffSide(node.DiffSide),
 		StartDiffSide:     github.DiffSide(node.StartDiffSide),
 	}

@@ -24,7 +24,7 @@ type PullRequestListStyles struct {
 }
 
 func newPullRequestListStyles(roles Roles) PullRequestListStyles {
-	foreground := func(color color.Color) lipgloss.Style { return lipgloss.NewStyle().Foreground(color) }
+	foreground := func(colour color.Color) lipgloss.Style { return lipgloss.NewStyle().Foreground(colour) }
 	muted := foreground(roles.Muted)
 	return PullRequestListStyles{
 		Header:           muted.Bold(true),

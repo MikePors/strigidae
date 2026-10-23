@@ -36,7 +36,7 @@ func (overview *overview) invalidate() { overview.dirty = true }
 
 // ensure sizes the viewport and rebuilds the content when the data, theme or
 // width changed. Markdown rendering is cached by the renderer.
-func (overview *overview) ensure(theme theme.Theme, markdownSource *markdown.Renderer, detail *github.PullRequestDetail, threads threadsView, now time.Time, width, height int) {
+func (overview *overview) ensure(activeTheme theme.Theme, markdownRenderer *markdown.Renderer, detail *github.PullRequestDetail, threads threadsView, now time.Time, width, height int) {
 	overview.viewport.SetWidth(width)
 	overview.viewport.SetHeight(height)
 	minute := now.Truncate(time.Minute)
@@ -53,23 +53,23 @@ func (overview *overview) ensure(theme theme.Theme, markdownSource *markdown.Ren
 	}
 
 	overview.sections = append(overview.sections, line)
-	add(theme.SectionHeading.Render("Description"))
+	add(activeTheme.SectionHeading.Render("Description"))
 	if strings.TrimSpace(detail.Body) == "" {
-		add(theme.Muted.Render("No description provided."))
+		add(activeTheme.Muted.Render("No description provided."))
 	} else {
-		add(markdownSource.Render(terminaltext.CleanBlock(detail.Body), width))
+		add(markdownRenderer.Render(terminaltext.CleanBlock(detail.Body), width))
 	}
 	add("")
 
 	overview.sections = append(overview.sections, line)
 	items := conversation(detail)
-	add(theme.SectionHeading.Render(fmt.Sprintf("Conversation (%d)", len(items))))
+	add(activeTheme.SectionHeading.Render(fmt.Sprintf("Conversation (%d)", len(items))))
 	if len(items) == 0 {
-		add(theme.Muted.Render("No comments yet."))
+		add(activeTheme.Muted.Render("No comments yet."))
 	}
 	for _, item := range items {
-		add(comment.Header(theme, now, item.comment))
-		if body := comment.Body(theme, markdownSource, item.comment, width); body != "" {
+		add(comment.Header(activeTheme, now, item.comment))
+		if body := comment.Body(activeTheme, markdownRenderer, item.comment, width); body != "" {
 			add(body)
 		}
 		add("")
@@ -78,18 +78,18 @@ func (overview *overview) ensure(theme theme.Theme, markdownSource *markdown.Ren
 	overview.sections = append(overview.sections, line)
 	switch {
 	case !threads.loaded && threads.pending:
-		add(theme.SectionHeading.Render("Review threads"))
-		add(theme.Muted.Render("Loading review threads…"))
+		add(activeTheme.SectionHeading.Render("Review threads"))
+		add(activeTheme.Muted.Render("Loading review threads…"))
 	case !threads.loaded && threads.err != nil:
-		add(theme.SectionHeading.Render("Review threads"))
-		add(theme.ErrorText.Render(ansi.Wrap("Could not load review threads: "+terminaltext.SafeError(threads.err).Error(), width, "")))
+		add(activeTheme.SectionHeading.Render("Review threads"))
+		add(activeTheme.ErrorText.Render(ansi.Wrap("Could not load review threads: "+terminaltext.SafeError(threads.err).Error(), width, "")))
 	default:
-		add(theme.SectionHeading.Render(fmt.Sprintf("Review threads (%d)", len(threads.list))))
+		add(activeTheme.SectionHeading.Render(fmt.Sprintf("Review threads (%d)", len(threads.list))))
 		if len(threads.list) == 0 {
-			add(theme.Muted.Render("No review threads."))
+			add(activeTheme.Muted.Render("No review threads."))
 		}
 	}
-	environment := thread.Environment{Theme: theme, Markdown: markdownSource, Now: now}
+	environment := thread.Environment{Theme: activeTheme, Markdown: markdownRenderer, Now: now}
 	for _, reviewThread := range threads.list {
 		add(strings.Join(thread.Lines(environment, reviewThread, width, thread.Options{Expanded: true, Location: true}), "\n"))
 		add("")
@@ -103,17 +103,17 @@ func (overview *overview) ensure(theme theme.Theme, markdownSource *markdown.Ren
 func (overview *overview) jump(delta int) {
 	row := overview.viewport.YOffset()
 	if delta > 0 {
-		for _, size := range overview.sections {
-			if size > row {
-				overview.viewport.SetYOffset(size)
+		for _, section := range overview.sections {
+			if section > row {
+				overview.viewport.SetYOffset(section)
 				return
 			}
 		}
 		return
 	}
-	for _, size := range slices.Backward(overview.sections) {
-		if size < row {
-			overview.viewport.SetYOffset(size)
+	for _, section := range slices.Backward(overview.sections) {
+		if section < row {
+			overview.viewport.SetYOffset(section)
 			return
 		}
 	}
@@ -139,8 +139,8 @@ type entry struct {
 // only wrap inline comments ("commented") are left out; verdicts are kept.
 func conversation(detail *github.PullRequestDetail) []entry {
 	var out []entry
-	for _, reviewComment := range detail.Comments {
-		out = append(out, entry{at: reviewComment.CreatedAt, comment: comment.Comment{Author: reviewComment.Author, Action: "commented", At: reviewComment.CreatedAt, Body: reviewComment.Body, Reactions: reviewComment.Reactions}})
+	for _, issueComment := range detail.Comments {
+		out = append(out, entry{at: issueComment.CreatedAt, comment: comment.Comment{Author: issueComment.Author, Action: "commented", At: issueComment.CreatedAt, Body: issueComment.Body, Reactions: issueComment.Reactions}})
 	}
 	for _, review := range detail.Reviews {
 		listEntry := entry{at: review.SubmittedAt, comment: comment.Comment{Author: review.Author, Action: reviewAction(review.State), At: review.SubmittedAt, Body: review.Body}}

@@ -37,7 +37,7 @@ func WithClock(now func() time.Time) Option { return func(view *View) { view.now
 // WithTheme sets the initial theme. Without it the default dark theme is used
 // until the root sends a userinterface.ThemeMessage; a view that pushes a workspace should
 // pass its own current theme.
-func WithTheme(theme theme.Theme) Option { return func(view *View) { view.theme = theme } }
+func WithTheme(activeTheme theme.Theme) Option { return func(view *View) { view.theme = activeTheme } }
 
 // WithOpener replaces how `o` opens the pull request URL, which by default is
 // the user's browser.
@@ -53,15 +53,15 @@ type View struct {
 	repository github.Repository
 	number     int
 
-	now            func() time.Time
-	open           func(url string) error
-	theme          theme.Theme
-	globalKeys     keys.Global
-	bind           bindings
-	navigationBind diffBindings // hunk/thread keys, routed to the file pane from either focus
-	markdown       *markdown.Renderer
-	filePane       FilePane
-	edit           EditFunction
+	now              func() time.Time
+	open             func(url string) error
+	theme            theme.Theme
+	globalKeys       keys.Global
+	bind             bindings
+	navigationBind   diffBindings // hunk/thread keys, routed to the file pane from either focus
+	markdownRenderer *markdown.Renderer
+	filePane         FilePane
+	edit             EditFunction
 
 	sequence           int // latest load request; older results are stale
 	pullRequestPending bool
@@ -128,7 +128,7 @@ func New(client github.Client, repository github.Repository, number int, options
 	for _, option := range options {
 		option(view)
 	}
-	view.markdown = markdown.New(view.theme)
+	view.markdownRenderer = markdown.New(view.theme)
 	view.overview = newOverview()
 	if view.filePane == nil {
 		view.filePane = newDiffPane(view.theme, func() time.Time { return view.now() })
@@ -191,7 +191,7 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		view.layout()
 	case userinterface.ThemeMessage:
 		view.theme = message.Theme
-		view.markdown = markdown.New(view.theme)
+		view.markdownRenderer = markdown.New(view.theme)
 		view.overview.invalidate()
 		view.filePane.SetTheme(view.theme)
 		view.layout()

@@ -287,8 +287,8 @@ func TestReplyWithZeroOneAndSeveralThreads(test *testing.T) {
 	}
 	configuration, _ := composer.lastConfirm()
 	composer.run(configuration.OnYes)
-	if review := composer.client.Replies(); len(review) != 1 || review[0].ThreadIdentifier != "c" {
-		test.Errorf("replies = %v", review)
+	if replies := composer.client.Replies(); len(replies) != 1 || replies[0].ThreadIdentifier != "c" {
+		test.Errorf("replies = %v", replies)
 	}
 
 	composer.messages = nil

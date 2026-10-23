@@ -54,8 +54,8 @@ var (
 // violations returns what is wrong with the Go file src at rel, a slash path
 // relative to internal/ui (such as "theme/roles.go").
 func violations(relative, source string) ([]string, error) {
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, relative, source, 0)
+	fileSet := token.NewFileSet()
+	file, err := parser.ParseFile(fileSet, relative, source, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -78,18 +78,18 @@ func violations(relative, source string) ([]string, error) {
 
 	var out []string
 	bad := func(node ast.Node, format string, arguments ...any) {
-		out = append(out, fmt.Sprintf("%s: %s", fset.Position(node.Pos()), fmt.Sprintf(format, arguments...)))
+		out = append(out, fmt.Sprintf("%s: %s", fileSet.Position(node.Pos()), fmt.Sprintf(format, arguments...)))
 	}
-	pkgSelection := func(expression ast.Expr) (packageName, selection string, ok bool) {
+	packageSelection := func(expression ast.Expr) (packageName, selection string, ok bool) {
 		selector, isSelection := expression.(*ast.SelectorExpr)
 		if !isSelection {
 			return "", "", false
 		}
-		column, isIdentifier := selector.X.(*ast.Ident)
+		packageIdentifier, isIdentifier := selector.X.(*ast.Ident)
 		if !isIdentifier {
 			return "", "", false
 		}
-		return paths[column.Name], selector.Sel.Name, paths[column.Name] != ""
+		return paths[packageIdentifier.Name], selector.Sel.Name, paths[packageIdentifier.Name] != ""
 	}
 
 	checkString := func(node ast.Node, text string) {
@@ -111,15 +111,15 @@ func violations(relative, source string) ([]string, error) {
 				checkString(node, text)
 			}
 		case *ast.CallExpr:
-			if packageName, selection, ok := pkgSelection(node.Fun); ok && colourConstructors[packageName][selection] && !colourFile {
+			if packageName, selection, ok := packageSelection(node.Fun); ok && colourConstructors[packageName][selection] && !colourFile {
 				bad(node, "colour constructor %s.%s outside the palette files", filepath.Base(packageName), selection)
 			}
 		case *ast.CompositeLit:
-			if packageName, selection, ok := pkgSelection(node.Type); ok && packageName == colorPath && colourTypes[selection] && relative != "theme/color.go" {
+			if packageName, selection, ok := packageSelection(node.Type); ok && packageName == colorPath && colourTypes[selection] && relative != "theme/color.go" {
 				bad(node, "color.%s literal outside theme/color.go", selection)
 			}
 		case *ast.SelectorExpr:
-			if packageName, selection, ok := pkgSelection(node); ok {
+			if packageName, selection, ok := packageSelection(node); ok {
 				if (packageName == lipglossPath || packageName == ansiPath) && namedColours[selection] {
 					bad(node, "named colour %s.%s; use a role", filepath.Base(packageName), selection)
 				}
@@ -150,15 +150,15 @@ func foldStrings(expression ast.Expr) (string, bool) {
 		if expression.Kind != token.STRING {
 			return "", false
 		}
-		text, err := strconv.Unquote(expression.Value)
-		return text, err == nil
+		rightText, err := strconv.Unquote(expression.Value)
+		return rightText, err == nil
 	case *ast.BinaryExpr:
 		if expression.Op != token.ADD {
 			return "", false
 		}
-		line, firstOk := foldStrings(expression.X)
-		text, secondOk := foldStrings(expression.Y)
-		return line + text, firstOk && secondOk
+		leftText, leftOk := foldStrings(expression.X)
+		rightText, rightOk := foldStrings(expression.Y)
+		return leftText + rightText, leftOk && rightOk
 	case *ast.ParenExpr:
 		return foldStrings(expression.X)
 	}

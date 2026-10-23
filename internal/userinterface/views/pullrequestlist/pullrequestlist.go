@@ -75,7 +75,7 @@ var (
 )
 
 // New returns the PR list for repo. It starts loading when pushed (Init).
-func New(client github.Client, repository github.Repository, theme theme.Theme, options Options) *View {
+func New(client github.Client, repository github.Repository, activeTheme theme.Theme, options Options) *View {
 	if options.Now == nil {
 		options.Now = time.Now
 	}
@@ -85,7 +85,7 @@ func New(client github.Client, repository github.Repository, theme theme.Theme, 
 	return &View{
 		client:     client,
 		repository: repository,
-		theme:      theme,
+		theme:      activeTheme,
 		globalKeys: keys.DefaultGlobal(),
 		now:        options.Now,
 		open:       options.Open,
@@ -124,12 +124,12 @@ func (view *View) Init() tea.Cmd { return view.fetch(github.PageRequest{}, false
 
 // fetch loads one page. The closure captures copies, so it shares no state
 // with the view.
-func (view *View) fetch(request github.PageRequest, more bool) tea.Cmd {
+func (view *View) fetch(pageRequest github.PageRequest, more bool) tea.Cmd {
 	client, repository, sequence := view.client, view.repository, view.sequence
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 		defer cancel()
-		page, err := client.ListPullRequests(ctx, repository, request)
+		page, err := client.ListPullRequests(ctx, repository, pageRequest)
 		return pullRequestsLoadedMessage{repository: repository, sequence: sequence, more: more, page: page, err: err}
 	}
 }

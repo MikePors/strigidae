@@ -32,44 +32,44 @@ type Comment struct {
 }
 
 // Header renders the header line, not truncated.
-func Header(theme theme.Theme, now time.Time, comment Comment) string {
-	name := theme.Author
+func Header(activeTheme theme.Theme, now time.Time, comment Comment) string {
+	name := activeTheme.Author
 	if comment.Muted {
-		name = theme.Muted
+		name = activeTheme.Muted
 	}
 	text := name.Render(Author(comment.Author))
 	if comment.Action != "" && !comment.Pending {
 		text += " " + comment.Action
 	}
 	if !comment.At.IsZero() {
-		text += theme.Muted.Render(" · " + RelativeTime(now, comment.At))
+		text += activeTheme.Muted.Render(" · " + RelativeTime(now, comment.At))
 	}
 	if comment.Pending {
 		label := "PENDING (draft, not submitted)"
 		if comment.Action != "" {
 			label = "PENDING " + comment.Action + " (draft, not submitted)"
 		}
-		text += " " + theme.Pending.Render(label)
+		text += " " + activeTheme.Pending.Render(label)
 	}
 	if reactionText := reactions(comment.Reactions); reactionText != "" {
-		text += "  " + theme.Muted.Render(reactionText)
+		text += "  " + activeTheme.Muted.Render(reactionText)
 	}
 	return text
 }
 
 // Body renders the Markdown body in width columns, or "" for a blank body.
 // Muted bodies lose their styling and are drawn in the muted colour.
-func Body(theme theme.Theme, markdownSource *markdown.Renderer, comment Comment, width int) string {
+func Body(activeTheme theme.Theme, markdownRenderer *markdown.Renderer, comment Comment, width int) string {
 	if strings.TrimSpace(comment.Body) == "" {
 		return ""
 	}
-	out := markdownSource.Render(terminaltext.CleanBlock(comment.Body), width)
+	out := markdownRenderer.Render(terminaltext.CleanBlock(comment.Body), width)
 	if !comment.Muted {
 		return out
 	}
 	lines := strings.Split(out, "\n")
 	for i, line := range lines {
-		lines[i] = theme.Muted.Render(strings.TrimRight(ansi.Strip(line), " "))
+		lines[i] = activeTheme.Muted.Render(strings.TrimRight(ansi.Strip(line), " "))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -85,9 +85,9 @@ func Author(name string) string {
 // reactions formats the non-zero reaction counts: "👍 2 👀 1".
 func reactions(reactionList []github.ReactionSummary) string {
 	var parts []string
-	for _, review := range reactionList {
-		if review.Count > 0 {
-			parts = append(parts, terminaltext.Clean(review.Content.Emoji())+" "+strconv.Itoa(review.Count))
+	for _, reaction := range reactionList {
+		if reaction.Count > 0 {
+			parts = append(parts, terminaltext.Clean(reaction.Content.Emoji())+" "+strconv.Itoa(reaction.Count))
 		}
 	}
 	return strings.Join(parts, " ")

@@ -12,15 +12,15 @@ import (
 
 // Path returns the log file location: $XDG_STATE_HOME/strig/strig.log, falling
 // back to ~/.local/state/strig/strig.log. getenv and home are injected for tests.
-func Path(getenv func(string) string, home func() (string, error)) (string, error) {
-	if directory := getenv("XDG_STATE_HOME"); directory != "" && filepath.IsAbs(directory) {
+func Path(getEnvironment func(string) string, home func() (string, error)) (string, error) {
+	if directory := getEnvironment("XDG_STATE_HOME"); directory != "" && filepath.IsAbs(directory) {
 		return filepath.Join(directory, "strig", "strig.log"), nil
 	}
-	text, err := home()
+	homeDirectory, err := home()
 	if err != nil {
 		return "", fmt.Errorf("find home directory: %w", err)
 	}
-	return filepath.Join(text, ".local", "state", "strig", "strig.log"), nil
+	return filepath.Join(homeDirectory, ".local", "state", "strig", "strig.log"), nil
 }
 
 // Open creates the log file (and its directory) and returns a logger writing
@@ -40,8 +40,8 @@ func Open(path string) (*slog.Logger, *os.File, error) {
 // to it and a func that closes the file. Logging is never fatal: if the file
 // can't be opened, Start returns the error along with a logger that discards
 // everything and a no-op close, so the logger and close are always usable.
-func Start(getenv func(string) string, home func() (string, error)) (*slog.Logger, func(), error) {
-	path, err := Path(getenv, home)
+func Start(getEnvironment func(string) string, home func() (string, error)) (*slog.Logger, func(), error) {
+	path, err := Path(getEnvironment, home)
 	if err == nil {
 		var logger *slog.Logger
 		var file *os.File

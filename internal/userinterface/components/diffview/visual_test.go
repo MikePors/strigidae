@@ -159,8 +159,8 @@ func TestRangeFor(test *testing.T) {
 			if !errors.Is(err, testCase.err) {
 				test.Fatalf("err = %v, want %v", err, testCase.err)
 			}
-			if diff := cmp.Diff(testCase.want, got); diff != "" {
-				test.Errorf("range (-want +got):\n%s", diff)
+			if difference := cmp.Diff(testCase.want, got); difference != "" {
+				test.Errorf("range (-want +got):\n%s", difference)
 			}
 		})
 	}

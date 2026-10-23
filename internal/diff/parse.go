@@ -240,14 +240,14 @@ func patchPath(text string) (string, bool) {
 func splitGitPaths(rest string) (oldPath, newPath string) {
 	rest = strings.TrimRight(rest, "\r")
 	if strings.HasPrefix(rest, `"`) {
-		if first, text, ok := splitQuoted(rest); ok {
-			return first, text
+		if first, second, ok := splitQuoted(rest); ok {
+			return first, second
 		}
 	}
-	if mid := (len(rest) - 1) / 2; len(rest)%2 == 1 && rest[mid] == ' ' {
-		first, text := rest[:mid], rest[mid+1:]
-		if strings.HasPrefix(first, "a/") && strings.HasPrefix(text, "b/") && first[2:] == text[2:] {
-			return first[2:], text[2:]
+	if middle := (len(rest) - 1) / 2; len(rest)%2 == 1 && rest[middle] == ' ' {
+		first, second := rest[:middle], rest[middle+1:]
+		if strings.HasPrefix(first, "a/") && strings.HasPrefix(second, "b/") && first[2:] == second[2:] {
+			return first[2:], second[2:]
 		}
 	}
 	if i := strings.Index(rest, " b/"); i >= 0 {

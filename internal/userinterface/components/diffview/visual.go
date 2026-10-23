@@ -124,16 +124,16 @@ func (model *Model) selection() (Range, bool) {
 // cursorBase returns the base row the cursor is on, or the one it follows when
 // it is on a thread row. ok is false when there are no rows.
 func (model *Model) cursorBase() (baseIndex int, ok bool) {
-	count := model.window.Cursor()
-	if count >= len(model.rows) {
+	cursor := model.window.Cursor()
+	if cursor >= len(model.rows) {
 		return 0, false
 	}
-	return model.rows[count].baseIndex, true
+	return model.rows[cursor].baseIndex, true
 }
 
 // rangeOf is the range between two base rows, or why there is none.
-func (model *Model) rangeOf(first, count int) (Range, error) {
-	low, high := min(first, count), max(first, count)
+func (model *Model) rangeOf(first, second int) (Range, error) {
+	low, high := min(first, second), max(first, second)
 	lines, err := model.linesIn(low, high)
 	if err != nil {
 		return Range{}, err
@@ -180,6 +180,6 @@ func rangeFor(path string, lines []*diff.Line) (Range, error) {
 
 // selected reports whether base row bi is inside the selection.
 func (model *Model) selected(baseIndex int) bool {
-	count, ok := model.cursorBase()
-	return model.visual && ok && baseIndex >= min(model.visualBaseIndex, count) && baseIndex <= max(model.visualBaseIndex, count)
+	cursor, ok := model.cursorBase()
+	return model.visual && ok && baseIndex >= min(model.visualBaseIndex, cursor) && baseIndex <= max(model.visualBaseIndex, cursor)
 }

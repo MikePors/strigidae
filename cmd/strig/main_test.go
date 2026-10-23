@@ -30,10 +30,10 @@ type harness struct {
 func newHarness(remotes map[string]string, checkout bool, clientErr error) harness {
 	testHarness := harness{clientHost: new(string), started: new(github.Repository)}
 	testHarness.dependencies = dependencies{
-		getwd: func() (string, error) { return "/work", nil },
+		getWorkingDirectory: func() (string, error) { return "/work", nil },
 		// Directories that don't exist, so tests never read a real config.
-		getenv: func(string) string { return "/nonexistent-xdg" },
-		home:   func() (string, error) { return "/nonexistent-home", nil },
+		getEnvironment: func(string) string { return "/nonexistent-xdg" },
+		home:           func() (string, error) { return "/nonexistent-home", nil },
 		runner: func(_ context.Context, _ string, arguments ...string) (string, error) {
 			if arguments[0] == "rev-parse" {
 				if !checkout {

@@ -13,8 +13,8 @@ import (
 )
 
 // sgrRGB is the tail of a true-colour SGR sequence for c.
-func sgrRGB(color color.Color) string {
-	red, green, blue, _ := color.RGBA()
+func sgrRGB(colour color.Color) string {
+	red, green, blue, _ := colour.RGBA()
 	return fmt.Sprintf("2;%d;%d;%d", red>>8, green>>8, blue>>8)
 }
 

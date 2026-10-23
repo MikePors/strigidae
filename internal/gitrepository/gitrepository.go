@@ -94,8 +94,8 @@ func (unknownHostError *UnknownHostError) Error() string {
 // QuotedHosts returns the hosts individually quoted and comma-separated.
 func (unknownHostError *UnknownHostError) QuotedHosts() string {
 	queries := make([]string, len(unknownHostError.Hosts))
-	for i, text := range unknownHostError.Hosts {
-		queries[i] = strconv.Quote(text)
+	for i, host := range unknownHostError.Hosts {
+		queries[i] = strconv.Quote(host)
 	}
 	return strings.Join(queries, ", ")
 }
@@ -123,8 +123,8 @@ func splitURL(raw string) (host, path string, err error) {
 		if !ok || strings.Contains(hostPart, "/") {
 			return "", "", errors.New("unrecognised URL")
 		}
-		if _, text, found := strings.Cut(hostPart, "@"); found {
-			hostPart = text
+		if _, host, found := strings.Cut(hostPart, "@"); found {
+			hostPart = host
 		}
 		return hostPart, path, nil
 	}

@@ -47,7 +47,7 @@ func resolveTarget(repositoryFlag string, dependencies dependencies) (gitreposit
 		// No host: the client uses the gh default (GH_HOST or github.com).
 		return gitrepository.Remote{Repository: repository}, nil
 	}
-	directory, err := dependencies.getwd()
+	directory, err := dependencies.getWorkingDirectory()
 	if err != nil {
 		return gitrepository.Remote{}, err
 	}

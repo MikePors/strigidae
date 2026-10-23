@@ -54,12 +54,12 @@ func TestSubmitReview(test *testing.T) {
 			case err != nil:
 				test.Fatal(err)
 			}
-			wantSubs := 1
+			wantSubmissions := 1
 			if err != nil {
-				wantSubs = 0
+				wantSubmissions = 0
 			}
-			if got := len(client.Submissions()); got != wantSubs {
-				test.Errorf("submissions = %d, want %d", got, wantSubs)
+			if got := len(client.Submissions()); got != wantSubmissions {
+				test.Errorf("submissions = %d, want %d", got, wantSubmissions)
 			}
 		})
 	}

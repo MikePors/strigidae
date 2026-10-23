@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	githubnetwork "github.com/cli/go-gh/v2/pkg/api"
+	githubapi "github.com/cli/go-gh/v2/pkg/api"
 
 	"github.com/MikePors/strigidae/internal/github"
 )
@@ -28,18 +28,18 @@ func (client *Client) mapError(err error) error {
 	if errors.As(err, &rateLimitError) {
 		return err
 	}
-	var httpErr *githubnetwork.HTTPError
+	var httpErr *githubapi.HTTPError
 	if errors.As(err, &httpErr) {
 		return client.mapHTTPError(httpErr)
 	}
-	var graphqlErr *githubnetwork.GraphQLError
+	var graphqlErr *githubapi.GraphQLError
 	if errors.As(err, &graphqlErr) {
 		return client.mapGraphQLError(graphqlErr)
 	}
 	return err
 }
 
-func (client *Client) mapHTTPError(httpError *githubnetwork.HTTPError) error {
+func (client *Client) mapHTTPError(httpError *githubapi.HTTPError) error {
 	switch {
 	case httpError.StatusCode == http.StatusUnauthorized:
 		return fmt.Errorf("%w: %w", github.ErrNotAuthenticated, httpError)
@@ -53,7 +53,7 @@ func (client *Client) mapHTTPError(httpError *githubnetwork.HTTPError) error {
 	return httpError
 }
 
-func isRateLimited(httpError *githubnetwork.HTTPError) bool {
+func isRateLimited(httpError *githubapi.HTTPError) bool {
 	if httpError.StatusCode != http.StatusForbidden && httpError.StatusCode != http.StatusTooManyRequests {
 		return false
 	}
@@ -71,7 +71,7 @@ const defaultSecondaryWait = time.Minute
 // httpResetAt works out when a rate-limited REST request may be retried.
 // X-RateLimit-Reset belongs to the primary bucket, so it is only used when
 // that bucket is actually exhausted.
-func (client *Client) httpResetAt(httpError *githubnetwork.HTTPError) time.Time {
+func (client *Client) httpResetAt(httpError *githubapi.HTTPError) time.Time {
 	if value := httpError.Headers.Get("Retry-After"); value != "" {
 		if seconds, err := strconv.Atoi(value); err == nil {
 			return client.now().Add(time.Duration(seconds) * time.Second)
@@ -90,7 +90,7 @@ func (client *Client) httpResetAt(httpError *githubnetwork.HTTPError) time.Time 
 
 // isScopeError reports whether err is a GraphQL permission/scope failure.
 func isScopeError(err error) bool {
-	var graphqlErr *githubnetwork.GraphQLError
+	var graphqlErr *githubapi.GraphQLError
 	if err == nil || !errors.As(err, &graphqlErr) {
 		return false
 	}
@@ -102,7 +102,7 @@ func isScopeError(err error) bool {
 	return false
 }
 
-func (client *Client) mapGraphQLError(graphqlError *githubnetwork.GraphQLError) error {
+func (client *Client) mapGraphQLError(graphqlError *githubapi.GraphQLError) error {
 	for _, item := range graphqlError.Errors {
 		switch item.Type {
 		case "RATE_LIMITED":

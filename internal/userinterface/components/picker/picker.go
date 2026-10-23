@@ -46,8 +46,8 @@ type Model struct {
 }
 
 // New returns a picker over items.
-func New(theme theme.Theme, title string, items []string) *Model {
-	model := &Model{theme: theme, title: title, items: items}
+func New(activeTheme theme.Theme, title string, items []string) *Model {
+	model := &Model{theme: activeTheme, title: title, items: items}
 	model.refilter()
 	return model
 }

@@ -13,24 +13,24 @@ const helpKeyWidth = 9
 
 // renderHelp lays out the help overlay: global bindings on the left and the
 // active view's on the right (stacked when the terminal is narrow).
-func renderHelp(theme theme.Theme, title string, global, view [][]key.Binding, width int) string {
-	text := helpColumn(theme, "Global", global)
-	value := helpColumn(theme, title, view)
-	head := theme.HelpTitle.Render("Help") + theme.Muted.Render("  ? / esc to close")
+func renderHelp(activeTheme theme.Theme, title string, global, viewBindings [][]key.Binding, width int) string {
+	globalColumn := helpColumn(activeTheme, "Global", global)
+	viewColumn := helpColumn(activeTheme, title, viewBindings)
+	head := activeTheme.HelpTitle.Render("Help") + activeTheme.Muted.Render("  ? / esc to close")
 
 	var body string
 	switch {
-	case value == "":
-		body = text
-	case lipgloss.Width(text)+lipgloss.Width(value)+4 <= width:
-		body = lipgloss.JoinHorizontal(lipgloss.Top, text, "    ", value)
+	case viewColumn == "":
+		body = globalColumn
+	case lipgloss.Width(globalColumn)+lipgloss.Width(viewColumn)+4 <= width:
+		body = lipgloss.JoinHorizontal(lipgloss.Top, globalColumn, "    ", viewColumn)
 	default:
-		body = text + "\n\n" + value
+		body = globalColumn + "\n\n" + viewColumn
 	}
 	return head + "\n\n" + body
 }
 
-func helpColumn(theme theme.Theme, heading string, groups [][]key.Binding) string {
+func helpColumn(activeTheme theme.Theme, heading string, groups [][]key.Binding) string {
 	var blocks []string
 	for _, bindings := range groups {
 		var lines []string
@@ -40,7 +40,7 @@ func helpColumn(theme theme.Theme, heading string, groups [][]key.Binding) strin
 				continue
 			}
 			pad := strings.Repeat(" ", max(0, helpKeyWidth-lipgloss.Width(help.Key)))
-			lines = append(lines, theme.HelpKey.Render(help.Key)+pad+theme.HelpDescription.Render(help.Desc))
+			lines = append(lines, activeTheme.HelpKey.Render(help.Key)+pad+activeTheme.HelpDescription.Render(help.Desc))
 		}
 		if len(lines) > 0 {
 			blocks = append(blocks, strings.Join(lines, "\n"))
@@ -49,5 +49,5 @@ func helpColumn(theme theme.Theme, heading string, groups [][]key.Binding) strin
 	if len(blocks) == 0 {
 		return ""
 	}
-	return theme.HelpSection.Render(heading) + "\n" + strings.Join(blocks, "\n\n")
+	return activeTheme.HelpSection.Render(heading) + "\n" + strings.Join(blocks, "\n\n")
 }

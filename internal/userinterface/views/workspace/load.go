@@ -62,9 +62,9 @@ const maximumThreadPages = 100
 // the partial result: a half-list would hide threads without saying so.
 func loadThreads(ctx context.Context, client github.Client, repository github.Repository, number int) ([]github.ReviewThread, error) {
 	var all []github.ReviewThread
-	var request github.PageRequest
+	var pageRequest github.PageRequest
 	for range maximumThreadPages {
-		page, err := client.ListReviewThreads(ctx, repository, number, request)
+		page, err := client.ListReviewThreads(ctx, repository, number, pageRequest)
 		if err != nil {
 			return nil, err
 		}
@@ -72,7 +72,7 @@ func loadThreads(ctx context.Context, client github.Client, repository github.Re
 		if page.Next == "" {
 			return all, nil
 		}
-		request.After = page.Next
+		pageRequest.After = page.Next
 	}
 	return nil, fmt.Errorf("more than %d pages of review threads", maximumThreadPages)
 }

@@ -20,10 +20,10 @@ import (
 // handling and repository inference without a checkout, the network or a
 // terminal.
 type dependencies struct {
-	getwd  func() (string, error)
-	getenv func(string) string
-	home   func() (string, error)
-	runner gitrepository.Runner
+	getWorkingDirectory func() (string, error)
+	getEnvironment      func(string) string
+	home                func() (string, error)
+	runner              gitrepository.Runner
 	// knownHost reports whether host is a GitHub host gh can talk to.
 	knownHost func(host string) bool
 	newClient func(host string) (github.Client, error)
@@ -32,11 +32,11 @@ type dependencies struct {
 
 func realDependencies() dependencies {
 	return dependencies{
-		getwd:     os.Getwd,
-		getenv:    os.Getenv,
-		home:      os.UserHomeDir,
-		runner:    gitrepository.ExecRunner,
-		knownHost: network.KnownHost,
+		getWorkingDirectory: os.Getwd,
+		getEnvironment:      os.Getenv,
+		home:                os.UserHomeDir,
+		runner:              gitrepository.ExecRunner,
+		knownHost:           network.KnownHost,
 		newClient: func(host string) (github.Client, error) {
 			client, err := network.New(network.Options{Host: host})
 			if err != nil {
@@ -44,7 +44,7 @@ func realDependencies() dependencies {
 			}
 			return client, nil
 		},
-		start: runTUI,
+		start: runTerminalInterface,
 	}
 }
 
@@ -111,7 +111,7 @@ func configLocation(flagValue string, dependencies dependencies) (string, error)
 	if flagValue != "" {
 		return flagValue, nil
 	}
-	return config.Path(dependencies.getenv, dependencies.home)
+	return config.Path(dependencies.getEnvironment, dependencies.home)
 }
 
 func printLine(stdout io.Writer, text string) error {

@@ -67,7 +67,7 @@ type Model struct {
 }
 
 // New returns a root model whose stack holds just root.
-func New(root View, theme theme.Theme, options Options) *Model {
+func New(root View, activeTheme theme.Theme, options Options) *Model {
 	if options.SequenceTimeout == 0 {
 		options.SequenceTimeout = DefaultSequenceTimeout
 	}
@@ -82,14 +82,14 @@ func New(root View, theme theme.Theme, options Options) *Model {
 	}
 	return &Model{
 		stack:           []View{root},
-		theme:           theme,
+		theme:           activeTheme,
 		keys:            keys.DefaultGlobal(),
 		log:             options.Logger,
 		tick:            options.Tick,
 		sequenceWait:    options.SequenceTimeout,
 		messageLifetime: options.MessageLifetime,
-		commandLine:     newCommandLine(theme),
-		spin:            spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(theme.Spinner)),
+		commandLine:     newCommandLine(activeTheme),
+		spin:            spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(activeTheme.Spinner)),
 	}
 }
 
@@ -209,8 +209,8 @@ func (model *Model) pop() tea.Cmd {
 	}
 	model.stack = model.stack[:len(model.stack)-1]
 	model.log.Debug("pop view", "depth", len(model.stack))
-	if review, ok := model.top().(Resumer); ok {
-		return review.Resumed()
+	if resumer, ok := model.top().(Resumer); ok {
+		return resumer.Resumed()
 	}
 	return nil
 }

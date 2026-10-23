@@ -11,7 +11,7 @@ import (
 )
 
 func TestParseURL(test *testing.T) {
-	repository := func(text, name string) github.Repository { return github.Repository{Owner: text, Name: name} }
+	repository := func(owner, name string) github.Repository { return github.Repository{Owner: owner, Name: name} }
 	tests := []struct {
 		raw     string
 		want    Remote
@@ -54,11 +54,11 @@ func TestParseURL(test *testing.T) {
 }
 
 // fakeGit answers rev-parse and remote get-url from a table.
-func fakeGit(toplevel bool, remotes map[string]string) Runner {
+func fakeGit(hasTopLevel bool, remotes map[string]string) Runner {
 	return func(_ context.Context, _ string, arguments ...string) (string, error) {
 		switch {
 		case len(arguments) > 0 && arguments[0] == "rev-parse":
-			if !toplevel {
+			if !hasTopLevel {
 				return "", errors.New("not a git repository")
 			}
 			return "/work/repo", nil
@@ -126,11 +126,11 @@ func TestInfer(test *testing.T) {
 	up := "git@github.com:upstream-owner/repo.git"
 	origin := "https://github.com/fork-owner/repo.git"
 	tests := []struct {
-		name     string
-		toplevel bool
-		remotes  map[string]string
-		want     github.Repository
-		wantErr  error
+		name        string
+		hasTopLevel bool
+		remotes     map[string]string
+		want        github.Repository
+		wantErr     error
 	}{
 		{"origin only", true, map[string]string{"origin": origin}, github.Repository{Owner: "fork-owner", Name: "repo"}, nil},
 		{"upstream preferred", true, map[string]string{"origin": origin, "upstream": up}, github.Repository{Owner: "upstream-owner", Name: "repo"}, nil},
@@ -141,7 +141,7 @@ func TestInfer(test *testing.T) {
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
-			got, err := Infer(context.Background(), fakeGit(testCase.toplevel, testCase.remotes), "/work", nil)
+			got, err := Infer(context.Background(), fakeGit(testCase.hasTopLevel, testCase.remotes), "/work", nil)
 			if !errors.Is(err, testCase.wantErr) {
 				test.Fatalf("err = %v, want %v", err, testCase.wantErr)
 			}

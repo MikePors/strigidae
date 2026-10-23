@@ -67,9 +67,9 @@ func (palette Palette) Slot(slot Slot) color.Color { return palette.colors[slot]
 
 // check reports the first unset slot.
 func (palette Palette) check() error {
-	for size, color := range palette.colors {
-		if color == nil {
-			return fmt.Errorf("palette %q: missing slot %s", palette.Name, Slot(size))
+	for index, colour := range palette.colors {
+		if colour == nil {
+			return fmt.Errorf("palette %q: missing slot %s", palette.Name, Slot(index))
 		}
 	}
 	return nil
@@ -80,8 +80,8 @@ func (palette Palette) check() error {
 // accents base12 to base17 to the matching normal accents, as tinted-theming
 // documents for Base16 schemes. It returns an error naming the first missing
 // (nil) slot.
-func FromBase16(name string, view Variant, base16 [16]color.Color) (Palette, error) {
-	palette := Palette{Name: name, Variant: view}
+func FromBase16(name string, variant Variant, base16 [16]color.Color) (Palette, error) {
+	palette := Palette{Name: name, Variant: variant}
 	copy(palette.colors[:], base16[:])
 	palette.colors[Base10] = base16[Base00]
 	palette.colors[Base11] = base16[Base00]
@@ -91,9 +91,9 @@ func FromBase16(name string, view Variant, base16 [16]color.Color) (Palette, err
 	palette.colors[Base15] = base16[Base0C] // cyan
 	palette.colors[Base16] = base16[Base0D] // blue
 	palette.colors[Base17] = base16[Base0E] // magenta
-	for size := range base16 {
-		if base16[size] == nil {
-			return Palette{}, fmt.Errorf("palette %q: missing slot %s", name, Slot(size))
+	for index := range base16 {
+		if base16[index] == nil {
+			return Palette{}, fmt.Errorf("palette %q: missing slot %s", name, Slot(index))
 		}
 	}
 	return palette, nil
@@ -117,14 +117,14 @@ func FromANSI(name string, background, foreground color.Color, ansi [16]color.Co
 	if background == nil || foreground == nil {
 		return Palette{}, fmt.Errorf("palette %q: missing background or foreground", name)
 	}
-	for i, color := range ansi {
-		if color == nil {
+	for i, colour := range ansi {
+		if colour == nil {
 			return Palette{}, fmt.Errorf("palette %q: missing ANSI colour %d", name, i)
 		}
 	}
-	view := Dark
+	variant := Dark
 	if extreme(background) == color.Color(color.Black) {
-		view = Light
+		variant = Light
 	}
 	// The ANSI black or white furthest from the background supplies the
 	// brightest foreground (base07).
@@ -134,7 +134,7 @@ func FromANSI(name string, background, foreground color.Color, ansi [16]color.Co
 	}
 	orange := blend(ansi[1], ansi[3], 0.5)
 
-	palette := Palette{Name: name, Variant: view}
+	palette := Palette{Name: name, Variant: variant}
 	palette.colors[Base00] = background
 	palette.colors[Base01] = blend(background, foreground, 0.12)
 	palette.colors[Base02] = blend(background, foreground, 0.25)

@@ -68,8 +68,8 @@ func TestReviewDiffHeadIsTheCommit(test *testing.T) {
 	composer.command("approve")
 	configuration, _ := composer.lastConfirm()
 	composer.run(configuration.OnYes)
-	if subs := composer.client.Submissions(); len(subs) != 1 || subs[0].CommitObjectIdentifier != composer.view.diffHead || composer.view.diffHead != headSHA {
-		test.Errorf("submissions = %+v, diff head %q", subs, composer.view.diffHead)
+	if submissions := composer.client.Submissions(); len(submissions) != 1 || submissions[0].CommitObjectIdentifier != composer.view.diffHead || composer.view.diffHead != headSHA {
+		test.Errorf("submissions = %+v, diff head %q", submissions, composer.view.diffHead)
 	}
 }
 
@@ -136,9 +136,9 @@ func TestReviewEmptyBodyKeepsEarlierDraft(test *testing.T) {
 		test.Fatal("no confirmation")
 	}
 	composer.run(configuration.OnYes)
-	subs := composer.client.Submissions()
-	if len(subs) != 1 || subs[0].Body != "" {
-		test.Errorf("submissions = %+v, want an empty body", subs)
+	submissions := composer.client.Submissions()
+	if len(submissions) != 1 || submissions[0].Body != "" {
+		test.Errorf("submissions = %+v, want an empty body", submissions)
 	}
 	if !strings.Contains(strings.Join(composer.infoMessages(), ","), "Approved #7") {
 		test.Errorf("infos = %v", composer.infoMessages())

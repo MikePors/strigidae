@@ -24,16 +24,16 @@ type Renderer struct {
 	theme theme.Theme
 	// Only the current width is kept: callers render at one width at a time,
 	// so a window resize drops what was built for the old one.
-	width        int
-	termRenderer *glamour.TermRenderer
-	cache        map[cacheKey]string
+	width            int
+	terminalRenderer *glamour.TermRenderer
+	cache            map[cacheKey]string
 }
 
 // New returns a Renderer styled by th. The style comes from the theme, never
 // from terminal detection, so output is deterministic. Build a new Renderer
 // when the theme changes.
-func New(theme theme.Theme) *Renderer {
-	return &Renderer{theme: theme, cache: map[cacheKey]string{}}
+func New(activeTheme theme.Theme) *Renderer {
+	return &Renderer{theme: activeTheme, cache: map[cacheKey]string{}}
 }
 
 // Render returns body rendered and wrapped to width columns, without the
@@ -42,7 +42,7 @@ func New(theme theme.Theme) *Renderer {
 func (renderer *Renderer) Render(body string, width int) string {
 	width = max(width, 10)
 	if width != renderer.width {
-		renderer.width, renderer.termRenderer = width, nil
+		renderer.width, renderer.terminalRenderer = width, nil
 		clear(renderer.cache)
 	}
 	key := cacheKey{body, width, renderer.theme.Identifier}
@@ -57,14 +57,14 @@ func (renderer *Renderer) Render(body string, width int) string {
 }
 
 func (renderer *Renderer) render(body string, width int) string {
-	if renderer.termRenderer == nil {
-		termRenderer, err := glamour.NewTermRenderer(glamour.WithStyles(styleConfig(renderer.theme)), glamour.WithChromaFormatter("terminal16m"), glamour.WithWordWrap(width-4))
+	if renderer.terminalRenderer == nil {
+		terminalRenderer, err := glamour.NewTermRenderer(glamour.WithStyles(styleConfig(renderer.theme)), glamour.WithChromaFormatter("terminal16m"), glamour.WithWordWrap(width-4))
 		if err != nil {
 			return body
 		}
-		renderer.termRenderer = termRenderer
+		renderer.terminalRenderer = terminalRenderer
 	}
-	out, err := renderer.termRenderer.Render(body)
+	out, err := renderer.terminalRenderer.Render(body)
 	if err != nil {
 		return body
 	}

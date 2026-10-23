@@ -42,15 +42,15 @@ type Section struct {
 // Path returns the config file location: $XDG_CONFIG_HOME/strig/config.yml,
 // falling back to ~/.config/strig/config.yml. getenv and home are injected
 // for tests.
-func Path(getenv func(string) string, home func() (string, error)) (string, error) {
-	if directory := getenv("XDG_CONFIG_HOME"); directory != "" && filepath.IsAbs(directory) {
+func Path(getEnvironment func(string) string, home func() (string, error)) (string, error) {
+	if directory := getEnvironment("XDG_CONFIG_HOME"); directory != "" && filepath.IsAbs(directory) {
 		return filepath.Join(directory, "strig", "config.yml"), nil
 	}
-	text, err := home()
+	homeDirectory, err := home()
 	if err != nil {
 		return "", fmt.Errorf("find home directory: %w", err)
 	}
-	return filepath.Join(text, ".config", "strig", "config.yml"), nil
+	return filepath.Join(homeDirectory, ".config", "strig", "config.yml"), nil
 }
 
 // Load reads and validates the file at path. A missing file yields Default

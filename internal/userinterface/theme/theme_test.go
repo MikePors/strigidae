@@ -145,9 +145,9 @@ func TestFromANSIMutedShade(test *testing.T) {
 		{"bright black almost the background", "#101010", "#e0e0e0", "#121212", true},
 	}
 	for _, testCase := range tests {
-		color := ansi
-		color[8] = hex(testCase.bright)
-		palette := mustPalette(test)(FromANSI("term", hex(testCase.background), hex(testCase.foreground), color))
+		colour := ansi
+		colour[8] = hex(testCase.bright)
+		palette := mustPalette(test)(FromANSI("term", hex(testCase.background), hex(testCase.foreground), colour))
 		want := testCase.bright
 		if testCase.wantBlend {
 			want = blended(hex(testCase.background), hex(testCase.foreground))
@@ -453,14 +453,14 @@ func styleColors(style lipgloss.Style) []string {
 	}
 	columns = append(columns, style.GetBorderForegroundBlend()...)
 	out := make([]string, len(columns))
-	for i, color := range columns {
-		if color == nil {
+	for i, colour := range columns {
+		if colour == nil {
 			continue
 		}
-		if _, none := color.(lipgloss.NoColor); none {
+		if _, none := colour.(lipgloss.NoColor); none {
 			continue
 		}
-		out[i] = HexString(color)
+		out[i] = HexString(colour)
 	}
 	return out
 }

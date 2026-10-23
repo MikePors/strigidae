@@ -25,11 +25,11 @@ const hostile = "evil\x1b[2J\x1b]0;pwned\x07\x1b]8;;http://evil.test\x07link\x1b
 
 // refs are HTML character references that Glamour decodes into real escape
 // sequences and bidi controls unless its output is cleaned.
-const refs = "&#x1b;[2J &#x1b;]52;c;aGk=&#x07; &#x202e;gnp.exe &rlm; &lrm; &#27;[2J &#7;"
+const references = "&#x1b;[2J &#x1b;]52;c;aGk=&#x07; &#x202e;gnp.exe &rlm; &lrm; &#27;[2J &#7;"
 
 // refsBody exercises the references in text, inline HTML, a code span, a
 // fenced block, link text and a heading.
-const refsBody = "\n\n" + refs + "\n\n<span>&#x1b;]0;t&#x07;</span>\n\n`&#x1b;]52;c;aGk=&#x07;`\n\n" +
+const referencesBody = "\n\n" + references + "\n\n<span>&#x1b;]0;t&#x07;</span>\n\n`&#x1b;]52;c;aGk=&#x07;`\n\n" +
 	"```\n&#x1b;[2J &#x202e;\n```\n\n[&#x1b;[2J](http://x/)\n\n# &#x1b;]0;h&#x07;"
 
 var (
@@ -45,7 +45,7 @@ func hostileDiff() string {
 		"old mode 100644\nnew mode 100755\n" +
 		"--- a/" + hostileGoPath + "\n+++ b/" + hostileGoPath + "\n" +
 		"@@ -1,1 +1,1 @@ section " + hostile + "\n" +
-		"-old " + hostile + refs + "\n+new " + hostile + refs + "\n" +
+		"-old " + hostile + references + "\n+new " + hostile + references + "\n" +
 		"diff --git a/" + hostileOldPath + " b/" + hostileNewPath + "\n" +
 		"similarity index 100%\nrename from " + hostileOldPath + "\nrename to " + hostileNewPath + "\n"
 }
@@ -56,16 +56,16 @@ func hostileDetail() github.PullRequestDetail {
 	detail.Author = "author" + hostile
 	detail.HeadBranch = "head" + hostile
 	detail.BaseBranch = "base" + hostile
-	detail.Body = "# body " + hostile + "\n\n[click](http://x)\x1b[31m red\r\n" + hostile + refsBody
+	detail.Body = "# body " + hostile + "\n\n[click](http://x)\x1b[31m red\r\n" + hostile + referencesBody
 	detail.Labels = []github.Label{{Name: "label" + hostile}}
 	detail.ReviewRequests = []github.Reviewer{{Name: "rev" + hostile}, {Name: "team" + hostile, IsTeam: true}}
 	detail.Files = append(detail.Files,
 		github.ChangedFile{Path: hostileGoPath, Additions: 1, Deletions: 1, Change: github.FileModified},
 		github.ChangedFile{Path: hostileNewPath, Change: github.FileRenamed})
-	detail.Comments = []github.IssueComment{{Author: "c" + hostile, CreatedAt: testNow.Add(-time.Hour), Body: hostile + refsBody}}
+	detail.Comments = []github.IssueComment{{Author: "c" + hostile, CreatedAt: testNow.Add(-time.Hour), Body: hostile + referencesBody}}
 	detail.Reviews = []github.Review{
-		{Author: "r" + hostile, State: github.ReviewApproved, SubmittedAt: testNow.Add(-time.Hour), Body: hostile + refsBody},
-		{Author: "p" + hostile, State: github.ReviewPending, Body: hostile + refsBody},
+		{Author: "r" + hostile, State: github.ReviewApproved, SubmittedAt: testNow.Add(-time.Hour), Body: hostile + referencesBody},
+		{Author: "p" + hostile, State: github.ReviewPending, Body: hostile + referencesBody},
 	}
 	return detail
 }
@@ -76,7 +76,7 @@ func hostileDetail() github.PullRequestDetail {
 func hostileThreads() []github.ReviewThread {
 	comment := func(who string) github.ReviewComment {
 		return github.ReviewComment{
-			Identifier: who, Author: who + hostile, Body: hostile + refsBody, CreatedAt: testNow.Add(-time.Hour),
+			Identifier: who, Author: who + hostile, Body: hostile + referencesBody, CreatedAt: testNow.Add(-time.Hour),
 			Reactions: []github.ReactionSummary{{Content: "X" + github.ReactionContent(hostile), Count: 2}},
 		}
 	}

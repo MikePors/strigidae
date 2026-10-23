@@ -127,7 +127,7 @@ func checkRange(in github.AddThreadInput) error {
 }
 
 // findComment locates a comment among the pull requests' threads.
-func (client *Client) findComment(identifier string) (key pullRequestKey, threadIndex, checks int, ok bool) {
+func (client *Client) findComment(identifier string) (key pullRequestKey, threadIndex, commentIndex int, ok bool) {
 	for key, threads := range client.threads {
 		for i, thread := range threads {
 			for j, comment := range thread.Comments {
@@ -143,15 +143,15 @@ func (client *Client) findComment(identifier string) (key pullRequestKey, thread
 // findAllowed locates a comment the viewer may change as GitHub reports it
 // (the can-flags, so also other people's when the viewer has write access).
 // An unknown comment is ErrNotFound, a refused one ErrForbidden.
-func (client *Client) findAllowed(identifier string, allowed func(github.ReviewComment) bool) (key pullRequestKey, threadIndex, checks int, err error) {
-	key, threadIndex, checks, ok := client.findComment(identifier)
+func (client *Client) findAllowed(identifier string, allowed func(github.ReviewComment) bool) (key pullRequestKey, threadIndex, commentIndex int, err error) {
+	key, threadIndex, commentIndex, ok := client.findComment(identifier)
 	switch {
 	case !ok:
 		return pullRequestKey{}, 0, 0, fmt.Errorf("comment %s: %w", identifier, github.ErrNotFound)
-	case !allowed(client.threads[key][threadIndex].Comments[checks]):
+	case !allowed(client.threads[key][threadIndex].Comments[commentIndex]):
 		return pullRequestKey{}, 0, 0, fmt.Errorf("comment %s: %w", identifier, github.ErrForbidden)
 	}
-	return key, threadIndex, checks, nil
+	return key, threadIndex, commentIndex, nil
 }
 
 // publishPending marks the pending comments of a pull request as published,
@@ -178,16 +178,16 @@ func (client *Client) UpdateReviewComment(ctx context.Context, commentIdentifier
 	if strings.TrimSpace(body) == "" {
 		return github.ReviewComment{}, fmt.Errorf("update review comment %s: empty body", commentIdentifier)
 	}
-	key, threadIndex, checks, err := client.findAllowed(commentIdentifier, func(comment github.ReviewComment) bool { return comment.ViewerCanUpdate })
+	key, threadIndex, commentIndex, err := client.findAllowed(commentIdentifier, func(comment github.ReviewComment) bool { return comment.ViewerCanUpdate })
 	if err != nil {
 		return github.ReviewComment{}, fmt.Errorf("update review comment: %w", err)
 	}
 	// Fresh slices, so earlier reads are never written to.
 	threads := slices.Clone(client.threads[key])
 	threads[threadIndex].Comments = slices.Clone(threads[threadIndex].Comments)
-	threads[threadIndex].Comments[checks].Body = body
+	threads[threadIndex].Comments[commentIndex].Body = body
 	client.threads[key] = threads
-	return cloneReviewComment(threads[threadIndex].Comments[checks]), nil
+	return cloneReviewComment(threads[threadIndex].Comments[commentIndex]), nil
 }
 
 // DeleteReviewComment implements github.Client. Deleting a thread's last
@@ -198,13 +198,13 @@ func (client *Client) DeleteReviewComment(ctx context.Context, commentIdentifier
 	if err := client.begin(ctx, Call{Method: MethodDeleteReviewComment}); err != nil {
 		return err
 	}
-	key, threadIndex, checks, err := client.findAllowed(commentIdentifier, func(comment github.ReviewComment) bool { return comment.ViewerCanDelete })
+	key, threadIndex, commentIndex, err := client.findAllowed(commentIdentifier, func(comment github.ReviewComment) bool { return comment.ViewerCanDelete })
 	if err != nil {
 		return fmt.Errorf("delete review comment: %w", err)
 	}
-	wasPending := client.threads[key][threadIndex].Comments[checks].Pending
+	wasPending := client.threads[key][threadIndex].Comments[commentIndex].Pending
 	threads := slices.Clone(client.threads[key])
-	threads[threadIndex].Comments = slices.Delete(slices.Clone(threads[threadIndex].Comments), checks, checks+1)
+	threads[threadIndex].Comments = slices.Delete(slices.Clone(threads[threadIndex].Comments), commentIndex, commentIndex+1)
 	if len(threads[threadIndex].Comments) == 0 {
 		threads = slices.Delete(threads, threadIndex, threadIndex+1)
 	}
@@ -232,11 +232,11 @@ func (client *Client) GetReviewComment(ctx context.Context, commentIdentifier st
 	if err := client.begin(ctx, Call{Method: MethodGetReviewComment}); err != nil {
 		return github.ReviewComment{}, err
 	}
-	key, threadIndex, checks, ok := client.findComment(commentIdentifier)
+	key, threadIndex, commentIndex, ok := client.findComment(commentIdentifier)
 	if !ok {
 		return github.ReviewComment{}, fmt.Errorf("load review comment %s: %w", commentIdentifier, github.ErrNotFound)
 	}
-	return cloneReviewComment(client.threads[key][threadIndex].Comments[checks]), nil
+	return cloneReviewComment(client.threads[key][threadIndex].Comments[commentIndex]), nil
 }
 
 // permissions sets what the viewer may do with each comment, as GitHub

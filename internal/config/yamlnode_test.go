@@ -24,7 +24,7 @@ func errText(parser *parser) string {
 	return parser.err.Error()
 }
 
-func TestParserInt(test *testing.T) {
+func TestParserInteger(test *testing.T) {
 	tests := []struct {
 		name    string
 		source  string
@@ -44,7 +44,7 @@ func TestParserInt(test *testing.T) {
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
 			nodeParser := &parser{path: "c.yml"}
-			got := nodeParser.int(node(test, testCase.source), "n", 1, 100)
+			got := nodeParser.integer(node(test, testCase.source), "n", 1, 100)
 			if got != testCase.want {
 				test.Errorf("value = %d, want %d", got, testCase.want)
 			}

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	githubnetwork "github.com/cli/go-gh/v2/pkg/api"
+	githubapi "github.com/cli/go-gh/v2/pkg/api"
 	"github.com/cli/go-gh/v2/pkg/auth"
 
 	"github.com/MikePors/strigidae/internal/github"
@@ -40,10 +40,10 @@ type Options struct {
 
 // Client is the real github.Client.
 type Client struct {
-	graphqlClient *githubnetwork.GraphQLClient
-	rest          *githubnetwork.RESTClient
+	graphqlClient *githubapi.GraphQLClient
+	rest          *githubapi.RESTClient
 	// diff is a REST client that asks for the unified diff media type.
-	diff  *githubnetwork.RESTClient
+	diff  *githubapi.RESTClient
 	limit *limitTracker
 	now   func() time.Time
 	host  string
@@ -81,23 +81,23 @@ func New(options Options) (*Client, error) {
 		base = http.DefaultTransport
 	}
 	tracker := &limitTracker{base: base}
-	clientOptions := githubnetwork.ClientOptions{
+	clientOptions := githubapi.ClientOptions{
 		Host:         host,
 		APIHost:      options.APIHost,
 		AuthToken:    token,
 		Transport:    tracker,
 		LogIgnoreEnv: true,
 	}
-	graphqlClient, err := githubnetwork.NewGraphQLClient(clientOptions)
+	graphqlClient, err := githubapi.NewGraphQLClient(clientOptions)
 	if err != nil {
 		return nil, fmt.Errorf("create graphql client: %w", err)
 	}
-	rest, err := githubnetwork.NewRESTClient(clientOptions)
+	rest, err := githubapi.NewRESTClient(clientOptions)
 	if err != nil {
 		return nil, fmt.Errorf("create rest client: %w", err)
 	}
 	clientOptions.Headers = map[string]string{"Accept": diffAccept}
-	diff, err := githubnetwork.NewRESTClient(clientOptions)
+	diff, err := githubapi.NewRESTClient(clientOptions)
 	if err != nil {
 		return nil, fmt.Errorf("create diff client: %w", err)
 	}

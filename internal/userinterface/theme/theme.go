@@ -127,8 +127,8 @@ func FromPaletteWithOverrides(palette Palette, overrides Roles) Theme {
 
 func newTheme(palette Palette, roles Roles) Theme {
 	bar := lipgloss.NewStyle().Background(roles.Surface).Foreground(roles.Text)
-	foreground := func(color color.Color) lipgloss.Style { return lipgloss.NewStyle().Foreground(color) }
-	bold := func(color color.Color) lipgloss.Style { return foreground(color).Bold(true) }
+	foreground := func(colour color.Color) lipgloss.Style { return lipgloss.NewStyle().Foreground(colour) }
+	bold := func(colour color.Color) lipgloss.Style { return foreground(colour).Bold(true) }
 
 	return Theme{
 		StatusBar:     bar,

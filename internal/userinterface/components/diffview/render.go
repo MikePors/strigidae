@@ -37,17 +37,17 @@ type styleSet struct {
 	hunk     [2]lipgloss.Style
 }
 
-func newStyleSet(theme theme.Theme) styleSet {
+func newStyleSet(activeTheme theme.Theme) styleSet {
 	var style styleSet
-	cursorBackground := theme.DiffCursor.GetBackground()
-	bases := [numberKinds]lipgloss.Style{theme.DiffContext, theme.DiffAdd, theme.DiffDelete}
-	gutters := [numberKinds]lipgloss.Style{theme.DiffGutter, theme.DiffGutterAdd, theme.DiffGutterDelete}
+	cursorBackground := activeTheme.DiffCursor.GetBackground()
+	bases := [numberKinds]lipgloss.Style{activeTheme.DiffContext, activeTheme.DiffAdd, activeTheme.DiffDelete}
+	gutters := [numberKinds]lipgloss.Style{activeTheme.DiffGutter, activeTheme.DiffGutterAdd, activeTheme.DiffGutterDelete}
 	var foreground [numberClasses + 1]lipgloss.Style
 	for class := range Class(numberClasses) {
-		foreground[class] = theme.Syntax.For(class)
+		foreground[class] = activeTheme.Syntax.For(class)
 	}
 	foreground[ClassPlain] = lipgloss.NewStyle()
-	foreground[classNoNewline] = theme.DiffNoNewline
+	foreground[classNoNewline] = activeTheme.DiffNoNewline
 	for current := range 2 {
 		for k := range numberKinds {
 			base, gutter := bases[k], gutters[k]
@@ -55,16 +55,16 @@ func newStyleSet(theme theme.Theme) styleSet {
 				base, gutter = base.Background(cursorBackground), gutter.Background(cursorBackground)
 			}
 			view := variant{fill: base, gutter: gutter}
-			view.thread[0] = theme.Muted.Background(gutter.GetBackground())
-			view.thread[1] = theme.ThreadMarker.Background(gutter.GetBackground())
+			view.thread[0] = activeTheme.Muted.Background(gutter.GetBackground())
+			view.thread[1] = activeTheme.ThreadMarker.Background(gutter.GetBackground())
 			for count := range view.code {
 				view.code[count] = foreground[count].Background(base.GetBackground())
 			}
 			style.variants[current][k] = view
 		}
 	}
-	style.hunk[0] = theme.DiffHunk
-	style.hunk[1] = theme.DiffHunkCursor
+	style.hunk[0] = activeTheme.DiffHunk
+	style.hunk[1] = activeTheme.DiffHunkCursor
 	return style
 }
 

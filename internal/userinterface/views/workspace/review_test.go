@@ -128,9 +128,9 @@ func TestReviewCommentThroughChooser(test *testing.T) {
 		test.Fatalf("confirm = %+v, %v", configuration, ok)
 	}
 	composer.run(configuration.OnYes)
-	subs := composer.client.Submissions()
-	if len(subs) != 1 || subs[0].Event != github.ReviewEventComment {
-		test.Errorf("submissions = %+v", subs)
+	submissions := composer.client.Submissions()
+	if len(submissions) != 1 || submissions[0].Event != github.ReviewEventComment {
+		test.Errorf("submissions = %+v", submissions)
 	}
 }
 

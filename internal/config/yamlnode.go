@@ -144,7 +144,7 @@ func (parser *parser) stringValue(node *yaml.Node, what string) string {
 }
 
 // int reads an unquoted integer from lo to hi.
-func (parser *parser) int(node *yaml.Node, what string, low, high int) int {
+func (parser *parser) integer(node *yaml.Node, what string, low, high int) int {
 	value, err := strconv.Atoi(node.Value)
 	if node.Kind != yaml.ScalarNode || node.Tag != "!!int" || err != nil || value < low || value > high {
 		parser.fail(node, "%s must be a whole number from %d to %d", what, low, high)

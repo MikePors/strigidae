@@ -104,8 +104,8 @@ func TestMatcherFeed(test *testing.T) {
 		test.Run(testCase.name, func(test *testing.T) {
 			var matcher Matcher
 			var got []Result
-			for _, key := range testCase.keys {
-				got = append(got, matcher.Feed(key, testCase.bindings))
+			for _, pressed := range testCase.keys {
+				got = append(got, matcher.Feed(pressed, testCase.bindings))
 			}
 			if diff := cmp.Diff(testCase.want, got); diff != "" {
 				test.Errorf("results mismatch (-want +got):\n%s", diff)
@@ -128,8 +128,8 @@ func TestMatcherExpire(test *testing.T) {
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
 			var matcher Matcher
-			for _, key := range testCase.keys {
-				matcher.Feed(key, testCase.bindings)
+			for _, pressed := range testCase.keys {
+				matcher.Feed(pressed, testCase.bindings)
 			}
 			if got := matcher.Expire(testCase.bindings); got != testCase.want {
 				test.Errorf("Expire() = %+v, want %+v", got, testCase.want)
@@ -168,16 +168,16 @@ func TestGlobalBindings(test *testing.T) {
 	}
 	seen := map[string]bool{}
 	for _, binding := range global.Bindings() {
-		for _, key := range binding.Keys() {
-			if seen[key] {
-				test.Errorf("duplicate global key %q", key)
+		for _, pressed := range binding.Keys() {
+			if seen[pressed] {
+				test.Errorf("duplicate global key %q", pressed)
 			}
-			seen[key] = true
+			seen[pressed] = true
 		}
 	}
-	for _, key := range []string{"r", "c", "q", "ctrl+c", "tab", "ctrl+o", "ctrl+i"} {
-		if seen[key] {
-			test.Errorf("%q is reserved and must not be bound globally", key)
+	for _, pressed := range []string{"r", "c", "q", "ctrl+c", "tab", "ctrl+o", "ctrl+i"} {
+		if seen[pressed] {
+			test.Errorf("%q is reserved and must not be bound globally", pressed)
 		}
 	}
 }

@@ -41,7 +41,7 @@ func (view *View) layout() {
 	height := max(0, view.panesHeight()-2)
 	view.sizeFilePane(filesWidth, rightWidth, height)
 	if rightWidth > 0 {
-		view.overview.ensure(view.theme, view.markdown, view.detail, threadsView{view.threads, view.threadLoaded, view.threadPending, view.threadErr}, view.now(), max(1, rightWidth-4), height)
+		view.overview.ensure(view.theme, view.markdownRenderer, view.detail, threadsView{view.threads, view.threadLoaded, view.threadPending, view.threadErr}, view.now(), max(1, rightWidth-4), height)
 	}
 	view.window.SetRows(view.entries())
 	view.window.SetSize(height)
@@ -90,14 +90,14 @@ func (view *View) Render(width, height int) string {
 	rows := make([]string, 0, height)
 	rows = append(rows, view.renderHeader(width)...)
 	for i := range lineHeight {
-		var line, text string
+		var leftLine, rightLine string
 		if left != nil {
-			line = left[i]
+			leftLine = left[i]
 		}
 		if right != nil {
-			text = right[i]
+			rightLine = right[i]
 		}
-		rows = append(rows, line+text)
+		rows = append(rows, leftLine+rightLine)
 	}
 	if view.picker != nil {
 		overlay(rows, view.picker.Render(width, height-headerRows), width, headerRows)
@@ -160,9 +160,9 @@ func (view *View) renderHeader(width int) []string {
 	}
 	if len(detail.ReviewRequests) > 0 {
 		names := make([]string, len(detail.ReviewRequests))
-		for i, review := range detail.ReviewRequests {
-			names[i] = terminaltext.Clean(review.Name)
-			if review.IsTeam {
+		for i, reviewer := range detail.ReviewRequests {
+			names[i] = terminaltext.Clean(reviewer.Name)
+			if reviewer.IsTeam {
 				names[i] = "team " + names[i]
 			}
 		}
@@ -236,12 +236,12 @@ func (view *View) fileRow(file github.ChangedFile, width int, selected bool) str
 	if selected {
 		return view.theme.Selected.Render("> " + viewedGlyph(file.Viewed) + " " + marker + " " + path + " " + counts)
 	}
-	mStyle := view.theme.FileModified
+	modifiedStyle := view.theme.FileModified
 	switch file.Change {
 	case github.FileAdded:
-		mStyle = view.theme.FileAdded
+		modifiedStyle = view.theme.FileAdded
 	case github.FileDeleted:
-		mStyle = view.theme.FileDeleted
+		modifiedStyle = view.theme.FileDeleted
 	case github.FileModified, github.FileRenamed, github.FileCopied, github.FileChanged:
 	}
 	var names []string
@@ -261,7 +261,7 @@ func (view *View) fileRow(file github.ChangedFile, width int, selected bool) str
 		glyph = view.theme.FileModified.Render(viewedGlyph(file.Viewed))
 	case github.FileUnviewed:
 	}
-	return "  " + glyph + " " + mStyle.Render(marker) + " " + pathStyle.Render(path) + " " + strings.Join(names, " ")
+	return "  " + glyph + " " + modifiedStyle.Render(marker) + " " + pathStyle.Render(path) + " " + strings.Join(names, " ")
 }
 
 // viewedGlyph is the one-cell mark of a file's viewed state.

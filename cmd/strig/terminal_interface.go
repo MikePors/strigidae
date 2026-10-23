@@ -17,7 +17,7 @@ import (
 // runTUI starts the interactive program. Logs go to a file because the TUI
 // owns the terminal; if the file can't be opened we warn once and carry on
 // with logging discarded.
-func runTUI(application application, stderr io.Writer) error {
+func runTerminalInterface(application application, stderr io.Writer) error {
 	logger, closeLog, err := logging.Start(os.Getenv, os.UserHomeDir)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "strig: logging disabled: %v\n", err) // best effort, before the TUI starts

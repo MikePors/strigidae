@@ -18,7 +18,7 @@ func load(test *testing.T, name string) string {
 	return string(bytes)
 }
 
-func TestParseMulti(test *testing.T) {
+func TestParseMultiple(test *testing.T) {
 	diff, err := Parse(load(test, "multi.diff"))
 	if err != nil {
 		test.Fatal(err)
@@ -299,8 +299,8 @@ func TestCRLFBlankContextLine(test *testing.T) {
 		{Delete, 3, 0, "two"},
 		{Add, 0, 3, "three"},
 	}
-	if diff := cmp.Diff(want, diff.Files[0].Hunks[0].Lines); diff != "" {
-		test.Errorf("lines (-want +got):\n%s", diff)
+	if difference := cmp.Diff(want, diff.Files[0].Hunks[0].Lines); difference != "" {
+		test.Errorf("lines (-want +got):\n%s", difference)
 	}
 }
 

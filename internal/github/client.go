@@ -7,17 +7,17 @@ import "context"
 // or *RateLimitError where applicable; test with errors.Is / errors.As.
 type Client interface {
 	// ListPullRequests lists open pull requests in repo, most recently updated first.
-	ListPullRequests(ctx context.Context, repository Repository, page PageRequest) (Page[PullRequest], error)
+	ListPullRequests(ctx context.Context, repository Repository, pageRequest PageRequest) (Page[PullRequest], error)
 	// SearchPullRequests runs a GitHub search query restricted to pull
 	// requests ("is:pr" is added automatically), e.g. "review-requested:@me is:open".
-	SearchPullRequests(ctx context.Context, query string, page PageRequest) (Page[PullRequest], error)
+	SearchPullRequests(ctx context.Context, query string, pageRequest PageRequest) (Page[PullRequest], error)
 	// GetPullRequest returns one pull request with all its files, conversation
 	// comments and review summaries.
 	GetPullRequest(ctx context.Context, repository Repository, number int) (PullRequestDetail, error)
 	// GetDiff returns the raw unified diff of the pull request.
 	GetDiff(ctx context.Context, repository Repository, number int) (string, error)
 	// ListReviewThreads lists review threads, including resolved and outdated ones.
-	ListReviewThreads(ctx context.Context, repository Repository, number int, page PageRequest) (Page[ReviewThread], error)
+	ListReviewThreads(ctx context.Context, repository Repository, number int, pageRequest PageRequest) (Page[ReviewThread], error)
 	// ReplyToThread posts a reply to the thread with the given ID and returns the new comment.
 	ReplyToThread(ctx context.Context, threadIdentifier, body string) (ReviewComment, error)
 	// AddComment posts a top-level comment on the pull request.

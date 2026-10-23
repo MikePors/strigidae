@@ -39,8 +39,8 @@ func TestWindow(test *testing.T) {
 		return builder.String()
 	}
 	tests := []struct {
-		off, width int
-		want       string
+		startColumn, width int
+		want               string
 	}{
 		{0, 100, "ab日本語cd"},
 		{0, 2, "ab"},
@@ -54,8 +54,8 @@ func TestWindow(test *testing.T) {
 	}
 	emoji := []Span{{"❤️❤️a", ClassPlain}}
 	for _, testCase := range []struct {
-		off, width int
-		want       string
+		startColumn, width int
+		want               string
 	}{
 		{0, 4, "❤️❤️"},
 		{0, 3, "❤️ "},
@@ -63,18 +63,18 @@ func TestWindow(test *testing.T) {
 		{2, 3, "❤️a"},
 		{3, 2, " a"},
 	} {
-		got, used := window(emoji, testCase.off, testCase.width)
+		got, used := window(emoji, testCase.startColumn, testCase.width)
 		if joined := join(got); joined != testCase.want || used != ansi.StringWidth(joined) {
-			test.Errorf("emoji window(%d,%d) = %q (used %d), want %q", testCase.off, testCase.width, joined, used, testCase.want)
+			test.Errorf("emoji window(%d,%d) = %q (used %d), want %q", testCase.startColumn, testCase.width, joined, used, testCase.want)
 		}
 	}
 	for _, testCase := range tests {
-		got, used := window(spans, testCase.off, testCase.width)
+		got, used := window(spans, testCase.startColumn, testCase.width)
 		if joined := join(got); joined != testCase.want {
-			test.Errorf("window(%d,%d) = %q, want %q", testCase.off, testCase.width, joined, testCase.want)
+			test.Errorf("window(%d,%d) = %q, want %q", testCase.startColumn, testCase.width, joined, testCase.want)
 		}
 		if width := ansi.StringWidth(join(got)); width != used || used > testCase.width {
-			test.Errorf("window(%d,%d): used %d, text width %d", testCase.off, testCase.width, used, width)
+			test.Errorf("window(%d,%d): used %d, text width %d", testCase.startColumn, testCase.width, used, width)
 		}
 	}
 }

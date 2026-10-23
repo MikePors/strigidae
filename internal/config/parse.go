@@ -106,7 +106,7 @@ func (parser *parser) section(node *yaml.Node) (Section, string) {
 			}
 			section.Query = normalized
 		case "limit":
-			section.Limit = parser.int(node, "limit", 1, MaximumLimit)
+			section.Limit = parser.integer(node, "limit", 1, MaximumLimit)
 		case "sort":
 			section.Sort = Sort(parser.oneOf(node, "sort", sortNames))
 		case "order":

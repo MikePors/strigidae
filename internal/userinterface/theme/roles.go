@@ -63,11 +63,11 @@ type tintParameters struct{ lightMix, chroma float64 }
 // the same blend reads very differently on a dark and a light background.
 type tintSet struct{ row, gutter, hunk, hunkCursor tintParameters }
 
-func tintsFor(view Variant) tintSet {
+func tintsFor(variant Variant) tintSet {
 	// Fitted so the built-in palettes reproduce the earlier hand-picked row
 	// colours closely: deep green and red on dark, pastel mint and pink on
 	// light, with the same hunk-header shades.
-	if view == Light {
+	if variant == Light {
 		return tintSet{
 			row:        tintParameters{0.07, 0.20},
 			gutter:     tintParameters{0.085, 0.52},
@@ -273,9 +273,9 @@ func (roles *Roles) guard(overridden map[string]bool) {
 // generated Chroma style are functions of them, so it is the identity
 // rendered-output caches key on. extra carries anything else that affects
 // rendering, such as a named syntax style.
-func (roles *Roles) fingerprint(view Variant, extra string) string {
+func (roles *Roles) fingerprint(variant Variant, extra string) string {
 	hasher := fnv.New64a()
-	_, _ = fmt.Fprintf(hasher, "%d|%s", view, extra)
+	_, _ = fmt.Fprintf(hasher, "%d|%s", variant, extra)
 	for _, field := range roles.fields() {
 		_, _ = hasher.Write([]byte(HexString(*field.color)))
 	}

@@ -91,14 +91,14 @@ func header(environment Environment, thread github.ReviewThread, width int, opti
 	if count > 0 {
 		parts = append(parts, theme.Author.Render(comment.Author(thread.Comments[0].Author)))
 	}
-	meta := fmt.Sprintf("%d comment", count)
+	summary := fmt.Sprintf("%d comment", count)
 	if count != 1 {
-		meta += "s"
+		summary += "s"
 	}
 	if count > 0 {
-		meta += " · " + comment.RelativeTime(environment.Now, thread.Comments[count-1].CreatedAt)
+		summary += " · " + comment.RelativeTime(environment.Now, thread.Comments[count-1].CreatedAt)
 	}
-	parts = append(parts, theme.Muted.Render(meta))
+	parts = append(parts, theme.Muted.Render(summary))
 	if thread.IsResolved {
 		parts = append(parts, theme.Muted.Render("[resolved]"))
 	}

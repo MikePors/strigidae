@@ -172,7 +172,7 @@ func TestToggleFromInsideTheThreadLandsOnHeader(test *testing.T) {
 		test.Fatal("setup: cursor should be on a thread row")
 	}
 	model.ToggleThread()
-	if row := model.rows[model.window.Cursor()]; row.threadRow == nil || row.threadRow.i != 0 || !strings.Contains(cursorRowText(model), "▸ alice") {
+	if row := model.rows[model.window.Cursor()]; row.threadRow == nil || row.threadRow.rowInBlock != 0 || !strings.Contains(cursorRowText(model), "▸ alice") {
 		test.Errorf("cursor should sit on the collapsed header, got %q", cursorRowText(model))
 	}
 	model.ToggleThread()

@@ -43,22 +43,22 @@ type Matcher struct {
 // Pending, even if they also match a shorter binding exactly (Expire delivers
 // the shorter one). If a pending prefix turns out not to lead anywhere it is
 // discarded and the new key is tried on its own.
-func (matcher *Matcher) Feed(key string, bindings []key.Binding) Result {
+func (matcher *Matcher) Feed(pressed string, bindings []key.Binding) Result {
 	found := len(matcher.pending) > 0
-	sequence := strings.Join(append(matcher.pending[:len(matcher.pending):len(matcher.pending)], key), " ")
+	sequence := strings.Join(append(matcher.pending[:len(matcher.pending):len(matcher.pending)], pressed), " ")
 	exact, longer := lookup(sequence, bindings)
 	switch {
 	case longer:
-		matcher.pending = append(matcher.pending, key)
+		matcher.pending = append(matcher.pending, pressed)
 		return Result{Kind: Pending, Sequence: sequence}
 	case exact:
 		matcher.Reset()
 		return Result{Kind: Matched, Sequence: sequence}
 	case found:
 		matcher.Reset()
-		return matcher.Feed(key, bindings)
+		return matcher.Feed(pressed, bindings)
 	default:
-		return Result{Kind: NoMatch, Sequence: key}
+		return Result{Kind: NoMatch, Sequence: pressed}
 	}
 }
 
@@ -92,10 +92,10 @@ func lookup(sequence string, bindings []key.Binding) (exact, longer bool) {
 		if !binding.Enabled() {
 			continue
 		}
-		for _, key := range binding.Keys() {
-			if key == sequence {
+		for _, pressed := range binding.Keys() {
+			if pressed == sequence {
 				exact = true
-			} else if strings.HasPrefix(key, prefix) {
+			} else if strings.HasPrefix(pressed, prefix) {
 				longer = true
 			}
 		}

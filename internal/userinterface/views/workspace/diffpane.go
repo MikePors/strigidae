@@ -13,7 +13,7 @@ import (
 )
 
 // hScrollStep is how many columns `z h` / `z l` scroll.
-const hScrollStep = 4
+const horizontalScrollStep = 4
 
 // diffBindings are the diff pane's own keys; the movement keys come from
 // keys.Global.
@@ -59,11 +59,11 @@ type diffPane struct {
 
 var _ FilePane = (*diffPane)(nil)
 
-func newDiffPane(theme theme.Theme, now func() time.Time) *diffPane {
-	return &diffPane{diffView: diffview.New(theme, diffview.WithClock(now)), globalKeys: keys.DefaultGlobal(), bind: defaultDiffBindings()}
+func newDiffPane(activeTheme theme.Theme, now func() time.Time) *diffPane {
+	return &diffPane{diffView: diffview.New(activeTheme, diffview.WithClock(now)), globalKeys: keys.DefaultGlobal(), bind: defaultDiffBindings()}
 }
 
-func (pane *diffPane) SetTheme(theme theme.Theme) { pane.diffView.SetTheme(theme) }
+func (pane *diffPane) SetTheme(activeTheme theme.Theme) { pane.diffView.SetTheme(activeTheme) }
 
 func (pane *diffPane) SetThreads(threads []github.ReviewThread) { pane.diffView.SetThreads(threads) }
 
@@ -138,9 +138,9 @@ func (pane *diffPane) Update(message keys.Message) tea.Cmd {
 	case key.Matches(message, pane.bind.CloseThread):
 		diffView.CloseThread()
 	case key.Matches(message, pane.bind.ScrollLeft):
-		diffView.ScrollLeft(hScrollStep)
+		diffView.ScrollLeft(horizontalScrollStep)
 	case key.Matches(message, pane.bind.ScrollRight):
-		diffView.ScrollRight(hScrollStep)
+		diffView.ScrollRight(horizontalScrollStep)
 	case key.Matches(message, pane.bind.HalfScrollLeft):
 		diffView.HalfScrollLeft()
 	case key.Matches(message, pane.bind.HalfScrollRight):

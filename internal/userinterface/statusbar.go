@@ -32,47 +32,47 @@ type statusBar struct {
 // transient message; the breadcrumbs shrink last-first from the left (so the
 // current view stays visible) down to a third of the free space. The idle
 // hint is expendable.
-func (statusBar statusBar) render(theme theme.Theme, width int) string {
+func (statusBar statusBar) render(activeTheme theme.Theme, width int) string {
 	if width <= 0 {
 		return ""
 	}
-	right := statusBar.renderRight(theme)
+	right := statusBar.renderRight(activeTheme)
 	if lipgloss.Width(right) >= width {
 		right = ""
 	}
-	avail := width - lipgloss.Width(right)
+	available := width - lipgloss.Width(right)
 
 	text := " " + strings.ReplaceAll(statusBar.text, "\n", " ")
 	textWidth := ansi.StringWidth(text)
 	crumbWidth := ansi.StringWidth(statusBar.crumbs) + 2
-	budget := min(crumbWidth, avail)
-	if statusBar.kind != statusNone && crumbWidth+textWidth > avail {
-		budget = min(crumbWidth, max(avail/3, avail-textWidth))
+	budget := min(crumbWidth, available)
+	if statusBar.kind != statusNone && crumbWidth+textWidth > available {
+		budget = min(crumbWidth, max(available/3, available-textWidth))
 	}
-	left := theme.StatusContext.Render(fitLeft(statusBar.crumbs, budget))
+	left := activeTheme.StatusContext.Render(fitLeft(statusBar.crumbs, budget))
 
-	midWidth := avail - lipgloss.Width(left)
-	style := theme.StatusHint
+	midWidth := available - lipgloss.Width(left)
+	style := activeTheme.StatusHint
 	switch statusBar.kind {
 	case statusInfo:
-		style = theme.StatusInfo
+		style = activeTheme.StatusInfo
 	case statusError:
-		style = theme.StatusError
+		style = activeTheme.StatusError
 	}
 	text = ansi.Truncate(text, midWidth, "…")
 	pad := strings.Repeat(" ", max(0, midWidth-ansi.StringWidth(text)))
-	return left + style.Render(text) + theme.StatusBar.Render(pad) + right
+	return left + style.Render(text) + activeTheme.StatusBar.Render(pad) + right
 }
 
-func (statusBar statusBar) renderRight(theme theme.Theme) string {
+func (statusBar statusBar) renderRight(activeTheme theme.Theme) string {
 	var right string
 	if statusBar.pending != "" {
-		right += theme.StatusPending.Render(" " + statusBar.pending)
+		right += activeTheme.StatusPending.Render(" " + statusBar.pending)
 	}
 	if statusBar.spinner != "" {
-		right += theme.StatusBar.Render(" ") + statusBar.spinner
+		right += activeTheme.StatusBar.Render(" ") + statusBar.spinner
 	}
-	return right + theme.StatusBar.Render(" ")
+	return right + activeTheme.StatusBar.Render(" ")
 }
 
 // fitLeft pads crumbs with a space each side and, if the result would exceed

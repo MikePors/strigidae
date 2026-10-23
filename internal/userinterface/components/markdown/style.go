@@ -18,9 +18,9 @@ func pointer[Value any](value Value) *Value { return &value }
 // colour.
 func styleConfig(activeTheme theme.Theme) ansi.StyleConfig {
 	roles := activeTheme.Roles
-	column := func(color color.Color) *string { return pointer(theme.HexString(color)) }
-	text, muted := column(roles.Text), column(roles.Muted)
-	accent, link := column(roles.Accent), column(roles.Link)
+	hexOf := func(colour color.Color) *string { return pointer(theme.HexString(colour)) }
+	text, muted := hexOf(roles.Text), hexOf(roles.Muted)
+	accent, link := hexOf(roles.Accent), hexOf(roles.Link)
 	bold := pointer(true)
 
 	// The marker is pre-styled (muted) inside the prefix, so it keeps its own
@@ -43,12 +43,12 @@ func styleConfig(activeTheme theme.Theme) ansi.StyleConfig {
 
 		Heading: ansi.StyleBlock{StylePrimitive: ansi.StylePrimitive{BlockSuffix: "\n", Color: accent, Bold: bold}},
 		H1: ansi.StyleBlock{StylePrimitive: ansi.StylePrimitive{
-			Prefix: " ", Suffix: " ", Color: column(roles.OnAccent), BackgroundColor: accent, Bold: bold,
+			Prefix: " ", Suffix: " ", Color: hexOf(roles.OnAccent), BackgroundColor: accent, Bold: bold,
 		}},
 		H2: heading(2, accent),
 		H3: heading(3, accent),
-		H4: heading(4, column(roles.Info)),
-		H5: heading(5, column(roles.Info)),
+		H4: heading(4, hexOf(roles.Info)),
+		H5: heading(5, hexOf(roles.Info)),
 		H6: heading(6, text),
 
 		Strikethrough:  ansi.StylePrimitive{CrossedOut: bold},
@@ -67,7 +67,7 @@ func styleConfig(activeTheme theme.Theme) ansi.StyleConfig {
 
 		// Inline code is the text colour on a muted surface, not a hue.
 		Code: ansi.StyleBlock{StylePrimitive: ansi.StylePrimitive{
-			Prefix: "\u00a0", Suffix: "\u00a0", Color: text, BackgroundColor: column(roles.Surface), // non-breaking: no wrap inside a span
+			Prefix: "\u00a0", Suffix: "\u00a0", Color: text, BackgroundColor: hexOf(roles.Surface), // non-breaking: no wrap inside a span
 		}},
 		CodeBlock: ansi.StyleCodeBlock{
 			StyleBlock: ansi.StyleBlock{

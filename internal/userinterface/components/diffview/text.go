@@ -101,8 +101,8 @@ func spaces(count int) string {
 // window returns the part of spans that falls in display columns
 // [off, off+width), plus its width. Grapheme clusters are the unit: one cut by
 // either edge is replaced by spaces so everything keeps its column.
-func window(spans []Span, off, width int) ([]Span, int) {
-	end := off + width
+func window(spans []Span, startColumn, width int) ([]Span, int) {
+	end := startColumn + width
 	column := 0
 	var out []Span
 	for _, span := range spans {
@@ -110,11 +110,11 @@ func window(spans []Span, off, width int) ([]Span, int) {
 		done := false
 		if isPlainASCII(span.Text) {
 			count := len(span.Text)
-			if column+count <= off {
+			if column+count <= startColumn {
 				column += count
 				continue
 			}
-			low, high := max(off-column, 0), min(count, end-column)
+			low, high := max(startColumn-column, 0), min(count, end-column)
 			text = span.Text[low:high]
 			if high < count {
 				column, done = end, true
@@ -122,7 +122,7 @@ func window(spans []Span, off, width int) ([]Span, int) {
 				column += count
 			}
 		} else {
-			text, column, done = windowSlow(span.Text, column, off, end)
+			text, column, done = windowSlow(span.Text, column, startColumn, end)
 		}
 		if text != "" {
 			out = append(out, Span{Text: text, Class: span.Class})
@@ -131,11 +131,11 @@ func window(spans []Span, off, width int) ([]Span, int) {
 			break
 		}
 	}
-	used := min(max(column-off, 0), width)
+	used := min(max(column-startColumn, 0), width)
 	return out, used
 }
 
-func windowSlow(text string, column, off, end int) (string, int, bool) {
+func windowSlow(text string, column, startColumn, end int) (string, int, bool) {
 	var builder strings.Builder
 	for rest := text; rest != ""; {
 		var text string
@@ -143,13 +143,13 @@ func windowSlow(text string, column, off, end int) (string, int, bool) {
 		width := clusterWidth(text)
 		switch {
 		case width == 0:
-			if column > off { // zero-width cluster: keep only after a visible one
+			if column > startColumn { // zero-width cluster: keep only after a visible one
 				builder.WriteString(text)
 			}
-		case column+width <= off:
+		case column+width <= startColumn:
 			column += width
-		case column < off: // straddles the left edge
-			builder.WriteString(spaces(column + width - off))
+		case column < startColumn: // straddles the left edge
+			builder.WriteString(spaces(column + width - startColumn))
 			column += width
 		case column+width > end: // does not fit on the right
 			builder.WriteString(spaces(end - column))

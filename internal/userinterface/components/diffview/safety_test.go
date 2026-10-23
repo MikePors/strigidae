@@ -99,8 +99,8 @@ func TestInvalidUTF8(test *testing.T) {
 	model.SetFile(file)
 	out := model.Render(40, 5)
 	assertSafe(test, "styled", ansi.Strip(out))
-	for i, text := range strings.Split(out, "\n") {
-		if width := ansi.StringWidth(text); width != 40 {
+	for i, row := range strings.Split(out, "\n") {
+		if width := ansi.StringWidth(row); width != 40 {
 			test.Errorf("row %d is %d cells wide, want 40", i, width)
 		}
 	}
@@ -115,8 +115,8 @@ func TestEmojiRowsAreExactlyPaneWidth(test *testing.T) {
 		"é combining",
 	}
 	hunk := diff.Hunk{OldStart: 1, NewStart: 1}
-	for i, text := range lines {
-		hunk.Lines = append(hunk.Lines, diff.Line{Kind: diff.Add, New: i + 1, Text: text})
+	for i, row := range lines {
+		hunk.Lines = append(hunk.Lines, diff.Line{Kind: diff.Add, New: i + 1, Text: row})
 	}
 	hunk.NewLines = len(lines)
 	file := &diff.File{NewPath: "e.txt", Status: diff.Added, Hunks: []diff.Hunk{hunk}}
@@ -124,17 +124,17 @@ func TestEmojiRowsAreExactlyPaneWidth(test *testing.T) {
 	const width = 40
 	model := New(theme.New(true))
 	model.SetFile(file)
-	for off := 0; off <= 120; off++ {
+	for horizontalOffset := 0; horizontalOffset <= 120; horizontalOffset++ {
 		model.SetSize(width, 8)
 		model.ScrollLeft(1000)
-		model.ScrollRight(off)
+		model.ScrollRight(horizontalOffset)
 		rows := strings.Split(model.Render(width, 8), "\n")
 		if len(rows) != len(lines)+1 {
 			test.Fatalf("rows = %d", len(rows))
 		}
-		for i, text := range rows {
-			if got := ansi.StringWidth(text); got != width {
-				test.Fatalf("xoff %d row %d is %d cells wide, want %d: %q", model.HorizontalOffset(), i, got, width, ansi.Strip(text))
+		for i, row := range rows {
+			if got := ansi.StringWidth(row); got != width {
+				test.Fatalf("xoff %d row %d is %d cells wide, want %d: %q", model.HorizontalOffset(), i, got, width, ansi.Strip(row))
 			}
 		}
 	}

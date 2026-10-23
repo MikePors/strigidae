@@ -15,7 +15,7 @@ type anchor struct {
 type position struct {
 	path             string
 	anchor           anchor
-	off              int // cursor row minus top row
+	cursorOffset     int // cursor row minus top row
 	horizontalOffset int
 	ok               bool // false when there was no diff row to anchor to
 
@@ -31,9 +31,9 @@ func (model *Model) capture() position {
 		return currentPosition
 	}
 	i := model.window.Cursor()
-	currentPosition.off = model.window.Cursor() - model.window.Top()
+	currentPosition.cursorOffset = model.window.Cursor() - model.window.Top()
 	if row := model.rows[i]; row.threadRow != nil {
-		currentPosition.thread, currentPosition.threadOffset = model.fthreads[row.threadRow.threadIndex].Identifier, row.threadRow.i
+		currentPosition.thread, currentPosition.threadOffset = model.fileThreads[row.threadRow.threadIndex].Identifier, row.threadRow.rowInBlock
 	}
 	for i > 0 && model.rows[i].threadRow != nil {
 		i-- // a thread row: anchor to the diff row it follows
@@ -73,7 +73,7 @@ func (model *Model) restore(position position) {
 		}
 		row = model.find(position.anchor)
 	}
-	model.window.Restore(row, row-position.off, position.horizontalOffset)
+	model.window.Restore(row, row-position.cursorOffset, position.horizontalOffset)
 }
 
 func lineKey(oldNumber, newNumber int) int {

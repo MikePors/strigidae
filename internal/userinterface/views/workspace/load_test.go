@@ -210,16 +210,16 @@ func TestPartialDiffStillShowsParsedFiles(test *testing.T) {
 		test.Errorf("the missing file should say so:\n%s", out)
 	}
 
-	var errs []string
+	var errorTexts []string
 	for _, message := range harness.messages {
 		if errorMessage, ok := message.(userinterface.ErrorMessage); ok {
-			errs = append(errs, errorMessage.Err.Error())
+			errorTexts = append(errorTexts, errorMessage.Err.Error())
 		}
 	}
-	if len(errs) != 1 {
-		test.Fatalf("status bar errors = %q, want exactly one", errs)
+	if len(errorTexts) != 1 {
+		test.Fatalf("status bar errors = %q, want exactly one", errorTexts)
 	}
-	if count := strings.Count(errs[0], "parse diff"); count != 1 || !strings.HasPrefix(errs[0], "acme/widgets#7: ") {
-		test.Errorf("status bar text = %q", errs[0])
+	if count := strings.Count(errorTexts[0], "parse diff"); count != 1 || !strings.HasPrefix(errorTexts[0], "acme/widgets#7: ") {
+		test.Errorf("status bar text = %q", errorTexts[0])
 	}
 }

@@ -33,11 +33,11 @@ func TestPagination(test *testing.T) {
 	client := seeded()
 	ctx := context.Background()
 	var numbers []int
-	var request github.PageRequest
-	request.Limit = 2
+	var pageRequest github.PageRequest
+	pageRequest.Limit = 2
 	pages := 0
 	for {
-		page, err := client.ListPullRequests(ctx, repository, request)
+		page, err := client.ListPullRequests(ctx, repository, pageRequest)
 		if err != nil {
 			test.Fatal(err)
 		}
@@ -48,7 +48,7 @@ func TestPagination(test *testing.T) {
 		if !page.HasMore() {
 			break
 		}
-		request.After = page.Next
+		pageRequest.After = page.Next
 	}
 	if diff := cmp.Diff([]int{1, 2, 3, 4, 5}, numbers); diff != "" {
 		test.Errorf("numbers mismatch:\n%s", diff)

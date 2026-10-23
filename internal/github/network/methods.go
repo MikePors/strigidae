@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	githubnetwork "github.com/cli/go-gh/v2/pkg/api"
+	githubapi "github.com/cli/go-gh/v2/pkg/api"
 
 	"github.com/MikePors/strigidae/internal/github"
 )
@@ -23,15 +23,15 @@ import (
 var pullRequestQualifiers = []string{"is:pr", "type:pr", "is:pull-request", "type:pull-request"}
 
 func hasPullRequestQualifier(query string) bool {
-	for _, format := range strings.Fields(query) {
-		if slices.Contains(pullRequestQualifiers, format) {
+	for _, qualifier := range strings.Fields(query) {
+		if slices.Contains(pullRequestQualifiers, qualifier) {
 			return true
 		}
 	}
 	return false
 }
 
-func afterVar(pageRequest github.PageRequest) any {
+func afterCursor(pageRequest github.PageRequest) any {
 	if pageRequest.After == "" {
 		return nil
 	}
@@ -39,13 +39,13 @@ func afterVar(pageRequest github.PageRequest) any {
 }
 
 // ListPullRequests implements github.Client.
-func (client *Client) ListPullRequests(ctx context.Context, repository github.Repository, page github.PageRequest) (github.Page[github.PullRequest], error) {
+func (client *Client) ListPullRequests(ctx context.Context, repository github.Repository, pageRequest github.PageRequest) (github.Page[github.PullRequest], error) {
 	var response struct {
 		Repository *struct {
 			PullRequests graphqlConnection[graphqlPullRequest]
 		}
 	}
-	variables := map[string]any{"owner": repository.Owner, "name": repository.Name, "first": page.Size(), "after": afterVar(page)}
+	variables := map[string]any{"owner": repository.Owner, "name": repository.Name, "first": pageRequest.Size(), "after": afterCursor(pageRequest)}
 	if err := client.query(ctx, listPullRequestsQuery, variables, &response); err != nil {
 		return github.Page[github.PullRequest]{}, fmt.Errorf("list pull requests in %s: %w", repository, err)
 	}
@@ -61,7 +61,7 @@ func (client *Client) ListPullRequests(ctx context.Context, repository github.Re
 }
 
 // SearchPullRequests implements github.Client.
-func (client *Client) SearchPullRequests(ctx context.Context, query string, page github.PageRequest) (github.Page[github.PullRequest], error) {
+func (client *Client) SearchPullRequests(ctx context.Context, query string, pageRequest github.PageRequest) (github.Page[github.PullRequest], error) {
 	var response struct {
 		Search struct {
 			IssueCount int
@@ -73,7 +73,7 @@ func (client *Client) SearchPullRequests(ctx context.Context, query string, page
 	if !hasPullRequestQualifier(searchQuery) {
 		searchQuery = "is:pr " + searchQuery
 	}
-	variables := map[string]any{"query": searchQuery, "first": page.Size(), "after": afterVar(page)}
+	variables := map[string]any{"query": searchQuery, "first": pageRequest.Size(), "after": afterCursor(pageRequest)}
 	if err := client.query(ctx, searchPullRequestsQuery, variables, &response); err != nil {
 		return github.Page[github.PullRequest]{}, fmt.Errorf("search pull requests: %w", err)
 	}
@@ -165,7 +165,7 @@ func (client *Client) GetDiff(ctx context.Context, repository github.Repository,
 	path := fmt.Sprintf("repos/%s/%s/pulls/%d", url.PathEscape(repository.Owner), url.PathEscape(repository.Name), number)
 	response, err := client.diff.RequestWithContext(ctx, "GET", path, nil)
 	if err != nil {
-		var httpErr *githubnetwork.HTTPError
+		var httpErr *githubapi.HTTPError
 		if errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusNotAcceptable {
 			return "", fmt.Errorf("load diff of %s#%d: %w: %w", repository, number, github.ErrDiffTooLarge, err)
 		}
@@ -180,7 +180,7 @@ func (client *Client) GetDiff(ctx context.Context, repository github.Repository,
 }
 
 // ListReviewThreads implements github.Client.
-func (client *Client) ListReviewThreads(ctx context.Context, repository github.Repository, number int, page github.PageRequest) (github.Page[github.ReviewThread], error) {
+func (client *Client) ListReviewThreads(ctx context.Context, repository github.Repository, number int, pageRequest github.PageRequest) (github.Page[github.ReviewThread], error) {
 	var response struct {
 		Repository *struct {
 			PullRequest *struct {
@@ -188,7 +188,7 @@ func (client *Client) ListReviewThreads(ctx context.Context, repository github.R
 			}
 		}
 	}
-	variables := map[string]any{"owner": repository.Owner, "name": repository.Name, "number": number, "first": page.Size(), "after": afterVar(page)}
+	variables := map[string]any{"owner": repository.Owner, "name": repository.Name, "number": number, "first": pageRequest.Size(), "after": afterCursor(pageRequest)}
 	if err := client.query(ctx, reviewThreadsQuery, variables, &response); err != nil {
 		return github.Page[github.ReviewThread]{}, fmt.Errorf("list review threads of %s#%d: %w", repository, number, err)
 	}

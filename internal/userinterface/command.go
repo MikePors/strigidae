@@ -12,15 +12,15 @@ import (
 )
 
 // commandSpec is one entry in the command registry.
-type commandSpec struct {
+type commandDefinition struct {
 	names []string // the command and its aliases, without the leading ":"
 	run   func(arguments string) tea.Cmd
 }
 
 // commandTable lists the commands the command line understands. Add new
 // commands here; parsing and dispatch need no other change.
-func commandTable() []commandSpec {
-	return []commandSpec{
+func commandTable() []commandDefinition {
+	return []commandDefinition{
 		{names: []string{"q", "quit"}, run: func(string) tea.Cmd { return Pop() }},
 		{names: []string{"qa", "qall", "quitall"}, run: func(string) tea.Cmd { return Quit() }},
 	}
@@ -37,16 +37,16 @@ func parseCommand(line string, top View) tea.Cmd {
 	}
 	name, arguments, _ := strings.Cut(line, " ")
 	arguments = strings.TrimSpace(arguments)
-	for _, spec := range commandTable() {
-		for _, variableName := range spec.names {
-			if variableName == name {
-				return spec.run(arguments)
+	for _, definition := range commandTable() {
+		for _, alias := range definition.names {
+			if alias == name {
+				return definition.run(arguments)
 			}
 		}
 	}
 	if slices.Contains(viewCommands, name) {
-		if capturer, ok := top.(Commander); ok {
-			if command, handled := capturer.Command(name, arguments); handled {
+		if commander, ok := top.(Commander); ok {
+			if command, handled := commander.Command(name, arguments); handled {
 				return command
 			}
 		}
@@ -71,27 +71,27 @@ type commandLine struct {
 
 var _ KeyCapturer = (*commandLine)(nil)
 
-func newCommandLine(theme theme.Theme) commandLine {
+func newCommandLine(activeTheme theme.Theme) commandLine {
 	in := textinput.New()
 	in.Prompt = ":"
 	currentCommandLine := commandLine{input: in}
-	currentCommandLine.setTheme(theme)
+	currentCommandLine.setTheme(activeTheme)
 	return currentCommandLine
 }
 
 // setTheme styles the input from the theme's command-line styles, so the
 // typed text is readable on light and dark backgrounds alike.
-func (commandLine *commandLine) setTheme(theme theme.Theme) {
+func (commandLine *commandLine) setTheme(activeTheme theme.Theme) {
 	state := textinput.StyleState{
-		Text:        theme.CommandText,
-		Prompt:      theme.CommandPrompt,
-		Placeholder: theme.CommandHint,
-		Suggestion:  theme.CommandHint,
+		Text:        activeTheme.CommandText,
+		Prompt:      activeTheme.CommandPrompt,
+		Placeholder: activeTheme.CommandHint,
+		Suggestion:  activeTheme.CommandHint,
 	}
 	commandLine.input.SetStyles(textinput.Styles{
 		Focused: state,
 		Blurred: state,
-		Cursor:  textinput.CursorStyle{Color: theme.CommandText.GetForeground(), Shape: tea.CursorBlock, Blink: true},
+		Cursor:  textinput.CursorStyle{Color: activeTheme.CommandText.GetForeground(), Shape: tea.CursorBlock, Blink: true},
 	})
 }
 

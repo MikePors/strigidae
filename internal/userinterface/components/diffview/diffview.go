@@ -104,7 +104,7 @@ func (row row) isLine() bool {
 }
 
 // threadRow places a row inside a thread's block of lines.
-type threadRow struct{ threadIndex, i int }
+type threadRow struct{ threadIndex, rowInBlock int }
 
 // Model is the diff pane. Create it with New. It is not a tea.Model.
 type Model struct {
@@ -118,19 +118,19 @@ type Model struct {
 	rows    []row
 	hunkRow []int // row index of each hunk header
 
-	now            func() time.Time
-	markdown       *markdown.Renderer
-	threads        []github.ReviewThread // all of the pull request's threads
-	fthreads       []github.ReviewThread // the ones on the shown file
-	attach         map[int][]int         // base row -> indexes in fthreads
-	orphans        []int                 // fthreads that map to no diff line
-	open           map[string]bool       // thread ID -> expanded, once the user chose
-	blocks         [][]string            // rendered lines of each fthreads entry
-	blockCache     map[blockKey][]string // rendered threads; dropped by SetThreads and when width or theme change
-	blockSignature blockSignature
-	renders        int // thread blocks rendered, for tests
-	numberWidth    int // width of one line-number column
-	maximumWidth   int // widest code line, in cells
+	now              func() time.Time
+	markdownRenderer *markdown.Renderer
+	threads          []github.ReviewThread // all of the pull request's threads
+	fileThreads      []github.ReviewThread // the ones on the shown file
+	attach           map[int][]int         // base row -> indexes in fthreads
+	orphans          []int                 // fthreads that map to no diff line
+	open             map[string]bool       // thread ID -> expanded, once the user chose
+	blocks           [][]string            // rendered lines of each fthreads entry
+	blockCache       map[blockKey][]string // rendered threads; dropped by SetThreads and when width or theme change
+	blockSignature   blockSignature
+	renders          int // thread blocks rendered, for tests
+	numberWidth      int // width of one line-number column
+	maximumWidth     int // widest code line, in cells
 
 	cache map[int][]Span // highlighted rows, by base row index; reset per file
 	saved *position      // position kept while a message replaces the file
@@ -144,22 +144,22 @@ type Model struct {
 }
 
 // New returns an empty diff pane.
-func New(theme theme.Theme, options ...Option) *Model {
-	model := &Model{theme: theme, highlight: ChromaHighlighter(), cache: map[int][]Span{}, now: time.Now, open: map[string]bool{}}
+func New(activeTheme theme.Theme, options ...Option) *Model {
+	model := &Model{theme: activeTheme, highlight: ChromaHighlighter(), cache: map[int][]Span{}, now: time.Now, open: map[string]bool{}}
 	for _, option := range options {
 		option(model)
 	}
-	model.styles = newStyleSet(theme)
-	model.markdown = markdown.New(theme)
+	model.styles = newStyleSet(activeTheme)
+	model.markdownRenderer = markdown.New(activeTheme)
 	return model
 }
 
 // SetTheme swaps the theme. The highlight cache holds token classes, not
 // colours, so it stays valid.
-func (model *Model) SetTheme(theme theme.Theme) {
-	model.theme = theme
-	model.styles = newStyleSet(theme)
-	model.markdown = markdown.New(theme)
+func (model *Model) SetTheme(activeTheme theme.Theme) {
+	model.theme = activeTheme
+	model.styles = newStyleSet(activeTheme)
+	model.markdownRenderer = markdown.New(activeTheme)
 	model.layout()
 }
 
@@ -233,7 +233,7 @@ func (model *Model) reset() {
 	model.blockCache = nil
 	model.visual = false // base rows are about to change
 	model.base, model.rows, model.hunkRow = nil, nil, nil
-	model.fthreads, model.attach, model.orphans, model.blocks = nil, nil, nil, nil
+	model.fileThreads, model.attach, model.orphans, model.blocks = nil, nil, nil, nil
 	model.cache = map[int][]Span{}
 	model.window.Reset()
 	model.maximumWidth, model.numberWidth = 0, 0
@@ -294,20 +294,20 @@ func (model *Model) sync() {
 // precede it. A thread row is identified by the thread's ID, so a reload that
 // adds or removes threads keeps the cursor on the same one.
 type cursorKey struct {
-	baseIndex int
-	thread    string // ID of the thread the cursor is in, or ""
-	off       int    // row within the thread's block
+	baseIndex   int
+	thread      string // ID of the thread the cursor is in, or ""
+	blockOffset int    // row within the thread's block
 }
 
 func (model *Model) cursorKey() (cursorKey, bool) {
-	count := model.window.Cursor()
-	if count >= len(model.rows) {
+	cursor := model.window.Cursor()
+	if cursor >= len(model.rows) {
 		return cursorKey{}, false
 	}
-	row := model.rows[count]
+	row := model.rows[cursor]
 	key := cursorKey{baseIndex: row.baseIndex}
 	if row.threadRow != nil {
-		key.thread, key.off = model.fthreads[row.threadRow.threadIndex].Identifier, row.threadRow.i
+		key.thread, key.blockOffset = model.fileThreads[row.threadRow.threadIndex].Identifier, row.threadRow.rowInBlock
 	}
 	return key, true
 }
@@ -316,7 +316,7 @@ func (model *Model) cursorKey() (cursorKey, bool) {
 // is shorter) falls back to the nearest one in its block, then to its line.
 func (model *Model) keyRow(key cursorKey) int {
 	if key.thread != "" {
-		if row := model.threadRowFor(key.thread, key.off); row >= 0 {
+		if row := model.threadRowFor(key.thread, key.blockOffset); row >= 0 {
 			return row
 		}
 	}
@@ -330,10 +330,10 @@ func (model *Model) keyRow(key cursorKey) int {
 
 // threadRowFor returns the row at offset off in the block of the thread with
 // the given ID (clamped to the block), or -1 if the thread is not shown.
-func (model *Model) threadRowFor(identifier string, off int) int {
+func (model *Model) threadRowFor(identifier string, blockOffset int) int {
 	best := -1
 	for i, row := range model.rows {
-		if row.threadRow != nil && model.fthreads[row.threadRow.threadIndex].Identifier == identifier && row.threadRow.i <= off {
+		if row.threadRow != nil && model.fileThreads[row.threadRow.threadIndex].Identifier == identifier && row.threadRow.rowInBlock <= blockOffset {
 			best = i
 		}
 	}
@@ -350,22 +350,22 @@ func (model *Model) layout() {
 // relayout is layout with the cursor key taken by the caller, for changes to
 // the thread list, which would make the current rows' thread indexes stale.
 func (model *Model) relayout(key cursorKey, found bool) {
-	off := model.window.Cursor() - model.window.Top()
+	cursorOffset := model.window.Cursor() - model.window.Top()
 	model.rows = model.rows[:0]
 	model.hunkRow = model.hunkRow[:0]
-	model.blocks = make([][]string, len(model.fthreads))
-	for i := range model.fthreads {
+	model.blocks = make([][]string, len(model.fileThreads))
+	for i := range model.fileThreads {
 		model.blocks[i] = model.renderBlock(i)
 	}
 	base := model.base
-	if model.file != nil && len(base) == 0 && len(model.fthreads) > 0 {
+	if model.file != nil && len(base) == 0 && len(model.fileThreads) > 0 {
 		base = model.noticeRows()
 	}
 	var pending []int
 	flush := func(baseIndex int) {
 		for _, threadIndex := range pending {
 			for lineIndex := range model.blocks[threadIndex] {
-				model.rows = append(model.rows, row{baseIndex: baseIndex, threadRow: &threadRow{threadIndex: threadIndex, i: lineIndex}})
+				model.rows = append(model.rows, row{baseIndex: baseIndex, threadRow: &threadRow{threadIndex: threadIndex, rowInBlock: lineIndex}})
 			}
 		}
 		pending = pending[:0]
@@ -385,8 +385,8 @@ func (model *Model) relayout(key cursorKey, found bool) {
 	flush(len(base) - 1)
 	model.sync()
 	if found && len(model.rows) > 0 {
-		count := model.keyRow(key)
-		model.window.Restore(count, count-off, model.window.HorizontalOffset())
+		cursorRow := model.keyRow(key)
+		model.window.Restore(cursorRow, cursorRow-cursorOffset, model.window.HorizontalOffset())
 	}
 }
 
