@@ -1,4 +1,5 @@
-// Package dashboard is the default screen outside a checkout: tabs of
+// Package dashboard is the default screen when there is no repository to list
+// (outside a checkout, or in one with no GitHub remote): tabs of
 // sections, each a list of pull requests found by a search query, across
 // repositories.
 package dashboard
@@ -245,6 +246,9 @@ func (view *View) loaded(message sectionLoadedMessage) {
 		return // keep the rows from the last good load
 	}
 	target.pullRequests = message.page.Items
+	if current.total() == 0 {
+		current.anchor = nil // start from the top when rows come back
+	}
 	if current.anchor != nil && len(current.sections[current.anchor.section].pullRequests) == 0 {
 		// The anchored section emptied and the cursor is drawn in another one:
 		// it stays there even if the old section refills.
