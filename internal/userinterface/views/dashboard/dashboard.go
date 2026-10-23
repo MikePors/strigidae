@@ -245,6 +245,11 @@ func (view *View) loaded(message sectionLoadedMessage) {
 		return // keep the rows from the last good load
 	}
 	target.pullRequests = message.page.Items
+	if current.anchor != nil && len(current.sections[current.anchor.section].pullRequests) == 0 {
+		// The anchored section emptied and the cursor is drawn in another one:
+		// it stays there even if the old section refills.
+		current.selectIndex(current.selectedIndex())
+	}
 }
 
 func (view *View) handleKey(message keys.Message) tea.Cmd {

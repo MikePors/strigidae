@@ -39,6 +39,9 @@ func (view *View) Render(width, height int) string {
 	lines, selectedLine := current.lines()
 	current.window.SetRows(len(lines))
 	current.window.SetSize(view.listHeight())
+	if current.selectedIndex() == 0 {
+		current.window.GotoRow(0) // the tab's first row: show everything above it too
+	}
 	if selectedLine > 0 && lines[selectedLine-1].row == headingLine {
 		current.window.GotoRow(selectedLine - 1) // keep the section's heading on screen
 	}
