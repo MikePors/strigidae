@@ -5,13 +5,13 @@ import (
 	"strings"
 )
 
-// Repo identifies a repository on the host the client is configured for.
+// Repository identifies a repository on the host the client is configured for.
 type Repository struct {
 	Owner string
 	Name  string
 }
 
-// ParseRepo parses "owner/name".
+// ParseRepository parses "owner/name".
 func ParseRepository(text string) (Repository, error) {
 	text = strings.TrimSpace(text)
 	owner, name, ok := strings.Cut(text, "/")
@@ -24,5 +24,5 @@ func ParseRepository(text string) (Repository, error) {
 // String returns "owner/name".
 func (repository Repository) String() string { return repository.Owner + "/" + repository.Name }
 
-// IsZero reports whether r is the zero Repo.
+// IsZero reports whether r is the zero Repository.
 func (repository Repository) IsZero() bool { return repository == Repository{} }

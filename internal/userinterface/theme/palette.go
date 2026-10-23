@@ -99,7 +99,7 @@ func FromBase16(name string, view Variant, base16 [16]color.Color) (Palette, err
 	return palette, nil
 }
 
-// minDistinctContrast is how far a colour must be from the background and the
+// minimumDistinctContrast is how far a colour must be from the background and the
 // foreground (as a WCAG contrast ratio) to count as a distinct shade.
 const minimumDistinctContrast = 1.1
 

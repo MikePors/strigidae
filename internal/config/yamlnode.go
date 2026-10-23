@@ -163,7 +163,7 @@ func (parser *parser) oneOf(node *yaml.Node, what string, allowed []string) stri
 }
 
 // uniqueList reads a non-empty sequence, converting each element with item,
-// which returns the value and its name. Names must be unique; dupMsg is the
+// which returns the value and its name. Names must be unique; duplicateMessage is the
 // format (one %q for the name) of the error for a repeat. what names the list
 // in the empty-list error. It returns nil if anything failed.
 func uniqueList[Value any](parser *parser, node *yaml.Node, what string, item func(*yaml.Node) (Value, string), duplicateMessage string) []Value {

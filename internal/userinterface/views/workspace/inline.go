@@ -19,14 +19,14 @@ import (
 // pending review. Adding or editing a pending comment asks nothing (private
 // drafts). Deleting any comment, and editing a published one, asks y/N.
 
-// commentDeletedMsg is the result of deleting a comment (or of a refusal
+// commentDeletedMessage is the result of deleting a comment (or of a refusal
 // before the question). Like a post it is identified by its origin only.
 type commentDeletedMessage struct {
 	origin origin
 	err    error
 }
 
-// commentCheckedMsg carries a question for the user, asked after a comment
+// commentCheckedMessage carries a question for the user, asked after a comment
 // was re-read: onYes runs on yes.
 type commentCheckedMessage struct {
 	origin   origin
@@ -34,7 +34,7 @@ type commentCheckedMessage struct {
 	onYes    tea.Cmd
 }
 
-// commentAgreedMsg is what a "yes" produces: the write that was asked about.
+// commentAgreedMessage is what a "yes" produces: the write that was asked about.
 // It goes through the view so the write is counted as in flight and refused
 // when a review or merge is.
 type commentAgreedMessage struct {
@@ -42,7 +42,7 @@ type commentAgreedMessage struct {
 	run    tea.Cmd
 }
 
-// commentReadMsg is the result of re-reading a comment before the editor
+// commentReadMessage is the result of re-reading a comment before the editor
 // opens on it: tgt holds the fresh body, or err why it cannot be edited.
 type commentReadMessage struct {
 	origin   origin

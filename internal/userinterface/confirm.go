@@ -9,12 +9,12 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// ConfirmMsg asks the root to show a yes/no question in the status row. The
+// ConfirmMessage asks the root to show a yes/no question in the status row. The
 // root appends " y/N" to Text. While it shows, the root captures every key:
 // `y` runs OnYes, anything else (esc included) cancels. A view returns it for
 // actions that must not happen by accident, such as posting a comment.
 //
-// A ConfirmMsg that arrives while another prompt is open replaces it
+// A ConfirmMessage that arrives while another prompt is open replaces it
 // silently (the visible text always matches the action that would run). Views
 // whose confirmation arrives after a network round trip should expect that.
 type ConfirmMessage struct {

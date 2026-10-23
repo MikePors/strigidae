@@ -78,7 +78,7 @@ func (model *Model) expanded(reviewThread github.ReviewThread) bool {
 	return thread.DefaultExpanded(reviewThread)
 }
 
-// blockSig is what every cached block depends on besides its own key.
+// blockSignature is what every cached block depends on besides its own key.
 type blockSignature struct {
 	width           int
 	themeIdentifier string
@@ -196,7 +196,7 @@ func (model *Model) NextThread() {
 	}
 }
 
-// PrevThread moves the cursor to the header of the closest thread above it.
+// PreviousThread moves the cursor to the header of the closest thread above it.
 func (model *Model) PreviousThread() {
 	for i := min(model.window.Cursor(), len(model.rows)) - 1; i >= 0; i-- {
 		if row := model.rows[i]; row.threadRow != nil && row.threadRow.i == 0 {

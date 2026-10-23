@@ -18,7 +18,7 @@ import (
 	"github.com/MikePors/strigidae/internal/github"
 )
 
-// prQualifiers are the search tokens that already restrict results to pull
+// pullRequestQualifiers are the search tokens that already restrict results to pull
 // requests. Whole tokens are compared: "is:private" and "-is:pr" do not count.
 var pullRequestQualifiers = []string{"is:pr", "type:pr", "is:pull-request", "type:pull-request"}
 

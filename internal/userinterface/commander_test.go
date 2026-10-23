@@ -14,7 +14,7 @@ func typeCommand(model *Model, line string) tea.Cmd {
 	return press(model, "enter")
 }
 
-// cmdView is a fake view that owns the command "review".
+// commandView is a fake view that owns the command "review".
 type commandView struct {
 	*fakeView
 	pings []string

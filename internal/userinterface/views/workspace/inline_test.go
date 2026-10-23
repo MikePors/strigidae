@@ -518,7 +518,7 @@ func (inliner *inliner) serverBody(identifier string) string {
 	return ""
 }
 
-// mineID is the ID of the thread built by mine.
+// mineIdentifier is the ID of the thread built by mine.
 const mineIdentifier = "t-mine"
 
 // mine returns a published thread by the viewer on new line 10 of client.go.

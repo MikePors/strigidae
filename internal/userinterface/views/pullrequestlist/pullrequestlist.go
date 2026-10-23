@@ -27,7 +27,7 @@ const (
 	requestTimeout = 30 * time.Second
 )
 
-// prsLoadedMsg is the result of a ListPullRequests call. repo and seq identify
+// pullRequestsLoadedMessage is the result of a ListPullRequests call. repo and seq identify
 // the request: every view receives every command result, and a refresh
 // supersedes any page still in flight.
 type pullRequestsLoadedMessage struct {
@@ -107,7 +107,7 @@ func (view *View) Loading() bool { return view.loading || view.loadingMore }
 // Title implements userinterface.View.
 func (view *View) Title() string { return view.repositoryName() }
 
-// repoName is the repository name made safe to draw (it can come from -R).
+// repositoryName is the repository name made safe to draw (it can come from -R).
 func (view *View) repositoryName() string { return terminaltext.Clean(view.repository.String()) }
 
 // ShortHelp implements userinterface.View.

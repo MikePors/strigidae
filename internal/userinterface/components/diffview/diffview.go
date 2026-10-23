@@ -9,11 +9,11 @@
 //	g g / G        GotoTop() / GotoBottom()
 //	ctrl+d / ctrl+u HalfPageDown() / HalfPageUp()
 //	ctrl+f / ctrl+b PageDown() / PageUp()
-//	] / [          NextHunk() / PrevHunk()
+//	] / [          NextHunk() / PreviousHunk()
 //	z h / z l      ScrollLeft(4) / ScrollRight(4)
 //	z H / z L      HalfScrollLeft() / HalfScrollRight()
 //	z a / z o / z c  ToggleThread() / OpenThread() / CloseThread()
-//	) / (          NextThread() / PrevThread()
+//	) / (          NextThread() / PreviousThread()
 //
 // Usage:
 //
@@ -277,7 +277,7 @@ func (model *Model) SetSize(width, height int) {
 // Size returns the current drawing area.
 func (model *Model) Size() (width, height int) { return model.width, model.height }
 
-// gutterW is the fixed width of the non-scrolling left part of a row:
+// gutterWidth is the fixed width of the non-scrolling left part of a row:
 // cursor mark, old number, new number, thread marker, change marker.
 func (model *Model) gutterWidth() int { return 2*model.numberWidth + 5 }
 
@@ -436,7 +436,7 @@ func (model *Model) NextHunk() {
 	}
 }
 
-// PrevHunk moves the cursor to the closest hunk header above it, which is the
+// PreviousHunk moves the cursor to the closest hunk header above it, which is the
 // current hunk's own header when the cursor is inside the hunk.
 func (model *Model) PreviousHunk() {
 	for i := len(model.hunkRow) - 1; i >= 0; i-- {
@@ -461,7 +461,7 @@ func (model *Model) HalfScrollRight() { model.window.HalfRight() }
 // HalfScrollLeft scrolls left by half the code area.
 func (model *Model) HalfScrollLeft() { model.window.HalfLeft() }
 
-// XOffset returns the horizontal scroll in cells.
+// HorizontalOffset returns the horizontal scroll in cells.
 func (model *Model) HorizontalOffset() int { return model.window.HorizontalOffset() }
 
 // Top returns the index of the first visible row (hunk headers count as rows).

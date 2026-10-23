@@ -12,7 +12,7 @@ import (
 )
 
 // mergeFlow is the state of merging the pull request. It takes what it needs
-// from the workspace as a reviewEnv, and result messages carry the flow's own
+// from the workspace as a reviewEnvironment, and result messages carry the flow's own
 // pointer as their identity.
 type mergeFlow struct {
 	sequence int  // latest merge request; older results are stale
@@ -20,7 +20,7 @@ type mergeFlow struct {
 }
 
 type (
-	// mergeFreshMsg is the status fetched just before confirming.
+	// mergeFreshMessage is the status fetched just before confirming.
 	mergeFreshMessage struct {
 		flow       *mergeFlow
 		repository github.Repository
@@ -30,7 +30,7 @@ type (
 		status     github.MergeStatus
 		err        error
 	}
-	// mergeSendMsg is what the confirmation's "yes" produces; handling it
+	// mergeSendMessage is what the confirmation's "yes" produces; handling it
 	// marks the merge as in flight before the call starts.
 	mergeSendMessage struct {
 		flow       *mergeFlow
@@ -46,7 +46,7 @@ type (
 		method     github.MergeMethod
 		err        error
 	}
-	// mergeRefreshMsg asks the workspace to reload after its head moved.
+	// mergeRefreshMessage asks the workspace to reload after its head moved.
 	mergeRefreshMessage struct {
 		flow       *mergeFlow
 		repository github.Repository

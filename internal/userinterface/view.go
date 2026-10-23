@@ -21,7 +21,7 @@ import (
 //   - tea.WindowSizeMsg with the area the view may draw in (the terminal
 //     minus the status bar), on push and on every resize. Views below the top
 //     of the stack get it too.
-//   - ThemeMsg when the theme changes.
+//   - ThemeMessage when the theme changes.
 //   - every other message (command results, spinner and blink ticks, ...) is
 //     broadcast to EVERY view in the stack, so a result is never lost because
 //     another view was pushed meanwhile. Views must therefore ignore messages

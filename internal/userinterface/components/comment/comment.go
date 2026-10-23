@@ -93,7 +93,7 @@ func reactions(reactionList []github.ReactionSummary) string {
 	return strings.Join(parts, " ")
 }
 
-// RelTime formats t relative to now ("5m ago").
+// RelativeTime formats t relative to now ("5m ago").
 func RelativeTime(now, timestamp time.Time) string {
 	duration := now.Sub(timestamp)
 	switch {

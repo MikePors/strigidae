@@ -33,7 +33,7 @@ type Section struct {
 	// Query is the final search query, with the tab's user already
 	// substituted for {user}.
 	Query string
-	// Limit is the most PRs to fetch, 1 to MaxLimit.
+	// Limit is the most PRs to fetch, 1 to MaximumLimit.
 	Limit int
 	Sort  Sort
 	Order Order

@@ -43,7 +43,7 @@ type Span struct {
 // them. That is the price of never lexing the whole file.
 type Highlighter func(path, text string) []Span
 
-// maxHighlightLen bounds the line length we are willing to lex; longer lines
+// maximumHighlightLength bounds the line length we are willing to lex; longer lines
 // (minified bundles) render as plain text.
 const maximumHighlightLength = 2000
 

@@ -35,7 +35,7 @@ type Option func(*View)
 func WithClock(now func() time.Time) Option { return func(view *View) { view.now = now } }
 
 // WithTheme sets the initial theme. Without it the default dark theme is used
-// until the root sends a userinterface.ThemeMsg; a view that pushes a workspace should
+// until the root sends a userinterface.ThemeMessage; a view that pushes a workspace should
 // pass its own current theme.
 func WithTheme(theme theme.Theme) Option { return func(view *View) { view.theme = theme } }
 

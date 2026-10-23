@@ -12,7 +12,7 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
-// flowEnv is a ready environment for a flow working against the fake, with
+// flowEnvironment is a ready environment for a flow working against the fake, with
 // no workspace involved.
 func flowEnvironment(client github.Client) reviewEnvironment {
 	return reviewEnvironment{

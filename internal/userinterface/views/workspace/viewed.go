@@ -22,7 +22,7 @@ type viewedToggle struct {
 	settledAt int                // load seq current when the toggle settled
 }
 
-// viewedMsg is the result of one mutation. It is matched on owner, repo,
+// viewedMessage is the result of one mutation. It is matched on owner, repo,
 // number and path, not on the load sequence: a reload does not make the
 // result irrelevant.
 type viewedMessage struct {

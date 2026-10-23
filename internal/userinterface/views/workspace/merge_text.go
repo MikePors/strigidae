@@ -8,7 +8,7 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/terminaltext"
 )
 
-// methodArgs maps the :merge argument to a method; "" is the default.
+// methodArguments maps the :merge argument to a method; "" is the default.
 var methodArguments = map[string]github.MergeMethod{
 	"merge":  github.MergeMethodMerge,
 	"squash": github.MergeMethodSquash,
@@ -29,7 +29,7 @@ var methodPlurals = map[github.MergeMethod]string{
 	github.MergeMethodRebase: "rebase merges",
 }
 
-// parseMergeArgs returns the requested method, or "" for the default.
+// parseMergeArguments returns the requested method, or "" for the default.
 func parseMergeArguments(arguments string) (github.MergeMethod, error) {
 	arguments = strings.TrimSpace(arguments)
 	if arguments == "" {

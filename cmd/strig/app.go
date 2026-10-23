@@ -20,7 +20,7 @@ type application struct {
 	config config.Config
 }
 
-// newApp resolves the repository to show and a client for its host.
+// newApplication resolves the repository to show and a client for its host.
 func newApplication(repositoryFlag string, configuration config.Config, dependencies dependencies) (application, error) {
 	target, err := resolveTarget(repositoryFlag, dependencies)
 	if err != nil {

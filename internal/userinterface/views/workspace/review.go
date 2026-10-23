@@ -17,7 +17,7 @@ import (
 
 // reviewFlow is the state of submitting a review: the verdict chooser, the
 // unsent summary, the request sequence and the in-flight flag. Its methods
-// take everything they need from the workspace as a reviewEnv, and result
+// take everything they need from the workspace as a reviewEnvironment, and result
 // messages carry the flow's own pointer as their identity.
 type reviewFlow struct {
 	chooser    *picker.Model // non-nil while the verdict chooser is open
@@ -26,7 +26,7 @@ type reviewFlow struct {
 	submitting bool          // a submission is in flight
 }
 
-// reviewEnv is what the flow needs from the workspace at one moment.
+// reviewEnvironment is what the flow needs from the workspace at one moment.
 type reviewEnvironment struct {
 	client      github.Client
 	repository  github.Repository
@@ -46,7 +46,7 @@ type reviewEnvironment struct {
 // ones that belong to one attempt (pending, edited, fresh) also carry the
 // flow's sequence, so starting another review makes older results stale.
 type (
-	// reviewPendingMsg is the pending review fetched to pre-fill the editor.
+	// reviewPendingMessage is the pending review fetched to pre-fill the editor.
 	reviewPendingMessage struct {
 		flow       *reviewFlow
 		repository github.Repository
@@ -65,7 +65,7 @@ type (
 		body       string
 		err        error
 	}
-	// reviewFreshMsg is the status fetched just before confirming.
+	// reviewFreshMessage is the status fetched just before confirming.
 	reviewFreshMessage struct {
 		flow       *reviewFlow
 		repository github.Repository
@@ -76,7 +76,7 @@ type (
 		status     github.ReviewStatus
 		err        error
 	}
-	// reviewSendMsg is what the confirmation's "yes" produces; handling it
+	// reviewSendMessage is what the confirmation's "yes" produces; handling it
 	// marks the submission as in flight before the call starts.
 	reviewSendMessage struct {
 		flow       *reviewFlow
@@ -94,7 +94,7 @@ type (
 		body       string
 		err        error
 	}
-	// refreshMsg asks the workspace to reload after its head moved.
+	// refreshMessage asks the workspace to reload after its head moved.
 	refreshMessage struct {
 		flow       *reviewFlow
 		repository github.Repository

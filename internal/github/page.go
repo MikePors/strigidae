@@ -3,7 +3,7 @@ package github
 // DefaultPageSize is used when PageRequest.Limit is zero.
 const DefaultPageSize = 30
 
-// MaxPageSize is the largest page the API accepts.
+// MaximumPageSize is the largest page the API accepts.
 const MaximumPageSize = 100
 
 // PageRequest asks for one page of a list. The zero value requests the first
@@ -12,7 +12,7 @@ type PageRequest struct {
 	// After is the Next cursor of the previous Page, or empty for the first page.
 	After string
 	// Limit is the page size; zero means DefaultPageSize, values above
-	// MaxPageSize are clamped.
+	// MaximumPageSize are clamped.
 	Limit int
 }
 

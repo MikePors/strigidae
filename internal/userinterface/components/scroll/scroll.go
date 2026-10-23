@@ -55,16 +55,16 @@ func (window *Window) Cursor() int { return window.cursor }
 // Top returns the first visible row.
 func (window *Window) Top() int { return window.top }
 
-// XOffset returns the horizontal scroll in cells.
+// HorizontalOffset returns the horizontal scroll in cells.
 func (window *Window) HorizontalOffset() int { return window.column }
 
 // Height returns the number of visible rows.
 func (window *Window) Height() int { return window.height }
 
-// MaxTop returns the largest valid top row.
+// MaximumTop returns the largest valid top row.
 func (window *Window) MaximumTop() int { return max(window.rows-window.height, 0) }
 
-// MaxX returns the largest valid horizontal offset.
+// MaximumHorizontalOffset returns the largest valid horizontal offset.
 func (window *Window) MaximumHorizontalOffset() int { return max(window.content-window.view, 0) }
 
 func (window *Window) clamp() {

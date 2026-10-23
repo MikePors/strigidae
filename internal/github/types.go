@@ -2,7 +2,7 @@ package github
 
 import "time"
 
-// PRState is the lifecycle state of a pull request.
+// PullRequestState is the lifecycle state of a pull request.
 type PullRequestState string
 
 // Pull request states.
@@ -284,13 +284,13 @@ type PendingReview struct {
 	Body string
 	// CommentCount is the number of inline comments waiting in it.
 	CommentCount int
-	// CommitOID is the commit the review is anchored to; empty if unknown.
+	// CommitObjectIdentifier is the commit the review is anchored to; empty if unknown.
 	CommitObjectIdentifier string
 }
 
 // ReviewStatus is the state a review submission depends on.
 type ReviewStatus struct {
-	// PullRequestID is the pull request's node ID.
+	// PullRequestIdentifier is the pull request's node ID.
 	PullRequestIdentifier string
 	// HeadSHA is the pull request's current head commit.
 	HeadSHA string
@@ -305,10 +305,10 @@ type SubmitReviewInput struct {
 	PullRequestIdentifier string
 	Event                 ReviewEvent
 	Body                  string
-	// CommitOID is the commit a new review applies to. A pending review keeps
+	// CommitObjectIdentifier is the commit a new review applies to. A pending review keeps
 	// the commit it was started on.
 	CommitObjectIdentifier string
-	// PendingReviewID, if set, submits that pending review instead of
+	// PendingReviewIdentifier, if set, submits that pending review instead of
 	// creating a new one.
 	PendingReviewIdentifier string
 }
@@ -318,7 +318,7 @@ type StartReviewInput struct {
 	Repository            Repository
 	Number                int
 	PullRequestIdentifier string
-	// CommitOID is the commit the review's comments are anchored to.
+	// CommitObjectIdentifier is the commit the review's comments are anchored to.
 	CommitObjectIdentifier string
 }
 

@@ -6,22 +6,22 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
-// PushMsg asks the root to push View on top of the stack.
+// PushMessage asks the root to push View on top of the stack.
 type PushMessage struct{ View View }
 
-// PopMsg asks the root to pop the active view; on the root view it quits.
+// PopMessage asks the root to pop the active view; on the root view it quits.
 type PopMessage struct{}
 
-// QuitMsg asks the root to exit the program.
+// QuitMessage asks the root to exit the program.
 type QuitMessage struct{}
 
-// InfoMsg shows a transient informational message in the status bar.
+// InfoMessage shows a transient informational message in the status bar.
 type InfoMessage struct{ Text string }
 
-// ErrorMsg shows a transient error in the status bar and logs it.
+// ErrorMessage shows a transient error in the status bar and logs it.
 type ErrorMessage struct{ Err error }
 
-// ThemeMsg tells views the theme changed (for example after the terminal
+// ThemeMessage tells views the theme changed (for example after the terminal
 // background was detected).
 type ThemeMessage struct{ Theme theme.Theme }
 

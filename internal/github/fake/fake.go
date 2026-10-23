@@ -50,8 +50,8 @@ type Call struct {
 	Page             github.PageRequest
 	ThreadIdentifier string
 	Body             string
-	// PullRequestID, Path and Viewed are set by the methods that take them:
-	// PullRequestID by SetFileViewed, StartReview and MergePullRequest, Path by
+	// PullRequestIdentifier, Path and Viewed are set by the methods that take them:
+	// PullRequestIdentifier by SetFileViewed, StartReview and MergePullRequest, Path by
 	// SetFileViewed and AddReviewThread, Viewed by SetFileViewed.
 	PullRequestIdentifier string
 	Path                  string
@@ -190,7 +190,7 @@ func (client *Client) SetSearchResults(query string, pullRequests []github.PullR
 	client.search[query] = slices.Clone(pullRequests)
 }
 
-// SetPullRequest sets the detail returned for d.Repo and d.Number.
+// SetPullRequest sets the detail returned for d.Repository and d.Number.
 func (client *Client) SetPullRequest(detail github.PullRequestDetail) {
 	client.mutex.Lock()
 	defer client.mutex.Unlock()

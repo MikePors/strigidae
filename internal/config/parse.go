@@ -7,7 +7,7 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-// MaxFileSize is the largest config file strig will read.
+// MaximumFileSize is the largest config file strig will read.
 const MaximumFileSize = 1 << 20
 
 // topLevel maps each top-level key to the function that decodes it. Another

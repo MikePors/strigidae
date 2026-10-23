@@ -21,7 +21,7 @@ import (
 // by thread ID.
 const topLevelDraft = "top-level"
 
-// EditFunc opens the editor on initial and, when it closes, delivers the
+// EditFunction opens the editor on initial and, when it closes, delivers the
 // result as the message done builds. The default runs $VISUAL or $EDITOR
 // through tea.ExecProcess; tests inject their own.
 type EditFunction func(initial string, done func(body string, err error) tea.Msg) tea.Cmd
@@ -42,7 +42,7 @@ const (
 // target is what a comment is written for; kind says which fields apply.
 type target struct {
 	kind targetKind
-	// threadID is the thread replied to (kindReply) or the one the edited
+	// threadIdentifier is the thread replied to (kindReply) or the one the edited
 	// comment is in (kindEdit).
 	threadIdentifier string
 	label            string // "path:line" of the thread, for the questions about it
@@ -51,7 +51,7 @@ type target struct {
 	// diff the lines were picked on.
 	inline *github.AddThreadInput
 	head   string
-	// commentID (kindEdit) is the comment, pending or published, being
+	// commentIdentifier (kindEdit) is the comment, pending or published, being
 	// edited; initial is its body when the editor was opened, shown there
 	// when no draft is kept.
 	commentIdentifier string
@@ -270,7 +270,7 @@ func threadLocation(thread github.ReviewThread) string {
 	return thread.Path + ":" + strconv.Itoa(line)
 }
 
-// execEditor is the default EditFunc: a temporary file opened in the user's
+// execEditor is the default EditFunction: a temporary file opened in the user's
 // editor, with the TUI suspended meanwhile.
 func execEditor(initial string, done func(string, error) tea.Msg) tea.Cmd {
 	return func() tea.Msg {

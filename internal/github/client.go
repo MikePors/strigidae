@@ -27,13 +27,13 @@ type Client interface {
 	// viewer's pending review if there is one. It is a small query, cheap
 	// enough to run just before asking for confirmation.
 	GetReviewStatus(ctx context.Context, repository Repository, number int) (ReviewStatus, error)
-	// SubmitReview submits a review verdict. With in.PendingReviewID set it
+	// SubmitReview submits a review verdict. With in.PendingReviewIdentifier set it
 	// submits that pending review (so its inline comments go too); otherwise
-	// it creates and submits a new review on in.CommitOID. A pending review
+	// it creates and submits a new review on in.CommitObjectIdentifier. A pending review
 	// that no longer exists yields ErrNotFound.
 	SubmitReview(ctx context.Context, in SubmitReviewInput) error
 	// SetFileViewed marks the file at path as viewed (or, with viewed false,
-	// clears the mark) for the viewer. pullRequestID is PullRequest.ID.
+	// clears the mark) for the viewer. pullRequestIdentifier is PullRequest.ID.
 	SetFileViewed(ctx context.Context, pullRequestIdentifier, path string, viewed bool) error
 	// GetMergeStatus returns what a merge needs to know right now: the pull
 	// request's node ID, head commit and base branch, and the repository's
@@ -43,12 +43,12 @@ type Client interface {
 	// default commit title and message. GitHub's refusal (failing checks,
 	// conflicts, a moved head) comes back as an error.
 	MergePullRequest(ctx context.Context, in MergeInput) error
-	// StartReview creates the viewer's pending review on in.CommitOID and
+	// StartReview creates the viewer's pending review on in.CommitObjectIdentifier and
 	// returns it. GitHub allows one pending review per user per pull request,
 	// so this fails when one exists; call GetReviewStatus first.
 	StartReview(ctx context.Context, in StartReviewInput) (PendingReview, error)
 	// AddReviewThread adds an inline comment, as a new thread, to the pending
-	// review in.PendingReviewID and returns the thread. The comment stays
+	// review in.PendingReviewIdentifier and returns the thread. The comment stays
 	// private until the review is submitted. A pending review that no longer
 	// exists yields ErrNotFound; a position GitHub does not accept (for example
 	// a line outside the diff) yields ErrCommentRejected.

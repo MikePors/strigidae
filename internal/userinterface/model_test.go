@@ -364,7 +364,7 @@ func TestSequences(test *testing.T) {
 		view := newFake("v")
 		model := newModel(view)
 		command := press(model, "g")
-		run(model, command) // fires seqTimeoutMsg
+		run(model, command) // fires sequenceTimeoutMessage
 		if model.matcher.Pending() {
 			test.Error("timeout should clear the pending prefix")
 		}
@@ -453,7 +453,7 @@ func TestStatusMessages(test *testing.T) {
 	}
 }
 
-// resultMsg stands in for a command result addressed to a view.
+// resultMessage stands in for a command result addressed to a view.
 type resultMessage struct{}
 
 func TestSpinnerFollowsTopView(test *testing.T) {

@@ -54,7 +54,7 @@ type (
 	}
 )
 
-// maxThreadPages bounds the follow-up requests for review threads, so a
+// maximumThreadPages bounds the follow-up requests for review threads, so a
 // misbehaving server cannot keep the command running forever.
 const maximumThreadPages = 100
 
@@ -106,7 +106,7 @@ func (view *View) fetchDiff(message pullRequestLoadedMessage) tea.Cmd {
 	}
 }
 
-// reloadPR loads the pull request again under the current request sequence;
+// reloadPullRequest loads the pull request again under the current request sequence;
 // after posting a comment it refreshes just the conversation.
 func (view *View) reloadPullRequest() tea.Cmd { return view.fetchPullRequest(false) }
 

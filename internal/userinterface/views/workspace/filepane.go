@@ -16,11 +16,11 @@ type DiffState struct {
 	// the previous text while Loading is set, and after a failed refresh.
 	Raw string
 	// Parsed is Raw parsed by internal/diff, done in the load command. It is nil
-	// until a load gets as far as parsing. When ParseErr is set it holds the
+	// until a load gets as far as parsing. When ParseError is set it holds the
 	// files parsed before the problem: look files up in it as usual and treat a
 	// missing one as "no diff available".
 	Parsed *diff.Diff
-	// ParseErr is why Raw could not be parsed completely. The workspace reports
+	// ParseError is why Raw could not be parsed completely. The workspace reports
 	// it once on the status bar; Parsed is still usable.
 	ParseError error
 	// Err is why the diff could not be loaded at all, for example

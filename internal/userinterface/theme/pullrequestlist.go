@@ -6,7 +6,7 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// PRListStyles are the styles for pull request tables (the PR list view).
+// PullRequestListStyles are the styles for pull request tables (the PR list view).
 type PullRequestListStyles struct {
 	Header           lipgloss.Style // column headings
 	Selected         lipgloss.Style // the whole highlighted row

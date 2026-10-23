@@ -54,7 +54,7 @@ type Roles struct {
 	SyntaxEscape   color.Color // string escapes and regular expressions
 }
 
-// tintParams say how a tint is made from a role: how far the background's
+// tintParameters say how a tint is made from a role: how far the background's
 // lightness moves toward the role's, and how much of the role's chroma it
 // keeps (see tint).
 type tintParameters struct{ lightMix, chroma float64 }
