@@ -241,6 +241,11 @@ func (v *View) Update(msg tea.Msg) (ui.View, tea.Cmd) {
 		}
 		v.commentWriting = false // the write waits for the answer
 		return v, ui.Confirm(msg.question, msg.onYes)
+	case commentAgreedMsg:
+		if !v.owns(msg.origin) {
+			return v, nil
+		}
+		return v, v.commentAgreed(msg)
 	case commentReadMsg:
 		if !v.owns(msg.origin) {
 			return v, nil

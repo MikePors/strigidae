@@ -1300,3 +1300,158 @@ func TestEditAndDeleteUseTheirOwnPermission(t *testing.T) {
 		})
 	}
 }
+
+// agree answers a question as the root does, but leaves the write it starts
+// unrun, so the write is in flight until the returned command is run.
+func (c *inliner) agree(conf ui.ConfirmMsg) tea.Cmd {
+	c.t.Helper()
+	_, cmd := c.v.Update(conf.OnYes())
+	return cmd
+}
+
+func TestWriteAfterYesIsInFlightUntilItsResult(t *testing.T) {
+	blocked := func(c *inliner) {
+		t.Helper()
+		for _, name := range []string{"approve", "request-changes", "review", "merge"} {
+			c.msgs = nil
+			c.command(name)
+			if diff := cmp.Diff([]string{commentSavingText}, c.infos()); diff != "" {
+				t.Errorf(":%s while the write is in flight (-want +got):\n%s", name, diff)
+			}
+		}
+	}
+	t.Run("delete", func(t *testing.T) {
+		c := newInliner(t)
+		c.addPending("x")
+		c.msgs = nil
+		c.press("D")
+		conf, _ := c.lastConfirm()
+		if c.v.commentWriting {
+			t.Fatal("flag set while the question is open")
+		}
+		write := c.agree(conf)
+		if !c.v.commentWriting {
+			t.Fatal("flag not set after the yes")
+		}
+		blocked(c)
+		c.run(write)
+		if c.v.commentWriting || len(c.client.DeletedComments()) != 1 {
+			t.Errorf("flag %v, deleted %v", c.v.commentWriting, c.client.DeletedComments())
+		}
+	})
+	t.Run("published edit", func(t *testing.T) {
+		c := newInliner(t)
+		c.seed(c.mine(true, true))
+		c.toThread(mineID)
+		c.msgs, c.body = nil, "revised"
+		c.press("e")
+		conf, _ := c.lastConfirm()
+		write := c.agree(conf)
+		blocked(c)
+		c.run(write)
+		if c.v.commentWriting {
+			t.Error("flag still set after the result")
+		}
+	})
+	t.Run("a failed write clears it too", func(t *testing.T) {
+		c := newInliner(t)
+		c.addPending("x")
+		c.client.SetError(fake.MethodDeleteReviewComment, errors.New("boom"))
+		c.msgs = nil
+		c.press("D")
+		conf, _ := c.lastConfirm()
+		c.run(c.agree(conf))
+		if c.v.commentWriting {
+			t.Error("flag still set after a failed write")
+		}
+	})
+	t.Run("a stale refusal after the yes clears it", func(t *testing.T) {
+		c := newInliner(t)
+		c.addPending("x")
+		c.msgs = nil
+		c.press("D")
+		conf, _ := c.lastConfirm()
+		if err := c.client.DeleteReviewComment(t.Context(), c.pendingThread().Comments[0].ID); err != nil {
+			t.Fatal(err)
+		}
+		c.run(c.agree(conf))
+		if c.v.commentWriting {
+			t.Error("flag still set after a stale refusal")
+		}
+	})
+	t.Run("reply", func(t *testing.T) {
+		c := newComposer(t)
+		c.onThread()
+		c.body = "thanks"
+		c.press("r")
+		conf, ok := c.lastConfirm()
+		if !ok {
+			t.Fatal("no confirmation")
+		}
+		_, write := c.v.Update(conf.OnYes())
+		if !c.v.commentWriting {
+			t.Fatal("flag not set for a reply")
+		}
+		c.run(write)
+		if c.v.commentWriting {
+			t.Error("flag still set after the reply was posted")
+		}
+	})
+	t.Run("top-level comment", func(t *testing.T) {
+		c := newComposer(t)
+		c.body = "LGTM"
+		c.press("c")
+		conf, ok := c.lastConfirm()
+		if !ok {
+			t.Fatal("no confirmation")
+		}
+		_, write := c.v.Update(conf.OnYes())
+		if !c.v.commentWriting {
+			t.Fatal("flag not set for a top-level comment")
+		}
+		c.run(write)
+		if c.v.commentWriting {
+			t.Error("flag still set after the comment was posted")
+		}
+	})
+}
+
+func TestYesIsRefusedWhileAReviewOrMergeRuns(t *testing.T) {
+	for name, busy := range map[string]func(c *inliner){
+		"review": func(c *inliner) { c.v.review.submitting = true },
+		"merge":  func(c *inliner) { c.v.merge.merging = true },
+	} {
+		t.Run(name, func(t *testing.T) {
+			c := newInliner(t)
+			c.addPending("x")
+			c.msgs = nil
+			c.press("D")
+			conf, _ := c.lastConfirm()
+			busy(c)
+			before := len(c.deletes())
+			c.run(conf.OnYes)
+			if len(c.deletes()) != before || c.v.commentWriting {
+				t.Errorf("deletes %v, flag %v", c.deletes(), c.v.commentWriting)
+			}
+			if len(c.infos()) == 0 {
+				t.Error("no message for the refused yes")
+			}
+		})
+	}
+}
+
+func TestAgreedForAnotherViewIsIgnored(t *testing.T) {
+	c := newInliner(t)
+	c.v.commentWriting = true
+	other := New(c.client, testRepo, 12)
+	_, cmd := c.v.Update(commentAgreedMsg{origin: other.origin(), run: func() tea.Msg { return nil }})
+	if cmd != nil || !c.v.commentWriting {
+		t.Errorf("cmd %v, flag %v: another view's yes must change nothing", cmd != nil, c.v.commentWriting)
+	}
+	// A result for another view leaves the flag alone too.
+	c.send(commentDeletedMsg{origin: other.origin()})
+	c.send(postedMsg{origin: other.origin()})
+	if !c.v.commentWriting {
+		t.Error("another view's result cleared the flag")
+	}
+}

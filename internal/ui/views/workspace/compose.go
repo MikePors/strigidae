@@ -163,7 +163,7 @@ func (v *View) edited(msg editedMsg) tea.Cmd {
 	case kindEdit:
 		return v.sendEdit(msg.tgt, body)
 	}
-	return ui.Confirm(v.question(msg.tgt, body), v.post(msg.tgt, body))
+	return ui.Confirm(v.question(msg.tgt, body), v.agreed(v.post(msg.tgt, body)))
 }
 
 // question is the confirmation text: where the text goes and its first line.

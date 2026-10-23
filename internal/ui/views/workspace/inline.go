@@ -33,6 +33,14 @@ type commentCheckedMsg struct {
 	onYes    tea.Cmd
 }
 
+// commentAgreedMsg is what a "yes" produces: the write that was asked about.
+// It goes through the view so the write is counted as in flight and refused
+// when a review or merge is.
+type commentAgreedMsg struct {
+	origin origin
+	run    tea.Cmd
+}
+
 // commentReadMsg is the result of re-reading a comment before the editor
 // opens on it: tgt holds the fresh body, or err why it cannot be edited.
 type commentReadMsg struct {
@@ -156,13 +164,36 @@ func (w commentWrite) run(given answer) tea.Msg {
 	}
 	if q := w.ask(fresh.Pending); q != "" && !given.covers(fresh.Pending) {
 		pending := fresh.Pending
-		return commentCheckedMsg{origin: w.origin, question: q, onYes: func() tea.Msg { return w.run(yes(pending)) }}
+		again := func() tea.Msg { return w.run(yes(pending)) }
+		return commentCheckedMsg{origin: w.origin, question: q, onYes: agreed(w.origin, again)}
 	}
 	err = w.write(ctx, w.client)
 	if errors.Is(err, github.ErrNotFound) {
 		err = errCommentGone // deleted between the re-read and the write
 	}
 	return w.result(err)
+}
+
+// agreed wraps the write to run on a yes, so the view sees the yes first.
+func agreed(o origin, run tea.Cmd) tea.Cmd {
+	return func() tea.Msg { return commentAgreedMsg{origin: o, run: run} }
+}
+
+// agreed is agreed for this view's origin.
+func (v *View) agreed(run tea.Cmd) tea.Cmd { return agreed(v.origin(), run) }
+
+// commentAgreed starts the write a yes was given for, unless a review is being
+// submitted or a merge is running; the write then counts as in flight until its
+// result arrives.
+func (v *View) commentAgreed(msg commentAgreedMsg) tea.Cmd {
+	switch {
+	case v.review.submitting:
+		return ui.Info("a review is being submitted")
+	case v.merge.merging:
+		return ui.Info("a merge is in progress")
+	}
+	v.commentWriting = true
+	return msg.run
 }
 
 // withShownError returns res together with an error to show, so the error
