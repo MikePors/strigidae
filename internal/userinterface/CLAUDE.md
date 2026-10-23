@@ -16,9 +16,20 @@ Rules for the app shell, components and views. The root `CLAUDE.md` still applie
 - **Text inputs capture keys.** A view with a focused text input (filter, command line, reply box) implements `userinterface.KeyCapturer`; while it captures, it receives every key raw and no global bindings or sequences fire. `esc` must always release capture, and every capturing component needs a test proving it.
 - **Scrolling lists.** Any view or component with a cursor in a scrolling list uses `internal/userinterface/components/scroll.Window` and never re-implements clamping or follow logic.
 - **Sizing**: views receive the space they may draw in and must not draw outside it. Handle `tea.WindowSizeMsg` everywhere.
-- **Untrusted text.** Pass all GitHub/git text through `internal/userinterface/terminaltext` before it reaches the screen: `Clean` for single-line text, `CleanBlock` before markdown rendering. Test with a hostile fixture (escape sequences, C1 controls, bidi overrides, invalid UTF-8).
+- **Untrusted text.** Pass all GitHub/git text through `internal/userinterface/terminaltext` before it reaches the screen: `Clean` for single-line text, `CleanBlock` before markdown rendering. Test with a hostile fixture (escape sequences, C1 controls, bidi overrides, invalid UTF-8). Accepted risk, don't re-report: markdown links render as OSC 8 hyperlinks (the URL is sanitised by `CleanStyled`), so link text can differ from its target, as on github.com.
 - **Styling**: no inline colours or ad-hoc `lipgloss.NewStyle()` in views or components; add a named style to `internal/userinterface/theme`.
 - **Performance**: large diffs must stay smooth. Render only the visible window, and cache expensive work (syntax highlighting, markdown rendering) keyed by content and width.
+
+## Actions that write to GitHub
+
+The maintainer's rules for when strig asks before acting:
+
+- Anything that publishes or changes what other people see (submitting a review, merging, editing a published comment) asks `y/N`, and is started by a command (`:approve`, `:merge`) rather than a lone key. A key is acceptable only when it still ends in `y/N`.
+- Private drafts (pending review comments, the Files "viewed" mark) are added and edited without `y/N`.
+- **Every deletion asks `y/N`**, draft or published.
+- Cancelling happens only at the `y/N`. An empty body is an error, not a cancel, and nothing is written.
+- Keys backed by a command are welcome (`e` / `D` and `:edit-comment` / `:delete-comment`).
+- Re-read the state before asking and again after `y`; if it changed, ask again or refuse and refresh. Never write on a stale yes.
 
 ## Keybindings
 

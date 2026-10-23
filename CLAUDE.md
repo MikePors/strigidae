@@ -17,6 +17,7 @@ If something here is wrong or missing, say so in your PR rather than silently wo
 - **Never write to real GitHub** (comments, reviews, reactions, merges). Read-only calls are fine. Acceptance criteria like "reflected on github.com" are verified by the maintainer: show the behaviour against `internal/github/fake` and say what to check live.
 - **`make check` must pass** before you push. It is exactly what CI runs.
 - If the issue is ambiguous in a way that changes user-visible behaviour (keys, layout, wording, config format), stop and ask rather than guess.
+- **Simplest first version.** Build the smallest thing that meets the acceptance criteria. Special cases and polish go under "Follow-ups" in the PR; they become their own issues if wanted.
 
 ## Stack
 
@@ -105,8 +106,10 @@ A local or parameter may take the name of its type's package (`theme theme.Theme
 1. **Branch** off an up-to-date `main`: `<type>/<issue#>-<short-slug>`, e.g. `feat/6-pr-list`. Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`.
 2. **Commit** in small, coherent steps with [Conventional Commits](https://www.conventionalcommits.org/) messages and PR titles: `feat(diff): add hunk navigation` (the scope is optional).
 3. **Run `make check`** (fmt-check, lint, race tests, tidy-check, govulncheck, actionlint, build). Install `shellcheck` locally for full parity with CI.
-4. **Open a PR** against `main` using the template: `Closes #N`; what changed and why; how to try it (exact `strig` invocation and keys) and test notes; a screenshot or recording for visible UI changes; new keybindings and dependencies; follow-ups left out of scope.
-5. CI must be green. Address review comments with new commits; don't rewrite history on a PR under review.
+4. **Open a PR** against `main` using the template: `Closes #N`; what changed and why; how to try it (exact `strig` invocation and keys) and test notes; a screenshot for visible UI changes ([docs/screenshots.md](docs/screenshots.md)); new keybindings and dependencies; follow-ups left out of scope. Write the body file inside your own checkout or a temp file, never in a shared location.
+   The body must start with `Closes #N` for the right issue: merging closes whatever it names. Only ever edit your own PR's body, re-fetch it before each edit, and check `Closes #N` is still there afterwards.
+5. **Review.** Every PR gets an independent review by a fresh agent with no stake in the code (`/review-pr <N>` in Claude Code; see `.claude/skills/review-pr`) on top of the author's own check. Findings go on the PR as inline comments in one comment-only review. Fix them in new commits, then reply in each thread naming the fixing commit and resolve it; leave threads that need the maintainer's decision open.
+6. CI must be green. Address review comments with new commits; don't rewrite history on a PR under review. The maintainer merges, with merge commits.
 
 **Definition of done:** the issue's acceptance criteria are met; tests cover the new logic and main view states; `make check` passes; new keybindings appear in the help overlay; README/docs reflect user-facing changes; the PR description is complete.
 
