@@ -43,6 +43,7 @@ type Model struct {
 	query   []rune
 	matches []int         // indexes into items
 	window  scroll.Window // cursor and top row over matches
+	note    string        // muted explanation under the items, if any
 }
 
 // New returns a picker over items.
@@ -51,6 +52,10 @@ func New(activeTheme theme.Theme, title string, items []string) *Model {
 	model.refilter()
 	return model
 }
+
+// SetNote sets a muted line of explanation drawn under the items, for example
+// why some choices are missing.
+func (model *Model) SetNote(note string) { model.note = note }
 
 // Query returns the current filter text.
 func (model *Model) Query() string { return string(model.query) }
@@ -125,7 +130,8 @@ func (model *Model) Render(width, height int) string {
 		return ""
 	}
 	inner := paneWidth - 2
-	rows := min(max(len(model.matches), 1), min(height-4, 12))
+	noteLines := model.noteLines(inner - 2)
+	rows := min(max(len(model.matches), 1), min(height-4-len(noteLines), 12))
 
 	lines := make([]string, 0, rows+2)
 	query := string(model.query)
@@ -148,10 +154,20 @@ func (model *Model) Render(width, height int) string {
 			lines = append(lines, model.theme.OverlayItem.Render("  "+label))
 		}
 	}
+	for _, line := range noteLines {
+		lines = append(lines, model.theme.Muted.Render(line))
+	}
 	box := model.theme.OverlayBox.
 		Width(paneWidth).
 		Render(strings.Join(lines, "\n"))
 	return model.titled(box)
+}
+
+func (model *Model) noteLines(width int) []string {
+	if model.note == "" || width < 1 {
+		return nil
+	}
+	return strings.Split(ansi.Wordwrap(model.note, width, ""), "\n")
 }
 
 // titled puts the title in the top edge of the box.

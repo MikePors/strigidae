@@ -20,24 +20,27 @@ import (
 // take everything they need from the workspace as a reviewEnvironment, and result
 // messages carry the flow's own pointer as their identity.
 type reviewFlow struct {
-	chooser    *picker.Model // non-nil while the verdict chooser is open
-	sequence   int           // latest review request; older results are stale
-	draft      string        // unsent summary, kept until a review is submitted
-	submitting bool          // a submission is in flight
+	chooser *picker.Model // non-nil while the verdict chooser is open
+	// chooserVerdicts are the events of the chooser's rows, in order.
+	chooserVerdicts []github.ReviewEvent
+	sequence        int    // latest review request; older results are stale
+	draft           string // unsent summary, kept until a review is submitted
+	submitting      bool   // a submission is in flight
 }
 
 // reviewEnvironment is what the flow needs from the workspace at one moment.
 type reviewEnvironment struct {
-	client      github.Client
-	repository  github.Repository
-	number      int
-	theme       theme.Theme
-	edit        EditFunction
-	reload      func() tea.Cmd // reloads the workspace
-	loaded      bool           // the pull request detail has loaded
-	diffHead    string         // head SHA the diff on screen was loaded for
-	diffPending bool           // a diff load is in flight
-	diffReady   bool           // a diff is loaded and shown
+	client         github.Client
+	repository     github.Repository
+	number         int
+	theme          theme.Theme
+	edit           EditFunction
+	reload         func() tea.Cmd // reloads the workspace
+	loaded         bool           // the pull request detail has loaded
+	ownPullRequest bool           // the viewer authored the pull request
+	diffHead       string         // head SHA the diff on screen was loaded for
+	diffPending    bool           // a diff load is in flight
+	diffReady      bool           // a diff is loaded and shown
 	// commentWriting is set while a comment is being saved.
 	commentWriting bool
 }
@@ -106,10 +109,11 @@ func (view *View) reviewEnvironment() reviewEnvironment {
 	return reviewEnvironment{
 		client: view.client, repository: view.repository, number: view.number, theme: view.theme,
 		edit: view.edit, reload: view.load,
-		loaded:      view.detail != nil,
-		diffHead:    view.diffHead,
-		diffPending: view.diffPending,
-		diffReady:   !view.diffPending && view.diff.Parsed != nil && view.diff.Err == nil,
+		loaded:         view.detail != nil,
+		ownPullRequest: view.detail != nil && view.detail.ViewerDidAuthor,
+		diffHead:       view.diffHead,
+		diffPending:    view.diffPending,
+		diffReady:      !view.diffPending && view.diff.Parsed != nil && view.diff.Err == nil,
 
 		commentWriting: view.writes > 0,
 	}
@@ -214,11 +218,19 @@ func (currentFlow *reviewFlow) openChooser(environment reviewEnvironment) tea.Cm
 	if blocked := currentFlow.blocked(environment); blocked != nil {
 		return blocked
 	}
-	items := make([]string, len(verdicts))
-	for i, testCase := range verdicts {
-		items[i] = testCase.label
+	currentFlow.chooserVerdicts = currentFlow.chooserVerdicts[:0]
+	var items []string
+	for _, verdict := range verdicts {
+		if environment.ownPullRequest && verdict.event != github.ReviewEventComment {
+			continue
+		}
+		currentFlow.chooserVerdicts = append(currentFlow.chooserVerdicts, verdict.event)
+		items = append(items, verdict.label)
 	}
 	currentFlow.chooser = picker.New(environment.theme, "Submit review", items)
+	if environment.ownPullRequest {
+		currentFlow.chooser.SetNote(ownPullRequestText)
+	}
 	return nil
 }
 
@@ -230,7 +242,7 @@ func (currentFlow *reviewFlow) chooserKey(message tea.KeyPressMsg, environment r
 		currentFlow.chooser = nil
 	case picker.Chosen:
 		currentFlow.chooser = nil
-		return currentFlow.start(environment, verdicts[result.Index].event)
+		return currentFlow.start(environment, currentFlow.chooserVerdicts[result.Index])
 	case picker.Open:
 	}
 	return nil
@@ -241,6 +253,9 @@ func (currentFlow *reviewFlow) chooserKey(message tea.KeyPressMsg, environment r
 func (currentFlow *reviewFlow) start(environment reviewEnvironment, event github.ReviewEvent) tea.Cmd {
 	if blocked := currentFlow.blocked(environment); blocked != nil {
 		return blocked
+	}
+	if environment.ownPullRequest && event != github.ReviewEventComment {
+		return userinterface.Info(ownPullRequestText)
 	}
 	currentFlow.sequence++
 	flow, sequence := currentFlow, currentFlow.sequence
