@@ -327,7 +327,7 @@ func (v *View) editComment() tea.Cmd {
 		return cmd
 	}
 	o, client := v.origin(), v.client
-	tgt := target{kind: kindEdit, commentID: c.ID, threadID: t.ID, label: threadLocation(t), home: threadHome(t)}
+	tgt := target{kind: kindEdit, commentID: c.ID, threadID: t.ID, label: threadLocation(t), home: v.reachableHome(t)}
 	v.cseq++ // a compose started meanwhile supersedes this read
 	seq := v.cseq
 	return func() tea.Msg {
@@ -337,13 +337,33 @@ func (v *View) editComment() tea.Cmd {
 	}
 }
 
-// threadHome is the position of a thread in the diff, as `c` would write a
-// comment there; nil when it has no line (outdated or file-level threads).
-func threadHome(t github.ReviewThread) *github.AddThreadInput {
-	if t.Line == 0 {
+// reachableHome is the position of a thread as `c` would write a comment
+// there, or nil when `c` cannot reach it: the thread has no line (outdated and
+// file-level threads) or its lines are not in the diff on screen.
+func (v *View) reachableHome(t github.ReviewThread) *github.AddThreadInput {
+	if t.Line == 0 || !v.lineInDiff(t.Path, t.DiffSide, t.Line) || (t.StartLine > 0 && !v.lineInDiff(t.Path, t.StartDiffSide, t.StartLine)) {
 		return nil
 	}
 	return &github.AddThreadInput{Path: t.Path, Side: t.DiffSide, Line: t.Line, StartLine: t.StartLine, StartSide: t.StartDiffSide}
+}
+
+// lineInDiff reports whether the diff on screen has line n of path on side.
+func (v *View) lineInDiff(path string, side github.DiffSide, n int) bool {
+	if v.diff.Parsed == nil {
+		return false
+	}
+	f := v.diff.Parsed.File(path)
+	if f == nil {
+		return false
+	}
+	for _, h := range f.Hunks {
+		for _, l := range h.Lines {
+			if (side == github.SideLeft && l.Old == n) || (side != github.SideLeft && l.New == n) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // commentRead opens the editor on a freshly read comment, or refuses.
@@ -462,27 +482,34 @@ func threadExists(client github.Client, o origin, threadID string) bool {
 }
 
 // homeKey is the draft a refused edit's text goes to: the reply draft of its
-// thread while the thread exists, else the draft of a new comment on its lines.
+// thread while the thread exists, else the draft of a new comment on its lines
+// when `c` can reach them, else the top-level draft.
 func homeKey(msg postedMsg) string {
-	if msg.threadLive || msg.tgt.home == nil {
+	switch {
+	case msg.threadLive:
 		return target{kind: kindReply, threadID: msg.tgt.threadID}.draftKey()
+	case msg.tgt.home != nil:
+		return target{kind: kindInline, inline: msg.tgt.home}.draftKey()
 	}
-	return target{kind: kindInline, inline: msg.tgt.home}.draftKey()
+	return target{}.draftKey()
 }
 
 // editFailure is the error shown for a failed edit, saying where its text is
 // kept. A refused edit (a stale comment) goes to the thread's reply draft, or
-// when the thread is gone too to the draft for a new comment on its lines; any
-// other failure leaves the text under the comment's own draft, which `e` finds.
+// when the thread is gone too to the draft for a new comment on its lines (or,
+// when `c` cannot reach them, the top-level draft); any other failure leaves the text under the comment's own draft, which `e` finds.
 func editFailure(err error, tgt target, threadLive bool) error {
 	var s staleError
 	if !errors.As(err, &s) {
 		return commentFailure(fmt.Errorf("%w; the comment is kept as a draft", err), "update comment")
 	}
-	if threadLive || tgt.home == nil {
+	switch {
+	case threadLive:
 		return staleError(string(s) + "; your text is kept as a reply draft")
+	case tgt.home != nil:
+		return staleError(string(s) + "; your text is kept as a draft for a new comment on " + termtext.Clean(lineLabel(tgt.home)))
 	}
-	return staleError(string(s) + "; your text is kept as a draft for a new comment on " + termtext.Clean(lineLabel(tgt.home)))
+	return staleError(string(s) + "; your text is kept as a draft for a top-level comment")
 }
 
 // lineLabel is "path:line" or "path:start-line" for a position.
@@ -519,11 +546,9 @@ func (v *View) staleEdit(msg postedMsg) tea.Cmd {
 // sendInline adds a new inline comment to the pending review (creating the
 // review if there is none), anchored to the commit the lines were picked on.
 func (v *View) sendInline(tgt target, body string) tea.Cmd {
-	// No check that the diff is settled: the lines are anchored to tgt.head,
-	// and addPendingThread refuses unless the server is still on it.
-	if v.detail == nil {
-		return ui.Error(errors.New("the pull request is not loaded; the comment is kept as a draft, try again"))
-	}
+	// A diff load in flight is no obstacle: the lines are anchored to tgt.head,
+	// and addPendingThread refuses unless the server is still on it. (The caller
+	// checked that the pull request is loaded.)
 	o, client := v.origin(), v.client
 	in := *tgt.inline
 	in.Repo, in.Number, in.Body = o.repo, o.number, body

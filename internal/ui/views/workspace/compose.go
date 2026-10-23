@@ -171,8 +171,12 @@ func (v *View) edited(msg editedMsg) tea.Cmd {
 	// sendEdit asks before changing a published one.
 	switch msg.tgt.kind {
 	case kindInline, kindEdit:
-		if blocked := v.commentBlocked(); blocked != nil {
-			return blocked // the text stays a draft
+		// The diff being reloaded does not matter now: the head check in the
+		// send covers it. The text stays a draft if the send is refused.
+		env := v.reviewEnv()
+		env.diffReady = true
+		if blocked := v.review.blocked(env); blocked != nil {
+			return blocked
 		}
 		if msg.tgt.kind == kindInline {
 			return v.sendInline(msg.tgt, body)
