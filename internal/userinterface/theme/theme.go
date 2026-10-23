@@ -56,7 +56,7 @@ type Theme struct {
 
 	// IsDark reports whether the palette is the dark variant.
 	IsDark bool
-	// ID fingerprints the final roles and the variant, so any change to a
+	// Identifier fingerprints the final roles and the variant, so any change to a
 	// role, including an override, changes it. Renderer caches include it.
 	Identifier string
 	// Roles are the colours the styles were built from. Renderers with their

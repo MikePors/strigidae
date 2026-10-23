@@ -382,8 +382,8 @@ func TestReplyAndCommentAreInHelp(test *testing.T) {
 	got := map[string]string{}
 	for _, bindings := range harness.view.FullHelp() {
 		for _, binding := range bindings {
-			if k := binding.Keys(); len(k) == 1 && (k[0] == "r" || k[0] == "c") {
-				got[k[0]] = binding.Help().Desc
+			if key := binding.Keys(); len(key) == 1 && (key[0] == "r" || key[0] == "c") {
+				got[key[0]] = binding.Help().Desc
 			}
 		}
 	}

@@ -27,8 +27,8 @@ type diffBindings struct {
 }
 
 func defaultDiffBindings() diffBindings {
-	bind := func(k, helpKey, description string) key.Binding {
-		return key.NewBinding(key.WithKeys(k), key.WithHelp(helpKey, description))
+	bind := func(pressed, helpKey, description string) key.Binding {
+		return key.NewBinding(key.WithKeys(pressed), key.WithHelp(helpKey, description))
 	}
 	return diffBindings{
 		NextHunk:        bind("]", "]", "next hunk"),

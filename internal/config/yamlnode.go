@@ -98,8 +98,8 @@ func (parser *parser) rejectAliases(node *yaml.Node) {
 
 func keys[Value any](entries map[string]Value) []string {
 	keyNames := make([]string, 0, len(entries))
-	for k := range entries {
-		keyNames = append(keyNames, k)
+	for key := range entries {
+		keyNames = append(keyNames, key)
 	}
 	slices.Sort(keyNames)
 	return keyNames
@@ -114,25 +114,25 @@ func (parser *parser) mapping(node *yaml.Node, what string, each func(key string
 	}
 	seen := map[string]bool{}
 	for i := 0; i+1 < len(node.Content); i += 2 {
-		k, node := node.Content[i], node.Content[i+1]
+		keyNode, node := node.Content[i], node.Content[i+1]
 		switch {
-		case !slices.Contains(allowed, k.Value):
-			parser.fail(k, "unknown key %q in %s (valid keys: %s)", k.Value, what, strings.Join(allowed, ", "))
-		case seen[k.Value]:
-			parser.fail(k, "duplicate key %q in %s", k.Value, what)
+		case !slices.Contains(allowed, keyNode.Value):
+			parser.fail(keyNode, "unknown key %q in %s (valid keys: %s)", keyNode.Value, what, strings.Join(allowed, ", "))
+		case seen[keyNode.Value]:
+			parser.fail(keyNode, "duplicate key %q in %s", keyNode.Value, what)
 		}
 		if parser.err != nil {
 			return
 		}
-		seen[k.Value] = true
-		each(k.Value, node)
+		seen[keyNode.Value] = true
+		each(keyNode.Value, node)
 		if parser.err != nil {
 			return
 		}
 	}
 }
 
-// str reads a non-empty scalar as trimmed text; numbers and booleans are
+// stringValue reads a non-empty scalar as trimmed text; numbers and booleans are
 // accepted as written.
 func (parser *parser) stringValue(node *yaml.Node, what string) string {
 	value := strings.TrimSpace(node.Value)

@@ -128,11 +128,11 @@ func checkRange(in github.AddThreadInput) error {
 
 // findComment locates a comment among the pull requests' threads.
 func (client *Client) findComment(identifier string) (key pullRequestKey, threadIndex, checks int, ok bool) {
-	for k, threads := range client.threads {
+	for key, threads := range client.threads {
 		for i, thread := range threads {
 			for j, comment := range thread.Comments {
 				if comment.Identifier == identifier {
-					return k, i, j, true
+					return key, i, j, true
 				}
 			}
 		}

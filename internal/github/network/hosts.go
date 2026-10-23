@@ -25,8 +25,8 @@ func knownHost(host string, known []string, gitHubHost string) bool {
 	if host == "github.com" || host == github.NormalizeHost(gitHubHost) {
 		return true
 	}
-	for _, k := range known {
-		if github.NormalizeHost(k) == host {
+	for _, key := range known {
+		if github.NormalizeHost(key) == host {
 			return true
 		}
 	}

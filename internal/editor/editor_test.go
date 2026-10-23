@@ -10,7 +10,7 @@ import (
 )
 
 func environment(entries map[string]string) func(string) string {
-	return func(k string) string { return entries[k] }
+	return func(key string) string { return entries[key] }
 }
 
 func TestCommandChoice(test *testing.T) {

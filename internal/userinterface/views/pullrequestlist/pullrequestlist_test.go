@@ -279,9 +279,9 @@ func TestFailedNextPageIsNotRetried(test *testing.T) {
 		test.Error("still loading after failure")
 	}
 	calls := len(client.Calls())
-	for _, k := range []string{"k", "j", "G", "j"} {
-		if command := press(view, k); command != nil {
-			test.Fatalf("key %q retried the failed page", k)
+	for _, key := range []string{"k", "j", "G", "j"} {
+		if command := press(view, key); command != nil {
+			test.Fatalf("key %q retried the failed page", key)
 		}
 	}
 	if len(client.Calls()) != calls {
@@ -363,8 +363,8 @@ func TestNavigation(test *testing.T) {
 	}
 	for _, testCase := range tests {
 		press(view, "g g")
-		for _, k := range testCase.keys {
-			press(view, k)
+		for _, key := range testCase.keys {
+			press(view, key)
 		}
 		if view.window.Cursor() != testCase.want {
 			test.Errorf("keys %v: cursor = %d, want %d", testCase.keys, view.window.Cursor(), testCase.want)
@@ -513,8 +513,8 @@ func TestPagingKeysAtTheEnds(test *testing.T) {
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
 			view := loadedView(test, fakeWith(makePullRequests(25)), nil) // window shows 11 rows
-			for _, k := range testCase.start {
-				press(view, k)
+			for _, key := range testCase.start {
+				press(view, key)
 			}
 			press(view, testCase.key)
 			if got := view.window.Cursor(); got != testCase.want {
@@ -528,19 +528,19 @@ func TestPagingKeysAtTheEnds(test *testing.T) {
 }
 
 func TestPagingNearTheEndLoadsMore(test *testing.T) {
-	for _, k := range []string{"ctrl+d", "ctrl+f"} {
-		test.Run(k, func(test *testing.T) {
+	for _, key := range []string{"ctrl+d", "ctrl+f"} {
+		test.Run(key, func(test *testing.T) {
 			client := fakeWith(makePullRequests(45))
 			view := loadedView(test, client, nil) // 30 loaded, 11 visible
 			var command tea.Cmd
 			for i := 0; i < 10 && command == nil; i++ {
-				command = press(view, k)
+				command = press(view, key)
 				if command == nil && view.window.Cursor() >= len(view.pullRequests)-1-loadMoreMargin {
-					test.Fatalf("%s reached cursor %d inside the margin without loading", k, view.window.Cursor())
+					test.Fatalf("%s reached cursor %d inside the margin without loading", key, view.window.Cursor())
 				}
 			}
 			if command == nil || !view.Loading() {
-				test.Fatalf("%s into the margin should load the next page", k)
+				test.Fatalf("%s into the margin should load the next page", key)
 			}
 			cursor, top := view.window.Cursor(), view.window.Top()
 			deliver(test, view, command)

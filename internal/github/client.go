@@ -33,7 +33,7 @@ type Client interface {
 	// that no longer exists yields ErrNotFound.
 	SubmitReview(ctx context.Context, in SubmitReviewInput) error
 	// SetFileViewed marks the file at path as viewed (or, with viewed false,
-	// clears the mark) for the viewer. pullRequestIdentifier is PullRequest.ID.
+	// clears the mark) for the viewer. pullRequestIdentifier is PullRequest.Identifier.
 	SetFileViewed(ctx context.Context, pullRequestIdentifier, path string, viewed bool) error
 	// GetMergeStatus returns what a merge needs to know right now: the pull
 	// request's node ID, head commit and base branch, and the repository's

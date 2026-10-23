@@ -45,7 +45,7 @@ func (view *fakeView) Resumed() tea.Cmd {
 
 func (view *fakeView) Update(message tea.Msg) (View, tea.Cmd) {
 	view.got = append(view.got, message)
-	if k, ok := message.(tea.KeyPressMsg); ok && k.String() == "esc" {
+	if key, ok := message.(tea.KeyPressMsg); ok && key.String() == "esc" {
 		view.capture = false
 	}
 	if _, ok := message.(resultMessage); ok {
@@ -62,8 +62,8 @@ func (view *fakeView) CapturesKeys() bool        { return view.capture }
 func (view *fakeView) last() tea.Msg             { return view.got[len(view.got)-1] }
 func (view *fakeView) keyMessages() (out []keys.Message) {
 	for _, message := range view.got {
-		if k, ok := message.(keys.Message); ok {
-			out = append(out, k)
+		if key, ok := message.(keys.Message); ok {
+			out = append(out, key)
 		}
 	}
 	return out
@@ -108,9 +108,9 @@ func run(model *Model, command tea.Cmd) {
 func TestKeyEncoding(test *testing.T) {
 	// Guards the assumption press() relies on: key names match binding names.
 	for _, text := range []string{"j", "G", "?", ":", "ctrl+c", "esc", "enter", "tab", "ctrl+o"} {
-		k := keyFor(text)
-		if k.String() != text {
-			test.Errorf("key for %q stringifies as %q", text, k.String())
+		key := keyFor(text)
+		if key.String() != text {
+			test.Errorf("key for %q stringifies as %q", text, key.String())
 		}
 	}
 }

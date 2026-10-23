@@ -11,12 +11,12 @@ package keys
 
 import "charm.land/bubbles/v2/key"
 
-// Msg is delivered to the active view when a key press, or a complete
+// Message is delivered to the active view when a key press, or a complete
 // sequence, matches a binding that is active in that view. Seq is the key name
 // ("j", "ctrl+d") or the space-joined sequence ("g g"). Msg implements
 // fmt.Stringer so it works with key.Matches.
 //
-// Msg is not a tea.KeyPressMsg: embedded bubbles components (viewport, ...)
+// Message is not a tea.KeyPressMsg: embedded bubbles components (viewport, ...)
 // ignore it. Views drive them through their methods (ScrollDown, GotoTop, ...)
 // in response to a Msg and never forward it to the component's Update.
 type Message struct{ Sequence string }

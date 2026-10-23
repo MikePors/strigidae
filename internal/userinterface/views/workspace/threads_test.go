@@ -239,16 +239,16 @@ func TestThreadKeysAreRegisteredForSequences(test *testing.T) {
 	want := map[string]bool{")": false, "(": false, "z a": false, "z o": false, "z c": false}
 	for _, group := range harness.view.FullHelp() {
 		for _, binding := range group {
-			for _, k := range binding.Keys() {
-				if _, ok := want[k]; ok {
-					want[k] = true
+			for _, key := range binding.Keys() {
+				if _, ok := want[key]; ok {
+					want[key] = true
 				}
 			}
 		}
 	}
-	for k, ok := range want {
+	for key, ok := range want {
 		if !ok {
-			test.Errorf("FullHelp does not register %q", k)
+			test.Errorf("FullHelp does not register %q", key)
 		}
 	}
 }

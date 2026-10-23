@@ -27,7 +27,7 @@ func TestPath(test *testing.T) {
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
-			got, err := Path(func(k string) string { return testCase.environment[k] }, testCase.home)
+			got, err := Path(func(key string) string { return testCase.environment[key] }, testCase.home)
 			if (err != nil) != testCase.wantErr {
 				test.Fatalf("err = %v, wantErr %v", err, testCase.wantErr)
 			}
@@ -84,7 +84,7 @@ func TestStart(test *testing.T) {
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
 			// The logger and close must be usable whether or not Start failed.
-			logger, closeLog, err := Start(func(k string) string { return testCase.environment[k] }, testCase.home)
+			logger, closeLog, err := Start(func(key string) string { return testCase.environment[key] }, testCase.home)
 			logger.Info("hello")
 			closeLog()
 

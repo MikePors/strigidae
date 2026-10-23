@@ -45,14 +45,14 @@ func (renderer *Renderer) Render(body string, width int) string {
 		renderer.width, renderer.termRenderer = width, nil
 		clear(renderer.cache)
 	}
-	k := cacheKey{body, width, renderer.theme.Identifier}
-	if text, ok := renderer.cache[k]; ok {
+	key := cacheKey{body, width, renderer.theme.Identifier}
+	if text, ok := renderer.cache[key]; ok {
 		return text
 	}
 	// Glamour decodes HTML character references (&#x1b;, &rlm;, ...) into real
 	// control and bidi runes, after any input sanitising, so clean the output.
 	text := terminaltext.CleanStyled(renderer.render(body, width))
-	renderer.cache[k] = text
+	renderer.cache[key] = text
 	return text
 }
 

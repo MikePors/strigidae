@@ -26,7 +26,7 @@ const (
 
 // PullRequest is the summary shown in lists.
 type PullRequest struct {
-	// ID is the GraphQL node ID, needed by mutations that target the pull request.
+	// Identifier is the GraphQL node ID, needed by mutations that target the pull request.
 	Identifier string
 	// HeadSHA is the head commit; review comments are anchored to it, and a
 	// change since a diff was loaded means that diff is stale.
@@ -243,7 +243,7 @@ const (
 // ReviewThread is a conversation anchored to a line of a diff. Threads may
 // include the viewer's pending (draft) comments; see ReviewComment.Pending.
 type ReviewThread struct {
-	// ID is the node ID used to reply to the thread.
+	// Identifier is the node ID used to reply to the thread.
 	Identifier  string
 	SubjectType ThreadSubject
 	IsResolved  bool

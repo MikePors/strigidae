@@ -20,7 +20,7 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
-// Env is what rendering needs besides the thread.
+// Environment is what rendering needs besides the thread.
 type Environment struct {
 	Theme    theme.Theme
 	Markdown *markdown.Renderer

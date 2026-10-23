@@ -42,8 +42,8 @@ func rootFor(harness *harness) (model *userinterface.Model, timers *int) {
 func TestNavigationKeysAreReportedAsText(test *testing.T) {
 	bases := map[string]rune{"}": ']', "{": '[', ")": '0', "(": '9'}
 	for text, base := range bases {
-		for name, k := range terminalKeys(text, base) {
-			if got := k.String(); got != text {
+		for name, key := range terminalKeys(text, base) {
+			if got := key.String(); got != text {
 				test.Errorf("%s %q stringifies as %q", name, text, got)
 			}
 		}
@@ -57,10 +57,10 @@ func TestNavigationKeysThroughRoot(test *testing.T) {
 	}
 
 	test.Run("} and { move between files from Overview", func(test *testing.T) {
-		for name, k := range terminalKeys("}", ']') {
+		for name, key := range terminalKeys("}", ']') {
 			harness := loaded(test, 100, 24)
 			model, timers := rootFor(harness)
-			_, _ = model.Update(k)
+			_, _ = model.Update(key)
 			if harness.view.selection() != 1 {
 				test.Errorf("%s: } sel = %d, want 1", name, harness.view.selection())
 			}
@@ -111,11 +111,11 @@ func TestNavigationKeysThroughRoot(test *testing.T) {
 	})
 
 	test.Run(") and ( move between threads in the diff", func(test *testing.T) {
-		for name, k := range terminalKeys(")", '0') {
+		for name, key := range terminalKeys(")", '0') {
 			harness := threadHarness(test, 110, 40)
 			harness.selectFile()
 			model, timers := rootFor(harness)
-			_, _ = model.Update(k)
+			_, _ = model.Update(key)
 			if !strings.Contains(harness.cursorRow(), "carol") {
 				test.Errorf("%s: ) landed on %q", name, harness.cursorRow())
 			}
@@ -165,8 +165,8 @@ func TestHelpKeysMatchBindings(test *testing.T) {
 				continue
 			}
 			ok := false
-			for _, k := range binding.Keys() {
-				ok = ok || strings.ReplaceAll(k, " ", "") == binding.Help().Key || k == binding.Help().Key
+			for _, key := range binding.Keys() {
+				ok = ok || strings.ReplaceAll(key, " ", "") == binding.Help().Key || key == binding.Help().Key
 			}
 			if !ok {
 				test.Errorf("help key %q is not one of %v", binding.Help().Key, binding.Keys())
@@ -181,9 +181,9 @@ func TestNoBracketPrefixSequences(test *testing.T) {
 	harness := openClientDiff(test, 120, 30)
 	for _, bindings := range harness.view.FullHelp() {
 		for _, binding := range bindings {
-			for _, k := range binding.Keys() {
-				if strings.HasPrefix(k, "] ") || strings.HasPrefix(k, "[ ") {
-					test.Errorf("binding %q is a bracket sequence", k)
+			for _, key := range binding.Keys() {
+				if strings.HasPrefix(key, "] ") || strings.HasPrefix(key, "[ ") {
+					test.Errorf("binding %q is a bracket sequence", key)
 				}
 			}
 		}

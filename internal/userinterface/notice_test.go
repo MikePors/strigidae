@@ -25,15 +25,15 @@ func TestConfirmReplacesOpenPrompt(test *testing.T) {
 }
 
 func TestNoticeAnyKeyDismissesAndRuns(test *testing.T) {
-	for _, k := range []string{"y", "n", "esc", "enter", "j"} {
-		test.Run(k, func(test *testing.T) {
+	for _, key := range []string{"y", "n", "esc", "enter", "j"} {
+		test.Run(key, func(test *testing.T) {
 			model := newModel(newFake("v"))
 			run(model, messageCommand(ConfirmMessage{Text: "Head moved.", OnDismiss: func() tea.Msg { return answered{} }, OnYes: func() tea.Msg { return wrong{} }, Notice: true}))
 			row := ansi.Strip(model.bottomRow())
 			if strings.Contains(row, "y/N") || !strings.Contains(row, "any key") {
 				test.Errorf("row = %q", row)
 			}
-			command := press(model, k)
+			command := press(model, key)
 			if model.confirm.CapturesKeys() {
 				test.Error("notice still captures")
 			}

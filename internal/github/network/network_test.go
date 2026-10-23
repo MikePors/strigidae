@@ -417,16 +417,16 @@ func TestErrors(test *testing.T) {
 	resetAt := time.Unix(2_000, 0)
 	jsonError := func(writer http.ResponseWriter, status int, headers map[string]string, body string) {
 		writer.Header().Set("Content-Type", "application/json; charset=utf-8")
-		for k, value := range headers {
-			writer.Header().Set(k, value)
+		for key, value := range headers {
+			writer.Header().Set(key, value)
 		}
 		writer.WriteHeader(status)
 		_, _ = writer.Write([]byte(body))
 	}
 	fixtureError := func(server *server, name string, headers map[string]string) func(call, http.ResponseWriter) bool {
 		return func(_ call, writer http.ResponseWriter) bool {
-			for k, value := range headers {
-				writer.Header().Set(k, value)
+			for key, value := range headers {
+				writer.Header().Set(key, value)
 			}
 			server.fixture(writer, http.StatusOK, name)
 			return true

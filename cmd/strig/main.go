@@ -16,7 +16,7 @@ import (
 	"github.com/MikePors/strigidae/internal/version"
 )
 
-// deps are the side effects run needs, injected so tests exercise flag
+// dependencies are the side effects run needs, injected so tests exercise flag
 // handling and repository inference without a checkout, the network or a
 // terminal.
 type dependencies struct {

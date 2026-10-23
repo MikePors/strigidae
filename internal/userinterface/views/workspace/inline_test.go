@@ -476,14 +476,14 @@ func TestInlineKeysAreInHelp(test *testing.T) {
 	got := map[string]bool{}
 	for _, bindings := range harness.view.FullHelp() {
 		for _, binding := range bindings {
-			if k := binding.Keys(); len(k) == 1 {
-				got[k[0]] = true
+			if key := binding.Keys(); len(key) == 1 {
+				got[key[0]] = true
 			}
 		}
 	}
-	for _, k := range []string{"V", "e", "D"} {
-		if !got[k] {
-			test.Errorf("%s is not in the help", k)
+	for _, key := range []string{"V", "e", "D"} {
+		if !got[key] {
+			test.Errorf("%s is not in the help", key)
 		}
 	}
 }

@@ -64,14 +64,14 @@ func TestWindow(test *testing.T) {
 		{3, 2, " a"},
 	} {
 		got, used := window(emoji, testCase.off, testCase.width)
-		if j := join(got); j != testCase.want || used != ansi.StringWidth(j) {
-			test.Errorf("emoji window(%d,%d) = %q (used %d), want %q", testCase.off, testCase.width, j, used, testCase.want)
+		if joined := join(got); joined != testCase.want || used != ansi.StringWidth(joined) {
+			test.Errorf("emoji window(%d,%d) = %q (used %d), want %q", testCase.off, testCase.width, joined, used, testCase.want)
 		}
 	}
 	for _, testCase := range tests {
 		got, used := window(spans, testCase.off, testCase.width)
-		if j := join(got); j != testCase.want {
-			test.Errorf("window(%d,%d) = %q, want %q", testCase.off, testCase.width, j, testCase.want)
+		if joined := join(got); joined != testCase.want {
+			test.Errorf("window(%d,%d) = %q, want %q", testCase.off, testCase.width, joined, testCase.want)
 		}
 		if width := ansi.StringWidth(join(got)); width != used || used > testCase.width {
 			test.Errorf("window(%d,%d): used %d, text width %d", testCase.off, testCase.width, used, width)

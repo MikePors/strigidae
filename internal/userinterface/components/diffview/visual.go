@@ -164,8 +164,8 @@ func rangeFor(path string, lines []*diff.Line) (Range, error) {
 	if len(lines) == 0 {
 		return Range{}, errNoLines
 	}
-	isKind := func(k diff.LineKind) func(*diff.Line) bool {
-		return func(line *diff.Line) bool { return line.Kind == k }
+	isKind := func(kind diff.LineKind) func(*diff.Line) bool {
+		return func(line *diff.Line) bool { return line.Kind == kind }
 	}
 	hasDeletion, hasAdd := slices.ContainsFunc(lines, isKind(diff.Delete)), slices.ContainsFunc(lines, isKind(diff.Add))
 	if hasDeletion && hasAdd {

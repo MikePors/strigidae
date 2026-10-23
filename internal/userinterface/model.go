@@ -256,7 +256,7 @@ func (model *Model) bindings() []key.Binding {
 }
 
 func (model *Model) handleKey(message tea.KeyPressMsg) tea.Cmd {
-	k := message.String()
+	pressed := message.String()
 	if confirmPrompt := model.confirm; confirmPrompt.CapturesKeys() {
 		model.confirm = nil
 		return confirmPrompt.answer(message)
@@ -279,7 +279,7 @@ func (model *Model) handleKey(message tea.KeyPressMsg) tea.Cmd {
 		return model.forward(message)
 	}
 
-	result := model.matcher.Feed(k, model.bindings())
+	result := model.matcher.Feed(pressed, model.bindings())
 	model.sequenceGeneration++
 	switch result.Kind {
 	case keys.Pending:

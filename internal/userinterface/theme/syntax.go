@@ -61,8 +61,8 @@ var tokenClasses = map[chroma.TokenType]SyntaxClass{
 
 // ClassOf returns the syntax class of a Chroma token type.
 func ClassOf(tokenType chroma.TokenType) SyntaxClass {
-	for _, k := range []chroma.TokenType{tokenType, tokenType.SubCategory(), tokenType.Category()} {
-		if class, ok := tokenClasses[k]; ok {
+	for _, key := range []chroma.TokenType{tokenType, tokenType.SubCategory(), tokenType.Category()} {
+		if class, ok := tokenClasses[key]; ok {
 			return class
 		}
 	}

@@ -305,23 +305,23 @@ func (model *Model) cursorKey() (cursorKey, bool) {
 		return cursorKey{}, false
 	}
 	row := model.rows[count]
-	k := cursorKey{baseIndex: row.baseIndex}
+	key := cursorKey{baseIndex: row.baseIndex}
 	if row.threadRow != nil {
-		k.thread, k.off = model.fthreads[row.threadRow.threadIndex].Identifier, row.threadRow.i
+		key.thread, key.off = model.fthreads[row.threadRow.threadIndex].Identifier, row.threadRow.i
 	}
-	return k, true
+	return key, true
 }
 
 // keyRow returns the row for k; a thread row that is gone (a collapsed block
 // is shorter) falls back to the nearest one in its block, then to its line.
-func (model *Model) keyRow(k cursorKey) int {
-	if k.thread != "" {
-		if row := model.threadRowFor(k.thread, k.off); row >= 0 {
+func (model *Model) keyRow(key cursorKey) int {
+	if key.thread != "" {
+		if row := model.threadRowFor(key.thread, key.off); row >= 0 {
 			return row
 		}
 	}
 	for i, row := range model.rows {
-		if row.threadRow == nil && row.baseIndex == k.baseIndex {
+		if row.threadRow == nil && row.baseIndex == key.baseIndex {
 			return i
 		}
 	}
@@ -343,13 +343,13 @@ func (model *Model) threadRowFor(identifier string, off int) int {
 // layout rebuilds rows from the diff's rows and the threads, keeping the
 // cursor on the same row and at the same place in the view.
 func (model *Model) layout() {
-	k, found := model.cursorKey()
-	model.relayout(k, found)
+	key, found := model.cursorKey()
+	model.relayout(key, found)
 }
 
 // relayout is layout with the cursor key taken by the caller, for changes to
 // the thread list, which would make the current rows' thread indexes stale.
-func (model *Model) relayout(k cursorKey, found bool) {
+func (model *Model) relayout(key cursorKey, found bool) {
 	off := model.window.Cursor() - model.window.Top()
 	model.rows = model.rows[:0]
 	model.hunkRow = model.hunkRow[:0]
@@ -385,7 +385,7 @@ func (model *Model) relayout(k cursorKey, found bool) {
 	flush(len(base) - 1)
 	model.sync()
 	if found && len(model.rows) > 0 {
-		count := model.keyRow(k)
+		count := model.keyRow(key)
 		model.window.Restore(count, count-off, model.window.HorizontalOffset())
 	}
 }

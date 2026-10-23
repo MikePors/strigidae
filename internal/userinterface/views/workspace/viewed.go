@@ -59,14 +59,14 @@ func (view *View) filesTitle() string {
 // mutation is sent now if none is in flight for the file, else when the
 // running one finishes.
 func (view *View) toggleViewed() tea.Cmd {
-	size := view.selection()
-	if size == 0 || size > len(view.files()) {
+	selected := view.selection()
+	if selected == 0 || selected > len(view.files()) {
 		return nil
 	}
 	if view.detail.Identifier == "" {
 		return userinterface.Error(errors.New("mark file as viewed: pull request ID unknown"))
 	}
-	file := &view.detail.Files[size-1]
+	file := &view.detail.Files[selected-1]
 	toggle := view.viewedState[file.Path]
 	if toggle == nil {
 		toggle = &viewedToggle{confirmed: file.Viewed}

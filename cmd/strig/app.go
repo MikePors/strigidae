@@ -11,7 +11,7 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
-// app is everything the TUI needs, resolved before it starts.
+// application is everything the TUI needs, resolved before it starts.
 type application struct {
 	client     github.Client
 	repository github.Repository

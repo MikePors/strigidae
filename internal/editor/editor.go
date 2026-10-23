@@ -37,7 +37,7 @@ func New(initial string, getenv func(string) string) (*Session, error) {
 	return &Session{command: Command(path, getenv), path: path}, nil
 }
 
-// Cmd is the editor command, ready to run.
+// Command is the editor command, ready to run.
 func (session *Session) Command() *exec.Cmd { return session.command }
 
 // Path is the temporary file.

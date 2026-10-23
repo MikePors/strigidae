@@ -92,7 +92,7 @@ func TestFilePaneContractThroughRoot(test *testing.T) {
 	testHarness := &harness{test: test, view: view, client: client}
 
 	step := func(message tea.Msg) { _, _ = model.Update(message) }
-	keyPress := func(k string) { step(tea.KeyPressMsg{Code: rune(k[0]), Text: k}) }
+	keyPress := func(key string) { step(tea.KeyPressMsg{Code: rune(key[0]), Text: key}) }
 	step(tea.WindowSizeMsg{Width: 100, Height: 25})
 	testHarness.run(view.Init())
 

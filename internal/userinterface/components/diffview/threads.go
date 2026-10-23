@@ -21,11 +21,11 @@ const (
 // on the file it displays. Which threads the user expanded or collapsed is
 // kept across calls, by thread ID.
 func (model *Model) SetThreads(threads []github.ReviewThread) {
-	k, found := model.cursorKey()
+	key, found := model.cursorKey()
 	model.threads = threads
 	model.blockCache = nil
 	model.placeThreads()
-	model.relayout(k, found)
+	model.relayout(key, found)
 }
 
 // placeThreads picks the threads on the shown file and anchors each to a row
