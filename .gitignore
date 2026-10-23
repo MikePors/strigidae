@@ -5,5 +5,7 @@
 .idea/
 .vscode/
 
-# Claude Code agent worktrees
-/.claude/
+# Claude Code: local state and agent worktrees are ignored; project skills are shared
+/.claude/*
+!/.claude/skills/
+# add a !-line here for any other shared Claude Code config (agents, commands, settings)
