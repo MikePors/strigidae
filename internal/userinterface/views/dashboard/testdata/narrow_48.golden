@@ -1,0 +1,9 @@
+ Me   Rivka 
+  REPO              #  TITLE             UPD  RV
+Review requested  is:pr is:open review-requeste…
+  acme/widgets    #12  Cache the pars…    1h  ? 
+  acme/gadgets     #7  [draft] Fix a …    3h    
+My PRs  is:pr is:open author:@me
+> rivka/dotfiles   #3  Tidy the shell…    1d    
+Involved  is:pr is:open involves:@me -author:@me
+  No pull requests

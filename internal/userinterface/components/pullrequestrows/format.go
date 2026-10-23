@@ -1,4 +1,6 @@
-package pullrequestlist
+// Package pullrequestrows draws pull request table rows: the column layout,
+// header and one row, shared by every screen that lists pull requests.
+package pullrequestrows
 
 import (
 	"fmt"
@@ -11,7 +13,7 @@ import (
 	"github.com/MikePors/strigidae/internal/github"
 )
 
-// pad right-pads s with spaces to width w (display columns).
+// pad right-pads text with spaces to width columns (display columns).
 func pad(text string, width int) string {
 	if count := width - ansi.StringWidth(text); count > 0 {
 		return text + strings.Repeat(" ", count)
@@ -19,7 +21,7 @@ func pad(text string, width int) string {
 	return text
 }
 
-// padLeft left-pads s with spaces to width w (display columns).
+// padLeft left-pads text with spaces to width columns (display columns).
 func padLeft(text string, width int) string {
 	if count := width - ansi.StringWidth(text); count > 0 {
 		return strings.Repeat(" ", count) + text
@@ -27,7 +29,7 @@ func padLeft(text string, width int) string {
 	return text
 }
 
-// relativeAge formats how long ago t was: "now", "5m", "3h", "2d", "4mo", "2y".
+// relativeAge formats how long ago timestamp was: "now", "5m", "3h", "2d", "4mo", "2y".
 func relativeAge(now, timestamp time.Time) string {
 	duration := now.Sub(timestamp)
 	switch {
@@ -56,8 +58,8 @@ func commentText(count int) string {
 }
 
 // reviewMark returns the one-column glyph and style for a review decision.
-func (view *View) reviewMark(decision github.ReviewDecision) (string, lipgloss.Style) {
-	styles := view.theme.PullRequestList
+func (table Table) reviewMark(decision github.ReviewDecision) (string, lipgloss.Style) {
+	styles := table.theme.PullRequestList
 	switch decision {
 	case github.ReviewDecisionApproved:
 		return "✓", styles.Approved
@@ -72,8 +74,8 @@ func (view *View) reviewMark(decision github.ReviewDecision) (string, lipgloss.S
 
 // checksMark returns the one-column glyph and style for the head commit's
 // check state; no checks gives a blank.
-func (view *View) checksMark(state github.CheckState) (string, lipgloss.Style) {
-	styles := view.theme.PullRequestList
+func (table Table) checksMark(state github.CheckState) (string, lipgloss.Style) {
+	styles := table.theme.PullRequestList
 	switch state {
 	case github.ChecksPassing:
 		return "✓", styles.ChecksPassing

@@ -103,6 +103,7 @@ type Theme struct {
 	// --- end diff pane ---
 
 	PullRequestList PullRequestListStyles // pull request tables
+	Dashboard       DashboardStyles       // the dashboard view
 }
 
 // Default returns the default theme for a dark terminal background.
@@ -198,5 +199,6 @@ func newTheme(palette Palette, roles Roles) Theme {
 		// --- end diff pane ---
 
 		PullRequestList: newPullRequestListStyles(roles),
+		Dashboard:       newDashboardStyles(roles),
 	}
 }

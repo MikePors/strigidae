@@ -11,11 +11,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
 	cliBrowser "github.com/cli/browser"
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/MikePors/strigidae/internal/config"
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/github/fake"
+	"github.com/MikePors/strigidae/internal/userinterface/keys"
+	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
 // harness records what run did with its injected dependencies.
@@ -23,12 +27,14 @@ type harness struct {
 	dependencies dependencies
 	clientHost   *string
 	started      *github.Repository
+	// application is what start received; nil until the TUI would start.
+	application *application
 }
 
 // newHarness returns deps whose checkout has the given remotes ("" key
 // "toplevel" absent means not a checkout).
-func newHarness(remotes map[string]string, checkout bool, clientErr error) harness {
-	testHarness := harness{clientHost: new(string), started: new(github.Repository)}
+func newHarness(remotes map[string]string, checkout bool, clientErr error) *harness {
+	testHarness := &harness{clientHost: new(string), started: new(github.Repository)}
 	testHarness.dependencies = dependencies{
 		getWorkingDirectory: func() (string, error) { return "/work", nil },
 		// Directories that don't exist, so tests never read a real config.
@@ -56,6 +62,7 @@ func newHarness(remotes map[string]string, checkout bool, clientErr error) harne
 		},
 		start: func(application application, _ io.Writer) error {
 			*testHarness.started = application.repository
+			testHarness.application = &application
 			return nil
 		},
 	}
@@ -146,6 +153,8 @@ func TestRunRepositorySelection(test *testing.T) {
 		wantHost       string
 		wantClient     bool // newClient should have been called
 		wantStderr     string
+		wantDashboard  bool // the first view is the dashboard, with no repository
+		wantNotice     string
 	}{
 		{
 			name: "inferred from origin", remotes: map[string]string{"origin": origin}, checkout: true,
@@ -180,12 +189,16 @@ func TestRunRepositorySelection(test *testing.T) {
 			wantCode: 2, wantStderr: "invalid repository",
 		},
 		{
-			name:     "outside a checkout",
-			wantCode: 1, wantStderr: "strig: run strig inside a GitHub repository checkout, or pass -R owner/repo\n",
+			name:       "outside a checkout starts the dashboard",
+			wantClient: true, wantDashboard: true,
 		},
 		{
-			name: "checkout without remotes", checkout: true,
-			wantCode: 1, wantStderr: "no GitHub remote",
+			name: "checkout without a remote starts the dashboard with a note", checkout: true,
+			wantClient: true, wantDashboard: true, wantNotice: "no GitHub remote here; showing the dashboard",
+		},
+		{
+			name: "-R in a checkout without a remote shows that repository", arguments: []string{"-R", "o/r"}, checkout: true,
+			wantRepository: "o/r", wantClient: true,
 		},
 		{
 			name: "not authenticated", remotes: map[string]string{"origin": origin}, checkout: true,
@@ -221,6 +234,18 @@ func TestRunRepositorySelection(test *testing.T) {
 			}
 			if got := harness.started.String(); testCase.wantRepository != "" && got != testCase.wantRepository {
 				test.Errorf("started on %q, want %q", got, testCase.wantRepository)
+			}
+			if testCase.wantDashboard {
+				if harness.application == nil || !harness.application.dashboard || !harness.started.IsZero() {
+					test.Errorf("want the dashboard without a repository, got %+v", harness.application)
+				}
+				if got := harness.application.notice; got != testCase.wantNotice {
+					test.Errorf("notice = %q, want %q", got, testCase.wantNotice)
+				}
+				return
+			}
+			if harness.application != nil && harness.application.dashboard {
+				test.Error("dashboard chosen although a repository was resolved")
 			}
 			if testCase.wantRepository == "" && !harness.started.IsZero() {
 				test.Errorf("TUI started on %v despite failure", *harness.started)
@@ -281,5 +306,42 @@ func TestRunConfig(test *testing.T) {
 				test.Errorf("tabs (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestFirstView(test *testing.T) {
+	tests := []struct {
+		name        string
+		application application
+		want        string
+	}{
+		{"dashboard outside a checkout", application{client: fake.New(), dashboard: true, config: config.Default()}, "Dashboard"},
+		{"pull request list inside one", application{client: fake.New(), repository: github.Repository{Owner: "o", Name: "r"}}, "o/r"},
+	}
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			testCase.application.theme = theme.Default()
+			if got := firstView(testCase.application).Title(); got != testCase.want {
+				test.Errorf("first view title = %q, want %q", got, testCase.want)
+			}
+		})
+	}
+}
+
+func TestDashboardShowsConfiguredTeammateTab(test *testing.T) {
+	path := filepath.Join(test.TempDir(), "config.yml")
+	body := "tabs:\n  - name: Me\n  - name: Rivka\n    user: rivka\n    sections:\n      - {name: Needs review, query: 'review-requested:{user}'}\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		test.Fatal(err)
+	}
+	harness := newHarness(nil, false, nil) // not a checkout
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"--config", path}, &stdout, &stderr, harness.dependencies); code != 0 {
+		test.Fatalf("exit code = %d (stderr: %s)", code, stderr.String())
+	}
+	view := firstView(*harness.application)
+	view.Update(keys.Message{Sequence: "g t"})
+	if out := ansi.Strip(view.Render(80, 10)); !strings.Contains(out, "Needs review") || !strings.Contains(out, "review-requested:rivka") {
+		test.Errorf("teammate tab does not show its section:\n%s", out)
 	}
 }

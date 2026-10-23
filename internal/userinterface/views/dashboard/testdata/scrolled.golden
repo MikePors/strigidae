@@ -1,0 +1,5 @@
+ Me   Rivka 
+  REPO              #  TITLE                         AUTHOR     UPD  CI  RV  CMT
+My PRs  is:pr is:open author:@me
+> rivka/dotfiles   #3  Tidy the shell prompt         octo-dev    1d            4
+Involved  is:pr is:open involves:@me -author:@me

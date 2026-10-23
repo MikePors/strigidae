@@ -1,0 +1,205 @@
+package pullrequestrows
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/charmbracelet/x/ansi"
+
+	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/userinterface/terminaltext"
+	"github.com/MikePors/strigidae/internal/userinterface/theme"
+)
+
+const (
+	gap                 = "  "
+	marker              = "> " // prefix of the selected row, so selection survives without colour
+	noMarker            = "  "
+	draftPrefix         = "[draft] "
+	minimumTitleColumns = 12
+	maximumAuthor       = 16
+	maximumRepository   = 24
+	minimumRepository   = 10 // narrowest the repository column shrinks to before it is dropped
+	ageColumns          = 4
+	reviewColumns       = 2
+	checksColumns       = 2
+	commentColumns      = 3
+)
+
+// MarkerColumns is the width of the selection marker in front of every row.
+// Callers subtract it from the width they give Layout.
+const MarkerColumns = len(marker)
+
+// Table draws rows with one theme and clock.
+type Table struct {
+	theme theme.Theme
+	now   func() time.Time
+	// repository adds a column with owner/name, for lists that span
+	// repositories.
+	repository bool
+}
+
+// New returns a Table. With showRepository, every row also shows the
+// repository the pull request belongs to.
+func New(activeTheme theme.Theme, now func() time.Time, showRepository bool) Table {
+	return Table{theme: activeTheme, now: now, repository: showRepository}
+}
+
+// Layout holds the column widths for one render. A zero width hides a column.
+type Layout struct {
+	repository, number, title, author, age, checks, review, comments int
+}
+
+// Layout sizes the columns for pullRequests in width columns (not counting the
+// selection marker).
+func (table Table) Layout(pullRequests []github.PullRequest, width int) Layout {
+	layout := Layout{age: ageColumns, checks: checksColumns, review: reviewColumns, comments: commentColumns, number: len("#")}
+	for _, pullRequest := range pullRequests {
+		layout.number = max(layout.number, len(fmt.Sprintf("#%d", pullRequest.Number)))
+		layout.author = min(maximumAuthor, max(layout.author, ansi.StringWidth(terminaltext.Clean(pullRequest.Author))))
+		if table.repository {
+			layout.repository = min(maximumRepository, max(layout.repository, ansi.StringWidth(terminaltext.Clean(pullRequest.Repository.String()))))
+		}
+	}
+	layout.author = max(layout.author, len("AUTHOR"))
+	if table.repository {
+		layout.repository = max(layout.repository, len("REPO"))
+	}
+	fits := func() bool { return layout.fixed() <= width-minimumTitleColumns }
+	// Drop the least important columns first on narrow terminals.
+	for _, drop := range []*int{&layout.author, &layout.comments, &layout.checks, &layout.review} {
+		if fits() {
+			break
+		}
+		*drop = 0
+	}
+	if table.repository {
+		table.narrowRepository(&layout, width, fits)
+	}
+	layout.title = max(1, width-layout.fixed())
+	return layout
+}
+
+// narrowRepository makes room for the title in a list that spans repositories:
+// shrink the repository column to a floor, then drop it, then drop the age.
+// The title takes whatever is left.
+func (table Table) narrowRepository(layout *Layout, width int, fits func() bool) {
+	if fits() {
+		return
+	}
+	excess := layout.fixed() - (width - minimumTitleColumns)
+	layout.repository = max(layout.repository-excess, min(layout.repository, minimumRepository))
+	if fits() {
+		return
+	}
+	layout.repository = 0
+	if !fits() {
+		layout.age = 0
+	}
+}
+
+// shortRepository fits owner/name into width columns, giving up the owner
+// before the name: "…/widgets" rather than "acme/wi…". text must be clean.
+func shortRepository(text string, width int) string {
+	if ansi.StringWidth(text) <= width {
+		return text
+	}
+	const ownerGap = "…/" // stands in for the owner
+	if slash := strings.LastIndex(text, "/"); slash >= 0 && width > ansi.StringWidth(ownerGap) {
+		// Keep the name and give up the owner, cutting the name only when it
+		// alone does not fit.
+		return ownerGap + ansi.Truncate(text[slash+1:], width-ansi.StringWidth(ownerGap), "…")
+	}
+	return ansi.Truncate(text, width, "…")
+}
+
+// fixed is the width of every column but the title, including the gaps.
+func (layout Layout) fixed() int {
+	width := layout.number + len(gap) // number, then the gap before the title
+	for _, count := range []int{layout.repository, layout.author, layout.age, layout.checks, layout.review, layout.comments} {
+		if count > 0 {
+			width += count + len(gap)
+		}
+	}
+	return width
+}
+
+// Header returns the column headings, padded to width.
+func (table Table) Header(layout Layout, width int) string {
+	return table.theme.PullRequestList.Header.Render(pad(noMarker+layout.row("REPO", "#", "TITLE", "AUTHOR", "UPD", "CI", "RV", "CMT"), width))
+}
+
+// row pads each cell to its column and joins them. Right-aligned columns are
+// numbers; the rest are left-aligned.
+func (layout Layout) row(repository, number, title, author, age, checks, review, comments string) string {
+	var cells []string
+	if layout.repository > 0 {
+		cells = append(cells, pad(repository, layout.repository))
+	}
+	cells = append(cells, padLeft(number, layout.number), pad(title, layout.title))
+	add := func(text string, width int, right bool) {
+		switch {
+		case width == 0:
+		case right:
+			cells = append(cells, padLeft(text, width))
+		default:
+			cells = append(cells, pad(text, width))
+		}
+	}
+	add(author, layout.author, false)
+	add(age, layout.age, true)
+	add(checks, layout.checks, false)
+	add(review, layout.review, false)
+	add(comments, layout.comments, true)
+	return strings.Join(cells, gap)
+}
+
+// Row draws one pull request, padded to width. The selected row is
+// highlighted and carries a marker.
+func (table Table) Row(layout Layout, pullRequest github.PullRequest, selected bool, width int) string {
+	title := terminaltext.Clean(pullRequest.Title)
+	if pullRequest.Draft {
+		title = draftPrefix + title
+	}
+	title = ansi.Truncate(title, layout.title, "…")
+	author := ansi.Truncate(terminaltext.Clean(pullRequest.Author), layout.author, "…")
+	repository := shortRepository(terminaltext.Clean(pullRequest.Repository.String()), layout.repository)
+	number := fmt.Sprintf("#%d", pullRequest.Number)
+	age := relativeAge(table.now(), pullRequest.UpdatedAt)
+	checksMark, checksStyle := table.checksMark(pullRequest.Checks)
+	reviewMark, reviewStyle := table.reviewMark(pullRequest.ReviewDecision)
+	comments := commentText(pullRequest.CommentCount)
+
+	if selected {
+		return table.theme.PullRequestList.Selected.Render(pad(marker+layout.row(repository, number, title, author, age, checksMark, reviewMark, comments), width))
+	}
+
+	styles := table.theme.PullRequestList
+	styledTitle := table.theme.Normal.Render(title)
+	if pullRequest.Draft && strings.HasPrefix(title, draftPrefix) {
+		styledTitle = styles.Draft.Render(draftPrefix) + table.theme.Normal.Render(strings.TrimPrefix(title, draftPrefix))
+	}
+	// Style after padding so the escape codes don't skew the widths.
+	var out []string
+	if layout.repository > 0 {
+		out = append(out, styles.Repository.Render(pad(repository, layout.repository)))
+	}
+	out = append(out, styles.Number.Render(padLeft(number, layout.number)), styledTitle+strings.Repeat(" ", max(0, layout.title-ansi.StringWidth(title))))
+	if layout.author > 0 {
+		out = append(out, styles.Author.Render(pad(author, layout.author)))
+	}
+	if layout.age > 0 {
+		out = append(out, styles.Age.Render(padLeft(age, layout.age)))
+	}
+	if layout.checks > 0 {
+		out = append(out, checksStyle.Render(pad(checksMark, layout.checks)))
+	}
+	if layout.review > 0 {
+		out = append(out, reviewStyle.Render(pad(reviewMark, layout.review)))
+	}
+	if layout.comments > 0 {
+		out = append(out, styles.Comments.Render(padLeft(comments, layout.comments)))
+	}
+	return noMarker + strings.Join(out, gap)
+}

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/google/go-cmp/cmp"
 
@@ -385,26 +384,6 @@ func TestHostileTextIsNeutralised(test *testing.T) {
 	}
 }
 
-func TestRelativeAge(test *testing.T) {
-	tests := []struct {
-		ago  time.Duration
-		want string
-	}{
-		{10 * time.Second, "now"},
-		{-time.Hour, "now"},
-		{5 * time.Minute, "5m"},
-		{3 * time.Hour, "3h"},
-		{49 * time.Hour, "2d"},
-		{45 * 24 * time.Hour, "1mo"},
-		{400 * 24 * time.Hour, "1y"},
-	}
-	for _, testCase := range tests {
-		if got := relativeAge(testNow, testNow.Add(-testCase.ago)); got != testCase.want {
-			test.Errorf("age %v = %q, want %q", testCase.ago, got, testCase.want)
-		}
-	}
-}
-
 func goldenPullRequests() []github.PullRequest {
 	pullRequests := makePullRequests(8)
 	pullRequests[0].Title = "Add a really quite extraordinarily long title that cannot possibly fit in the available columns"
@@ -557,32 +536,6 @@ func TestPagingNearTheEndLoadsMore(test *testing.T) {
 			press(view, "G")
 			if got := view.window.Cursor(); got != 44 {
 				test.Errorf("G after append: cursor = %d, want 44 (window must know the new row count)", got)
-			}
-		})
-	}
-}
-
-func TestChecksMark(test *testing.T) {
-	activeTheme := theme.Default()
-	view := newView(fakeWith(nil), nil)
-	tests := []struct {
-		state github.CheckState
-		glyph string
-		style lipgloss.Style
-	}{
-		{github.ChecksPassing, "✓", activeTheme.PullRequestList.ChecksPassing},
-		{github.ChecksFailing, "✗", activeTheme.PullRequestList.ChecksFailing},
-		{github.ChecksRunning, "●", activeTheme.PullRequestList.ChecksRunning},
-		{github.ChecksNone, "", activeTheme.PullRequestList.Comments},
-	}
-	for _, testCase := range tests {
-		test.Run(string(testCase.state), func(test *testing.T) {
-			glyph, style := view.checksMark(testCase.state)
-			if glyph != testCase.glyph {
-				test.Errorf("glyph = %q, want %q", glyph, testCase.glyph)
-			}
-			if got, want := style.Render("x"), testCase.style.Render("x"); got != want {
-				test.Errorf("style renders %q, want %q", got, want)
 			}
 		})
 	}

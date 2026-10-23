@@ -16,14 +16,30 @@ type application struct {
 	client     github.Client
 	repository github.Repository
 	theme      theme.Theme
-	// config holds the tabs and sections the dashboard (#12) will show.
+	// dashboard is set when strig runs without -R outside a checkout, or in one
+	// with no GitHub remote: there is no repository to list, so the first view
+	// is the dashboard of config.
+	dashboard bool
+	// notice is shown in the status bar when the dashboard starts, to say why
+	// it is showing.
+	notice string
+	// config holds the tabs and sections the dashboard shows.
 	config config.Config
 }
 
 // newApplication resolves the repository to show and a client for its host.
 func newApplication(repositoryFlag string, configuration config.Config, dependencies dependencies) (application, error) {
 	target, err := resolveTarget(repositoryFlag, dependencies)
-	if err != nil {
+	// With no repository there is no host either: the client uses the gh default.
+	// A checkout with no GitHub remote has nothing to list either, so it gets
+	// the dashboard too, with a note saying why.
+	noRemote := repositoryFlag == "" && errors.Is(err, gitrepository.ErrNoGitHubRemote)
+	dashboard := repositoryFlag == "" && (errors.Is(err, gitrepository.ErrNotCheckout) || noRemote)
+	notice := ""
+	if noRemote {
+		notice = "no GitHub remote here; showing the dashboard"
+	}
+	if err != nil && !dashboard {
 		return application{}, err
 	}
 	client, err := dependencies.newClient(target.Host)
@@ -33,11 +49,12 @@ func newApplication(repositoryFlag string, configuration config.Config, dependen
 	if err != nil {
 		return application{}, err
 	}
-	return application{client: client, repository: target.Repository, theme: theme.Default(), config: configuration}, nil
+	return application{client: client, repository: target.Repository, theme: theme.Default(), dashboard: dashboard, notice: notice, config: configuration}, nil
 }
 
 // resolveTarget decides which repository to show: -R if given, else the
-// current checkout's remote.
+// current checkout's remote. Outside a checkout it fails with
+// gitrepository.ErrNotCheckout.
 func resolveTarget(repositoryFlag string, dependencies dependencies) (gitrepository.Remote, error) {
 	if repositoryFlag != "" {
 		repository, err := github.ParseRepository(repositoryFlag)

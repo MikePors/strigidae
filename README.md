@@ -24,6 +24,10 @@ Or install directly:
 go install github.com/MikePors/strigidae/cmd/strig@latest
 ```
 
+## Dashboard
+
+Run `strig` outside a git checkout, or in one with no GitHub remote (and without `-R`), to see the dashboard: one tab per entry in the config (by default a single "Me" tab), each tab showing its sections stacked, with pull requests from any repository. `g t` / `g T` switch tabs, `]` / `[` jump between sections, `enter` opens the pull request, `o` opens it in the browser and `R` refreshes the tab. Inside a checkout with a GitHub remote, or with `-R owner/repo`, strig shows that repository's pull requests instead. A checkout whose remote is on a host strig doesn't know (another forge, or a GitHub Enterprise host you are not signed in to) still exits with an error; pass `-R owner/repo` there.
+
 ## Clipboard
 
 `:copy-filename` copies the selected file's path using the OSC 52 terminal escape, which also works over SSH. Terminals that ignore OSC 52 copy nothing. Inside tmux, add `set -g set-clipboard on` to `~/.tmux.conf`.

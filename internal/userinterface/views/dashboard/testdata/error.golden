@@ -1,0 +1,8 @@
+ Me   Rivka 
+  REPO  #  TITLE                                       AUTHOR   UPD  CI  RV  CMT
+Review requested  is:pr is:open review-requested:@me
+  Could not load: search pull requests: not found
+My PRs  is:pr is:open author:@me
+  Could not load: search pull requests: not found
+Involved  is:pr is:open involves:@me -author:@me
+  Could not load: search pull requests: not found
