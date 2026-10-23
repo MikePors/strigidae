@@ -33,40 +33,40 @@ type Section struct {
 	// Query is the final search query, with the tab's user already
 	// substituted for {user}.
 	Query string
-	// Limit is the most PRs to fetch, 1 to MaxLimit.
+	// Limit is the most PRs to fetch, 1 to MaximumLimit.
 	Limit int
 	Sort  Sort
 	Order Order
 }
 
 // Path returns the config file location: $XDG_CONFIG_HOME/strig/config.yml,
-// falling back to ~/.config/strig/config.yml. getenv and home are injected
+// falling back to ~/.config/strig/config.yml. getEnvironment and home are injected
 // for tests.
-func Path(getenv func(string) string, home func() (string, error)) (string, error) {
-	if dir := getenv("XDG_CONFIG_HOME"); dir != "" && filepath.IsAbs(dir) {
-		return filepath.Join(dir, "strig", "config.yml"), nil
+func Path(getEnvironment func(string) string, home func() (string, error)) (string, error) {
+	if directory := getEnvironment("XDG_CONFIG_HOME"); directory != "" && filepath.IsAbs(directory) {
+		return filepath.Join(directory, "strig", "config.yml"), nil
 	}
-	h, err := home()
+	homeDirectory, err := home()
 	if err != nil {
 		return "", fmt.Errorf("find home directory: %w", err)
 	}
-	return filepath.Join(h, ".config", "strig", "config.yml"), nil
+	return filepath.Join(homeDirectory, ".config", "strig", "config.yml"), nil
 }
 
 // Load reads and validates the file at path. A missing file yields Default
 // unless mustExist is set (the user named the file explicitly, so a typo
 // shouldn't silently fall back). Problems in the file are returned as *Error.
 func Load(path string, mustExist bool) (Config, error) {
-	f, err := os.Open(path)
+	file, err := os.Open(path)
 	if errors.Is(err, fs.ErrNotExist) && !mustExist {
 		return Default(), nil
 	}
 	if err != nil {
 		return Config{}, fmt.Errorf("read config: %w", err)
 	}
-	defer func() { _ = f.Close() }() // read-only
+	defer func() { _ = file.Close() }() // read-only
 	// One byte over the limit is enough for Parse to refuse the file.
-	data, err := io.ReadAll(io.LimitReader(f, MaxFileSize+1))
+	data, err := io.ReadAll(io.LimitReader(file, MaximumFileSize+1))
 	if err != nil {
 		return Config{}, fmt.Errorf("read config: %w", err)
 	}

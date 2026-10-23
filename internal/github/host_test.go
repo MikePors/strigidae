@@ -2,7 +2,7 @@ package github
 
 import "testing"
 
-func TestNormalizeHost(t *testing.T) {
+func TestNormalizeHost(test *testing.T) {
 	tests := []struct{ in, want string }{
 		{"github.com", "github.com"},
 		{"GitHub.COM", "github.com"},
@@ -13,9 +13,9 @@ func TestNormalizeHost(t *testing.T) {
 		{"::1", "::1"},
 		{"", ""},
 	}
-	for _, tt := range tests {
-		if got := NormalizeHost(tt.in); got != tt.want {
-			t.Errorf("NormalizeHost(%q) = %q, want %q", tt.in, got, tt.want)
+	for _, testCase := range tests {
+		if got := NormalizeHost(testCase.in); got != testCase.want {
+			test.Errorf("NormalizeHost(%q) = %q, want %q", testCase.in, got, testCase.want)
 		}
 	}
 }

@@ -89,18 +89,18 @@ type Hunk struct {
 
 // Header reconstructs the hunk header line.
 func (hunk Hunk) Header() string {
-	hunkString := "@@ -" + rng(hunk.OldStart, hunk.OldLines) + " +" + rng(hunk.NewStart, hunk.NewLines) + " @@"
+	hunkString := "@@ -" + rangeText(hunk.OldStart, hunk.OldLines) + " +" + rangeText(hunk.NewStart, hunk.NewLines) + " @@"
 	if hunk.Section != "" {
 		hunkString += " " + hunk.Section
 	}
 	return hunkString
 }
 
-func rng(start, n int) string {
-	if n == 1 {
+func rangeText(start, count int) string {
+	if count == 1 {
 		return strconv.Itoa(start)
 	}
-	return strconv.Itoa(start) + "," + strconv.Itoa(n)
+	return strconv.Itoa(start) + "," + strconv.Itoa(count)
 }
 
 // File is the diff of a single file.

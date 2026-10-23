@@ -7,13 +7,13 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-// MaxFileSize is the largest config file strig will read.
-const MaxFileSize = 1 << 20
+// MaximumFileSize is the largest config file strig will read.
+const MaximumFileSize = 1 << 20
 
 // topLevel maps each top-level key to the function that decodes it. Another
 // feature adding a key (a theme, merge defaults) adds an entry here and a
 // field on Config.
-var topLevel = map[string]func(p *parser, n *yaml.Node, c *Config){
+var topLevel = map[string]func(nodeParser *parser, node *yaml.Node, config *Config){
 	"tabs": (*parser).tabs,
 }
 
@@ -25,99 +25,99 @@ var (
 // Parse validates data, read from the file named path (used only in errors).
 // Empty data yields Default.
 func Parse(path string, data []byte) (Config, error) {
-	if len(data) > MaxFileSize {
-		return Config{}, &Error{Path: path, Msg: fmt.Sprintf("config file is too large (limit %d bytes)", MaxFileSize)}
+	if len(data) > MaximumFileSize {
+		return Config{}, &Error{Path: path, Message: fmt.Sprintf("config file is too large (limit %d bytes)", MaximumFileSize)}
 	}
-	doc, err := decodeSingle(path, data)
+	document, err := decodeSingle(path, data)
 	if err != nil {
 		return Config{}, err
 	}
-	if doc == nil {
+	if document == nil {
 		return Default(), nil
 	}
 
-	p := &parser{path: path}
-	p.rejectAliases(doc)
-	var c Config
-	if p.err == nil {
-		p.mapping(doc.Content[0], "the config file", func(key string, v *yaml.Node) {
-			topLevel[key](p, v, &c)
+	nodeParser := &parser{path: path}
+	nodeParser.rejectAliases(document)
+	var config Config
+	if nodeParser.err == nil {
+		nodeParser.mapping(document.Content[0], "the config file", func(key string, node *yaml.Node) {
+			topLevel[key](nodeParser, node, &config)
 		}, keys(topLevel))
 	}
-	if p.err != nil {
-		return Config{}, p.err
+	if nodeParser.err != nil {
+		return Config{}, nodeParser.err
 	}
-	if c.Tabs == nil {
-		c.Tabs = Default().Tabs
+	if config.Tabs == nil {
+		config.Tabs = Default().Tabs
 	}
-	return c, nil
+	return config, nil
 }
 
-func (p *parser) tabs(n *yaml.Node, c *Config) {
-	c.Tabs = uniqueList(p, n, "tabs", p.tab, "duplicate tab name %q")
+func (parser *parser) tabs(node *yaml.Node, config *Config) {
+	config.Tabs = uniqueList(parser, node, "tabs", parser.tab, "duplicate tab name %q")
 }
 
-func (p *parser) tab(n *yaml.Node) (Tab, string) {
-	t := Tab{User: Me}
+func (parser *parser) tab(node *yaml.Node) (Tab, string) {
+	tab := Tab{User: Me}
 	var sections *yaml.Node
-	p.mapping(n, "a tab", func(key string, v *yaml.Node) {
+	parser.mapping(node, "a tab", func(key string, node *yaml.Node) {
 		switch key {
 		case "name":
-			t.Name = p.str(v, "tab name")
+			tab.Name = parser.stringValue(node, "tab name")
 		case "user":
-			t.User = p.str(v, "user")
-			if p.err == nil && t.User != Me && !login.MatchString(t.User) {
-				p.fail(v, "user %q is not a GitHub login (letters, digits and hyphens) or %q", t.User, Me)
+			tab.User = parser.stringValue(node, "user")
+			if parser.err == nil && tab.User != Me && !login.MatchString(tab.User) {
+				parser.fail(node, "user %q is not a GitHub login (letters, digits and hyphens) or %q", tab.User, Me)
 			}
 		case "sections":
-			sections = v
+			sections = node
 		}
 	}, []string{"name", "user", "sections"})
-	if p.err == nil && t.Name == "" {
-		p.fail(n, "tab is missing a name")
+	if parser.err == nil && tab.Name == "" {
+		parser.fail(node, "tab is missing a name")
 	}
-	if p.err != nil {
-		return t, t.Name
+	if parser.err != nil {
+		return tab, tab.Name
 	}
 	if sections == nil {
-		t.Sections = defaultSections()
+		tab.Sections = defaultSections()
 	} else {
-		t.Sections = uniqueList(p, sections, "sections", p.section, "duplicate section name %q in this tab")
+		tab.Sections = uniqueList(parser, sections, "sections", parser.section, "duplicate section name %q in this tab")
 	}
-	t.resolve()
-	return t, t.Name
+	tab.resolve()
+	return tab, tab.Name
 }
 
-func (p *parser) section(n *yaml.Node) (Section, string) {
-	var s Section
-	p.mapping(n, "a section", func(key string, v *yaml.Node) {
+func (parser *parser) section(node *yaml.Node) (Section, string) {
+	var section Section
+	parser.mapping(node, "a section", func(key string, node *yaml.Node) {
 		switch key {
 		case "name":
-			s.Name = p.str(v, "section name")
+			section.Name = parser.stringValue(node, "section name")
 		case "query":
-			q := p.str(v, "query")
-			if p.err != nil {
+			query := parser.stringValue(node, "query")
+			if parser.err != nil {
 				return
 			}
-			norm, err := normalizeQuery(q)
+			normalized, err := normalizeQuery(query)
 			if err != nil {
-				p.fail(v, "%s", err)
+				parser.fail(node, "%s", err)
 				return
 			}
-			s.Query = norm
+			section.Query = normalized
 		case "limit":
-			s.Limit = p.int(v, "limit", 1, MaxLimit)
+			section.Limit = parser.integer(node, "limit", 1, MaximumLimit)
 		case "sort":
-			s.Sort = Sort(p.oneOf(v, "sort", sortNames))
+			section.Sort = Sort(parser.oneOf(node, "sort", sortNames))
 		case "order":
-			s.Order = Order(p.oneOf(v, "order", orderNames))
+			section.Order = Order(parser.oneOf(node, "order", orderNames))
 		}
 	}, []string{"name", "query", "limit", "sort", "order"})
-	if p.err == nil && s.Name == "" {
-		p.fail(n, "section is missing a name")
+	if parser.err == nil && section.Name == "" {
+		parser.fail(node, "section is missing a name")
 	}
-	if p.err == nil && s.Query == "" {
-		p.fail(n, "section %q is missing a query", s.Name)
+	if parser.err == nil && section.Query == "" {
+		parser.fail(node, "section %q is missing a query", section.Name)
 	}
-	return s, s.Name
+	return section, section.Name
 }

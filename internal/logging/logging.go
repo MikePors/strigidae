@@ -11,16 +11,16 @@ import (
 )
 
 // Path returns the log file location: $XDG_STATE_HOME/strig/strig.log, falling
-// back to ~/.local/state/strig/strig.log. getenv and home are injected for tests.
-func Path(getenv func(string) string, home func() (string, error)) (string, error) {
-	if dir := getenv("XDG_STATE_HOME"); dir != "" && filepath.IsAbs(dir) {
-		return filepath.Join(dir, "strig", "strig.log"), nil
+// back to ~/.local/state/strig/strig.log. getEnvironment and home are injected for tests.
+func Path(getEnvironment func(string) string, home func() (string, error)) (string, error) {
+	if directory := getEnvironment("XDG_STATE_HOME"); directory != "" && filepath.IsAbs(directory) {
+		return filepath.Join(directory, "strig", "strig.log"), nil
 	}
-	h, err := home()
+	homeDirectory, err := home()
 	if err != nil {
 		return "", fmt.Errorf("find home directory: %w", err)
 	}
-	return filepath.Join(h, ".local", "state", "strig", "strig.log"), nil
+	return filepath.Join(homeDirectory, ".local", "state", "strig", "strig.log"), nil
 }
 
 // Open creates the log file (and its directory) and returns a logger writing
@@ -29,36 +29,36 @@ func Open(path string) (*slog.Logger, *os.File, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, nil, fmt.Errorf("create log directory: %w", err)
 	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return nil, nil, fmt.Errorf("open log file: %w", err)
 	}
-	return slog.New(slog.NewTextHandler(f, nil)), f, nil
+	return slog.New(slog.NewTextHandler(file, nil)), file, nil
 }
 
-// Start opens the log file at Path(getenv, home) and returns a logger writing
+// Start opens the log file at Path(getEnvironment, home) and returns a logger writing
 // to it and a func that closes the file. Logging is never fatal: if the file
 // can't be opened, Start returns the error along with a logger that discards
 // everything and a no-op close, so the logger and close are always usable.
-func Start(getenv func(string) string, home func() (string, error)) (*slog.Logger, func(), error) {
-	path, err := Path(getenv, home)
+func Start(getEnvironment func(string) string, home func() (string, error)) (*slog.Logger, func(), error) {
+	path, err := Path(getEnvironment, home)
 	if err == nil {
-		var l *slog.Logger
-		var f *os.File
-		if l, f, err = Open(path); err == nil {
-			return l, func() { _ = f.Close() }, nil
+		var logger *slog.Logger
+		var file *os.File
+		if logger, file, err = Open(path); err == nil {
+			return logger, func() { _ = file.Close() }, nil
 		}
 	}
 	return slog.New(slog.NewTextHandler(io.Discard, nil)), func() {}, err
 }
 
-// Install routes the standard library's default loggers to l, so a
+// Install routes the standard library's default loggers to logger, so a
 // dependency calling log.Printf or slog.Info can never write to stderr and
-// corrupt the screen. slog.SetDefault also sends the log package through l's
+// corrupt the screen. slog.SetDefault also sends the log package through logger's
 // handler, so those lines get a timestamp and level. This is the one place the
 // program mutates the global loggers; pass a logger with an io.Discard
 // handler to silence them. The other allowed global mutations are listed in
 // the root CLAUDE.md.
-func Install(l *slog.Logger) {
-	slog.SetDefault(l)
+func Install(logger *slog.Logger) {
+	slog.SetDefault(logger)
 }

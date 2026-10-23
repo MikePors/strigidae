@@ -10,71 +10,71 @@ import (
 
 	"github.com/MikePors/strigidae/internal/config"
 	"github.com/MikePors/strigidae/internal/github"
-	"github.com/MikePors/strigidae/internal/github/api"
-	"github.com/MikePors/strigidae/internal/gitrepo"
+	"github.com/MikePors/strigidae/internal/github/network"
+	"github.com/MikePors/strigidae/internal/gitrepository"
 	"github.com/MikePors/strigidae/internal/logging"
 	"github.com/MikePors/strigidae/internal/version"
 )
 
-// deps are the side effects run needs, injected so tests exercise flag
+// dependencies are the side effects run needs, injected so tests exercise flag
 // handling and repository inference without a checkout, the network or a
 // terminal.
-type deps struct {
-	getwd  func() (string, error)
-	getenv func(string) string
-	home   func() (string, error)
-	runner gitrepo.Runner
+type dependencies struct {
+	getWorkingDirectory func() (string, error)
+	getEnvironment      func(string) string
+	home                func() (string, error)
+	runner              gitrepository.Runner
 	// knownHost reports whether host is a GitHub host gh can talk to.
 	knownHost func(host string) bool
 	newClient func(host string) (github.Client, error)
-	start     func(a app, stderr io.Writer) error
+	start     func(application application, stderr io.Writer) error
 }
 
-func realDeps() deps {
-	return deps{
-		getwd:     os.Getwd,
-		getenv:    os.Getenv,
-		home:      os.UserHomeDir,
-		runner:    gitrepo.ExecRunner,
-		knownHost: api.KnownHost,
+func realDependencies() dependencies {
+	return dependencies{
+		getWorkingDirectory: os.Getwd,
+		getEnvironment:      os.Getenv,
+		home:                os.UserHomeDir,
+		runner:              gitrepository.ExecRunner,
+		knownHost:           network.KnownHost,
 		newClient: func(host string) (github.Client, error) {
-			c, err := api.New(api.Options{Host: host})
+			client, err := network.New(network.Options{Host: host})
 			if err != nil {
-				return nil, err // not c: a nil *Client would be a non-nil interface
+				return nil, err // not client: a nil *Client would be a non-nil interface
 			}
-			return c, nil
+			return client, nil
 		},
-		start: runTUI,
+		start: runTerminalInterface,
 	}
 }
 
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr, realDeps()))
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr, realDependencies()))
 }
 
-func run(args []string, stdout, stderr io.Writer, d deps) int {
-	return report(stderr, execute(args, stdout, stderr, d))
+func run(arguments []string, stdout, stderr io.Writer, dependencies dependencies) int {
+	return report(stderr, execute(arguments, stdout, stderr, dependencies))
 }
 
-func execute(args []string, stdout, stderr io.Writer, d deps) error {
-	fs := flag.NewFlagSet("strig", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	showVersion := fs.Bool("version", false, "print version and exit")
-	showLogPath := fs.Bool("log-path", false, "print the log file path and exit")
-	showConfigPath := fs.Bool("config-path", false, "print the config file path and exit")
-	configFlag := fs.String("config", "", "config file `path` (default: $XDG_CONFIG_HOME/strig/config.yml)")
-	repoFlag := fs.String("R", "", "repository to show as `owner/repo` (default: the current checkout's upstream or origin remote)")
-	if err := fs.Parse(args); err != nil {
+func execute(arguments []string, stdout, stderr io.Writer, dependencies dependencies) error {
+	flags := flag.NewFlagSet("strig", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	showVersion := flags.Bool("version", false, "print version and exit")
+	showLogPath := flags.Bool("log-path", false, "print the log file path and exit")
+	showConfigPath := flags.Bool("config-path", false, "print the config file path and exit")
+	configFlag := flags.String("config", "", "config file `path` (default: $XDG_CONFIG_HOME/strig/config.yml)")
+	repositoryFlag := flags.String("R", "", "repository to show as `owner/repo` (default: the current checkout's upstream or origin remote)")
+	if err := flags.Parse(arguments); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return err
 		}
 		return &usageError{} // the flag package has printed the problem and usage
 	}
-	if fs.NArg() > 0 {
-		return &usageError{fmt.Sprintf("unexpected argument %q (did you mean -R %s?)", fs.Arg(0), fs.Arg(0))}
+	if flags.NArg() > 0 {
+		return &usageError{fmt.Sprintf("unexpected argument %q (did you mean -R %s?)", flags.Arg(0), flags.Arg(0))}
 	}
 
-	configPath, configErr := configLocation(*configFlag, d)
+	configPath, configErr := configLocation(*configFlag, dependencies)
 
 	switch {
 	case *showVersion:
@@ -95,26 +95,26 @@ func execute(args []string, stdout, stderr io.Writer, d deps) error {
 	if configErr != nil {
 		return configErr
 	}
-	cfg, err := config.Load(configPath, *configFlag != "")
+	configuration, err := config.Load(configPath, *configFlag != "")
 	if err != nil {
 		return err
 	}
-	a, err := newApp(*repoFlag, cfg, d)
+	application, err := newApplication(*repositoryFlag, configuration, dependencies)
 	if err != nil {
 		return err
 	}
-	return d.start(a, stderr)
+	return dependencies.start(application, stderr)
 }
 
 // configLocation is the --config path if given, else the default location.
-func configLocation(flagValue string, d deps) (string, error) {
+func configLocation(flagValue string, dependencies dependencies) (string, error) {
 	if flagValue != "" {
 		return flagValue, nil
 	}
-	return config.Path(d.getenv, d.home)
+	return config.Path(dependencies.getEnvironment, dependencies.home)
 }
 
-func printLine(stdout io.Writer, s string) error {
-	_, err := fmt.Fprintln(stdout, s)
+func printLine(stdout io.Writer, text string) error {
+	_, err := fmt.Fprintln(stdout, text)
 	return err
 }

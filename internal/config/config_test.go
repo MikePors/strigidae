@@ -10,19 +10,19 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func sec(name, query string, limit int, sort Sort, order Order) Section {
+func newSection(name, query string, limit int, sort Sort, order Order) Section {
 	return Section{Name: name, Query: query, Limit: limit, Sort: sort, Order: order}
 }
 
 func defaultsFor(user string) []Section {
 	return []Section{
-		sec("Review requested", "is:pr is:open review-requested:"+user, 30, SortUpdated, OrderDesc),
-		sec("My PRs", "is:pr is:open author:"+user, 30, SortUpdated, OrderDesc),
-		sec("Involved", "is:pr is:open involves:"+user+" -author:"+user, 30, SortUpdated, OrderDesc),
+		newSection("Review requested", "is:pr is:open review-requested:"+user, 30, SortUpdated, OrderDescending),
+		newSection("My PRs", "is:pr is:open author:"+user, 30, SortUpdated, OrderDescending),
+		newSection("Involved", "is:pr is:open involves:"+user+" -author:"+user, 30, SortUpdated, OrderDescending),
 	}
 }
 
-func TestParseValid(t *testing.T) {
+func TestParseValid(test *testing.T) {
 	tests := []struct {
 		name string
 		yaml string
@@ -49,9 +49,9 @@ func TestParseValid(t *testing.T) {
       - {name: Type, query: 'type:pr label:x'}
 `,
 			Config{Tabs: []Tab{{Name: "A", User: "a", Sections: []Section{
-				sec("Bug", "is:pr label:bug author:a", 30, SortUpdated, OrderDesc),
-				sec("Has", "author:a IS:PR", 30, SortUpdated, OrderDesc),
-				sec("Type", "type:pr label:x", 30, SortUpdated, OrderDesc),
+				newSection("Bug", "is:pr label:bug author:a", 30, SortUpdated, OrderDescending),
+				newSection("Has", "author:a IS:PR", 30, SortUpdated, OrderDescending),
+				newSection("Type", "type:pr label:x", 30, SortUpdated, OrderDescending),
 			}}}},
 		},
 		{
@@ -79,25 +79,25 @@ func TestParseValid(t *testing.T) {
         query: is:pr label:bug
 `,
 			Config{Tabs: []Tab{{Name: "Bob", User: "bob", Sections: []Section{
-				sec("Theirs", "is:pr author:bob -author:bob-bot", 5, SortComments, OrderAsc),
-				sec("Plain", "is:pr label:bug", 30, SortUpdated, OrderDesc),
+				newSection("Theirs", "is:pr author:bob -author:bob-bot", 5, SortComments, OrderAscending),
+				newSection("Plain", "is:pr label:bug", 30, SortUpdated, OrderDescending),
 			}}}},
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := Parse("c.yml", []byte(tt.yaml))
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			got, err := Parse("c.yml", []byte(testCase.yaml))
 			if err != nil {
-				t.Fatalf("Parse: %v", err)
+				test.Fatalf("Parse: %v", err)
 			}
-			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Errorf("config mismatch (-want +got):\n%s", diff)
+			if diff := cmp.Diff(testCase.want, got); diff != "" {
+				test.Errorf("config mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
 }
 
-func TestParseErrors(t *testing.T) {
+func TestParseErrors(test *testing.T) {
 	tests := []struct {
 		name string
 		yaml string
@@ -114,7 +114,7 @@ func TestParseErrors(t *testing.T) {
 		{"merge key", "tabs:\n  - <<: {name: A}\n", "c.yml:2: YAML aliases and merge keys are not supported"},
 		{"quoted limit", "tabs:\n  - name: A\n    sections:\n      - {name: S, query: q, limit: '5'}\n", "c.yml:4: limit must be a whole number from 1 to 100"},
 		{"null name", "tabs:\n  - name:\n", "c.yml:2: tab name must be a non-empty text value"},
-		{"too large", "# " + strings.Repeat("x", MaxFileSize) + "\n", "c.yml: config file is too large (limit 1048576 bytes)"},
+		{"too large", "# " + strings.Repeat("x", MaximumFileSize) + "\n", "c.yml: config file is too large (limit 1048576 bytes)"},
 		{"duplicate section", "tabs:\n  - name: A\n    sections:\n      - {name: S, query: q}\n      - {name: ' S ', query: r}\n", `c.yml:5: duplicate section name "S" in this tab`},
 		{"duplicate tab after trimming", "tabs:\n  - name: A\n  - name: ' A'\n", `c.yml:3: duplicate tab name "A"`},
 		{"sort in query", "tabs:\n  - name: A\n    sections:\n      - {name: S, query: 'is:pr Sort:created-asc'}\n", "c.yml:4: query must not contain sort:; use the sort and order keys"},
@@ -136,83 +136,83 @@ func TestParseErrors(t *testing.T) {
 		{"bad order", "tabs:\n  - name: A\n    sections:\n      - {name: S, query: q, order: up}\n", `c.yml:4: order "up" is not one of: asc, desc`},
 		{"unknown variable", "tabs:\n  - name: A\n    sections:\n      - {name: S, query: 'author:{usr}'}\n", "c.yml:4: unknown variable {usr} in query (the only variable is {user})"},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := Parse("c.yml", []byte(tt.yaml))
-			var ce *Error
-			if !errors.As(err, &ce) {
-				t.Fatalf("err = %v, want *Error", err)
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			_, err := Parse("c.yml", []byte(testCase.yaml))
+			var configError *Error
+			if !errors.As(err, &configError) {
+				test.Fatalf("err = %v, want *Error", err)
 			}
-			if diff := cmp.Diff(tt.want, err.Error()); diff != "" {
-				t.Errorf("message mismatch (-want +got):\n%s", diff)
+			if diff := cmp.Diff(testCase.want, err.Error()); diff != "" {
+				test.Errorf("message mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
 }
 
-func TestLoad(t *testing.T) {
-	dir := t.TempDir()
-	good := filepath.Join(dir, "good.yml")
+func TestLoad(test *testing.T) {
+	directory := test.TempDir()
+	good := filepath.Join(directory, "good.yml")
 	if err := os.WriteFile(good, []byte("tabs:\n  - name: Only\n    user: zed\n"), 0o600); err != nil {
-		t.Fatal(err)
+		test.Fatal(err)
 	}
-	missing := filepath.Join(dir, "missing.yml")
+	missing := filepath.Join(directory, "missing.yml")
 
-	t.Run("valid file", func(t *testing.T) {
+	test.Run("valid file", func(test *testing.T) {
 		got, err := Load(good, true)
 		if err != nil {
-			t.Fatal(err)
+			test.Fatal(err)
 		}
 		want := Config{Tabs: []Tab{{Name: "Only", User: "zed", Sections: defaultsFor("zed")}}}
 		if diff := cmp.Diff(want, got); diff != "" {
-			t.Errorf("(-want +got):\n%s", diff)
+			test.Errorf("(-want +got):\n%s", diff)
 		}
 	})
-	t.Run("missing file gives defaults", func(t *testing.T) {
+	test.Run("missing file gives defaults", func(test *testing.T) {
 		got, err := Load(missing, false)
 		if err != nil {
-			t.Fatal(err)
+			test.Fatal(err)
 		}
 		if diff := cmp.Diff(Default(), got); diff != "" {
-			t.Errorf("(-want +got):\n%s", diff)
+			test.Errorf("(-want +got):\n%s", diff)
 		}
 	})
-	t.Run("missing explicit file is an error", func(t *testing.T) {
+	test.Run("missing explicit file is an error", func(test *testing.T) {
 		if _, err := Load(missing, true); !errors.Is(err, os.ErrNotExist) {
-			t.Errorf("err = %v, want ErrNotExist", err)
+			test.Errorf("err = %v, want ErrNotExist", err)
 		}
 	})
 }
 
-func TestExampleParses(t *testing.T) {
+func TestExampleParses(test *testing.T) {
 	got, err := Load(filepath.Join("..", "..", "docs", "config.example.yml"), true)
 	if err != nil {
-		t.Fatal(err)
+		test.Fatal(err)
 	}
 	if len(got.Tabs) != 3 || got.Tabs[1].User != "alice" || len(got.Tabs[2].Sections) != 2 {
-		t.Errorf("unexpected example config: %+v", got)
+		test.Errorf("unexpected example config: %+v", got)
 	}
 }
 
-func TestPath(t *testing.T) {
+func TestPath(test *testing.T) {
 	home := func() (string, error) { return "/home/u", nil }
 	tests := []struct {
-		name string
-		env  string
-		want string
+		name        string
+		environment string
+		want        string
 	}{
 		{"xdg", "/x/cfg", "/x/cfg/strig/config.yml"},
 		{"unset", "", "/home/u/.config/strig/config.yml"},
 		{"relative xdg ignored", "rel", "/home/u/.config/strig/config.yml"},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := Path(func(string) string { return tt.env }, home)
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			got, err := Path(func(string) string { return testCase.environment }, home)
 			if err != nil {
-				t.Fatal(err)
+				test.Fatal(err)
 			}
-			if got != tt.want {
-				t.Errorf("Path = %q, want %q", got, tt.want)
+			if got != testCase.want {
+				test.Errorf("Path = %q, want %q", got, testCase.want)
 			}
 		})
 	}

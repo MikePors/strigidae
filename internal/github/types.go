@@ -2,14 +2,14 @@ package github
 
 import "time"
 
-// PRState is the lifecycle state of a pull request.
-type PRState string
+// PullRequestState is the lifecycle state of a pull request.
+type PullRequestState string
 
 // Pull request states.
 const (
-	PRStateOpen   PRState = "OPEN"
-	PRStateClosed PRState = "CLOSED"
-	PRStateMerged PRState = "MERGED"
+	PullRequestStateOpen   PullRequestState = "OPEN"
+	PullRequestStateClosed PullRequestState = "CLOSED"
+	PullRequestStateMerged PullRequestState = "MERGED"
 )
 
 // ReviewDecision is the aggregate review outcome. Empty means no decision
@@ -26,16 +26,16 @@ const (
 
 // PullRequest is the summary shown in lists.
 type PullRequest struct {
-	// ID is the GraphQL node ID, needed by mutations that target the pull request.
-	ID string
+	// Identifier is the GraphQL node ID, needed by mutations that target the pull request.
+	Identifier string
 	// HeadSHA is the head commit; review comments are anchored to it, and a
 	// change since a diff was loaded means that diff is stale.
 	HeadSHA        string
-	Repo           Repo
+	Repository     Repository
 	Number         int
 	Title          string
 	Author         string
-	State          PRState
+	State          PullRequestState
 	Draft          bool
 	ReviewDecision ReviewDecision
 	// Checks is the combined check state of the head commit.
@@ -45,8 +45,8 @@ type PullRequest struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	URL          string
-	HeadRef      string
-	BaseRef      string
+	HeadBranch   string
+	BaseBranch   string
 }
 
 // Label is a repository label.
@@ -116,7 +116,7 @@ const (
 // state ReviewPending are the viewer's own unsubmitted drafts; they stay in
 // the list and have a zero SubmittedAt, so sort or filter them deliberately.
 type Review struct {
-	ID          string
+	Identifier  string
 	Author      string
 	State       ReviewState
 	Body        string
@@ -155,8 +155,8 @@ const (
 )
 
 // Emoji returns the emoji for the reaction, or the raw content if unknown.
-func (c ReactionContent) Emoji() string {
-	switch c {
+func (content ReactionContent) Emoji() string {
+	switch content {
 	case ReactionThumbsUp:
 		return "👍"
 	case ReactionThumbsDown:
@@ -174,7 +174,7 @@ func (c ReactionContent) Emoji() string {
 	case ReactionEyes:
 		return "👀"
 	default:
-		return string(c)
+		return string(content)
 	}
 }
 
@@ -187,12 +187,12 @@ type ReactionSummary struct {
 
 // IssueComment is a top-level comment on a pull request.
 type IssueComment struct {
-	ID        string
-	Author    string
-	Body      string
-	CreatedAt time.Time
-	URL       string
-	Reactions []ReactionSummary
+	Identifier string
+	Author     string
+	Body       string
+	CreatedAt  time.Time
+	URL        string
+	Reactions  []ReactionSummary
 }
 
 // DiffSide says which side of a split diff a thread line refers to.
@@ -208,11 +208,11 @@ const (
 
 // ReviewComment is a comment inside a review thread.
 type ReviewComment struct {
-	ID        string
-	Author    string
-	Body      string
-	CreatedAt time.Time
-	URL       string
+	Identifier string
+	Author     string
+	Body       string
+	CreatedAt  time.Time
+	URL        string
 	// Pending marks a draft comment of the viewer's own pending review, which
 	// nobody else can see yet.
 	Pending bool
@@ -243,8 +243,8 @@ const (
 // ReviewThread is a conversation anchored to a line of a diff. Threads may
 // include the viewer's pending (draft) comments; see ReviewComment.Pending.
 type ReviewThread struct {
-	// ID is the node ID used to reply to the thread.
-	ID          string
+	// Identifier is the node ID used to reply to the thread.
+	Identifier  string
 	SubjectType ThreadSubject
 	IsResolved  bool
 	// IsOutdated means the anchored lines changed after the comment was made.
@@ -279,19 +279,19 @@ const (
 // PendingReview is the viewer's unsubmitted review on a pull request. GitHub
 // allows one per user per pull request.
 type PendingReview struct {
-	ID string
+	Identifier string
 	// Body is the review summary written so far.
 	Body string
 	// CommentCount is the number of inline comments waiting in it.
 	CommentCount int
-	// CommitOID is the commit the review is anchored to; empty if unknown.
-	CommitOID string
+	// CommitObjectIdentifier is the commit the review is anchored to; empty if unknown.
+	CommitObjectIdentifier string
 }
 
 // ReviewStatus is the state a review submission depends on.
 type ReviewStatus struct {
-	// PullRequestID is the pull request's node ID.
-	PullRequestID string
+	// PullRequestIdentifier is the pull request's node ID.
+	PullRequestIdentifier string
 	// HeadSHA is the pull request's current head commit.
 	HeadSHA string
 	// Pending is the viewer's pending review, or nil.
@@ -300,26 +300,26 @@ type ReviewStatus struct {
 
 // SubmitReviewInput describes a review to submit.
 type SubmitReviewInput struct {
-	Repo          Repo
-	Number        int
-	PullRequestID string
-	Event         ReviewEvent
-	Body          string
-	// CommitOID is the commit a new review applies to. A pending review keeps
+	Repository            Repository
+	Number                int
+	PullRequestIdentifier string
+	Event                 ReviewEvent
+	Body                  string
+	// CommitObjectIdentifier is the commit a new review applies to. A pending review keeps
 	// the commit it was started on.
-	CommitOID string
-	// PendingReviewID, if set, submits that pending review instead of
+	CommitObjectIdentifier string
+	// PendingReviewIdentifier, if set, submits that pending review instead of
 	// creating a new one.
-	PendingReviewID string
+	PendingReviewIdentifier string
 }
 
 // StartReviewInput describes a new pending review.
 type StartReviewInput struct {
-	Repo          Repo
-	Number        int
-	PullRequestID string
-	// CommitOID is the commit the review's comments are anchored to.
-	CommitOID string
+	Repository            Repository
+	Number                int
+	PullRequestIdentifier string
+	// CommitObjectIdentifier is the commit the review's comments are anchored to.
+	CommitObjectIdentifier string
 }
 
 // AddThreadInput describes an inline comment thread to add to a pending
@@ -327,13 +327,13 @@ type StartReviewInput struct {
 // multi-line comment (zero for a single line); both are line numbers on the
 // given side of the diff, not positions in it.
 type AddThreadInput struct {
-	Repo            Repo
-	Number          int
-	PendingReviewID string
-	Path            string
-	Line            int
-	Side            DiffSide
-	StartLine       int
-	StartSide       DiffSide
-	Body            string
+	Repository              Repository
+	Number                  int
+	PendingReviewIdentifier string
+	Path                    string
+	Line                    int
+	Side                    DiffSide
+	StartLine               int
+	StartSide               DiffSide
+	Body                    string
 }

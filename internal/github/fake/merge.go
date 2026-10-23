@@ -17,52 +17,52 @@ type MergeSettings struct {
 
 // Merge is a recorded successful MergePullRequest call.
 type Merge struct {
-	Repo            github.Repo
-	Number          int
-	PullRequestID   string
-	Method          github.MergeMethod
-	ExpectedHeadOID string
+	Repository                   github.Repository
+	Number                       int
+	PullRequestIdentifier        string
+	Method                       github.MergeMethod
+	ExpectedHeadObjectIdentifier string
 }
 
-// SetMergeSettings sets the merge settings of repo. Without it every method
+// SetMergeSettings sets the merge settings of repository. Without it every method
 // is allowed and head branches are not deleted automatically.
-func (c *Client) SetMergeSettings(repo github.Repo, s MergeSettings) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	s.Allowed = slices.Clone(s.Allowed)
-	c.merge[repo] = s
+func (client *Client) SetMergeSettings(repository github.Repository, settings MergeSettings) {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	settings.Allowed = slices.Clone(settings.Allowed)
+	client.merge[repository] = settings
 }
 
 // Merges returns the recorded successful MergePullRequest calls.
-func (c *Client) Merges() []Merge {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return slices.Clone(c.merges)
+func (client *Client) Merges() []Merge {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	return slices.Clone(client.merges)
 }
 
-func (c *Client) mergeSettings(repo github.Repo) MergeSettings {
-	if s, ok := c.merge[repo]; ok {
-		return s
+func (client *Client) mergeSettings(repository github.Repository) MergeSettings {
+	if settings, ok := client.merge[repository]; ok {
+		return settings
 	}
 	return MergeSettings{Allowed: github.MergeMethods}
 }
 
 // GetMergeStatus implements github.Client. It answers ErrNotFound for a pull
 // request the fake has no detail for.
-func (c *Client) GetMergeStatus(ctx context.Context, repo github.Repo, number int) (github.MergeStatus, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if err := c.begin(ctx, Call{Method: MethodGetMergeStatus, Repo: repo, Number: number}); err != nil {
+func (client *Client) GetMergeStatus(ctx context.Context, repository github.Repository, number int) (github.MergeStatus, error) {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	if err := client.begin(ctx, Call{Method: MethodGetMergeStatus, Repository: repository, Number: number}); err != nil {
 		return github.MergeStatus{}, err
 	}
-	d, ok := c.details[prKey{repo, number}]
+	detail, ok := client.details[pullRequestKey{repository, number}]
 	if !ok {
-		return github.MergeStatus{}, fmt.Errorf("load merge status of %s#%d: %w", repo, number, github.ErrNotFound)
+		return github.MergeStatus{}, fmt.Errorf("load merge status of %s#%d: %w", repository, number, github.ErrNotFound)
 	}
-	s := c.mergeSettings(repo)
+	settings := client.mergeSettings(repository)
 	return github.MergeStatus{
-		PullRequestID: d.ID, HeadSHA: d.HeadSHA, BaseRef: d.BaseRef,
-		Allowed: slices.Clone(s.Allowed), DeleteBranchOnMerge: s.DeleteBranchOnMerge,
+		PullRequestIdentifier: detail.Identifier, HeadSHA: detail.HeadSHA, BaseBranch: detail.BaseBranch,
+		Allowed: slices.Clone(settings.Allowed), DeleteBranchOnMerge: settings.DeleteBranchOnMerge,
 	}, nil
 }
 
@@ -70,31 +70,31 @@ func (c *Client) GetMergeStatus(ctx context.Context, repo github.Repo, number in
 // pull request ID, a method the repository does not allow, a head other than
 // the expected one, and a pull request that is not open. Inject a refusal
 // (failing checks, conflicts) with SetError(MethodMergePullRequest, err).
-func (c *Client) MergePullRequest(ctx context.Context, in github.MergeInput) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if err := c.begin(ctx, Call{Method: MethodMergePullRequest, Repo: in.Repo, Number: in.Number, PullRequestID: in.PullRequestID}); err != nil {
+func (client *Client) MergePullRequest(ctx context.Context, in github.MergeInput) error {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	if err := client.begin(ctx, Call{Method: MethodMergePullRequest, Repository: in.Repository, Number: in.Number, PullRequestIdentifier: in.PullRequestIdentifier}); err != nil {
 		return err
 	}
-	key := prKey{in.Repo, in.Number}
-	d, ok := c.details[key]
+	key := pullRequestKey{in.Repository, in.Number}
+	detail, ok := client.details[key]
 	if !ok {
-		return fmt.Errorf("merge %s#%d: %w", in.Repo, in.Number, github.ErrNotFound)
+		return fmt.Errorf("merge %s#%d: %w", in.Repository, in.Number, github.ErrNotFound)
 	}
 	switch {
-	case in.PullRequestID == "" || in.PullRequestID != d.ID:
-		return fmt.Errorf("merge %s#%d: unknown pull request ID %q", in.Repo, in.Number, in.PullRequestID)
-	case !slices.Contains(c.mergeSettings(in.Repo).Allowed, in.Method):
-		return fmt.Errorf("merge %s#%d: %s merges are not allowed", in.Repo, in.Number, in.Method)
-	case in.ExpectedHeadOID != d.HeadSHA:
-		return fmt.Errorf("merge %s#%d: head branch was modified", in.Repo, in.Number)
-	case d.State != github.PRStateOpen:
-		return fmt.Errorf("merge %s#%d: pull request is not open", in.Repo, in.Number)
+	case in.PullRequestIdentifier == "" || in.PullRequestIdentifier != detail.Identifier:
+		return fmt.Errorf("merge %s#%d: unknown pull request ID %q", in.Repository, in.Number, in.PullRequestIdentifier)
+	case !slices.Contains(client.mergeSettings(in.Repository).Allowed, in.Method):
+		return fmt.Errorf("merge %s#%d: %s merges are not allowed", in.Repository, in.Number, in.Method)
+	case in.ExpectedHeadObjectIdentifier != detail.HeadSHA:
+		return fmt.Errorf("merge %s#%d: head branch was modified", in.Repository, in.Number)
+	case detail.State != github.PullRequestStateOpen:
+		return fmt.Errorf("merge %s#%d: pull request is not open", in.Repository, in.Number)
 	}
-	d.State = github.PRStateMerged
-	c.details[key] = d
-	c.merges = append(c.merges, Merge{
-		Repo: in.Repo, Number: in.Number, PullRequestID: in.PullRequestID, Method: in.Method, ExpectedHeadOID: in.ExpectedHeadOID,
+	detail.State = github.PullRequestStateMerged
+	client.details[key] = detail
+	client.merges = append(client.merges, Merge{
+		Repository: in.Repository, Number: in.Number, PullRequestIdentifier: in.PullRequestIdentifier, Method: in.Method, ExpectedHeadObjectIdentifier: in.ExpectedHeadObjectIdentifier,
 	})
 	return nil
 }

@@ -16,55 +16,55 @@ const fallback = "vi"
 
 // Session is one editing round: a temporary file and the command to edit it.
 type Session struct {
-	cmd  *exec.Cmd
-	path string
+	command *exec.Cmd
+	path    string
 }
 
 // New writes initial to a new temporary .md file and returns a session whose
-// command opens it in $VISUAL, then $EDITOR, then vi. getenv looks up
+// command opens it in $VISUAL, then $EDITOR, then vi. getEnvironment looks up
 // environment variables (os.Getenv in production).
-func New(initial string, getenv func(string) string) (*Session, error) {
-	f, err := os.CreateTemp("", "strig-*.md")
+func New(initial string, getEnvironment func(string) string) (*Session, error) {
+	file, err := os.CreateTemp("", "strig-*.md")
 	if err != nil {
 		return nil, fmt.Errorf("create temporary file: %w", err)
 	}
-	path := f.Name()
-	_, werr := f.WriteString(initial)
-	if err := errors.Join(werr, f.Close()); err != nil {
+	path := file.Name()
+	_, writeError := file.WriteString(initial)
+	if err := errors.Join(writeError, file.Close()); err != nil {
 		_ = os.Remove(path)
 		return nil, fmt.Errorf("write temporary file: %w", err)
 	}
-	return &Session{cmd: Command(path, getenv), path: path}, nil
+	return &Session{command: Command(path, getEnvironment), path: path}, nil
 }
 
-// Cmd is the editor command, ready to run.
-func (s *Session) Cmd() *exec.Cmd { return s.cmd }
+// Command is the editor command, ready to run.
+func (session *Session) Command() *exec.Cmd { return session.command }
 
 // Path is the temporary file.
-func (s *Session) Path() string { return s.path }
+func (session *Session) Path() string { return session.path }
 
 // Result reads back what the user wrote and removes the file. It must be
 // called once, after the editor exited (also when it failed, to clean up).
-func (s *Session) Result() (string, error) {
-	b, err := os.ReadFile(s.path)
-	rerr := os.Remove(s.path)
+func (session *Session) Result() (string, error) {
+	bytes, err := os.ReadFile(session.path)
+	readError := os.Remove(session.path)
 	if err != nil {
 		return "", fmt.Errorf("read edited file: %w", err)
 	}
-	if rerr != nil && !errors.Is(rerr, os.ErrNotExist) {
-		return string(b), fmt.Errorf("remove temporary file: %w", rerr)
+	if readError != nil && !errors.Is(readError, os.ErrNotExist) {
+		return string(bytes), fmt.Errorf("remove temporary file: %w", readError)
 	}
-	return string(b), nil
+	return string(bytes), nil
 }
 
 // Command returns the command that opens path in the user's editor. Like
 // git, it hands the editor value to the shell with the path as an argument
 // (sh -c '$EDITOR "$@"' strig path), so quoting and paths with spaces work.
-func Command(path string, getenv func(string) string) *exec.Cmd {
+func Command(path string, getEnvironment func(string) string) *exec.Cmd {
 	editor := fallback
 	for _, name := range []string{"VISUAL", "EDITOR"} {
-		if v := strings.TrimSpace(getenv(name)); v != "" {
-			editor = v
+		if value := strings.TrimSpace(getEnvironment(name)); value != "" {
+			editor = value
 			break
 		}
 	}

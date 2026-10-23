@@ -43,37 +43,37 @@ const (
 
 // Call is one recorded call with the arguments that apply to its method.
 type Call struct {
-	Method   string
-	Repo     github.Repo
-	Number   int
-	Query    string
-	Page     github.PageRequest
-	ThreadID string
-	Body     string
-	// PullRequestID, Path and Viewed are set by the methods that take them:
-	// PullRequestID by SetFileViewed, StartReview and MergePullRequest, Path by
+	Method           string
+	Repository       github.Repository
+	Number           int
+	Query            string
+	Page             github.PageRequest
+	ThreadIdentifier string
+	Body             string
+	// PullRequestIdentifier, Path and Viewed are set by the methods that take them:
+	// PullRequestIdentifier by SetFileViewed, StartReview and MergePullRequest, Path by
 	// SetFileViewed and AddReviewThread, Viewed by SetFileViewed.
-	PullRequestID string
-	Path          string
-	Viewed        bool
+	PullRequestIdentifier string
+	Path                  string
+	Viewed                bool
 }
 
 // Reply is a recorded successful ReplyToThread call.
 type Reply struct {
-	ThreadID string
-	Body     string
+	ThreadIdentifier string
+	Body             string
 }
 
 // Comment is a recorded successful AddComment call.
 type Comment struct {
-	Repo   github.Repo
-	Number int
-	Body   string
+	Repository github.Repository
+	Number     int
+	Body       string
 }
 
-type prKey struct {
-	repo   github.Repo
-	number int
+type pullRequestKey struct {
+	repository github.Repository
+	number     int
 }
 
 // Client implements github.Client in memory. The zero value is not usable;
@@ -84,24 +84,24 @@ type Client struct {
 	// Now supplies timestamps for created comments.
 	Now func() time.Time
 
-	mu       sync.Mutex
-	lists    map[github.Repo][]github.PullRequest
-	search   map[string][]github.PullRequest
-	details  map[prKey]github.PullRequestDetail
-	diffs    map[prKey]string
-	threads  map[prKey][]github.ReviewThread
-	errs     map[string]error
-	calls    []Call
-	replies  []Reply
-	comments []Comment
-	pending  map[prKey]github.PendingReview
-	reviews  []Submission
-	nextID   int
-	merge    map[github.Repo]MergeSettings
-	merges   []Merge
-	added    []github.AddThreadInput
-	started  []StartedReview
-	deleted  []string
+	mutex          sync.Mutex
+	lists          map[github.Repository][]github.PullRequest
+	search         map[string][]github.PullRequest
+	details        map[pullRequestKey]github.PullRequestDetail
+	diffs          map[pullRequestKey]string
+	threads        map[pullRequestKey][]github.ReviewThread
+	injectedErrors map[string]error
+	calls          []Call
+	replies        []Reply
+	comments       []Comment
+	pending        map[pullRequestKey]github.PendingReview
+	reviews        []Submission
+	nextIdentifier int
+	merge          map[github.Repository]MergeSettings
+	merges         []Merge
+	added          []github.AddThreadInput
+	started        []StartedReview
+	deleted        []string
 }
 
 var _ github.Client = (*Client)(nil)
@@ -109,163 +109,165 @@ var _ github.Client = (*Client)(nil)
 // New returns an empty fake client whose viewer is "me".
 func New() *Client {
 	return &Client{
-		Viewer:  "me",
-		Now:     time.Now,
-		lists:   map[github.Repo][]github.PullRequest{},
-		search:  map[string][]github.PullRequest{},
-		details: map[prKey]github.PullRequestDetail{},
-		diffs:   map[prKey]string{},
-		threads: map[prKey][]github.ReviewThread{},
-		errs:    map[string]error{},
-		pending: map[prKey]github.PendingReview{},
-		merge:   map[github.Repo]MergeSettings{},
+		Viewer:         "me",
+		Now:            time.Now,
+		lists:          map[github.Repository][]github.PullRequest{},
+		search:         map[string][]github.PullRequest{},
+		details:        map[pullRequestKey]github.PullRequestDetail{},
+		diffs:          map[pullRequestKey]string{},
+		threads:        map[pullRequestKey][]github.ReviewThread{},
+		injectedErrors: map[string]error{},
+		pending:        map[pullRequestKey]github.PendingReview{},
+		merge:          map[github.Repository]MergeSettings{},
 	}
 }
 
-func cloneReactions(r []github.ReactionSummary) []github.ReactionSummary { return slices.Clone(r) }
-
-func cloneIssueComment(c github.IssueComment) github.IssueComment {
-	c.Reactions = cloneReactions(c.Reactions)
-	return c
+func cloneReactions(reactions []github.ReactionSummary) []github.ReactionSummary {
+	return slices.Clone(reactions)
 }
 
-func cloneReviewComment(c github.ReviewComment) github.ReviewComment {
-	c.Reactions = cloneReactions(c.Reactions)
-	return c
+func cloneIssueComment(comment github.IssueComment) github.IssueComment {
+	comment.Reactions = cloneReactions(comment.Reactions)
+	return comment
 }
 
-func cloneThread(t github.ReviewThread) github.ReviewThread {
-	cs := make([]github.ReviewComment, len(t.Comments))
-	for i, c := range t.Comments {
-		cs[i] = cloneReviewComment(c)
+func cloneReviewComment(comment github.ReviewComment) github.ReviewComment {
+	comment.Reactions = cloneReactions(comment.Reactions)
+	return comment
+}
+
+func cloneThread(thread github.ReviewThread) github.ReviewThread {
+	comments := make([]github.ReviewComment, len(thread.Comments))
+	for i, comment := range thread.Comments {
+		comments[i] = cloneReviewComment(comment)
 	}
-	if t.Comments == nil {
-		cs = nil
+	if thread.Comments == nil {
+		comments = nil
 	}
-	t.Comments = cs
-	return t
+	thread.Comments = comments
+	return thread
 }
 
-func cloneThreads(ts []github.ReviewThread) []github.ReviewThread {
-	if ts == nil {
+func cloneThreads(threads []github.ReviewThread) []github.ReviewThread {
+	if threads == nil {
 		return nil
 	}
-	out := make([]github.ReviewThread, len(ts))
-	for i, t := range ts {
-		out[i] = cloneThread(t)
+	out := make([]github.ReviewThread, len(threads))
+	for i, thread := range threads {
+		out[i] = cloneThread(thread)
 	}
 	return out
 }
 
-func cloneDetail(d github.PullRequestDetail) github.PullRequestDetail {
-	d.Labels = slices.Clone(d.Labels)
-	d.ReviewRequests = slices.Clone(d.ReviewRequests)
-	d.Files = slices.Clone(d.Files)
-	d.Reviews = slices.Clone(d.Reviews)
-	if d.Comments != nil {
-		cs := make([]github.IssueComment, len(d.Comments))
-		for i, c := range d.Comments {
-			cs[i] = cloneIssueComment(c)
+func cloneDetail(detail github.PullRequestDetail) github.PullRequestDetail {
+	detail.Labels = slices.Clone(detail.Labels)
+	detail.ReviewRequests = slices.Clone(detail.ReviewRequests)
+	detail.Files = slices.Clone(detail.Files)
+	detail.Reviews = slices.Clone(detail.Reviews)
+	if detail.Comments != nil {
+		comments := make([]github.IssueComment, len(detail.Comments))
+		for i, comment := range detail.Comments {
+			comments[i] = cloneIssueComment(comment)
 		}
-		d.Comments = cs
+		detail.Comments = comments
 	}
-	return d
+	return detail
 }
 
-// SetPullRequests sets the pull requests known for repo. ListPullRequests
+// SetPullRequests sets the pull requests known for the repository. ListPullRequests
 // returns the open ones, most recently updated first.
-func (c *Client) SetPullRequests(repo github.Repo, prs []github.PullRequest) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.lists[repo] = slices.Clone(prs)
+func (client *Client) SetPullRequests(repository github.Repository, pullRequests []github.PullRequest) {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	client.lists[repository] = slices.Clone(pullRequests)
 }
 
 // SetSearchResults sets what SearchPullRequests returns for exactly this
 // query, in the given order. Unseeded queries return an empty page.
-func (c *Client) SetSearchResults(query string, prs []github.PullRequest) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.search[query] = slices.Clone(prs)
+func (client *Client) SetSearchResults(query string, pullRequests []github.PullRequest) {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	client.search[query] = slices.Clone(pullRequests)
 }
 
-// SetPullRequest sets the detail returned for d.Repo and d.Number.
-func (c *Client) SetPullRequest(d github.PullRequestDetail) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.details[prKey{d.Repo, d.Number}] = cloneDetail(d)
+// SetPullRequest sets the detail returned for detail.Repository and detail.Number.
+func (client *Client) SetPullRequest(detail github.PullRequestDetail) {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	client.details[pullRequestKey{detail.Repository, detail.Number}] = cloneDetail(detail)
 }
 
 // SetDiff sets the raw diff returned for a pull request.
-func (c *Client) SetDiff(repo github.Repo, number int, diff string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.diffs[prKey{repo, number}] = diff
+func (client *Client) SetDiff(repository github.Repository, number int, diff string) {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	client.diffs[pullRequestKey{repository, number}] = diff
 }
 
 // SetReviewThreads sets the threads returned for a pull request.
-func (c *Client) SetReviewThreads(repo github.Repo, number int, threads []github.ReviewThread) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.threads[prKey{repo, number}] = c.permissions(cloneThreads(threads))
+func (client *Client) SetReviewThreads(repository github.Repository, number int, threads []github.ReviewThread) {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	client.threads[pullRequestKey{repository, number}] = client.permissions(cloneThreads(threads))
 }
 
 // SetError makes the named method fail with err until cleared with a nil err.
 // An empty method applies to every method that has no error of its own.
-func (c *Client) SetError(method string, err error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+func (client *Client) SetError(method string, err error) {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	if err == nil {
-		delete(c.errs, method)
+		delete(client.injectedErrors, method)
 		return
 	}
-	c.errs[method] = err
+	client.injectedErrors[method] = err
 }
 
 // Calls returns every call made so far with its arguments, in order,
 // including calls that failed.
-func (c *Client) Calls() []Call {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return slices.Clone(c.calls)
+func (client *Client) Calls() []Call {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	return slices.Clone(client.calls)
 }
 
 // Replies returns the recorded successful ReplyToThread calls.
-func (c *Client) Replies() []Reply {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return slices.Clone(c.replies)
+func (client *Client) Replies() []Reply {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	return slices.Clone(client.replies)
 }
 
 // Comments returns the recorded successful AddComment calls.
-func (c *Client) Comments() []Comment {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return slices.Clone(c.comments)
+func (client *Client) Comments() []Comment {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	return slices.Clone(client.comments)
 }
 
-// begin records the call and returns the injected error, if any. Callers hold c.mu.
-func (c *Client) begin(ctx context.Context, call Call) error {
-	c.calls = append(c.calls, call)
+// begin records the call and returns the injected error, if any. Callers hold client.mu.
+func (client *Client) begin(ctx context.Context, call Call) error {
+	client.calls = append(client.calls, call)
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err, ok := c.errs[call.Method]; ok {
+	if err, ok := client.injectedErrors[call.Method]; ok {
 		return err
 	}
-	return c.errs[""]
+	return client.injectedErrors[""]
 }
 
-func paginate[T any](items []T, p github.PageRequest) (github.Page[T], error) {
+func paginate[Value any](items []Value, pageRequest github.PageRequest) (github.Page[Value], error) {
 	start := 0
-	if p.After != "" {
-		n, err := strconv.Atoi(p.After)
-		if err != nil || n < 0 || n > len(items) {
-			return github.Page[T]{}, fmt.Errorf("invalid cursor %q", p.After)
+	if pageRequest.After != "" {
+		count, err := strconv.Atoi(pageRequest.After)
+		if err != nil || count < 0 || count > len(items) {
+			return github.Page[Value]{}, fmt.Errorf("invalid cursor %q", pageRequest.After)
 		}
-		start = n
+		start = count
 	}
-	end := min(start+p.Size(), len(items))
-	page := github.Page[T]{Items: slices.Clone(items[start:end]), Total: len(items)}
+	end := min(start+pageRequest.Size(), len(items))
+	page := github.Page[Value]{Items: slices.Clone(items[start:end]), Total: len(items)}
 	if end < len(items) {
 		page.Next = strconv.Itoa(end)
 	}
@@ -273,184 +275,184 @@ func paginate[T any](items []T, p github.PageRequest) (github.Page[T], error) {
 }
 
 // ListPullRequests implements github.Client.
-func (c *Client) ListPullRequests(ctx context.Context, repo github.Repo, page github.PageRequest) (github.Page[github.PullRequest], error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if err := c.begin(ctx, Call{Method: MethodListPullRequests, Repo: repo, Page: page}); err != nil {
+func (client *Client) ListPullRequests(ctx context.Context, repository github.Repository, pageRequest github.PageRequest) (github.Page[github.PullRequest], error) {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	if err := client.begin(ctx, Call{Method: MethodListPullRequests, Repository: repository, Page: pageRequest}); err != nil {
 		return github.Page[github.PullRequest]{}, err
 	}
-	all, ok := c.lists[repo]
+	all, ok := client.lists[repository]
 	if !ok {
-		return github.Page[github.PullRequest]{}, fmt.Errorf("list pull requests in %s: %w", repo, github.ErrNotFound)
+		return github.Page[github.PullRequest]{}, fmt.Errorf("list pull requests in %s: %w", repository, github.ErrNotFound)
 	}
 	var open []github.PullRequest
-	for _, pr := range all {
-		if pr.State == "" || pr.State == github.PRStateOpen {
-			open = append(open, pr)
+	for _, pullRequest := range all {
+		if pullRequest.State == "" || pullRequest.State == github.PullRequestStateOpen {
+			open = append(open, pullRequest)
 		}
 	}
-	slices.SortStableFunc(open, func(a, b github.PullRequest) int { return b.UpdatedAt.Compare(a.UpdatedAt) })
-	return paginate(open, page)
+	slices.SortStableFunc(open, func(first, pullRequest github.PullRequest) int { return pullRequest.UpdatedAt.Compare(first.UpdatedAt) })
+	return paginate(open, pageRequest)
 }
 
 // SearchPullRequests implements github.Client.
-func (c *Client) SearchPullRequests(ctx context.Context, query string, page github.PageRequest) (github.Page[github.PullRequest], error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if err := c.begin(ctx, Call{Method: MethodSearchPullRequests, Query: query, Page: page}); err != nil {
+func (client *Client) SearchPullRequests(ctx context.Context, query string, pageRequest github.PageRequest) (github.Page[github.PullRequest], error) {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	if err := client.begin(ctx, Call{Method: MethodSearchPullRequests, Query: query, Page: pageRequest}); err != nil {
 		return github.Page[github.PullRequest]{}, err
 	}
-	return paginate(c.search[query], page)
+	return paginate(client.search[query], pageRequest)
 }
 
 // GetPullRequest implements github.Client.
-func (c *Client) GetPullRequest(ctx context.Context, repo github.Repo, number int) (github.PullRequestDetail, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if err := c.begin(ctx, Call{Method: MethodGetPullRequest, Repo: repo, Number: number}); err != nil {
+func (client *Client) GetPullRequest(ctx context.Context, repository github.Repository, number int) (github.PullRequestDetail, error) {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	if err := client.begin(ctx, Call{Method: MethodGetPullRequest, Repository: repository, Number: number}); err != nil {
 		return github.PullRequestDetail{}, err
 	}
-	d, ok := c.details[prKey{repo, number}]
+	detail, ok := client.details[pullRequestKey{repository, number}]
 	if !ok {
-		return github.PullRequestDetail{}, fmt.Errorf("load pull request %s#%d: %w", repo, number, github.ErrNotFound)
+		return github.PullRequestDetail{}, fmt.Errorf("load pull request %s#%d: %w", repository, number, github.ErrNotFound)
 	}
-	return cloneDetail(d), nil
+	return cloneDetail(detail), nil
 }
 
 // GetDiff implements github.Client.
-func (c *Client) GetDiff(ctx context.Context, repo github.Repo, number int) (string, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if err := c.begin(ctx, Call{Method: MethodGetDiff, Repo: repo, Number: number}); err != nil {
+func (client *Client) GetDiff(ctx context.Context, repository github.Repository, number int) (string, error) {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	if err := client.begin(ctx, Call{Method: MethodGetDiff, Repository: repository, Number: number}); err != nil {
 		return "", err
 	}
-	d, ok := c.diffs[prKey{repo, number}]
+	diffText, ok := client.diffs[pullRequestKey{repository, number}]
 	if !ok {
-		return "", fmt.Errorf("load diff of %s#%d: %w", repo, number, github.ErrNotFound)
+		return "", fmt.Errorf("load diff of %s#%d: %w", repository, number, github.ErrNotFound)
 	}
-	return d, nil
+	return diffText, nil
 }
 
 // ListReviewThreads implements github.Client. A pull request with no threads
 // set yields an empty page.
-func (c *Client) ListReviewThreads(ctx context.Context, repo github.Repo, number int, page github.PageRequest) (github.Page[github.ReviewThread], error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if err := c.begin(ctx, Call{Method: MethodListReviewThreads, Repo: repo, Number: number, Page: page}); err != nil {
+func (client *Client) ListReviewThreads(ctx context.Context, repository github.Repository, number int, pageRequest github.PageRequest) (github.Page[github.ReviewThread], error) {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	if err := client.begin(ctx, Call{Method: MethodListReviewThreads, Repository: repository, Number: number, Page: pageRequest}); err != nil {
 		return github.Page[github.ReviewThread]{}, err
 	}
-	p, err := paginate(c.threads[prKey{repo, number}], page)
-	p.Items = cloneThreads(p.Items)
-	return p, err
+	currentPage, err := paginate(client.threads[pullRequestKey{repository, number}], pageRequest)
+	currentPage.Items = cloneThreads(currentPage.Items)
+	return currentPage, err
 }
 
 // ReplyToThread implements github.Client. The reply is appended to the thread
 // so later ListReviewThreads calls include it.
-func (c *Client) ReplyToThread(ctx context.Context, threadID, body string) (github.ReviewComment, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if err := c.begin(ctx, Call{Method: MethodReplyToThread, ThreadID: threadID, Body: body}); err != nil {
+func (client *Client) ReplyToThread(ctx context.Context, threadIdentifier, body string) (github.ReviewComment, error) {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	if err := client.begin(ctx, Call{Method: MethodReplyToThread, ThreadIdentifier: threadIdentifier, Body: body}); err != nil {
 		return github.ReviewComment{}, err
 	}
 	if strings.TrimSpace(body) == "" {
-		return github.ReviewComment{}, fmt.Errorf("reply to thread %s: empty body", threadID)
+		return github.ReviewComment{}, fmt.Errorf("reply to thread %s: empty body", threadIdentifier)
 	}
-	for _, threads := range c.threads {
+	for _, threads := range client.threads {
 		for i := range threads {
-			if threads[i].ID != threadID {
+			if threads[i].Identifier != threadIdentifier {
 				continue
 			}
-			c.nextID++
-			rc := github.ReviewComment{
-				ID:        "fake-review-comment-" + strconv.Itoa(c.nextID),
-				Author:    c.Viewer,
-				Body:      body,
-				CreatedAt: c.Now(),
+			client.nextIdentifier++
+			reviewComment := github.ReviewComment{
+				Identifier: "fake-review-comment-" + strconv.Itoa(client.nextIdentifier),
+				Author:     client.Viewer,
+				Body:       body,
+				CreatedAt:  client.Now(),
 
 				ViewerCanUpdate: true, ViewerCanDelete: true, ViewerDidAuthor: true,
 			}
 			// Build a fresh slice so slices handed out earlier are never written to.
-			threads[i].Comments = append(slices.Clip(threads[i].Comments), rc)
-			c.replies = append(c.replies, Reply{ThreadID: threadID, Body: body})
-			return rc, nil
+			threads[i].Comments = append(slices.Clip(threads[i].Comments), reviewComment)
+			client.replies = append(client.replies, Reply{ThreadIdentifier: threadIdentifier, Body: body})
+			return reviewComment, nil
 		}
 	}
-	return github.ReviewComment{}, fmt.Errorf("reply to thread %s: %w", threadID, github.ErrNotFound)
+	return github.ReviewComment{}, fmt.Errorf("reply to thread %s: %w", threadIdentifier, github.ErrNotFound)
 }
 
 // AddComment implements github.Client. It fails with ErrNotFound for a pull
 // request the fake has no data for, and otherwise bumps the comment count in
 // the detail, the repo list and search results.
-func (c *Client) AddComment(ctx context.Context, repo github.Repo, number int, body string) (github.IssueComment, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if err := c.begin(ctx, Call{Method: MethodAddComment, Repo: repo, Number: number, Body: body}); err != nil {
+func (client *Client) AddComment(ctx context.Context, repository github.Repository, number int, body string) (github.IssueComment, error) {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	if err := client.begin(ctx, Call{Method: MethodAddComment, Repository: repository, Number: number, Body: body}); err != nil {
 		return github.IssueComment{}, err
 	}
 	if strings.TrimSpace(body) == "" {
-		return github.IssueComment{}, fmt.Errorf("add comment to %s#%d: empty body", repo, number)
+		return github.IssueComment{}, fmt.Errorf("add comment to %s#%d: empty body", repository, number)
 	}
-	key := prKey{repo, number}
-	detail, hasDetail := c.details[key]
+	key := pullRequestKey{repository, number}
+	detail, hasDetail := client.details[key]
 	known := hasDetail
-	bump := func(prs []github.PullRequest) {
-		for i := range prs {
-			if prs[i].Repo == repo && prs[i].Number == number {
-				prs[i].CommentCount++
+	bump := func(pullRequests []github.PullRequest) {
+		for i := range pullRequests {
+			if pullRequests[i].Repository == repository && pullRequests[i].Number == number {
+				pullRequests[i].CommentCount++
 				known = true
 			}
 		}
 	}
-	for _, prs := range c.lists {
-		bump(prs)
+	for _, pullRequests := range client.lists {
+		bump(pullRequests)
 	}
-	for _, prs := range c.search {
-		bump(prs)
+	for _, pullRequests := range client.search {
+		bump(pullRequests)
 	}
 	if !known {
-		return github.IssueComment{}, fmt.Errorf("add comment to %s#%d: %w", repo, number, github.ErrNotFound)
+		return github.IssueComment{}, fmt.Errorf("add comment to %s#%d: %w", repository, number, github.ErrNotFound)
 	}
-	c.nextID++
-	ic := github.IssueComment{
-		ID:        "fake-comment-" + strconv.Itoa(c.nextID),
-		Author:    c.Viewer,
-		Body:      body,
-		CreatedAt: c.Now(),
+	client.nextIdentifier++
+	issueComment := github.IssueComment{
+		Identifier: "fake-comment-" + strconv.Itoa(client.nextIdentifier),
+		Author:     client.Viewer,
+		Body:       body,
+		CreatedAt:  client.Now(),
 	}
 	if hasDetail {
-		detail.Comments = append(slices.Clip(detail.Comments), ic)
+		detail.Comments = append(slices.Clip(detail.Comments), issueComment)
 		detail.CommentCount++
-		c.details[key] = detail
+		client.details[key] = detail
 	}
-	c.comments = append(c.comments, Comment{Repo: repo, Number: number, Body: body})
-	return ic, nil
+	client.comments = append(client.comments, Comment{Repository: repository, Number: number, Body: body})
+	return issueComment, nil
 }
 
 // SetFileViewed implements github.Client. It updates the file's state in the
 // pull request detail with the matching ID, so later reads report it; an
 // unknown pull request or path fails with ErrNotFound.
-func (c *Client) SetFileViewed(ctx context.Context, pullRequestID, path string, viewed bool) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if err := c.begin(ctx, Call{Method: MethodSetFileViewed, PullRequestID: pullRequestID, Path: path, Viewed: viewed}); err != nil {
+func (client *Client) SetFileViewed(ctx context.Context, pullRequestIdentifier, path string, viewed bool) error {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	if err := client.begin(ctx, Call{Method: MethodSetFileViewed, PullRequestIdentifier: pullRequestIdentifier, Path: path, Viewed: viewed}); err != nil {
 		return err
 	}
 	state := github.FileUnviewed
 	if viewed {
 		state = github.FileViewed
 	}
-	for key, d := range c.details {
-		if d.ID != pullRequestID {
+	for key, detail := range client.details {
+		if detail.Identifier != pullRequestIdentifier {
 			continue
 		}
-		for i := range d.Files {
-			if d.Files[i].Path == path {
-				d.Files = slices.Clone(d.Files)
-				d.Files[i].Viewed = state
-				c.details[key] = d
+		for i := range detail.Files {
+			if detail.Files[i].Path == path {
+				detail.Files = slices.Clone(detail.Files)
+				detail.Files[i].Viewed = state
+				client.details[key] = detail
 				return nil
 			}
 		}
 	}
-	return fmt.Errorf("mark %s as viewed in %s: %w", path, pullRequestID, github.ErrNotFound)
+	return fmt.Errorf("mark %s as viewed in %s: %w", path, pullRequestIdentifier, github.ErrNotFound)
 }
