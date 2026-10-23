@@ -37,17 +37,17 @@ type Result struct {
 // Model is a filterable list. Matching is a case-insensitive subsequence test,
 // so "wsgo" finds "views/workspace/workspace.go".
 type Model struct {
-	th      theme.Theme
+	theme   theme.Theme
 	title   string
 	items   []string
 	query   []rune
 	matches []int         // indexes into items
-	win     scroll.Window // cursor and top row over matches
+	window  scroll.Window // cursor and top row over matches
 }
 
 // New returns a picker over items.
 func New(theme theme.Theme, title string, items []string) *Model {
-	model := &Model{th: theme, title: title, items: items}
+	model := &Model{theme: theme, title: title, items: items}
 	model.refilter()
 	return model
 }
@@ -68,11 +68,11 @@ func (model *Model) Update(message tea.KeyPressMsg) Result {
 		if len(model.matches) == 0 {
 			return Result{Outcome: Open}
 		}
-		return Result{Outcome: Chosen, Index: model.matches[model.win.Cursor()]}
+		return Result{Outcome: Chosen, Index: model.matches[model.window.Cursor()]}
 	case "up", "ctrl+p":
-		model.win.Up(1)
+		model.window.Up(1)
 	case "down", "ctrl+n":
-		model.win.Down(1)
+		model.window.Down(1)
 	case "backspace":
 		if count := len(model.query); count > 0 {
 			model.query = model.query[:count-1]
@@ -98,8 +98,8 @@ func (model *Model) refilter() {
 			model.matches = append(model.matches, i)
 		}
 	}
-	model.win.Reset()
-	model.win.SetRows(len(model.matches))
+	model.window.Reset()
+	model.window.SetRows(len(model.matches))
 }
 
 func subsequence(text, query string) bool {
@@ -132,23 +132,23 @@ func (model *Model) Render(width, height int) string {
 	if over := ansi.StringWidth(query) - (inner - 3); over > 0 {
 		query = ansi.TruncateLeft(query, over+1, "…") // keep the tail of a long query visible
 	}
-	lines = append(lines, model.th.Title.Render("> ")+model.th.Normal.Render(query)+model.th.Muted.Render("▏"))
+	lines = append(lines, model.theme.Title.Render("> ")+model.theme.Normal.Render(query)+model.theme.Muted.Render("▏"))
 	if len(model.matches) == 0 {
-		lines = append(lines, model.th.Muted.Render("no matches"))
+		lines = append(lines, model.theme.Muted.Render("no matches"))
 	}
-	model.win.SetSize(rows)
-	for i := model.win.Top(); i < len(model.matches) && i < model.win.Top()+rows; i++ {
+	model.window.SetSize(rows)
+	for i := model.window.Top(); i < len(model.matches) && i < model.window.Top()+rows; i++ {
 		label := model.items[model.matches[i]]
 		if over := ansi.StringWidth(label) - (inner - 4); over > 0 {
 			label = ansi.TruncateLeft(label, over+1, "…") // keep the file name visible
 		}
-		if i == model.win.Cursor() {
-			lines = append(lines, model.th.OverlayItemFocus.Render(pad("> "+label, inner-2)))
+		if i == model.window.Cursor() {
+			lines = append(lines, model.theme.OverlayItemFocus.Render(pad("> "+label, inner-2)))
 		} else {
-			lines = append(lines, model.th.OverlayItem.Render("  "+label))
+			lines = append(lines, model.theme.OverlayItem.Render("  "+label))
 		}
 	}
-	box := model.th.OverlayBox.
+	box := model.theme.OverlayBox.
 		Width(paneWidth).
 		Render(strings.Join(lines, "\n"))
 	return model.titled(box)
@@ -165,7 +165,7 @@ func (model *Model) titled(box string) string {
 	if ansi.StringWidth(text)+4 > width {
 		return box
 	}
-	lines[0] = ansi.Cut(lines[0], 0, 2) + model.th.OverlayBorder.Render(text) + ansi.Cut(lines[0], 2+ansi.StringWidth(text), width)
+	lines[0] = ansi.Cut(lines[0], 0, 2) + model.theme.OverlayBorder.Render(text) + ansi.Cut(lines[0], 2+ansi.StringWidth(text), width)
 	return strings.Join(lines, "\n")
 }
 

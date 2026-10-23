@@ -38,11 +38,11 @@ func TestReparseReanchorsOnSameLine(test *testing.T) {
 	if !ok || cursorLine.Kind != diff.Delete || cursorLine.Old != 2 || cursorLine.Text != "b" {
 		test.Errorf("after rows moved: %+v ok=%v", cursorLine, ok)
 	}
-	if model.win.Cursor() != 4 {
-		test.Errorf("cursor row = %d, want 4", model.win.Cursor())
+	if model.window.Cursor() != 4 {
+		test.Errorf("cursor row = %d, want 4", model.window.Cursor())
 	}
-	if model.win.Cursor() < model.win.Top() || model.win.Cursor() >= model.win.Top()+4 {
-		test.Errorf("cursor %d not visible from top %d", model.win.Cursor(), model.win.Top())
+	if model.window.Cursor() < model.window.Top() || model.window.Cursor() >= model.window.Top()+4 {
+		test.Errorf("cursor %d not visible from top %d", model.window.Cursor(), model.window.Top())
 	}
 
 	model.SetFile(parseFile(test, v3))
@@ -59,8 +59,8 @@ func TestReparseKeepsHeaderAndMarkerAnchors(test *testing.T) {
 	model.SetSize(60, 10)
 	model.NextHunk()
 	model.SetFile(parseFile(test, withMarker))
-	if model.win.Cursor() != 5 {
-		test.Errorf("header anchor: cursor = %d", model.win.Cursor())
+	if model.window.Cursor() != 5 {
+		test.Errorf("header anchor: cursor = %d", model.window.Cursor())
 	}
 	model.GotoTop()
 	model.CursorDown(3) // the marker row
@@ -97,8 +97,8 @@ func TestMessageKeepsSavedPosition(test *testing.T) {
 	model.SetMessage("Loading diff...")
 	other := &diff.File{NewPath: "g", OldPath: "g", Hunks: parseFile(test, v1).Hunks}
 	model.SetFile(other)
-	if model.win.Cursor() != 0 {
-		test.Errorf("different path should start at 0, got %d", model.win.Cursor())
+	if model.window.Cursor() != 0 {
+		test.Errorf("different path should start at 0, got %d", model.window.Cursor())
 	}
 	// And an explicit clear forgets the saved position.
 	model.SetFile(parseFile(test, v2))
@@ -106,8 +106,8 @@ func TestMessageKeepsSavedPosition(test *testing.T) {
 	model.SetMessage("x")
 	model.SetFile(nil)
 	model.SetFile(parseFile(test, v2))
-	if model.win.Cursor() != 0 {
-		test.Errorf("SetFile(nil) should drop the saved position, got %d", model.win.Cursor())
+	if model.window.Cursor() != 0 {
+		test.Errorf("SetFile(nil) should drop the saved position, got %d", model.window.Cursor())
 	}
 }
 

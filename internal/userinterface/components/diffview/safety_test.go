@@ -152,11 +152,11 @@ func TestSetFileKeepsPositionAcrossReparse(test *testing.T) {
 	model.SetSize(60, 6)
 	model.CursorDown(15)
 	model.ScrollRight(5)
-	cursor, top, xoff := model.win.Cursor(), model.win.Top(), model.win.HorizontalOffset()
+	cursor, top, horizontalOffset := model.window.Cursor(), model.window.Top(), model.window.HorizontalOffset()
 
 	model.SetFile(secondDiff.File("server.go"))
-	if model.win.Cursor() != cursor || model.win.Top() != top || model.win.HorizontalOffset() != xoff {
-		test.Errorf("position after reparse = %d/%d/%d, want %d/%d/%d", model.win.Cursor(), model.win.Top(), model.win.HorizontalOffset(), cursor, top, xoff)
+	if model.window.Cursor() != cursor || model.window.Top() != top || model.window.HorizontalOffset() != horizontalOffset {
+		test.Errorf("position after reparse = %d/%d/%d, want %d/%d/%d", model.window.Cursor(), model.window.Top(), model.window.HorizontalOffset(), cursor, top, horizontalOffset)
 	}
 	if got, ok := model.Cursor(); !ok || got.Old != 32 {
 		test.Errorf("cursor line after reparse: %+v %v", got, ok)
@@ -166,14 +166,14 @@ func TestSetFileKeepsPositionAcrossReparse(test *testing.T) {
 	small := *secondDiff.File("server.go")
 	small.Hunks = small.Hunks[:1]
 	model.SetFile(&small)
-	if model.win.Cursor() >= len(model.rows) || model.win.Top() > model.win.MaximumTop() || model.win.Cursor() < model.win.Top() || model.win.Cursor() >= model.win.Top()+6 {
-		test.Errorf("not clamped: cursor %d top %d rows %d", model.win.Cursor(), model.win.Top(), len(model.rows))
+	if model.window.Cursor() >= len(model.rows) || model.window.Top() > model.window.MaximumTop() || model.window.Cursor() < model.window.Top() || model.window.Cursor() >= model.window.Top()+6 {
+		test.Errorf("not clamped: cursor %d top %d rows %d", model.window.Cursor(), model.window.Top(), len(model.rows))
 	}
 
 	// A different path resets.
 	model.SetFile(secondDiff.File("pkg/new.go"))
 	model.SetFile(firstDiff.File("server.go"))
-	if model.win.Cursor() != 0 || model.win.Top() != 0 || model.win.HorizontalOffset() != 0 {
-		test.Errorf("different path should reset, got %d/%d/%d", model.win.Cursor(), model.win.Top(), model.win.HorizontalOffset())
+	if model.window.Cursor() != 0 || model.window.Top() != 0 || model.window.HorizontalOffset() != 0 {
+		test.Errorf("different path should reset, got %d/%d/%d", model.window.Cursor(), model.window.Top(), model.window.HorizontalOffset())
 	}
 }

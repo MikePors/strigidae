@@ -102,9 +102,9 @@ func keepSequence(sequence string) bool {
 		default:
 			return false
 		}
-		params, url, ok := strings.Cut(body, ";")
-		return ok && !strings.Contains(params, ";") &&
-			!strings.ContainsFunc(params+url, func(character rune) bool { return character == 0x1b || unsafeRune(character) })
+		parameters, url, ok := strings.Cut(body, ";")
+		return ok && !strings.Contains(parameters, ";") &&
+			!strings.ContainsFunc(parameters+url, func(character rune) bool { return character == 0x1b || unsafeRune(character) })
 	}
 	return false
 }

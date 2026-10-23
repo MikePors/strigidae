@@ -14,8 +14,8 @@ var now = time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)
 
 func TestRelativeTime(test *testing.T) {
 	tests := []struct {
-		d    time.Duration
-		want string
+		duration time.Duration
+		want     string
 	}{
 		{-time.Hour, "just now"},
 		{30 * time.Second, "just now"},
@@ -26,8 +26,8 @@ func TestRelativeTime(test *testing.T) {
 		{800 * 24 * time.Hour, "2y ago"},
 	}
 	for _, testCase := range tests {
-		if got := RelativeTime(now, now.Add(-testCase.d)); got != testCase.want {
-			test.Errorf("RelTime(%v) = %q, want %q", testCase.d, got, testCase.want)
+		if got := RelativeTime(now, now.Add(-testCase.duration)); got != testCase.want {
+			test.Errorf("RelTime(%v) = %q, want %q", testCase.duration, got, testCase.want)
 		}
 	}
 }
@@ -36,9 +36,9 @@ func TestHeader(test *testing.T) {
 	activeTheme := theme.New(true)
 	heart := []github.ReactionSummary{{Content: github.ReactionHeart, Count: 2}, {Content: github.ReactionEyes}}
 	tests := []struct {
-		name string
-		c    Comment
-		want string
+		name    string
+		comment Comment
+		want    string
 	}{
 		{"plain", Comment{Author: "bob", At: now.Add(-5 * time.Minute)}, "bob · 5m ago"},
 		{"ghost", Comment{At: now}, "ghost · just now"},
@@ -49,7 +49,7 @@ func TestHeader(test *testing.T) {
 		{"hostile", Comment{Author: "b\x1b[31mob", At: now}, ""},
 	}
 	for _, testCase := range tests {
-		got := ansi.Strip(Header(activeTheme, now, testCase.c))
+		got := ansi.Strip(Header(activeTheme, now, testCase.comment))
 		if testCase.want == "" {
 			if got != ansi.Strip(got) || containsEsc(got) {
 				test.Errorf("%s: escape in %q", testCase.name, got)

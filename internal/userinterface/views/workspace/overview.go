@@ -20,7 +20,7 @@ import (
 // overview is the right pane's content while Overview is selected: the
 // description followed by the conversation, in a scrollable viewport.
 type overview struct {
-	vp       viewport.Model
+	viewport viewport.Model
 	width    int       // content width the viewport was built for
 	builtAt  time.Time // minute the content was built in; relative times age with it
 	dirty    bool
@@ -28,7 +28,7 @@ type overview struct {
 }
 
 func newOverview() overview {
-	return overview{vp: viewport.New(), dirty: true}
+	return overview{viewport: viewport.New(), dirty: true}
 }
 
 // invalidate forces a rebuild before the next render.
@@ -37,8 +37,8 @@ func (overview *overview) invalidate() { overview.dirty = true }
 // ensure sizes the viewport and rebuilds the content when the data, theme or
 // width changed. Markdown rendering is cached by the renderer.
 func (overview *overview) ensure(theme theme.Theme, markdownSource *markdown.Renderer, detail *github.PullRequestDetail, threads threadsView, now time.Time, width, height int) {
-	overview.vp.SetWidth(width)
-	overview.vp.SetHeight(height)
+	overview.viewport.SetWidth(width)
+	overview.viewport.SetHeight(height)
 	minute := now.Truncate(time.Minute)
 	if detail == nil || (!overview.dirty && overview.width == width && minute.Equal(overview.builtAt)) {
 		return
@@ -95,17 +95,17 @@ func (overview *overview) ensure(theme theme.Theme, markdownSource *markdown.Ren
 		add("")
 	}
 
-	overview.vp.SetContent(strings.TrimRight(builder.String(), "\n"))
+	overview.viewport.SetContent(strings.TrimRight(builder.String(), "\n"))
 	overview.width, overview.builtAt, overview.dirty = width, minute, false
 }
 
 // jump scrolls to the next (delta > 0) or previous section start.
 func (overview *overview) jump(delta int) {
-	row := overview.vp.YOffset()
+	row := overview.viewport.YOffset()
 	if delta > 0 {
 		for _, size := range overview.sections {
 			if size > row {
-				overview.vp.SetYOffset(size)
+				overview.viewport.SetYOffset(size)
 				return
 			}
 		}
@@ -113,7 +113,7 @@ func (overview *overview) jump(delta int) {
 	}
 	for _, size := range slices.Backward(overview.sections) {
 		if size < row {
-			overview.vp.SetYOffset(size)
+			overview.viewport.SetYOffset(size)
 			return
 		}
 	}

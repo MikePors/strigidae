@@ -63,11 +63,11 @@ func threadModel(test testing.TB, width, height int) *Model {
 	return model
 }
 
-func screen(model *Model) string { return ansi.Strip(model.Render(model.w, model.h)) }
+func screen(model *Model) string { return ansi.Strip(model.Render(model.width, model.height)) }
 
 func cursorRowText(model *Model) string {
 	lines := strings.Split(screen(model), "\n")
-	return lines[model.win.Cursor()-model.win.Top()]
+	return lines[model.window.Cursor()-model.window.Top()]
 }
 
 func TestThreadsPlacedByLineAndSide(test *testing.T) {
@@ -128,8 +128,8 @@ func TestResolvedStartsCollapsedOpenStartsExpanded(test *testing.T) {
 func (model *Model) goToRow(test testing.TB, contains string) {
 	test.Helper()
 	for i, row := range model.rows {
-		if row.tr == nil && row.line != nil && strings.Contains(row.text, contains) {
-			model.win.JumpTo(i)
+		if row.threadRow == nil && row.line != nil && strings.Contains(row.text, contains) {
+			model.window.JumpTo(i)
 			return
 		}
 	}
@@ -168,11 +168,11 @@ func TestToggleFromInsideTheThreadLandsOnHeader(test *testing.T) {
 	model := threadModel(test, 100, 80)
 	model.goToRow(test, `"log"`)
 	model.CursorDown(3) // inside the expanded thread (header + comments)
-	if model.rows[model.win.Cursor()].tr == nil {
+	if model.rows[model.window.Cursor()].threadRow == nil {
 		test.Fatal("setup: cursor should be on a thread row")
 	}
 	model.ToggleThread()
-	if row := model.rows[model.win.Cursor()]; row.tr == nil || row.tr.i != 0 || !strings.Contains(cursorRowText(model), "▸ alice") {
+	if row := model.rows[model.window.Cursor()]; row.threadRow == nil || row.threadRow.i != 0 || !strings.Contains(cursorRowText(model), "▸ alice") {
 		test.Errorf("cursor should sit on the collapsed header, got %q", cursorRowText(model))
 	}
 	model.ToggleThread()
@@ -216,7 +216,7 @@ func TestThreadNavigation(test *testing.T) {
 	if !strings.Contains(cursorRowText(model), "carol") {
 		test.Errorf("[ c should stop at the first thread, at %q", cursorRowText(model))
 	}
-	if model.win.Cursor() < model.win.Top() || model.win.Cursor() >= model.win.Top()+model.h {
+	if model.window.Cursor() < model.window.Top() || model.window.Cursor() >= model.window.Top()+model.height {
 		test.Error("cursor left the window")
 	}
 }
@@ -224,8 +224,8 @@ func TestThreadNavigation(test *testing.T) {
 func TestScrollingAccountsForThreadRows(test *testing.T) {
 	model := threadModel(test, 100, 8)
 	model.GotoBottom()
-	if model.win.Cursor() != len(model.rows)-1 {
-		test.Fatalf("cursor %d, rows %d", model.win.Cursor(), len(model.rows))
+	if model.window.Cursor() != len(model.rows)-1 {
+		test.Fatalf("cursor %d, rows %d", model.window.Cursor(), len(model.rows))
 	}
 	if !strings.Contains(screen(model), "Where did this go?") && !strings.Contains(screen(model), "frank") {
 		test.Errorf("the last row should be visible:\n%s", screen(model))
@@ -236,8 +236,8 @@ func TestScrollingAccountsForThreadRows(test *testing.T) {
 	model.GotoTop()
 	for range len(model.rows) {
 		model.CursorDown(1)
-		if model.win.Cursor() < model.win.Top() || model.win.Cursor() >= model.win.Top()+8 {
-			test.Fatalf("cursor %d outside window at top %d", model.win.Cursor(), model.win.Top())
+		if model.window.Cursor() < model.window.Top() || model.window.Cursor() >= model.window.Top()+8 {
+			test.Fatalf("cursor %d outside window at top %d", model.window.Cursor(), model.window.Top())
 		}
 	}
 }
@@ -292,8 +292,8 @@ func TestMarkerStyles(test *testing.T) {
 	raw := model.Render(100, 80)
 	// The open marker is drawn with the theme's ThreadMarker colour, the
 	// resolved one with Muted, on top of whatever the row background is.
-	open := activeTheme.ThreadMarker.Background(model.styles.v[0][kindAdd].gutter.GetBackground()).Render(markerOpen)
-	quiet := activeTheme.Muted.Background(model.styles.v[0][kindContext].gutter.GetBackground()).Render(markerQuiet)
+	open := activeTheme.ThreadMarker.Background(model.styles.variants[0][kindAdd].gutter.GetBackground()).Render(markerOpen)
+	quiet := activeTheme.Muted.Background(model.styles.variants[0][kindContext].gutter.GetBackground()).Render(markerQuiet)
 	if !strings.Contains(raw, open) {
 		test.Error("open thread marker not drawn with the ThreadMarker style")
 	}

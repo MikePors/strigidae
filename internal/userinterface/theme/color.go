@@ -90,15 +90,15 @@ func extreme(background color.Color) color.Color {
 // nudge moves fg away from bg (towards black or white, whichever contrasts
 // more with bg) in small steps until it reaches the contrast ratio min, or
 // runs out of room. A colour that already passes is returned unchanged.
-func nudge(foreground, background color.Color, minRatio float64) color.Color {
-	if contrast(foreground, background) >= minRatio {
+func nudge(foreground, background color.Color, minimumRatio float64) color.Color {
+	if contrast(foreground, background) >= minimumRatio {
 		return foreground
 	}
 	target := extreme(background)
 	out := foreground
 	for step := 1; step <= 20; step++ {
 		out = blend(foreground, target, float64(step)*0.05)
-		if contrast(out, background) >= minRatio {
+		if contrast(out, background) >= minimumRatio {
 			break
 		}
 	}
@@ -108,7 +108,7 @@ func nudge(foreground, background color.Color, minRatio float64) color.Color {
 // oklch is a colour in the OKLab polar form: perceptual lightness, chroma
 // and hue. Mixing there keeps a tint's hue and saturation where an sRGB blend
 // would grey them.
-type oklch struct{ l, c, h float64 }
+type oklch struct{ lightness, chroma, hue float64 }
 
 func toOKLCH(column color.Color) oklch {
 	red8, green8, blue8 := rgb8(column)
@@ -132,11 +132,11 @@ func toOKLCH(column color.Color) oklch {
 }
 
 func (color oklch) color() color.Color {
-	first, blue := color.c*math.Cos(color.h), color.c*math.Sin(color.h)
+	first, blue := color.chroma*math.Cos(color.hue), color.chroma*math.Sin(color.hue)
 	cube := func(value float64) float64 { return value * value * value }
-	lightness := cube(color.l + 0.3963377774*first + 0.2158037573*blue)
-	value := cube(color.l - 0.1055613458*first - 0.0638541728*blue)
-	saturation := cube(color.l - 0.0894841775*first - 1.2914855480*blue)
+	lightness := cube(color.lightness + 0.3963377774*first + 0.2158037573*blue)
+	value := cube(color.lightness - 0.1055613458*first - 0.0638541728*blue)
+	saturation := cube(color.lightness - 0.0894841775*first - 1.2914855480*blue)
 	encode := func(value float64) float64 {
 		value = math.Min(1, math.Max(0, value))
 		if value <= 0.0031308 {
@@ -158,5 +158,5 @@ func (color oklch) color() color.Color {
 // saturation, which an sRGB blend would grey out.
 func tint(base, role color.Color, lightMix, chromaScale float64) color.Color {
 	baseOklch, roleOklch := toOKLCH(base), toOKLCH(role)
-	return oklch{l: baseOklch.l + (roleOklch.l-baseOklch.l)*lightMix, c: roleOklch.c * chromaScale, h: roleOklch.h}.color()
+	return oklch{lightness: baseOklch.lightness + (roleOklch.lightness-baseOklch.lightness)*lightMix, chroma: roleOklch.chroma * chromaScale, hue: roleOklch.hue}.color()
 }

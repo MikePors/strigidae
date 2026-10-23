@@ -19,7 +19,7 @@ func (view *View) openPicker() {
 		paths[i] = file.Path
 	}
 	view.pickerItems, view.pickerPaths = items, paths
-	view.picker = picker.New(view.th, "Go to file", items)
+	view.picker = picker.New(view.theme, "Go to file", items)
 }
 
 // pickerKey feeds a raw key to the open picker.

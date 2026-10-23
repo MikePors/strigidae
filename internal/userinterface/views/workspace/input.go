@@ -85,9 +85,9 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 		return view.editComment()
 	case key.Matches(message, view.bind.DeleteComment):
 		return view.deleteComment()
-	case key.Matches(message, view.km.Open):
+	case key.Matches(message, view.globalKeys.Open):
 		return view.openBrowser()
-	case key.Matches(message, view.km.Refresh):
+	case key.Matches(message, view.globalKeys.Refresh):
 		return view.load()
 	case view.selection() > 0 && view.diffNavigation(message):
 		// Reserved globally: hunk and thread keys work from either pane.
@@ -126,23 +126,23 @@ func (view *View) openBrowser() tea.Cmd {
 func (view *View) filesKey(message keys.Message) {
 	previous := view.selection()
 	switch {
-	case key.Matches(message, view.km.Down):
-		view.fw.Down(1)
-	case key.Matches(message, view.km.Up):
-		view.fw.Up(1)
-	case key.Matches(message, view.km.Top):
-		view.fw.GotoTop()
-	case key.Matches(message, view.km.Bottom):
-		view.fw.GotoBottom()
-	case key.Matches(message, view.km.HalfDown):
-		view.fw.HalfPageDown()
-	case key.Matches(message, view.km.HalfUp):
-		view.fw.HalfPageUp()
-	case key.Matches(message, view.km.PageDown):
-		view.fw.PageDown()
-	case key.Matches(message, view.km.PageUp):
-		view.fw.PageUp()
-	case key.Matches(message, view.km.Select):
+	case key.Matches(message, view.globalKeys.Down):
+		view.window.Down(1)
+	case key.Matches(message, view.globalKeys.Up):
+		view.window.Up(1)
+	case key.Matches(message, view.globalKeys.Top):
+		view.window.GotoTop()
+	case key.Matches(message, view.globalKeys.Bottom):
+		view.window.GotoBottom()
+	case key.Matches(message, view.globalKeys.HalfDown):
+		view.window.HalfPageDown()
+	case key.Matches(message, view.globalKeys.HalfUp):
+		view.window.HalfPageUp()
+	case key.Matches(message, view.globalKeys.PageDown):
+		view.window.PageDown()
+	case key.Matches(message, view.globalKeys.PageUp):
+		view.window.PageUp()
+	case key.Matches(message, view.globalKeys.Select):
 		view.focus = paneRight
 	}
 	if view.selection() != previous {
@@ -155,23 +155,23 @@ func (view *View) rightKey(message keys.Message) tea.Cmd {
 	if view.selection() > 0 {
 		return view.filePane.Update(message)
 	}
-	viewport := &view.ov.vp
+	viewport := &view.overview.viewport
 	switch {
-	case key.Matches(message, view.km.Down):
+	case key.Matches(message, view.globalKeys.Down):
 		viewport.ScrollDown(1)
-	case key.Matches(message, view.km.Up):
+	case key.Matches(message, view.globalKeys.Up):
 		viewport.ScrollUp(1)
-	case key.Matches(message, view.km.Top):
+	case key.Matches(message, view.globalKeys.Top):
 		viewport.GotoTop()
-	case key.Matches(message, view.km.Bottom):
+	case key.Matches(message, view.globalKeys.Bottom):
 		viewport.GotoBottom()
-	case key.Matches(message, view.km.HalfDown):
+	case key.Matches(message, view.globalKeys.HalfDown):
 		viewport.HalfPageDown()
-	case key.Matches(message, view.km.HalfUp):
+	case key.Matches(message, view.globalKeys.HalfUp):
 		viewport.HalfPageUp()
-	case key.Matches(message, view.km.PageDown):
+	case key.Matches(message, view.globalKeys.PageDown):
 		viewport.PageDown()
-	case key.Matches(message, view.km.PageUp):
+	case key.Matches(message, view.globalKeys.PageUp):
 		viewport.PageUp()
 	}
 	return nil
@@ -183,11 +183,11 @@ func (view *View) jumpSection(delta int) {
 	if view.detail == nil {
 		return
 	}
-	view.ov.jump(delta)
+	view.overview.jump(delta)
 }
 
 // diffNav reports whether msg is a hunk or thread movement key.
 func (view *View) diffNavigation(message keys.Message) bool {
-	bindings := view.navBind
+	bindings := view.navigationBind
 	return key.Matches(message, bindings.NextHunk, bindings.PreviousHunk, bindings.NextThread, bindings.PreviousThread)
 }

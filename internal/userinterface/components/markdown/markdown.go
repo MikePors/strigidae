@@ -21,19 +21,19 @@ type cacheKey struct {
 // It is not safe for concurrent use; views call it from Update and Render
 // only.
 type Renderer struct {
-	th theme.Theme
+	theme theme.Theme
 	// Only the current width is kept: callers render at one width at a time,
 	// so a window resize drops what was built for the old one.
-	width int
-	tr    *glamour.TermRenderer
-	cache map[cacheKey]string
+	width        int
+	termRenderer *glamour.TermRenderer
+	cache        map[cacheKey]string
 }
 
 // New returns a Renderer styled by th. The style comes from the theme, never
 // from terminal detection, so output is deterministic. Build a new Renderer
 // when the theme changes.
 func New(theme theme.Theme) *Renderer {
-	return &Renderer{th: theme, cache: map[cacheKey]string{}}
+	return &Renderer{theme: theme, cache: map[cacheKey]string{}}
 }
 
 // Render returns body rendered and wrapped to width columns, without the
@@ -42,10 +42,10 @@ func New(theme theme.Theme) *Renderer {
 func (renderer *Renderer) Render(body string, width int) string {
 	width = max(width, 10)
 	if width != renderer.width {
-		renderer.width, renderer.tr = width, nil
+		renderer.width, renderer.termRenderer = width, nil
 		clear(renderer.cache)
 	}
-	k := cacheKey{body, width, renderer.th.Identifier}
+	k := cacheKey{body, width, renderer.theme.Identifier}
 	if text, ok := renderer.cache[k]; ok {
 		return text
 	}
@@ -57,14 +57,14 @@ func (renderer *Renderer) Render(body string, width int) string {
 }
 
 func (renderer *Renderer) render(body string, width int) string {
-	if renderer.tr == nil {
-		termRenderer, err := glamour.NewTermRenderer(glamour.WithStyles(styleConfig(renderer.th)), glamour.WithChromaFormatter("terminal16m"), glamour.WithWordWrap(width-4))
+	if renderer.termRenderer == nil {
+		termRenderer, err := glamour.NewTermRenderer(glamour.WithStyles(styleConfig(renderer.theme)), glamour.WithChromaFormatter("terminal16m"), glamour.WithWordWrap(width-4))
 		if err != nil {
 			return body
 		}
-		renderer.tr = termRenderer
+		renderer.termRenderer = termRenderer
 	}
-	out, err := renderer.tr.Render(body)
+	out, err := renderer.termRenderer.Render(body)
 	if err != nil {
 		return body
 	}

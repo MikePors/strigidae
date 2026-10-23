@@ -24,7 +24,7 @@ type Window struct {
 	rows, height  int
 	content, view int // widest content and visible width, in cells
 
-	cursor, top, x int
+	cursor, top, column int
 }
 
 // SetRows sets the number of rows and re-clamps.
@@ -41,11 +41,11 @@ func (window *Window) SetWidths(content, view int) {
 }
 
 // Reset puts the cursor, top and horizontal offset back at zero.
-func (window *Window) Reset() { window.cursor, window.top, window.x = 0, 0, 0 }
+func (window *Window) Reset() { window.cursor, window.top, window.column = 0, 0, 0 }
 
 // Restore sets a saved position and clamps it to the current bounds.
 func (window *Window) Restore(cursor, top, column int) {
-	window.cursor, window.top, window.x = cursor, top, column
+	window.cursor, window.top, window.column = cursor, top, column
 	window.clamp()
 }
 
@@ -56,7 +56,7 @@ func (window *Window) Cursor() int { return window.cursor }
 func (window *Window) Top() int { return window.top }
 
 // XOffset returns the horizontal scroll in cells.
-func (window *Window) HorizontalOffset() int { return window.x }
+func (window *Window) HorizontalOffset() int { return window.column }
 
 // Height returns the number of visible rows.
 func (window *Window) Height() int { return window.height }
@@ -69,12 +69,12 @@ func (window *Window) MaximumHorizontalOffset() int { return max(window.content-
 
 func (window *Window) clamp() {
 	if window.rows == 0 {
-		window.top, window.cursor, window.x = 0, 0, 0
+		window.top, window.cursor, window.column = 0, 0, 0
 		return
 	}
 	window.cursor = min(max(window.cursor, 0), window.rows-1)
 	window.top = min(max(window.top, 0), window.MaximumTop())
-	window.x = min(max(window.x, 0), window.MaximumHorizontalOffset())
+	window.column = min(max(window.column, 0), window.MaximumHorizontalOffset())
 	window.follow()
 }
 
@@ -148,10 +148,10 @@ func (window *Window) shift(count int) {
 // --- horizontal scrolling ---
 
 // Right shifts the content n cells to the right (reveals later text).
-func (window *Window) Right(count int) { window.x += count; window.clamp() }
+func (window *Window) Right(count int) { window.column += count; window.clamp() }
 
 // Left shifts the content n cells to the left.
-func (window *Window) Left(count int) { window.x -= count; window.clamp() }
+func (window *Window) Left(count int) { window.column -= count; window.clamp() }
 
 // HalfRight scrolls right by half the visible width.
 func (window *Window) HalfRight() { window.Right(max(window.view/2, 1)) }

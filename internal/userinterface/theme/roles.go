@@ -177,15 +177,15 @@ func (roles *Roles) fields() []roleField {
 }
 
 type roleField struct {
-	name string
-	c    *color.Color
+	name  string
+	color *color.Color
 }
 
 // set returns the names of the roles r overrides (its non-nil fields).
 func (roles Roles) set() map[string]bool {
 	out := map[string]bool{}
 	for _, field := range roles.fields() {
-		if *field.c != nil {
+		if *field.color != nil {
 			out[field.name] = true
 		}
 	}
@@ -198,16 +198,16 @@ func (roles Roles) set() map[string]bool {
 func (roles *Roles) override(overrides Roles, tints tintSet) {
 	overridden := overrides.fields()
 	for i, field := range roles.fields() {
-		if *overridden[i].c != nil {
-			*field.c = *overridden[i].c
+		if *overridden[i].color != nil {
+			*field.color = *overridden[i].color
 		}
 	}
 	derived := *roles
 	derived.deriveTints(tints)
 	defaults := derived.fields()
 	for i, field := range roles.fields() {
-		if strings.HasSuffix(field.name, "-tint") && *overridden[i].c == nil {
-			*field.c = *defaults[i].c
+		if strings.HasSuffix(field.name, "-tint") && *overridden[i].color == nil {
+			*field.color = *defaults[i].color
 		}
 	}
 }
@@ -264,7 +264,7 @@ func (roles *Roles) guard(overridden map[string]bool) {
 		{"syn-variable", &roles.SyntaxVariable},
 		{"syn-escape", &roles.SyntaxEscape},
 	} {
-		check(field.name, field.c, minimumAccentContrast, roles.Background)
+		check(field.name, field.color, minimumAccentContrast, roles.Background)
 	}
 	check("on-accent", &roles.OnAccent, minimumAccentContrast, roles.Accent)
 }
@@ -277,7 +277,7 @@ func (roles *Roles) fingerprint(view Variant, extra string) string {
 	hasher := fnv.New64a()
 	_, _ = fmt.Fprintf(hasher, "%d|%s", view, extra)
 	for _, field := range roles.fields() {
-		_, _ = hasher.Write([]byte(HexString(*field.c)))
+		_, _ = hasher.Write([]byte(HexString(*field.color)))
 	}
 	return fmt.Sprintf("%016x", hasher.Sum64())
 }

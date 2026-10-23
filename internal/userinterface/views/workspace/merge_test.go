@@ -13,10 +13,10 @@ import (
 
 // mergeCommand runs :merge with args.
 func (composer *composer) mergeCommand(arguments string) {
-	composer.t.Helper()
-	command, ok := composer.v.Command("merge", arguments)
+	composer.test.Helper()
+	command, ok := composer.view.Command("merge", arguments)
 	if !ok {
-		composer.t.Fatal("merge not handled")
+		composer.test.Fatal("merge not handled")
 	}
 	composer.run(command)
 }
@@ -36,7 +36,7 @@ func TestResolveMethod(test *testing.T) {
 	tests := []struct {
 		name      string
 		requested github.MergeMethod
-		st        github.MergeStatus
+		status    github.MergeStatus
 		want      github.MergeMethod
 		err       string
 	}{
@@ -49,7 +49,7 @@ func TestResolveMethod(test *testing.T) {
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
-			got, err := resolveMethod(testCase.requested, testCase.st)
+			got, err := resolveMethod(testCase.requested, testCase.status)
 			if got != testCase.want || (err == nil) != (testCase.err == "") || (err != nil && err.Error() != testCase.err) {
 				test.Errorf("got %q, %v; want %q, %q", got, err, testCase.want, testCase.err)
 			}
@@ -105,10 +105,10 @@ func TestMergeConfirmationAndSuccess(test *testing.T) {
 			if diff := cmp.Diff([]string{"Merging…", testCase.info}, composer.infoMessages()); diff != "" {
 				test.Errorf("info (-want +got):\n%s", diff)
 			}
-			if composer.v.detail.State != github.PullRequestStateMerged {
-				test.Errorf("workspace not refreshed after success: state %v", composer.v.detail.State)
+			if composer.view.detail.State != github.PullRequestStateMerged {
+				test.Errorf("workspace not refreshed after success: state %v", composer.view.detail.State)
 			}
-			if composer.v.Loading() {
+			if composer.view.Loading() {
 				test.Error("still loading after the merge")
 			}
 		})
@@ -157,8 +157,8 @@ func TestMergeHeadMoved(test *testing.T) {
 	if len(composer.client.Merges()) != 0 || composer.callCount(fake.MethodMergePullRequest) != 0 {
 		test.Error("merged although the head moved")
 	}
-	if composer.v.detail.HeadSHA != "bbbb2222" {
-		test.Errorf("workspace head = %q, want it refreshed", composer.v.detail.HeadSHA)
+	if composer.view.detail.HeadSHA != "bbbb2222" {
+		test.Errorf("workspace head = %q, want it refreshed", composer.view.detail.HeadSHA)
 	}
 }
 
@@ -174,7 +174,7 @@ func TestMergeHeadMovesAfterConfirmationIsRefusedAndNotRetried(test *testing.T) 
 	if composer.lastError() == "" {
 		test.Error("no error shown")
 	}
-	if composer.v.detail.HeadSHA != "bbbb2222" {
+	if composer.view.detail.HeadSHA != "bbbb2222" {
 		test.Error("workspace not refreshed")
 	}
 }
@@ -197,7 +197,7 @@ func TestMergeRefusalShownThenRefreshed(test *testing.T) {
 	if composer.callCount(fake.MethodGetPullRequest) <= loads {
 		test.Error("workspace not refreshed after the refusal")
 	}
-	if composer.v.merge.merging || composer.v.Loading() {
+	if composer.view.merge.merging || composer.view.Loading() {
 		test.Error("still merging after the refusal")
 	}
 	if len(composer.client.Merges()) != 0 {
@@ -211,10 +211,10 @@ func TestMergeBlockedWhileInFlight(test *testing.T) {
 	configuration, _ := composer.lastConfirm()
 	// Deliver the confirmation's message without running the merge command.
 	send := configuration.OnYes()
-	view, _ := composer.v.Update(send)
-	composer.v = view.(*View)
-	if !composer.v.merge.merging || !composer.v.Loading() {
-		test.Fatalf("merging = %v, loading = %v", composer.v.merge.merging, composer.v.Loading())
+	view, _ := composer.view.Update(send)
+	composer.view = view.(*View)
+	if !composer.view.merge.merging || !composer.view.Loading() {
+		test.Fatalf("merging = %v, loading = %v", composer.view.merge.merging, composer.view.Loading())
 	}
 	before := len(composer.client.Calls())
 	composer.messages = nil
@@ -237,7 +237,7 @@ func TestMergeNeedsLoadedPullRequestAndDiff(test *testing.T) {
 	})
 	test.Run("diff not loaded", func(test *testing.T) {
 		composer := newReviewer(test)
-		composer.v.diff = DiffState{}
+		composer.view.diff = DiffState{}
 		composer.mergeCommand("")
 		if diff := cmp.Diff([]string{"diff not loaded"}, composer.infoMessages()); diff != "" {
 			test.Errorf("info (-want +got):\n%s", diff)

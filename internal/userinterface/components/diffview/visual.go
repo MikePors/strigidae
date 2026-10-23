@@ -30,7 +30,7 @@ var (
 )
 
 // VisualActive reports whether a line selection is in progress.
-func (model *Model) VisualActive() bool { return model.vis }
+func (model *Model) VisualActive() bool { return model.visual }
 
 // VisualStart begins a line selection at the cursor line. It reports false
 // (and starts nothing) when the cursor is not on a diff line.
@@ -38,27 +38,27 @@ func (model *Model) VisualStart() bool {
 	if _, ok := model.Cursor(); !ok {
 		return false
 	}
-	model.vis, model.vbi = true, model.rows[model.win.Cursor()].bi
+	model.visual, model.visualBaseIndex = true, model.rows[model.window.Cursor()].baseIndex
 	return true
 }
 
 // VisualEnd leaves the line selection.
-func (model *Model) VisualEnd() { model.vis = false }
+func (model *Model) VisualEnd() { model.visual = false }
 
 // VisualMove moves the selection's free end by delta diff lines (negative is
 // up), skipping thread rows. It stops before a line that would leave the hunk
 // or mix added and deleted lines. When it cannot move at all, it returns why;
 // a move that got part of the way is not an error.
 func (model *Model) VisualMove(delta int) error {
-	if !model.vis {
+	if !model.visual {
 		return nil
 	}
-	from := model.win.Cursor()
+	from := model.window.Cursor()
 	row, err := model.furthest(from, delta)
 	if row == from {
 		return err
 	}
-	model.win.GotoRow(row)
+	model.window.GotoRow(row)
 	return nil
 }
 
@@ -77,7 +77,7 @@ func (model *Model) furthest(from, delta int) (row int, err error) {
 		if next < 0 {
 			return row, nil
 		}
-		if _, err := model.rangeOf(model.vbi, model.rows[next].bi); err != nil {
+		if _, err := model.rangeOf(model.visualBaseIndex, model.rows[next].baseIndex); err != nil {
 			return row, err
 		}
 		row = next
@@ -100,7 +100,7 @@ func (model *Model) nextLineRow(i, step int) int {
 // one is in progress, else the cursor line. ok is false when the cursor is not
 // on a diff line.
 func (model *Model) Anchor() (lineRange Range, ok bool) {
-	if model.vis {
+	if model.visual {
 		return model.selection()
 	}
 	cursorLine, ok := model.Cursor()
@@ -117,18 +117,18 @@ func (model *Model) selection() (Range, bool) {
 	if !ok {
 		return Range{}, false
 	}
-	lineRange, err := model.rangeOf(model.vbi, baseIndex)
+	lineRange, err := model.rangeOf(model.visualBaseIndex, baseIndex)
 	return lineRange, err == nil
 }
 
 // cursorBase returns the base row the cursor is on, or the one it follows when
 // it is on a thread row. ok is false when there are no rows.
 func (model *Model) cursorBase() (baseIndex int, ok bool) {
-	count := model.win.Cursor()
+	count := model.window.Cursor()
 	if count >= len(model.rows) {
 		return 0, false
 	}
-	return model.rows[count].bi, true
+	return model.rows[count].baseIndex, true
 }
 
 // rangeOf is the range between two base rows, or why there is none.
@@ -181,5 +181,5 @@ func rangeFor(path string, lines []*diff.Line) (Range, error) {
 // selected reports whether base row bi is inside the selection.
 func (model *Model) selected(baseIndex int) bool {
 	count, ok := model.cursorBase()
-	return model.vis && ok && baseIndex >= min(model.vbi, count) && baseIndex <= max(model.vbi, count)
+	return model.visual && ok && baseIndex >= min(model.visualBaseIndex, count) && baseIndex <= max(model.visualBaseIndex, count)
 }

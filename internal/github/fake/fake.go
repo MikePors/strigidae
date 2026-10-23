@@ -84,7 +84,7 @@ type Client struct {
 	// Now supplies timestamps for created comments.
 	Now func() time.Time
 
-	mu             sync.Mutex
+	mutex          sync.Mutex
 	lists          map[github.Repository][]github.PullRequest
 	search         map[string][]github.PullRequest
 	details        map[pullRequestKey]github.PullRequestDetail
@@ -177,45 +177,45 @@ func cloneDetail(detail github.PullRequestDetail) github.PullRequestDetail {
 // SetPullRequests sets the pull requests known for repo. ListPullRequests
 // returns the open ones, most recently updated first.
 func (client *Client) SetPullRequests(repository github.Repository, pullRequests []github.PullRequest) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	client.lists[repository] = slices.Clone(pullRequests)
 }
 
 // SetSearchResults sets what SearchPullRequests returns for exactly this
 // query, in the given order. Unseeded queries return an empty page.
 func (client *Client) SetSearchResults(query string, pullRequests []github.PullRequest) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	client.search[query] = slices.Clone(pullRequests)
 }
 
 // SetPullRequest sets the detail returned for d.Repo and d.Number.
 func (client *Client) SetPullRequest(detail github.PullRequestDetail) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	client.details[pullRequestKey{detail.Repository, detail.Number}] = cloneDetail(detail)
 }
 
 // SetDiff sets the raw diff returned for a pull request.
 func (client *Client) SetDiff(repository github.Repository, number int, diff string) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	client.diffs[pullRequestKey{repository, number}] = diff
 }
 
 // SetReviewThreads sets the threads returned for a pull request.
 func (client *Client) SetReviewThreads(repository github.Repository, number int, threads []github.ReviewThread) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	client.threads[pullRequestKey{repository, number}] = client.permissions(cloneThreads(threads))
 }
 
 // SetError makes the named method fail with err until cleared with a nil err.
 // An empty method applies to every method that has no error of its own.
 func (client *Client) SetError(method string, err error) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	if err == nil {
 		delete(client.errs, method)
 		return
@@ -226,22 +226,22 @@ func (client *Client) SetError(method string, err error) {
 // Calls returns every call made so far with its arguments, in order,
 // including calls that failed.
 func (client *Client) Calls() []Call {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	return slices.Clone(client.calls)
 }
 
 // Replies returns the recorded successful ReplyToThread calls.
 func (client *Client) Replies() []Reply {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	return slices.Clone(client.replies)
 }
 
 // Comments returns the recorded successful AddComment calls.
 func (client *Client) Comments() []Comment {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	return slices.Clone(client.comments)
 }
 
@@ -276,8 +276,8 @@ func paginate[Value any](items []Value, pageRequest github.PageRequest) (github.
 
 // ListPullRequests implements github.Client.
 func (client *Client) ListPullRequests(ctx context.Context, repository github.Repository, page github.PageRequest) (github.Page[github.PullRequest], error) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	if err := client.begin(ctx, Call{Method: MethodListPullRequests, Repository: repository, Page: page}); err != nil {
 		return github.Page[github.PullRequest]{}, err
 	}
@@ -297,8 +297,8 @@ func (client *Client) ListPullRequests(ctx context.Context, repository github.Re
 
 // SearchPullRequests implements github.Client.
 func (client *Client) SearchPullRequests(ctx context.Context, query string, page github.PageRequest) (github.Page[github.PullRequest], error) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	if err := client.begin(ctx, Call{Method: MethodSearchPullRequests, Query: query, Page: page}); err != nil {
 		return github.Page[github.PullRequest]{}, err
 	}
@@ -307,8 +307,8 @@ func (client *Client) SearchPullRequests(ctx context.Context, query string, page
 
 // GetPullRequest implements github.Client.
 func (client *Client) GetPullRequest(ctx context.Context, repository github.Repository, number int) (github.PullRequestDetail, error) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	if err := client.begin(ctx, Call{Method: MethodGetPullRequest, Repository: repository, Number: number}); err != nil {
 		return github.PullRequestDetail{}, err
 	}
@@ -321,8 +321,8 @@ func (client *Client) GetPullRequest(ctx context.Context, repository github.Repo
 
 // GetDiff implements github.Client.
 func (client *Client) GetDiff(ctx context.Context, repository github.Repository, number int) (string, error) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	if err := client.begin(ctx, Call{Method: MethodGetDiff, Repository: repository, Number: number}); err != nil {
 		return "", err
 	}
@@ -336,8 +336,8 @@ func (client *Client) GetDiff(ctx context.Context, repository github.Repository,
 // ListReviewThreads implements github.Client. A pull request with no threads
 // set yields an empty page.
 func (client *Client) ListReviewThreads(ctx context.Context, repository github.Repository, number int, page github.PageRequest) (github.Page[github.ReviewThread], error) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	if err := client.begin(ctx, Call{Method: MethodListReviewThreads, Repository: repository, Number: number, Page: page}); err != nil {
 		return github.Page[github.ReviewThread]{}, err
 	}
@@ -349,8 +349,8 @@ func (client *Client) ListReviewThreads(ctx context.Context, repository github.R
 // ReplyToThread implements github.Client. The reply is appended to the thread
 // so later ListReviewThreads calls include it.
 func (client *Client) ReplyToThread(ctx context.Context, threadIdentifier, body string) (github.ReviewComment, error) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	if err := client.begin(ctx, Call{Method: MethodReplyToThread, ThreadIdentifier: threadIdentifier, Body: body}); err != nil {
 		return github.ReviewComment{}, err
 	}
@@ -384,8 +384,8 @@ func (client *Client) ReplyToThread(ctx context.Context, threadIdentifier, body 
 // request the fake has no data for, and otherwise bumps the comment count in
 // the detail, the repo list and search results.
 func (client *Client) AddComment(ctx context.Context, repository github.Repository, number int, body string) (github.IssueComment, error) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	if err := client.begin(ctx, Call{Method: MethodAddComment, Repository: repository, Number: number, Body: body}); err != nil {
 		return github.IssueComment{}, err
 	}
@@ -432,8 +432,8 @@ func (client *Client) AddComment(ctx context.Context, repository github.Reposito
 // pull request detail with the matching ID, so later reads report it; an
 // unknown pull request or path fails with ErrNotFound.
 func (client *Client) SetFileViewed(ctx context.Context, pullRequestIdentifier, path string, viewed bool) error {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	if err := client.begin(ctx, Call{Method: MethodSetFileViewed, PullRequestIdentifier: pullRequestIdentifier, Path: path, Viewed: viewed}); err != nil {
 		return err
 	}

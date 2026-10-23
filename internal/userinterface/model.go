@@ -43,7 +43,7 @@ type (
 // resolution, the status bar, and the help overlay.
 type Model struct {
 	stack           []View
-	th              theme.Theme
+	theme           theme.Theme
 	keys            keys.Global
 	log             *slog.Logger
 	tick            TickFunction
@@ -82,7 +82,7 @@ func New(root View, theme theme.Theme, options Options) *Model {
 	}
 	return &Model{
 		stack:           []View{root},
-		th:              theme,
+		theme:           theme,
 		keys:            keys.DefaultGlobal(),
 		log:             options.Logger,
 		tick:            options.Tick,
@@ -116,10 +116,10 @@ func (model *Model) update(message tea.Msg) tea.Cmd {
 		model.cmdline.input.SetWidth(max(1, message.Width-2)) // room for the prompt and cursor
 		return model.broadcast(model.sizeMessage())
 	case tea.BackgroundColorMsg:
-		model.th = theme.New(message.IsDark())
-		model.cmdline.setTheme(model.th)
-		model.spin.Style = model.th.Spinner
-		return model.broadcast(ThemeMessage{Theme: model.th})
+		model.theme = theme.New(message.IsDark())
+		model.cmdline.setTheme(model.theme)
+		model.spin.Style = model.theme.Spinner
+		return model.broadcast(ThemeMessage{Theme: model.theme})
 	case tea.KeyPressMsg:
 		return model.handleKey(message)
 	case PushMessage:
@@ -332,11 +332,11 @@ func (model *Model) content() string {
 	width, height := model.contentSize()
 	var text string
 	if model.showHelp {
-		text = renderHelp(model.th, model.top().Title(), model.keys.FullHelp(), model.top().FullHelp(), width)
+		text = renderHelp(model.theme, model.top().Title(), model.keys.FullHelp(), model.top().FullHelp(), width)
 	} else {
 		text = model.top().Render(width, height)
 	}
-	text = model.th.Normal.MaxWidth(width).MaxHeight(height).Render(text)
+	text = model.theme.Normal.MaxWidth(width).MaxHeight(height).Render(text)
 	if count := height - lipgloss.Height(text); count > 0 {
 		text += strings.Repeat("\n", count)
 	}
@@ -376,10 +376,10 @@ func shortHelp(bindings []key.Binding) string {
 // bottomRow is the status bar, or the command line while it is open.
 func (model *Model) bottomRow() string {
 	if model.confirm != nil {
-		return model.th.StatusInfo.Width(model.width).MaxWidth(model.width).MaxHeight(1).Render(model.confirm.render(model.width))
+		return model.theme.StatusInfo.Width(model.width).MaxWidth(model.width).MaxHeight(1).Render(model.confirm.render(model.width))
 	}
 	if model.cmdline.active {
-		return model.th.StatusCommand.Width(model.width).MaxWidth(model.width).MaxHeight(1).Render(model.cmdline.input.View())
+		return model.theme.StatusCommand.Width(model.width).MaxWidth(model.width).MaxHeight(1).Render(model.cmdline.input.View())
 	}
-	return model.bar().render(model.th, model.width)
+	return model.bar().render(model.theme, model.width)
 }

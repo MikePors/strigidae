@@ -580,9 +580,9 @@ func TestHelpGolden(test *testing.T) {
 func TestStatusBarGolden(test *testing.T) {
 	activeTheme := theme.Default()
 	tests := []struct {
-		name string
-		bar  statusBar
-		w    int
+		name  string
+		bar   statusBar
+		width int
 	}{
 		{"idle", statusBar{crumbs: "strig › screen 2", text: "? help  enter open"}, 60},
 		{"pending_spinner", statusBar{crumbs: "strig", text: "? help", pending: "g", spinner: "⣾"}, 60},
@@ -599,9 +599,9 @@ func TestStatusBarGolden(test *testing.T) {
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
-			got := testCase.bar.render(activeTheme, testCase.w)
-			if width := lipgloss.Width(got); width != testCase.w {
-				test.Errorf("width = %d, want %d", width, testCase.w)
+			got := testCase.bar.render(activeTheme, testCase.width)
+			if width := lipgloss.Width(got); width != testCase.width {
+				test.Errorf("width = %d, want %d", width, testCase.width)
 			}
 			golden.Assert(test, "statusbar_"+testCase.name, got, false)
 		})

@@ -13,38 +13,38 @@ type anchor struct {
 
 // position is a saved view position for one file path.
 type position struct {
-	path string
-	a    anchor
-	off  int // cursor row minus top row
-	xoff int
-	ok   bool // false when there was no diff row to anchor to
+	path             string
+	anchor           anchor
+	off              int // cursor row minus top row
+	horizontalOffset int
+	ok               bool // false when there was no diff row to anchor to
 
 	// thread and toff say where in a thread's rows the cursor was, so it can
 	// go back there when the thread is still shown.
-	thread string
-	toff   int
+	thread       string
+	threadOffset int
 }
 
 func (model *Model) capture() position {
-	currentPosition := position{path: model.file.Path(), xoff: model.win.HorizontalOffset()}
+	currentPosition := position{path: model.file.Path(), horizontalOffset: model.window.HorizontalOffset()}
 	if len(model.rows) == 0 {
 		return currentPosition
 	}
-	i := model.win.Cursor()
-	currentPosition.off = model.win.Cursor() - model.win.Top()
-	if row := model.rows[i]; row.tr != nil {
-		currentPosition.thread, currentPosition.toff = model.fthreads[row.tr.t].Identifier, row.tr.i
+	i := model.window.Cursor()
+	currentPosition.off = model.window.Cursor() - model.window.Top()
+	if row := model.rows[i]; row.threadRow != nil {
+		currentPosition.thread, currentPosition.threadOffset = model.fthreads[row.threadRow.threadIndex].Identifier, row.threadRow.i
 	}
-	for i > 0 && model.rows[i].tr != nil {
+	for i > 0 && model.rows[i].threadRow != nil {
 		i-- // a thread row: anchor to the diff row it follows
 	}
 	if row := model.rows[i]; row.line != nil && row.line.Kind == diff.NoNewline && i > 0 {
 		i-- // markers have no numbers; anchor to the line they belong to
 	}
-	if row := model.rows[i]; row.tr != nil || row.message {
+	if row := model.rows[i]; row.threadRow != nil || row.message {
 		return currentPosition // no diff row to anchor to
 	}
-	currentPosition.a = model.anchorAt(i)
+	currentPosition.anchor = model.anchorAt(i)
 	currentPosition.ok = true
 	return currentPosition
 }
@@ -65,15 +65,15 @@ func (model *Model) restore(position position) {
 	}
 	row := -1
 	if position.thread != "" {
-		row = model.threadRowFor(position.thread, position.toff)
+		row = model.threadRowFor(position.thread, position.threadOffset)
 	}
 	if row < 0 {
 		if !position.ok {
 			return
 		}
-		row = model.find(position.a)
+		row = model.find(position.anchor)
 	}
-	model.win.Restore(row, row-position.off, position.xoff)
+	model.window.Restore(row, row-position.off, position.horizontalOffset)
 }
 
 func lineKey(oldNo, newNo int) int {
@@ -93,19 +93,19 @@ func absolute(count int) int {
 // find returns the row for a: an exact match on kind and line numbers, else
 // the row of the same sort whose line number is closest.
 func (model *Model) find(anchor anchor) int {
-	best, bestDist := 0, -1
+	best, bestDistance := 0, -1
 	for i, row := range model.rows {
-		var dist int
+		var distance int
 		switch {
 		case anchor.header:
-			if row.line != nil || row.tr != nil || row.message {
+			if row.line != nil || row.threadRow != nil || row.message {
 				continue
 			}
 			hunk := model.file.Hunks[row.hunk]
 			if hunk.OldStart == anchor.hunkOld && hunk.NewStart == anchor.hunkNew {
 				return i
 			}
-			dist = absolute(lineKey(hunk.OldStart, hunk.NewStart) - lineKey(anchor.hunkOld, anchor.hunkNew))
+			distance = absolute(lineKey(hunk.OldStart, hunk.NewStart) - lineKey(anchor.hunkOld, anchor.hunkNew))
 		default:
 			if !row.isLine() { // also skips thread rows
 				continue
@@ -113,10 +113,10 @@ func (model *Model) find(anchor anchor) int {
 			if row.line.Kind == anchor.kind && row.line.Old == anchor.old && row.line.New == anchor.new {
 				return i
 			}
-			dist = absolute(lineKey(row.line.Old, row.line.New) - lineKey(anchor.old, anchor.new))
+			distance = absolute(lineKey(row.line.Old, row.line.New) - lineKey(anchor.old, anchor.new))
 		}
-		if bestDist < 0 || dist < bestDist {
-			best, bestDist = i, dist
+		if bestDistance < 0 || distance < bestDistance {
+			best, bestDistance = i, distance
 		}
 	}
 	return best

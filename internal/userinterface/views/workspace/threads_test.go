@@ -49,21 +49,21 @@ func threadHarness(test *testing.T, width, height int) *harness {
 	test.Helper()
 	otherHarness := newHarness(test, width, height)
 	otherHarness.client.SetReviewThreads(testRepository, 7, testThreads())
-	otherHarness.run(otherHarness.v.Init())
+	otherHarness.run(otherHarness.view.Init())
 	return otherHarness
 }
 
 func TestThreadsLoadedAndSorted(test *testing.T) {
 	harness := threadHarness(test, 100, 40)
 	var identifiers []string
-	for _, thread := range harness.v.threads {
+	for _, thread := range harness.view.threads {
 		identifiers = append(identifiers, thread.Identifier)
 	}
 	want := "t-readme,t-outdated,t-resolved,t-open" // by path, then line (outdated by original line)
 	if got := strings.Join(identifiers, ","); got != want {
 		test.Errorf("threads = %s, want %s", got, want)
 	}
-	if harness.v.Loading() {
+	if harness.view.Loading() {
 		test.Error("still loading")
 	}
 }
@@ -75,9 +75,9 @@ func TestThreadsPagedLoad(test *testing.T) {
 		many = append(many, github.ReviewThread{Identifier: fmt.Sprintf("t%02d", i), Path: "README.md", Line: i + 1, Comments: []github.ReviewComment{tc("x", "y", time.Hour)}})
 	}
 	harness.client.SetReviewThreads(testRepository, 7, many)
-	harness.run(harness.v.Init())
-	if len(harness.v.threads) != 75 {
-		test.Errorf("loaded %d threads, want all 75", len(harness.v.threads))
+	harness.run(harness.view.Init())
+	if len(harness.view.threads) != 75 {
+		test.Errorf("loaded %d threads, want all 75", len(harness.view.threads))
 	}
 }
 
@@ -109,9 +109,9 @@ func TestOverviewWithoutThreads(test *testing.T) {
 func TestThreadErrorKeepsPullRequestUsable(test *testing.T) {
 	harness := newHarness(test, 100, 40)
 	harness.client.SetError(fake.MethodListReviewThreads, errors.New("threads boom"))
-	harness.run(harness.v.Init())
-	if harness.v.detail == nil || harness.v.Loading() {
-		test.Fatalf("the pull request should load without threads (detail=%v loading=%v)", harness.v.detail != nil, harness.v.Loading())
+	harness.run(harness.view.Init())
+	if harness.view.detail == nil || harness.view.Loading() {
+		test.Fatalf("the pull request should load without threads (detail=%v loading=%v)", harness.view.detail != nil, harness.view.Loading())
 	}
 	if err := harness.lastErr(); err == nil || !strings.Contains(err.Error(), "review threads") {
 		test.Errorf("status bar error = %v", err)
@@ -120,27 +120,27 @@ func TestThreadErrorKeepsPullRequestUsable(test *testing.T) {
 	harness.client.SetError(fake.MethodListReviewThreads, nil)
 	harness.client.SetReviewThreads(testRepository, 7, testThreads())
 	harness.press("R")
-	if len(harness.v.threads) != 4 {
-		test.Fatalf("threads after refresh = %d", len(harness.v.threads))
+	if len(harness.view.threads) != 4 {
+		test.Fatalf("threads after refresh = %d", len(harness.view.threads))
 	}
 	harness.client.SetError(fake.MethodListReviewThreads, errors.New("again"))
 	harness.press("R")
-	if len(harness.v.threads) != 4 {
-		test.Errorf("a failed refresh dropped the threads: %d", len(harness.v.threads))
+	if len(harness.view.threads) != 4 {
+		test.Errorf("a failed refresh dropped the threads: %d", len(harness.view.threads))
 	}
 }
 
 func TestStaleThreadsIgnored(test *testing.T) {
 	harness := loaded(test, 100, 30)
-	current := harness.v.sequence
+	current := harness.view.sequence
 	stale := []github.ReviewThread{{Identifier: "stale", Path: "x"}}
 	for name, message := range map[string]threadsLoadedMessage{
-		"old seq":      {owner: harness.v, repository: testRepository, number: 7, sequence: current - 1, threads: stale},
-		"other number": {owner: harness.v, repository: testRepository, number: 8, sequence: current, threads: stale},
+		"old seq":      {owner: harness.view, repository: testRepository, number: 7, sequence: current - 1, threads: stale},
+		"other number": {owner: harness.view, repository: testRepository, number: 8, sequence: current, threads: stale},
 		"other view":   {owner: nil, repository: testRepository, number: 7, sequence: current, threads: stale},
 	} {
 		harness.send(message)
-		if len(harness.v.threads) != 0 {
+		if len(harness.view.threads) != 0 {
 			test.Errorf("%s: stale threads applied", name)
 		}
 	}
@@ -148,15 +148,15 @@ func TestStaleThreadsIgnored(test *testing.T) {
 
 func (harness *harness) selectFile() {
 	const path = "internal/sync/client.go"
-	harness.t.Helper()
-	for i, file := range harness.v.files() {
+	harness.test.Helper()
+	for i, file := range harness.view.files() {
 		if file.Path == path {
-			harness.v.selectEntry(i + 1)
+			harness.view.selectEntry(i + 1)
 			harness.press("l")
 			return
 		}
 	}
-	harness.t.Fatalf("no file %s", path)
+	harness.test.Fatalf("no file %s", path)
 }
 
 func TestThreadsInDiff(test *testing.T) {
@@ -230,14 +230,14 @@ func (harness *harness) cursorRow() string {
 			return line
 		}
 	}
-	harness.t.Fatalf("no cursor row:\n%s", ansi.Strip(harness.render()))
+	harness.test.Fatalf("no cursor row:\n%s", ansi.Strip(harness.render()))
 	return ""
 }
 
 func TestThreadKeysAreRegisteredForSequences(test *testing.T) {
 	harness := loaded(test, 100, 30)
 	want := map[string]bool{")": false, "(": false, "z a": false, "z o": false, "z c": false}
-	for _, group := range harness.v.FullHelp() {
+	for _, group := range harness.view.FullHelp() {
 		for _, binding := range group {
 			for _, k := range binding.Keys() {
 				if _, ok := want[k]; ok {
@@ -256,7 +256,7 @@ func TestThreadKeysAreRegisteredForSequences(test *testing.T) {
 func TestEnterInOverviewDoesNothingToThreads(test *testing.T) {
 	harness := threadHarness(test, 100, 40)
 	harness.press("l", "enter") // overview focused: must not panic or change selection
-	if harness.v.selection() != 0 {
+	if harness.view.selection() != 0 {
 		test.Error("enter in the overview changed the selection")
 	}
 }
@@ -286,7 +286,7 @@ func overviewThreadsText(harness *harness) string {
 
 func TestOverviewThreadsLoadingState(test *testing.T) {
 	harness := newHarness(test, 100, 40)
-	for _, message := range messages(harness.v.Init()) {
+	for _, message := range messages(harness.view.Init()) {
 		if _, ok := message.(threadsLoadedMessage); !ok { // the thread load is still in flight
 			harness.send(message)
 		}
@@ -300,7 +300,7 @@ func TestOverviewThreadsLoadingState(test *testing.T) {
 func TestOverviewThreadsErrorState(test *testing.T) {
 	harness := newHarness(test, 100, 40)
 	harness.client.SetError(fake.MethodListReviewThreads, errors.New("boom\x1b[2J"))
-	harness.run(harness.v.Init())
+	harness.run(harness.view.Init())
 	out := overviewThreadsText(harness)
 	if !strings.Contains(out, "Could not load review threads: ") || !strings.Contains(out, "boom") || strings.Contains(out, "No review threads.") {
 		test.Errorf("expected the error state:\n%s", out)

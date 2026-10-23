@@ -57,18 +57,18 @@ func (pane *stubPane) FullHelp() [][]key.Binding {
 func TestSetFileOnChangedMetadata(test *testing.T) {
 	harness := loaded(test, 100, 30)
 	pane := &recordPane{}
-	harness.v.filePane = pane
+	harness.view.filePane = pane
 	harness.press("j")
 	if len(pane.files) != 1 {
 		test.Fatalf("SetFile calls = %v", pane.files)
 	}
 	detail := testDetail()
 	detail.Files[0].Additions = 99
-	harness.send(pullRequestLoadedMessage{owner: harness.v, repository: testRepository, number: 7, sequence: harness.v.sequence, detail: detail})
+	harness.send(pullRequestLoadedMessage{owner: harness.view, repository: testRepository, number: 7, sequence: harness.view.sequence, detail: detail})
 	if len(pane.files) != 2 || pane.files[1].Additions != 99 || pane.files[1].Path != pane.files[0].Path {
 		test.Errorf("pane did not get the new metadata: %+v", pane.files)
 	}
-	harness.send(pullRequestLoadedMessage{owner: harness.v, repository: testRepository, number: 7, sequence: harness.v.sequence, detail: detail})
+	harness.send(pullRequestLoadedMessage{owner: harness.view, repository: testRepository, number: 7, sequence: harness.view.sequence, detail: detail})
 	if len(pane.files) != 2 {
 		test.Errorf("unchanged file repeated: %+v", pane.files)
 	}
@@ -89,10 +89,10 @@ func TestFilePaneContractThroughRoot(test *testing.T) {
 	view := New(client, testRepository, 7, WithTheme(theme.New(true)), WithFilePane(pane))
 	noTick := func(time.Duration, func(time.Time) tea.Msg) tea.Cmd { return nil }
 	model := userinterface.New(view, theme.New(true), userinterface.Options{Tick: noTick})
-	testHarness := &harness{t: test, v: view, client: client}
+	testHarness := &harness{test: test, view: view, client: client}
 
 	step := func(message tea.Msg) { _, _ = model.Update(message) }
-	keyp := func(k string) { step(tea.KeyPressMsg{Code: rune(k[0]), Text: k}) }
+	keyPress := func(k string) { step(tea.KeyPressMsg{Code: rune(k[0]), Text: k}) }
 	step(tea.WindowSizeMsg{Width: 100, Height: 25})
 	testHarness.run(view.Init())
 
@@ -105,12 +105,12 @@ func TestFilePaneContractThroughRoot(test *testing.T) {
 		test.Errorf("resize did not change SetSize: %v", got)
 	}
 
-	keyp("}") // selects the first file
-	keyp("l") // focus the right pane
-	keyp("]")
-	keyp("z")
-	keyp("h")
-	keyp("j")
+	keyPress("}") // selects the first file
+	keyPress("l") // focus the right pane
+	keyPress("]")
+	keyPress("z")
+	keyPress("h")
+	keyPress("j")
 	if diff := cmp.Diff([]string{"]", "z h", "j"}, pane.keys); diff != "" {
 		test.Errorf("keys reaching the pane (-want +got):\n%s", diff)
 	}

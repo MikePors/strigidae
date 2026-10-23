@@ -128,8 +128,8 @@ func TestHostileTextNeverReachesTheScreen(test *testing.T) {
 	}
 	harness := newHarness(test, 140, 40)
 	harness.client = client
-	harness.v.client = client
-	harness.run(harness.v.Init())
+	harness.view.client = client
+	harness.run(harness.view.Init())
 
 	assertTame(test, "overview", harness.render())
 	harness.press("l", "G")
@@ -142,8 +142,8 @@ func TestHostileTextNeverReachesTheScreen(test *testing.T) {
 	}
 	harness.press("k") // the hostile modified file, with hostile hunk content
 	assertTame(test, "file selected", harness.render())
-	if !strings.Contains(harness.v.rightTitle(), "dir/evil") {
-		test.Errorf("hostile path was dropped, not cleaned: %q", harness.v.rightTitle())
+	if !strings.Contains(harness.view.rightTitle(), "dir/evil") {
+		test.Errorf("hostile path was dropped, not cleaned: %q", harness.view.rightTitle())
 	}
 	if out := ansi.Strip(harness.render()); !strings.Contains(out, "old evil") || !strings.Contains(out, "new evil") {
 		test.Errorf("hostile code lines should show, cleaned:\n%s", out)
@@ -172,7 +172,7 @@ func TestHostileTextNeverReachesTheScreen(test *testing.T) {
 	assertTame(test, "narrow", harness.render())
 	harness.press("f")
 	harness.typ("evil")
-	if !harness.v.CapturesKeys() {
+	if !harness.view.CapturesKeys() {
 		test.Fatal("setup: picker should be open")
 	}
 	out := harness.render()
@@ -186,7 +186,7 @@ func TestHostileErrorsAreCleaned(test *testing.T) {
 	hostileErr := errors.New("boom" + hostile)
 	harness := newHarness(test, 100, 20)
 	harness.client.SetError(fake.MethodGetPullRequest, hostileErr)
-	harness.run(harness.v.Init())
+	harness.run(harness.view.Init())
 	assertTame(test, "load failure", harness.render())
 
 	var got string
@@ -202,8 +202,8 @@ func TestHostileErrorsAreCleaned(test *testing.T) {
 
 	// Opening the browser can fail with attacker text in the URL.
 	secondHarness := loaded(test, 100, 20)
-	secondHarness.v.detail.URL = "http://x/" + hostile
-	secondHarness.v.open = func(string) error { return hostileErr }
+	secondHarness.view.detail.URL = "http://x/" + hostile
+	secondHarness.view.open = func(string) error { return hostileErr }
 	secondHarness.messages = nil
 	secondHarness.press("o")
 	for _, message := range secondHarness.messages {
@@ -220,7 +220,7 @@ func sizeMessage(width, height int) tea.Msg { return tea.WindowSizeMsg{Width: wi
 func TestHostileDiffError(test *testing.T) {
 	harness := newHarness(test, 100, 20)
 	harness.client.SetError(fake.MethodGetDiff, errors.New("bad"+hostile))
-	harness.run(harness.v.Init())
+	harness.run(harness.view.Init())
 	harness.press("}")
 	assertTame(test, "diff error", harness.render())
 

@@ -14,11 +14,11 @@ import (
 )
 
 func parseReset(value string) (time.Time, bool) {
-	secs, err := strconv.ParseInt(value, 10, 64)
-	if err != nil || secs <= 0 {
+	seconds, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || seconds <= 0 {
 		return time.Time{}, false
 	}
-	return time.Unix(secs, 0), true
+	return time.Unix(seconds, 0), true
 }
 
 // mapError converts go-gh errors into the typed errors of package github,
@@ -73,8 +73,8 @@ const defaultSecondaryWait = time.Minute
 // that bucket is actually exhausted.
 func (client *Client) httpResetAt(httpError *githubnetwork.HTTPError) time.Time {
 	if value := httpError.Headers.Get("Retry-After"); value != "" {
-		if secs, err := strconv.Atoi(value); err == nil {
-			return client.now().Add(time.Duration(secs) * time.Second)
+		if seconds, err := strconv.Atoi(value); err == nil {
+			return client.now().Add(time.Duration(seconds) * time.Second)
 		}
 		if timestamp, err := http.ParseTime(value); err == nil {
 			return timestamp

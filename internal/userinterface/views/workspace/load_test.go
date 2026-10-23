@@ -18,19 +18,19 @@ import (
 
 func TestLoad(test *testing.T) {
 	harness := newHarness(test, 100, 30)
-	if got := harness.v.Title(); got != "#7" {
+	if got := harness.view.Title(); got != "#7" {
 		test.Errorf("Title = %q", got)
 	}
-	command := harness.v.Init()
-	if !harness.v.Loading() {
+	command := harness.view.Init()
+	if !harness.view.Loading() {
 		test.Error("should be loading after Init")
 	}
 	harness.run(command)
-	if harness.v.Loading() {
+	if harness.view.Loading() {
 		test.Error("should have stopped loading")
 	}
-	if harness.v.detail == nil || harness.v.diff.Raw == "" {
-		test.Fatalf("detail=%v diff=%q", harness.v.detail, harness.v.diff.Raw)
+	if harness.view.detail == nil || harness.view.diff.Raw == "" {
+		test.Fatalf("detail=%v diff=%q", harness.view.detail, harness.view.diff.Raw)
 	}
 	var calls []string
 	for _, call := range harness.client.Calls() {
@@ -54,14 +54,14 @@ func TestLoadErrors(test *testing.T) {
 		test.Run(testCase.name, func(test *testing.T) {
 			harness := newHarness(test, 100, 30)
 			harness.client.SetError(fake.MethodGetPullRequest, testCase.err)
-			harness.run(harness.v.Init())
-			if harness.v.notFound != testCase.notFound || harness.v.err == nil {
-				test.Errorf("notFound=%v err=%v", harness.v.notFound, harness.v.err)
+			harness.run(harness.view.Init())
+			if harness.view.notFound != testCase.notFound || harness.view.err == nil {
+				test.Errorf("notFound=%v err=%v", harness.view.notFound, harness.view.err)
 			}
 			if !errors.Is(harness.lastErr(), testCase.err) {
 				test.Errorf("status bar error = %v, want %v", harness.lastErr(), testCase.err)
 			}
-			if harness.v.Loading() == false && harness.v.diffPending {
+			if harness.view.Loading() == false && harness.view.diffPending {
 				test.Error("inconsistent loading state")
 			}
 		})
@@ -71,10 +71,10 @@ func TestLoadErrors(test *testing.T) {
 func TestRefreshKeepsContentOnError(test *testing.T) {
 	harness := loaded(test, 100, 30)
 	harness.press("j", "j") // select the second file
-	path := harness.v.selectedPath()
+	path := harness.view.selectedPath()
 	harness.client.SetError(fake.MethodGetPullRequest, errors.New("flaky"))
 	harness.press("R")
-	if harness.v.detail == nil || harness.v.err != nil {
+	if harness.view.detail == nil || harness.view.err != nil {
 		test.Error("refresh failure must keep the loaded content")
 	}
 	if harness.lastErr() == nil {
@@ -82,8 +82,8 @@ func TestRefreshKeepsContentOnError(test *testing.T) {
 	}
 	harness.client.SetError(fake.MethodGetPullRequest, nil)
 	harness.press("R")
-	if harness.v.selectedPath() != path {
-		test.Errorf("selection after refresh = %q, want %q", harness.v.selectedPath(), path)
+	if harness.view.selectedPath() != path {
+		test.Errorf("selection after refresh = %q, want %q", harness.view.selectedPath(), path)
 	}
 	count := 0
 	for _, call := range harness.client.Calls() {
@@ -100,36 +100,36 @@ func TestStaleResultsIgnored(test *testing.T) {
 	harness := loaded(test, 100, 30)
 	other := testDetail()
 	other.Title = "stale"
-	current := harness.v.sequence
+	current := harness.view.sequence
 	for name, message := range map[string]pullRequestLoadedMessage{
-		"old seq":      {owner: harness.v, repository: testRepository, number: 7, sequence: current - 1, detail: other},
-		"other number": {owner: harness.v, repository: testRepository, number: 8, sequence: current, detail: other},
-		"other repo":   {owner: harness.v, repository: github.Repository{Owner: "x", Name: "y"}, number: 7, sequence: current, detail: other},
+		"old seq":      {owner: harness.view, repository: testRepository, number: 7, sequence: current - 1, detail: other},
+		"other number": {owner: harness.view, repository: testRepository, number: 8, sequence: current, detail: other},
+		"other repo":   {owner: harness.view, repository: github.Repository{Owner: "x", Name: "y"}, number: 7, sequence: current, detail: other},
 	} {
 		harness.send(message)
-		if harness.v.detail.Title == "stale" {
+		if harness.view.detail.Title == "stale" {
 			test.Errorf("%s: stale result applied", name)
 		}
 	}
-	harness.send(diffLoadedMessage{owner: harness.v, repository: testRepository, number: 7, sequence: current - 1, raw: "stale"})
-	if harness.v.diff.Raw == "stale" {
+	harness.send(diffLoadedMessage{owner: harness.view, repository: testRepository, number: 7, sequence: current - 1, raw: "stale"})
+	if harness.view.diff.Raw == "stale" {
 		test.Error("stale diff applied")
 	}
 	harness.press("R")
-	previous := harness.v.sequence - 1
-	harness.send(pullRequestLoadedMessage{owner: harness.v, repository: testRepository, number: 7, sequence: previous, detail: other})
-	if harness.v.detail.Title == "stale" {
+	previous := harness.view.sequence - 1
+	harness.send(pullRequestLoadedMessage{owner: harness.view, repository: testRepository, number: 7, sequence: previous, detail: other})
+	if harness.view.detail.Title == "stale" {
 		test.Error("result of a superseded request applied")
 	}
 }
 
 func TestDiffRefreshFailureKeepsDiff(test *testing.T) {
 	harness := loaded(test, 100, 30)
-	before := harness.v.diff.Raw
+	before := harness.view.diff.Raw
 	harness.client.SetError(fake.MethodGetDiff, errors.New("blip"))
 	harness.press("R")
-	if harness.v.diff.Raw != before || harness.v.diff.Loading {
-		test.Errorf("diff after failed refresh = %+v, want Raw kept and not loading", harness.v.diff)
+	if harness.view.diff.Raw != before || harness.view.diff.Loading {
+		test.Errorf("diff after failed refresh = %+v, want Raw kept and not loading", harness.view.diff)
 	}
 	if harness.lastErr() == nil {
 		test.Error("diff failure should reach the status bar")
@@ -137,8 +137,8 @@ func TestDiffRefreshFailureKeepsDiff(test *testing.T) {
 	// A too-large diff clears the text.
 	harness.client.SetError(fake.MethodGetDiff, github.ErrDiffTooLarge)
 	harness.press("R")
-	if harness.v.diff.Raw != "" || !errors.Is(harness.v.diff.Err, github.ErrDiffTooLarge) {
-		test.Errorf("too-large diff = %+v", harness.v.diff)
+	if harness.view.diff.Raw != "" || !errors.Is(harness.view.diff.Err, github.ErrDiffTooLarge) {
+		test.Errorf("too-large diff = %+v", harness.view.diff)
 	}
 }
 
@@ -194,7 +194,7 @@ func malformedDiff(test *testing.T) string {
 func TestPartialDiffStillShowsParsedFiles(test *testing.T) {
 	harness := newHarness(test, 100, 24)
 	harness.client.SetDiff(testRepository, 7, malformedDiff(test))
-	harness.run(harness.v.Init())
+	harness.run(harness.view.Init())
 
 	harness.press("}") // client.go parsed fine
 	if out := ansi.Strip(harness.render()); !strings.Contains(out, "func (c *Client) Sync") {

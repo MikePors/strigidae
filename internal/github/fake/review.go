@@ -23,8 +23,8 @@ type Submission struct {
 
 // SetHeadSHA moves the head commit of a seeded pull request, as a push would.
 func (client *Client) SetHeadSHA(repository github.Repository, number int, sha string) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	key := pullRequestKey{repository, number}
 	if detail, ok := client.details[key]; ok {
 		detail.HeadSHA = sha
@@ -35,8 +35,8 @@ func (client *Client) SetHeadSHA(repository github.Repository, number int, sha s
 // SetPendingReview sets the viewer's pending review on a pull request; nil
 // removes it, as if it had been submitted or deleted elsewhere.
 func (client *Client) SetPendingReview(repository github.Repository, number int, pendingReview *github.PendingReview) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	if pendingReview == nil {
 		delete(client.pending, pullRequestKey{repository, number})
 		return
@@ -46,16 +46,16 @@ func (client *Client) SetPendingReview(repository github.Repository, number int,
 
 // Submissions returns the recorded successful SubmitReview calls.
 func (client *Client) Submissions() []Submission {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	return slices.Clone(client.reviews)
 }
 
 // GetReviewStatus implements github.Client. It answers ErrNotFound for a pull
 // request the fake has no detail for.
 func (client *Client) GetReviewStatus(ctx context.Context, repository github.Repository, number int) (github.ReviewStatus, error) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	if err := client.begin(ctx, Call{Method: MethodGetReviewStatus, Repository: repository, Number: number}); err != nil {
 		return github.ReviewStatus{}, err
 	}
@@ -76,8 +76,8 @@ func (client *Client) GetReviewStatus(ctx context.Context, repository github.Rep
 // review brings inline comments. A submitted pending review disappears, and
 // the review joins the detail's reviews.
 func (client *Client) SubmitReview(ctx context.Context, in github.SubmitReviewInput) error {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	if err := client.begin(ctx, Call{Method: MethodSubmitReview, Repository: in.Repository, Number: in.Number, Body: in.Body}); err != nil {
 		return err
 	}

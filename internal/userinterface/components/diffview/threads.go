@@ -23,7 +23,7 @@ const (
 func (model *Model) SetThreads(threads []github.ReviewThread) {
 	k, found := model.cursorKey()
 	model.threads = threads
-	model.bcache = nil
+	model.blockCache = nil
 	model.placeThreads()
 	model.relayout(k, found)
 }
@@ -96,18 +96,18 @@ type blockKey struct {
 func (model *Model) renderBlock(threadIndex int) []string {
 	reviewThread := model.fthreads[threadIndex]
 	now := model.now()
-	signature := blockSignature{width: model.w - model.gutterWidth(), themeIdentifier: model.th.Identifier, minute: now.Truncate(time.Minute)}
-	if model.bcache == nil || signature != model.bsig {
-		model.bcache, model.bsig = map[blockKey][]string{}, signature
+	signature := blockSignature{width: model.width - model.gutterWidth(), themeIdentifier: model.theme.Identifier, minute: now.Truncate(time.Minute)}
+	if model.blockCache == nil || signature != model.blockSignature {
+		model.blockCache, model.blockSignature = map[blockKey][]string{}, signature
 	}
 	key := blockKey{identifier: reviewThread.Identifier, expanded: model.expanded(reviewThread), location: slices.Contains(model.orphans, threadIndex)}
-	if lines, ok := model.bcache[key]; ok {
+	if lines, ok := model.blockCache[key]; ok {
 		return lines
 	}
 	model.renders++
-	environment := thread.Environment{Theme: model.th, Markdown: model.md, Now: now}
+	environment := thread.Environment{Theme: model.theme, Markdown: model.markdown, Now: now}
 	lines := thread.Lines(environment, reviewThread, signature.width, thread.Options{Expanded: key.expanded, Location: key.location})
-	model.bcache[key] = lines
+	model.blockCache[key] = lines
 	return lines
 }
 
@@ -117,8 +117,8 @@ func (model *Model) noticeRows() []row {
 	var out []row
 	for _, line := range model.messageLines() {
 		line, _ = displayText(line)
-		for _, word := range strings.Split(ansi.Wrap(line, max(model.w-1, 1), ""), "\n") {
-			out = append(out, row{message: true, text: word, bi: len(out)})
+		for _, word := range strings.Split(ansi.Wrap(line, max(model.width-1, 1), ""), "\n") {
+			out = append(out, row{message: true, text: word, baseIndex: len(out)})
 		}
 	}
 	return out
@@ -126,24 +126,24 @@ func (model *Model) noticeRows() []row {
 
 func (model *Model) renderNoticeRow(i int, row row) string {
 	lead := " "
-	if i == model.win.Cursor() {
+	if i == model.window.Cursor() {
 		lead = ">"
 	}
-	text := ansi.Truncate(lead+row.text, model.w, "")
-	return model.th.Muted.Render(text + spaces(model.w-ansi.StringWidth(text)))
+	text := ansi.Truncate(lead+row.text, model.width, "")
+	return model.theme.Muted.Render(text + spaces(model.width-ansi.StringWidth(text)))
 }
 
 // threadsAtCursor returns the threads the cursor is on: the one whose rows it
 // is in, or those anchored to the diff line it is on.
 func (model *Model) threadsAtCursor() []int {
-	count := model.win.Cursor()
+	count := model.window.Cursor()
 	if count >= len(model.rows) {
 		return nil
 	}
-	if row := model.rows[count]; row.tr != nil {
-		return []int{row.tr.t}
+	if row := model.rows[count]; row.threadRow != nil {
+		return []int{row.threadRow.threadIndex}
 	}
-	return model.attach[model.rows[count].bi]
+	return model.attach[model.rows[count].baseIndex]
 }
 
 // ThreadsAtCursor returns the threads the cursor is on: the one whose rows it
@@ -188,9 +188,9 @@ func (model *Model) ToggleThread() {
 // NextThread moves the cursor to the header of the next thread below it (no-op
 // after the last one), putting it at the top of the view.
 func (model *Model) NextThread() {
-	for i := model.win.Cursor() + 1; i < len(model.rows); i++ {
-		if row := model.rows[i]; row.tr != nil && row.tr.i == 0 {
-			model.win.JumpTo(i)
+	for i := model.window.Cursor() + 1; i < len(model.rows); i++ {
+		if row := model.rows[i]; row.threadRow != nil && row.threadRow.i == 0 {
+			model.window.JumpTo(i)
 			return
 		}
 	}
@@ -198,9 +198,9 @@ func (model *Model) NextThread() {
 
 // PrevThread moves the cursor to the header of the closest thread above it.
 func (model *Model) PreviousThread() {
-	for i := min(model.win.Cursor(), len(model.rows)) - 1; i >= 0; i-- {
-		if row := model.rows[i]; row.tr != nil && row.tr.i == 0 {
-			model.win.JumpTo(i)
+	for i := min(model.window.Cursor(), len(model.rows)) - 1; i >= 0; i-- {
+		if row := model.rows[i]; row.threadRow != nil && row.threadRow.i == 0 {
+			model.window.JumpTo(i)
 			return
 		}
 	}
@@ -227,10 +227,10 @@ func (model *Model) threadGlyph(baseIndex int) (glyph string, open bool) {
 
 func (model *Model) renderThreadRow(i int, row row) string {
 	lead := " "
-	if i == model.win.Cursor() {
+	if i == model.window.Cursor() {
 		lead = ">"
 	}
 	lead += spaces(model.gutterWidth() - 1)
-	text := ansi.Truncate(lead+model.blocks[row.tr.t][row.tr.i], model.w, "")
-	return text + spaces(model.w-ansi.StringWidth(text))
+	text := ansi.Truncate(lead+model.blocks[row.threadRow.threadIndex][row.threadRow.i], model.width, "")
+	return text + spaces(model.width-ansi.StringWidth(text))
 }

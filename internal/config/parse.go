@@ -99,12 +99,12 @@ func (parser *parser) section(node *yaml.Node) (Section, string) {
 			if parser.err != nil {
 				return
 			}
-			norm, err := normalizeQuery(query)
+			normalized, err := normalizeQuery(query)
 			if err != nil {
 				parser.fail(node, "%s", err)
 				return
 			}
-			section.Query = norm
+			section.Query = normalized
 		case "limit":
 			section.Limit = parser.int(node, "limit", 1, MaximumLimit)
 		case "sort":

@@ -123,8 +123,8 @@ func TestUpdateAndDeleteFollowTheFlags(test *testing.T) {
 		{Identifier: "other", Author: "bob"}, // the fake gives other people's comments the admin flags
 	}
 	tests := []struct {
-		identifier string
-		update, rm error
+		identifier          string
+		update, removeError error
 	}{
 		{"own-ok", nil, nil},
 		{"own-no-update", github.ErrForbidden, nil},
@@ -139,8 +139,8 @@ func TestUpdateAndDeleteFollowTheFlags(test *testing.T) {
 			if _, err := client.UpdateReviewComment(ctx, testCase.identifier, "new"); !errors.Is(err, testCase.update) {
 				test.Errorf("update err = %v, want %v", err, testCase.update)
 			}
-			if err := client.DeleteReviewComment(ctx, testCase.identifier); !errors.Is(err, testCase.rm) {
-				test.Errorf("delete err = %v, want %v", err, testCase.rm)
+			if err := client.DeleteReviewComment(ctx, testCase.identifier); !errors.Is(err, testCase.removeError) {
+				test.Errorf("delete err = %v, want %v", err, testCase.removeError)
 			}
 		})
 	}

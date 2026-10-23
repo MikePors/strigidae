@@ -28,7 +28,7 @@ func TestHeaderChecks(test *testing.T) {
 			detail := testDetail()
 			detail.Checks = testCase.state
 			harness.client.SetPullRequest(detail)
-			harness.run(harness.v.Init())
+			harness.run(harness.view.Init())
 			out := harness.render()
 			if testCase.style == nil {
 				if strings.Contains(ansi.Strip(out), "checks") {

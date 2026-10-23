@@ -264,7 +264,7 @@ func TestBuiltinPalettesGuardQuietly(test *testing.T) {
 func colorHexes(roles Roles) map[string]string {
 	out := map[string]string{}
 	for _, field := range roles.fields() {
-		out[field.name] = HexString(*field.c)
+		out[field.name] = HexString(*field.color)
 	}
 	return out
 }
@@ -272,16 +272,16 @@ func colorHexes(roles Roles) map[string]string {
 // deltaEOK is the Euclidean distance between two colours in OKLab.
 func deltaEOK(first, second color.Color) float64 {
 	firstOklch, secondOklch := toOKLCH(first), toOKLCH(second)
-	deltaA := firstOklch.c*math.Cos(firstOklch.h) - secondOklch.c*math.Cos(secondOklch.h)
-	deltaB := firstOklch.c*math.Sin(firstOklch.h) - secondOklch.c*math.Sin(secondOklch.h)
-	return math.Sqrt((firstOklch.l-secondOklch.l)*(firstOklch.l-secondOklch.l) + deltaA*deltaA + deltaB*deltaB)
+	deltaA := firstOklch.chroma*math.Cos(firstOklch.hue) - secondOklch.chroma*math.Cos(secondOklch.hue)
+	deltaB := firstOklch.chroma*math.Sin(firstOklch.hue) - secondOklch.chroma*math.Sin(secondOklch.hue)
+	return math.Sqrt((firstOklch.lightness-secondOklch.lightness)*(firstOklch.lightness-secondOklch.lightness) + deltaA*deltaA + deltaB*deltaB)
 }
 
 // TestBuiltinTintsMatchTheEarlierLook checks the derived diff tints stay
 // within a small perceptual distance (OKLab delta E) of the hand-picked
 // colours they replaced.
 func TestBuiltinTintsMatchTheEarlierLook(test *testing.T) {
-	const maxDeltaE = 0.02
+	const maximumDeltaE = 0.02
 	old := map[string]map[string]string{
 		"strig-dark": {
 			"added-tint": "#12261e", "added-gutter-tint": "#17382a",
@@ -303,10 +303,10 @@ func TestBuiltinTintsMatchTheEarlierLook(test *testing.T) {
 				continue
 			}
 			count++
-			delta := deltaEOK(*field.c, hex(want))
-			test.Logf("%s %-20s %s vs %s: dE_OK = %.4f", palette.Name, field.name, HexString(*field.c), want, delta)
-			if delta > maxDeltaE {
-				test.Errorf("%s %s = %s, dE_OK %.4f from %s, want at most %.2f", palette.Name, field.name, HexString(*field.c), delta, want, maxDeltaE)
+			delta := deltaEOK(*field.color, hex(want))
+			test.Logf("%s %-20s %s vs %s: dE_OK = %.4f", palette.Name, field.name, HexString(*field.color), want, delta)
+			if delta > maximumDeltaE {
+				test.Errorf("%s %s = %s, dE_OK %.4f from %s, want at most %.2f", palette.Name, field.name, HexString(*field.color), delta, want, maximumDeltaE)
 			}
 		}
 	}
@@ -325,7 +325,7 @@ func TestGuardFixesUnreadableDerivedRoles(test *testing.T) {
 		name       string
 		foreground color.Color
 		background color.Color
-		min        float64
+		minimum    float64
 	}{
 		{"text", roles.Text, roles.Background, minimumTextContrast},
 		{"text on bar", roles.Text, roles.Surface, minimumTextContrast},
@@ -334,8 +334,8 @@ func TestGuardFixesUnreadableDerivedRoles(test *testing.T) {
 		{"success", roles.Success, roles.Background, minimumAccentContrast},
 	}
 	for _, testCase := range checks {
-		if got := contrast(testCase.foreground, testCase.background); got < testCase.min {
-			test.Errorf("%s contrast = %.2f, want at least %.1f", testCase.name, got, testCase.min)
+		if got := contrast(testCase.foreground, testCase.background); got < testCase.minimum {
+			test.Errorf("%s contrast = %.2f, want at least %.1f", testCase.name, got, testCase.minimum)
 		}
 	}
 }
@@ -444,16 +444,16 @@ func TestOverrideChangesIdentity(test *testing.T) {
 // background has no getter; the enforcement tests already keep any raw colour
 // constructor out of theme.go, so it can only come from a role.
 func styleColors(style lipgloss.Style) []string {
-	cols := []color.Color{
+	columns := []color.Color{
 		style.GetForeground(), style.GetBackground(), style.GetUnderlineColor(),
 		style.GetBorderTopForeground(), style.GetBorderRightForeground(),
 		style.GetBorderBottomForeground(), style.GetBorderLeftForeground(),
 		style.GetBorderTopBackground(), style.GetBorderRightBackground(),
 		style.GetBorderBottomBackground(), style.GetBorderLeftBackground(),
 	}
-	cols = append(cols, style.GetBorderForegroundBlend()...)
-	out := make([]string, len(cols))
-	for i, color := range cols {
+	columns = append(columns, style.GetBorderForegroundBlend()...)
+	out := make([]string, len(columns))
+	for i, color := range columns {
 		if color == nil {
 			continue
 		}
@@ -472,7 +472,7 @@ var (
 
 // walkColours calls f with the path and colour list of every style and bare
 // colour reachable from the exported fields of v, descending into structs.
-func walkColours(value reflect.Value, path string, check func(path string, cols []string)) {
+func walkColours(value reflect.Value, path string, check func(path string, columns []string)) {
 	for i := range value.NumField() {
 		structField := value.Type().Field(i)
 		if !structField.IsExported() {
@@ -512,19 +512,19 @@ func TestNothingIsHardcoded(test *testing.T) {
 		test.Fatal("setup: themes share an ID")
 	}
 	got := map[string][]string{}
-	walkColours(reflect.ValueOf(first), "", func(path string, cols []string) { got[path] = cols })
+	walkColours(reflect.ValueOf(first), "", func(path string, columns []string) { got[path] = columns })
 	checked := 0
-	walkColours(reflect.ValueOf(theme), "", func(path string, cols []string) {
+	walkColours(reflect.ValueOf(theme), "", func(path string, columns []string) {
 		actual := got[path]
-		if len(actual) != len(cols) {
+		if len(actual) != len(columns) {
 			test.Fatalf("%s: colour lists differ in length", path)
 		}
 		for i := range actual {
-			if actual[i] == "" && cols[i] == "" {
+			if actual[i] == "" && columns[i] == "" {
 				continue
 			}
 			checked++
-			if actual[i] == cols[i] {
+			if actual[i] == columns[i] {
 				test.Errorf("%s colour %d is %q in both palettes; is it hardcoded?", path, i, actual[i])
 			}
 		}
@@ -593,8 +593,8 @@ func TestChromaStyleFollowsClasses(test *testing.T) {
 
 func TestClassOfInherits(test *testing.T) {
 	tests := []struct {
-		tok  chroma.TokenType
-		want SyntaxClass
+		token chroma.TokenType
+		want  SyntaxClass
 	}{
 		{chroma.LiteralStringDouble, ClassString},
 		{chroma.LiteralStringEscape, ClassEscape},
@@ -608,8 +608,8 @@ func TestClassOfInherits(test *testing.T) {
 		{chroma.Text, ClassPlain},
 	}
 	for _, testCase := range tests {
-		if got := ClassOf(testCase.tok); got != testCase.want {
-			test.Errorf("ClassOf(%v) = %d, want %d", testCase.tok, got, testCase.want)
+		if got := ClassOf(testCase.token); got != testCase.want {
+			test.Errorf("ClassOf(%v) = %d, want %d", testCase.token, got, testCase.want)
 		}
 	}
 }

@@ -27,16 +27,16 @@ type Merge struct {
 // SetMergeSettings sets the merge settings of repo. Without it every method
 // is allowed and head branches are not deleted automatically.
 func (client *Client) SetMergeSettings(repository github.Repository, settings MergeSettings) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	settings.Allowed = slices.Clone(settings.Allowed)
 	client.merge[repository] = settings
 }
 
 // Merges returns the recorded successful MergePullRequest calls.
 func (client *Client) Merges() []Merge {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	return slices.Clone(client.merges)
 }
 
@@ -50,8 +50,8 @@ func (client *Client) mergeSettings(repository github.Repository) MergeSettings 
 // GetMergeStatus implements github.Client. It answers ErrNotFound for a pull
 // request the fake has no detail for.
 func (client *Client) GetMergeStatus(ctx context.Context, repository github.Repository, number int) (github.MergeStatus, error) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	if err := client.begin(ctx, Call{Method: MethodGetMergeStatus, Repository: repository, Number: number}); err != nil {
 		return github.MergeStatus{}, err
 	}
@@ -71,8 +71,8 @@ func (client *Client) GetMergeStatus(ctx context.Context, repository github.Repo
 // the expected one, and a pull request that is not open. Inject a refusal
 // (failing checks, conflicts) with SetError(MethodMergePullRequest, err).
 func (client *Client) MergePullRequest(ctx context.Context, in github.MergeInput) error {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	if err := client.begin(ctx, Call{Method: MethodMergePullRequest, Repository: in.Repository, Number: in.Number, PullRequestIdentifier: in.PullRequestIdentifier}); err != nil {
 		return err
 	}

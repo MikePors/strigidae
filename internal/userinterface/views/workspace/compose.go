@@ -116,7 +116,7 @@ func (view *View) origin() origin {
 func (view *View) owns(origin origin) bool { return origin == view.origin() }
 
 func (view *View) composeMine(origin origin, sequence int) bool {
-	return view.owns(origin) && sequence == view.cseq
+	return view.owns(origin) && sequence == view.commentSequence
 }
 
 // reply starts a reply to the thread under the diff cursor.
@@ -145,8 +145,8 @@ func (view *View) comment() tea.Cmd {
 
 // compose opens the editor, pre-filled with the draft for tgt if there is one.
 func (view *View) compose(target target) tea.Cmd {
-	view.cseq++
-	owner, repository, number, sequence := view, view.repository, view.number, view.cseq
+	view.commentSequence++
+	owner, repository, number, sequence := view, view.repository, view.number, view.commentSequence
 	initial := view.drafts[target.draftKey()]
 	if initial == "" {
 		initial = target.initial

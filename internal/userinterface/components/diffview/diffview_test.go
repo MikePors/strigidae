@@ -83,8 +83,8 @@ func TestMovementDelegates(test *testing.T) {
 		test.Run(testCase.name, func(test *testing.T) {
 			model := newModel(test, 80, 6)
 			testCase.do(model)
-			if model.win.Cursor() != testCase.wantCursor || model.Top() != testCase.wantTop {
-				test.Errorf("cursor/top = %d/%d, want %d/%d", model.win.Cursor(), model.Top(), testCase.wantCursor, testCase.wantTop)
+			if model.window.Cursor() != testCase.wantCursor || model.Top() != testCase.wantTop {
+				test.Errorf("cursor/top = %d/%d, want %d/%d", model.window.Cursor(), model.Top(), testCase.wantCursor, testCase.wantTop)
 			}
 		})
 	}
@@ -94,24 +94,24 @@ func TestResizeKeepsCursorVisible(test *testing.T) {
 	model := newModel(test, 80, 10)
 	model.CursorDown(9)
 	model.SetSize(80, 4)
-	if model.win.Cursor() < model.win.Top() || model.win.Cursor() >= model.win.Top()+4 {
-		test.Errorf("cursor %d outside [%d,%d)", model.win.Cursor(), model.win.Top(), model.win.Top()+4)
+	if model.window.Cursor() < model.window.Top() || model.window.Cursor() >= model.window.Top()+4 {
+		test.Errorf("cursor %d outside [%d,%d)", model.window.Cursor(), model.window.Top(), model.window.Top()+4)
 	}
 }
 
 // The code area, not the whole pane, is the horizontal view.
 func TestHorizontalScrollUsesCodeWidth(test *testing.T) {
 	model := newModel(test, 60, 8)
-	maxX := model.maxWidth - model.codeWidth()
-	if maxX <= 0 {
-		test.Fatalf("expected a line wider than the code area, maxX = %d", maxX)
+	maximumHorizontalOffset := model.maximumWidth - model.codeWidth()
+	if maximumHorizontalOffset <= 0 {
+		test.Fatalf("expected a line wider than the code area, maxX = %d", maximumHorizontalOffset)
 	}
 	model.ScrollRight(10000)
-	if model.HorizontalOffset() != maxX {
-		test.Errorf("right clamp: %d, want %d", model.HorizontalOffset(), maxX)
+	if model.HorizontalOffset() != maximumHorizontalOffset {
+		test.Errorf("right clamp: %d, want %d", model.HorizontalOffset(), maximumHorizontalOffset)
 	}
 	model.HalfScrollLeft()
-	if want := maxX - model.codeWidth()/2; model.HorizontalOffset() != want {
+	if want := maximumHorizontalOffset - model.codeWidth()/2; model.HorizontalOffset() != want {
 		test.Errorf("half left: %d, want %d", model.HorizontalOffset(), want)
 	}
 	model.ScrollLeft(10000)
@@ -133,25 +133,25 @@ func TestHorizontalScrollUsesCodeWidth(test *testing.T) {
 func TestHunkNavigation(test *testing.T) {
 	model := newModel(test, 80, 6)
 	model.NextHunk()
-	if model.win.Cursor() != hunk2Row || model.win.Top() != hunk2Row {
-		test.Errorf("next: cursor/top = %d/%d", model.win.Cursor(), model.win.Top())
+	if model.window.Cursor() != hunk2Row || model.window.Top() != hunk2Row {
+		test.Errorf("next: cursor/top = %d/%d", model.window.Cursor(), model.window.Top())
 	}
 	model.NextHunk() // last hunk: no-op
-	if model.win.Cursor() != hunk2Row {
-		test.Errorf("next on last hunk moved to %d", model.win.Cursor())
+	if model.window.Cursor() != hunk2Row {
+		test.Errorf("next on last hunk moved to %d", model.window.Cursor())
 	}
 	model.CursorDown(3)
 	model.PreviousHunk() // inside hunk 2: goes to its header
-	if model.win.Cursor() != hunk2Row {
-		test.Errorf("prev inside hunk: %d", model.win.Cursor())
+	if model.window.Cursor() != hunk2Row {
+		test.Errorf("prev inside hunk: %d", model.window.Cursor())
 	}
 	model.PreviousHunk()
-	if model.win.Cursor() != 0 {
-		test.Errorf("prev: %d", model.win.Cursor())
+	if model.window.Cursor() != 0 {
+		test.Errorf("prev: %d", model.window.Cursor())
 	}
 	model.PreviousHunk() // first hunk: no-op
-	if model.win.Cursor() != 0 {
-		test.Errorf("prev on first hunk moved to %d", model.win.Cursor())
+	if model.window.Cursor() != 0 {
+		test.Errorf("prev on first hunk moved to %d", model.window.Cursor())
 	}
 }
 
@@ -191,12 +191,12 @@ func TestSetFileSameFileKeepsPosition(test *testing.T) {
 	file := model.file
 	model.CursorDown(7)
 	model.SetFile(file)
-	if model.win.Cursor() != 7 {
-		test.Errorf("cursor reset to %d", model.win.Cursor())
+	if model.window.Cursor() != 7 {
+		test.Errorf("cursor reset to %d", model.window.Cursor())
 	}
 	model.SetFile(fixture(test, "pkg/new.go"))
-	if model.win.Cursor() != 0 {
-		test.Errorf("different path should reset cursor, got %d", model.win.Cursor())
+	if model.window.Cursor() != 0 {
+		test.Errorf("different path should reset cursor, got %d", model.window.Cursor())
 	}
 }
 
@@ -262,10 +262,10 @@ func TestSpecialStates(test *testing.T) {
 
 func TestGolden(test *testing.T) {
 	tests := []struct {
-		name string
-		path string
-		w, h int
-		do   func(model *Model)
+		name          string
+		path          string
+		width, height int
+		do            func(model *Model)
 	}{
 		{"normal", "server.go", 80, 25, nil},
 		{"scrolled_right", "server.go", 60, 14, func(model *Model) { model.ScrollRight(48) }},
@@ -280,11 +280,11 @@ func TestGolden(test *testing.T) {
 		test.Run(testCase.name, func(test *testing.T) {
 			model := New(theme.New(true))
 			model.SetFile(fixture(test, testCase.path))
-			model.SetSize(testCase.w, testCase.h)
+			model.SetSize(testCase.width, testCase.height)
 			if testCase.do != nil {
 				testCase.do(model)
 			}
-			golden.Assert(test, testCase.name, model.Render(testCase.w, testCase.h), false)
+			golden.Assert(test, testCase.name, model.Render(testCase.width, testCase.height), false)
 		})
 	}
 	test.Run("too_large", func(test *testing.T) {

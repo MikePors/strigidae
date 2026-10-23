@@ -31,10 +31,10 @@ func TestLines(test *testing.T) {
 		},
 	}
 	tests := []struct {
-		name string
-		o    Options
-		want []string
-		not  []string
+		name    string
+		options Options
+		want    []string
+		not     []string
 	}{
 		{"collapsed", Options{}, []string{"▸ ghost 2 comments · 1m ago [resolved] [outdated] — first"}, []string{"│"}},
 		{"collapsed with location", Options{Location: true}, []string{"▸ a/b.go:7 ghost"}, nil},
@@ -42,7 +42,7 @@ func TestLines(test *testing.T) {
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
-			out := ansi.Strip(strings.Join(Lines(environment(), thread, 80, testCase.o), "\n"))
+			out := ansi.Strip(strings.Join(Lines(environment(), thread, 80, testCase.options), "\n"))
 			for _, word := range testCase.want {
 				if !strings.Contains(out, word) {
 					test.Errorf("missing %q in:\n%s", word, out)

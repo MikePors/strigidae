@@ -34,10 +34,10 @@ func TestCopyFilename(test *testing.T) {
 		test.Run(testCase.name, func(test *testing.T) {
 			harness := loaded(test, 120, 30)
 			harness.press(testCase.keys...)
-			if harness.v.focus != testCase.focus {
-				test.Fatalf("focus = %v, want %v", harness.v.focus, testCase.focus)
+			if harness.view.focus != testCase.focus {
+				test.Fatalf("focus = %v, want %v", harness.view.focus, testCase.focus)
 			}
-			messages := copyCommand(test, harness.v)
+			messages := copyCommand(test, harness.view)
 			if len(messages) != 2 || messages[0] != tea.SetClipboard(testCase.want)() {
 				test.Fatalf("msgs = %#v, want clipboard %q first", messages, testCase.want)
 			}
@@ -50,7 +50,7 @@ func TestCopyFilename(test *testing.T) {
 
 func TestCopyFilenameOverview(test *testing.T) {
 	harness := loaded(test, 120, 30)
-	messages := copyCommand(test, harness.v)
+	messages := copyCommand(test, harness.view)
 	if len(messages) != 1 {
 		test.Fatalf("msgs = %#v", messages)
 	}
@@ -62,8 +62,8 @@ func TestCopyFilenameOverview(test *testing.T) {
 func TestCopyFilenameRefusesControlCharacters(test *testing.T) {
 	harness := loaded(test, 120, 30)
 	harness.press("j")
-	harness.v.detail.Files[0].Path = "a\x1b]52;c;x\x07b.go"
-	messages := copyCommand(test, harness.v)
+	harness.view.detail.Files[0].Path = "a\x1b]52;c;x\x07b.go"
+	messages := copyCommand(test, harness.view)
 	if len(messages) != 1 {
 		test.Fatalf("msgs = %#v", messages)
 	}

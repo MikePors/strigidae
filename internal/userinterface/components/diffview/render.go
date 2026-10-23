@@ -33,8 +33,8 @@ type variant struct {
 // styleSet precomputes every style combination so rendering never builds
 // styles.
 type styleSet struct {
-	v    [2][numberKinds]variant // [cursor][kind]
-	hunk [2]lipgloss.Style
+	variants [2][numberKinds]variant // [cursor][kind]
+	hunk     [2]lipgloss.Style
 }
 
 func newStyleSet(theme theme.Theme) styleSet {
@@ -60,7 +60,7 @@ func newStyleSet(theme theme.Theme) styleSet {
 			for count := range view.code {
 				view.code[count] = foreground[count].Background(base.GetBackground())
 			}
-			style.v[current][k] = view
+			style.variants[current][k] = view
 		}
 	}
 	style.hunk[0] = theme.DiffHunk
@@ -71,10 +71,10 @@ func newStyleSet(theme theme.Theme) styleSet {
 func (model *Model) renderRow(i int) string {
 	row := model.rows[i]
 	current := 0
-	if i == model.win.Cursor() {
+	if i == model.window.Cursor() {
 		current = 1
 	}
-	if row.tr != nil {
+	if row.threadRow != nil {
 		return model.renderThreadRow(i, row)
 	}
 	if row.message {
@@ -94,22 +94,22 @@ func (model *Model) renderRow(i int) string {
 	switch {
 	case current == 1:
 		mark = ">"
-	case model.selected(row.bi):
+	case model.selected(row.baseIndex):
 		mark, current = markSelected, 1 // the selection takes the cursor tint
 	}
-	view := &model.styles.v[current][kind]
+	view := &model.styles.variants[current][kind]
 
-	gutter := model.gutterText(row.line, row.bi, mark, view)
+	gutter := model.gutterText(row.line, row.baseIndex, mark, view)
 	codeWidth := model.codeWidth()
 	if codeWidth == 0 {
-		return ansi.Truncate(gutter, model.w, "")
+		return ansi.Truncate(gutter, model.width, "")
 	}
 
 	spans := model.spansFor(i)
 	if row.line.Kind == diff.NoNewline {
 		spans = []Span{{Text: row.text, Class: classNoNewline}}
 	}
-	visible, used := window(spans, model.win.HorizontalOffset(), codeWidth)
+	visible, used := window(spans, model.window.HorizontalOffset(), codeWidth)
 
 	var builder strings.Builder
 	builder.WriteString(gutter)
@@ -160,14 +160,14 @@ func (model *Model) renderHunk(header string, current int) string {
 		mark = ">"
 	}
 	header, _ = displayText(header) // the section text is copied from file content
-	text := ansi.Truncate(mark+header, model.w, "")
-	text += spaces(model.w - ansi.StringWidth(text))
+	text := ansi.Truncate(mark+header, model.width, "")
+	text += spaces(model.width - ansi.StringWidth(text))
 	return model.styles.hunk[current].Render(text)
 }
 
 // spansFor returns the highlighted spans of row i, highlighting on first use.
 func (model *Model) spansFor(i int) []Span {
-	baseIndex := model.rows[i].bi
+	baseIndex := model.rows[i].baseIndex
 	if span, ok := model.cache[baseIndex]; ok {
 		return span
 	}

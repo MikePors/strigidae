@@ -52,8 +52,8 @@ type Options struct {
 type View struct {
 	client     github.Client
 	repository github.Repository
-	th         theme.Theme
-	km         keys.Global
+	theme      theme.Theme
+	globalKeys keys.Global
 	now        func() time.Time
 	open       func(url string) error
 
@@ -65,7 +65,7 @@ type View struct {
 	err          error  // the last failed load, cleared by the next success
 	moreFailed   bool   // the last next-page load failed; no auto-retry until R
 
-	win           scroll.Window // cursor and top row over prs
+	window        scroll.Window // cursor and top row over prs
 	width, height int
 }
 
@@ -85,8 +85,8 @@ func New(client github.Client, repository github.Repository, theme theme.Theme, 
 	return &View{
 		client:     client,
 		repository: repository,
-		th:         theme,
-		km:         keys.DefaultGlobal(),
+		theme:      theme,
+		globalKeys: keys.DefaultGlobal(),
 		now:        options.Now,
 		open:       options.Open,
 		sequence:   1,
@@ -112,7 +112,7 @@ func (view *View) repositoryName() string { return terminaltext.Clean(view.repos
 
 // ShortHelp implements userinterface.View.
 func (view *View) ShortHelp() []key.Binding {
-	return []key.Binding{view.km.Select, view.km.Open, view.km.Refresh}
+	return []key.Binding{view.globalKeys.Select, view.globalKeys.Open, view.globalKeys.Refresh}
 }
 
 // FullHelp implements userinterface.View. Every binding here is a global one the root
@@ -139,10 +139,10 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 	switch message := message.(type) {
 	case tea.WindowSizeMsg:
 		view.width, view.height = message.Width, message.Height
-		view.win.SetSize(view.listHeight())
+		view.window.SetSize(view.listHeight())
 		return view, nil
 	case userinterface.ThemeMessage:
-		view.th = message.Theme
+		view.theme = message.Theme
 	case pullRequestsLoadedMessage:
 		return view, view.loaded(message)
 	case keys.Message:
@@ -173,7 +173,7 @@ func (view *View) loaded(message pullRequestsLoadedMessage) tea.Cmd {
 	} else {
 		view.replace(message.page.Items)
 	}
-	view.win.SetRows(len(view.pullRequests))
+	view.window.SetRows(len(view.pullRequests))
 	return view.maybeLoadMore()
 }
 
@@ -186,45 +186,45 @@ func (view *View) replace(items []github.PullRequest) {
 	}
 	view.pullRequests = items
 	// If the selected PR is gone, stay on the same row (the window clamps it).
-	view.win.SetRows(len(items))
+	view.window.SetRows(len(items))
 	for i, pullRequest := range items {
 		if selected != 0 && pullRequest.Number == selected {
-			view.win.Restore(i, view.win.Top(), 0)
+			view.window.Restore(i, view.window.Top(), 0)
 			break
 		}
 	}
 }
 
 func (view *View) selected() (github.PullRequest, bool) {
-	if view.win.Cursor() >= len(view.pullRequests) {
+	if view.window.Cursor() >= len(view.pullRequests) {
 		return github.PullRequest{}, false
 	}
-	return view.pullRequests[view.win.Cursor()], true
+	return view.pullRequests[view.window.Cursor()], true
 }
 
 func (view *View) handleKey(message keys.Message) tea.Cmd {
 	switch {
-	case key.Matches(message, view.km.Down):
-		view.win.Down(1)
-	case key.Matches(message, view.km.Up):
-		view.win.Up(1)
-	case key.Matches(message, view.km.Top):
-		view.win.GotoTop()
-	case key.Matches(message, view.km.Bottom):
-		view.win.GotoBottom()
-	case key.Matches(message, view.km.HalfDown):
-		view.win.HalfPageDown()
-	case key.Matches(message, view.km.HalfUp):
-		view.win.HalfPageUp()
-	case key.Matches(message, view.km.PageDown):
-		view.win.PageDown()
-	case key.Matches(message, view.km.PageUp):
-		view.win.PageUp()
-	case key.Matches(message, view.km.Select):
+	case key.Matches(message, view.globalKeys.Down):
+		view.window.Down(1)
+	case key.Matches(message, view.globalKeys.Up):
+		view.window.Up(1)
+	case key.Matches(message, view.globalKeys.Top):
+		view.window.GotoTop()
+	case key.Matches(message, view.globalKeys.Bottom):
+		view.window.GotoBottom()
+	case key.Matches(message, view.globalKeys.HalfDown):
+		view.window.HalfPageDown()
+	case key.Matches(message, view.globalKeys.HalfUp):
+		view.window.HalfPageUp()
+	case key.Matches(message, view.globalKeys.PageDown):
+		view.window.PageDown()
+	case key.Matches(message, view.globalKeys.PageUp):
+		view.window.PageUp()
+	case key.Matches(message, view.globalKeys.Select):
 		return view.openSelected()
-	case key.Matches(message, view.km.Open):
+	case key.Matches(message, view.globalKeys.Open):
 		return view.browseSelected()
-	case key.Matches(message, view.km.Refresh):
+	case key.Matches(message, view.globalKeys.Refresh):
 		return view.refresh()
 	default:
 		return nil
@@ -249,7 +249,7 @@ func (view *View) refresh() tea.Cmd {
 // maybeLoadMore requests the next page when the selection is near the end of
 // what is loaded.
 func (view *View) maybeLoadMore() tea.Cmd {
-	if view.next == "" || view.loading || view.moreFailed || view.loadingMore || view.win.Cursor() < len(view.pullRequests)-1-loadMoreMargin {
+	if view.next == "" || view.loading || view.moreFailed || view.loadingMore || view.window.Cursor() < len(view.pullRequests)-1-loadMoreMargin {
 		return nil
 	}
 	view.loadingMore = true
@@ -265,7 +265,7 @@ func (view *View) openSelected() tea.Cmd {
 		return nil
 	}
 	return userinterface.Push(workspace.New(view.client, view.repository, pullRequest.Number,
-		workspace.WithTheme(view.th),
+		workspace.WithTheme(view.theme),
 		workspace.WithClock(view.now),
 		workspace.WithOpener(view.open),
 	))

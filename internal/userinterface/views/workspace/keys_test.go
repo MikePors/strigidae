@@ -34,8 +34,8 @@ func terminalKeys(text string, base rune) map[string]tea.KeyPressMsg {
 func rootFor(harness *harness) (model *userinterface.Model, timers *int) {
 	timers = new(int)
 	tick := func(time.Duration, func(time.Time) tea.Msg) tea.Cmd { *timers++; return nil }
-	model = userinterface.New(harness.v, theme.New(true), userinterface.Options{Tick: tick})
-	_, _ = model.Update(tea.WindowSizeMsg{Width: harness.v.width, Height: harness.v.height + 1})
+	model = userinterface.New(harness.view, theme.New(true), userinterface.Options{Tick: tick})
+	_, _ = model.Update(tea.WindowSizeMsg{Width: harness.view.width, Height: harness.view.height + 1})
 	return model, timers
 }
 
@@ -61,12 +61,12 @@ func TestNavigationKeysThroughRoot(test *testing.T) {
 			harness := loaded(test, 100, 24)
 			model, timers := rootFor(harness)
 			_, _ = model.Update(k)
-			if harness.v.selection() != 1 {
-				test.Errorf("%s: } sel = %d, want 1", name, harness.v.selection())
+			if harness.view.selection() != 1 {
+				test.Errorf("%s: } sel = %d, want 1", name, harness.view.selection())
 			}
 			_, _ = model.Update(terminalKeys("{", '[')[name])
-			if harness.v.selection() != 1 {
-				test.Errorf("%s: { at the first file should stay, sel = %d", name, harness.v.selection())
+			if harness.view.selection() != 1 {
+				test.Errorf("%s: { at the first file should stay, sel = %d", name, harness.view.selection())
 			}
 			if *timers != 0 {
 				test.Errorf("%s: %d sequence timers started", name, *timers)
@@ -79,12 +79,12 @@ func TestNavigationKeysThroughRoot(test *testing.T) {
 		model, timers := rootFor(harness)
 		press(model, "l")
 		press(model, "]")
-		if harness.v.ov.vp.YOffset() != harness.v.ov.sections[1] {
-			test.Errorf("] did not act immediately: offset = %d", harness.v.ov.vp.YOffset())
+		if harness.view.overview.viewport.YOffset() != harness.view.overview.sections[1] {
+			test.Errorf("] did not act immediately: offset = %d", harness.view.overview.viewport.YOffset())
 		}
 		press(model, "[")
-		if harness.v.ov.vp.YOffset() != 0 {
-			test.Errorf("[: offset = %d", harness.v.ov.vp.YOffset())
+		if harness.view.overview.viewport.YOffset() != 0 {
+			test.Errorf("[: offset = %d", harness.view.overview.viewport.YOffset())
 		}
 		if *timers != 0 {
 			test.Errorf("] / [ started %d sequence timers", *timers)
@@ -134,12 +134,12 @@ func TestNavigationKeysThroughRoot(test *testing.T) {
 		model, _ := rootFor(harness)
 		press(model, "l")
 		press(model, "]") // jumps a section at once
-		if harness.v.ov.vp.YOffset() != harness.v.ov.sections[1] {
-			test.Errorf("]: offset = %d", harness.v.ov.vp.YOffset())
+		if harness.view.overview.viewport.YOffset() != harness.view.overview.sections[1] {
+			test.Errorf("]: offset = %d", harness.view.overview.viewport.YOffset())
 		}
 		press(model, "f") // is the file picker, not "next file"
-		if !harness.v.CapturesKeys() || harness.v.selection() != 0 {
-			test.Errorf("f after ]: captures = %v, sel = %d", harness.v.CapturesKeys(), harness.v.selection())
+		if !harness.view.CapturesKeys() || harness.view.selection() != 0 {
+			test.Errorf("f after ]: captures = %v, sel = %d", harness.view.CapturesKeys(), harness.view.selection())
 		}
 	})
 
@@ -159,7 +159,7 @@ func TestNavigationKeysThroughRoot(test *testing.T) {
 // TestHelpKeysMatchBindings keeps each help key equal to a real key.
 func TestHelpKeysMatchBindings(test *testing.T) {
 	harness := openClientDiff(test, 100, 24)
-	for _, bindings := range harness.v.FullHelp() {
+	for _, bindings := range harness.view.FullHelp() {
 		for _, binding := range bindings {
 			if binding.Help().Key == "" {
 				continue
@@ -179,7 +179,7 @@ func TestHelpKeysMatchBindings(test *testing.T) {
 // bracket sequence, so a bare ] or [ never waits for a second key.
 func TestNoBracketPrefixSequences(test *testing.T) {
 	harness := openClientDiff(test, 120, 30)
-	for _, bindings := range harness.v.FullHelp() {
+	for _, bindings := range harness.view.FullHelp() {
 		for _, binding := range bindings {
 			for _, k := range binding.Keys() {
 				if strings.HasPrefix(k, "] ") || strings.HasPrefix(k, "[ ") {

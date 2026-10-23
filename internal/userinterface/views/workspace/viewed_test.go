@@ -23,26 +23,26 @@ func viewedHarness(test *testing.T, width, height int, states ...github.ViewedSt
 		detail.Files[i].Viewed = state
 	}
 	otherHarness.client.SetPullRequest(detail)
-	otherHarness.run(otherHarness.v.Init())
+	otherHarness.run(otherHarness.view.Init())
 	return otherHarness
 }
 
 func (harness *harness) stateOf() github.ViewedState {
-	harness.t.Helper()
-	for _, file := range harness.v.files() {
+	harness.test.Helper()
+	for _, file := range harness.view.files() {
 		if file.Path == firstFile {
 			return file.Viewed
 		}
 	}
-	harness.t.Fatalf("no file %q", firstFile)
+	harness.test.Fatalf("no file %q", firstFile)
 	return ""
 }
 
 func (harness *harness) serverState() github.ViewedState {
-	harness.t.Helper()
-	detail, err := harness.client.GetPullRequest(harness.t.Context(), testRepository, 7)
+	harness.test.Helper()
+	detail, err := harness.client.GetPullRequest(harness.test.Context(), testRepository, 7)
 	if err != nil {
-		harness.t.Fatal(err)
+		harness.test.Fatal(err)
 	}
 	for _, file := range detail.Files {
 		if file.Path == firstFile {
@@ -113,7 +113,7 @@ func TestToggleViewedOnOverviewDoesNothing(test *testing.T) {
 	}
 }
 
-func (harness *harness) viewedCountForTest() int { return harness.v.viewedCount() }
+func (harness *harness) viewedCountForTest() int { return harness.view.viewedCount() }
 
 func TestToggleViewedRevertsOnError(test *testing.T) {
 	harness := viewedHarness(test, 100, 24, github.FileDismissed)

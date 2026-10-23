@@ -328,8 +328,8 @@ func (view *View) editComment() tea.Cmd {
 	}
 	origin, client := view.origin(), view.client
 	currentTarget := target{kind: kindEdit, commentIdentifier: comment.Identifier, threadIdentifier: thread.Identifier, label: threadLocation(thread), home: view.reachableHome(thread)}
-	view.cseq++ // a compose started meanwhile supersedes this read
-	sequence := view.cseq
+	view.commentSequence++ // a compose started meanwhile supersedes this read
+	sequence := view.commentSequence
 	return func() tea.Msg {
 		fresh, err := freshComment(context.Background(), client, currentTarget.commentIdentifier, changeEdit)
 		currentTarget.initial = fresh.Body

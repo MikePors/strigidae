@@ -16,10 +16,10 @@ func (view *View) files() []github.ChangedFile {
 func (view *View) entries() int { return 1 + len(view.files()) }
 
 // sel is the selected Files row: 0 is Overview, i is Files[i-1].
-func (view *View) selection() int { return view.fw.Cursor() }
+func (view *View) selection() int { return view.window.Cursor() }
 
 // setSel moves the selection to row i, scrolling the Files list to show it.
-func (view *View) setSelection(i int) { view.fw.Restore(i, view.fw.Top(), 0) }
+func (view *View) setSelection(i int) { view.window.Restore(i, view.window.Top(), 0) }
 
 func (view *View) selectedPath() string {
 	if size := view.selection(); size > 0 && size <= len(view.files()) {

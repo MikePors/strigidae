@@ -29,8 +29,8 @@ func TestConversationOrder(test *testing.T) {
 func TestRelativeTimesAge(test *testing.T) {
 	now := testNow
 	harness := newHarness(test, 100, 60)
-	harness.v.now = func() time.Time { return now }
-	harness.run(harness.v.Init())
+	harness.view.now = func() time.Time { return now }
+	harness.run(harness.view.Init())
 	harness.press("l", "G")
 	if !strings.Contains(ansi.Strip(harness.render()), "bob approved · 1h ago") {
 		test.Fatal("setup: expected 1h ago")

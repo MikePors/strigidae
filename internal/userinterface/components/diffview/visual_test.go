@@ -68,7 +68,7 @@ func TestVisualRanges(test *testing.T) {
 			if got := model.VisualMove(testCase.move); !errors.Is(got, testCase.refusal) {
 				test.Errorf("refusal = %v, want %v", got, testCase.refusal)
 			}
-			if got := model.win.Cursor(); got != testCase.endRow {
+			if got := model.window.Cursor(); got != testCase.endRow {
 				test.Errorf("cursor row = %d, want %d", got, testCase.endRow)
 			}
 			got, ok := model.Anchor()
@@ -114,7 +114,7 @@ func TestVisualRendering(test *testing.T) {
 	}
 	// The selected rows get the cursor tint, built here from the theme's own
 	// styles rather than the renderer's precomputed set.
-	theme := model.th
+	theme := model.theme
 	tint := theme.DiffCursor.GetBackground()
 	gutter := func(mark string, old int, selected bool) string {
 		style := theme.DiffGutterDelete

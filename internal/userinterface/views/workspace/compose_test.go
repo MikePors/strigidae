@@ -26,7 +26,7 @@ type composer struct {
 
 func newComposer(test *testing.T) *composer {
 	testComposer := &composer{harness: threadHarness(test, 110, 40)}
-	testComposer.v.edit = func(initial string, done func(string, error) tea.Msg) tea.Cmd {
+	testComposer.view.edit = func(initial string, done func(string, error) tea.Msg) tea.Cmd {
 		testComposer.openedOn = append(testComposer.openedOn, initial)
 		return func() tea.Msg { return done(testComposer.body, testComposer.err) }
 	}
@@ -85,11 +85,11 @@ func TestReplyAsksThenPosts(test *testing.T) {
 	if diff := cmp.Diff([]string{"Reply posted"}, composer.infoMessages()); diff != "" {
 		test.Errorf("info (-want +got):\n%s", diff)
 	}
-	if len(composer.v.drafts) != 0 {
-		test.Errorf("draft kept after success: %v", composer.v.drafts)
+	if len(composer.view.drafts) != 0 {
+		test.Errorf("draft kept after success: %v", composer.view.drafts)
 	}
 	var count int
-	for _, thread := range composer.v.threads {
+	for _, thread := range composer.view.threads {
 		if thread.Identifier == "t-resolved" {
 			count = len(thread.Comments)
 		}
@@ -129,7 +129,7 @@ func TestDraftsAreKeyedByTarget(test *testing.T) {
 	if diff := cmp.Diff([]string{"", "", "top draft"}, composer.openedOn); diff != "" {
 		test.Errorf("editor pre-fill (-want +got):\n%s", diff)
 	}
-	if diff := cmp.Diff(map[string]string{"t-resolved": "reply draft", "top-level": "top draft"}, composer.v.drafts); diff != "" {
+	if diff := cmp.Diff(map[string]string{"t-resolved": "reply draft", "top-level": "top draft"}, composer.view.drafts); diff != "" {
 		test.Errorf("drafts (-want +got):\n%s", diff)
 	}
 }
@@ -147,8 +147,8 @@ func TestEmptyBodyPostsNothing(test *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "empty comment") {
 			test.Errorf("%q: error = %v", body, err)
 		}
-		if len(composer.v.drafts) != 0 || len(composer.client.Replies()) != 0 {
-			test.Errorf("%q: drafts %v, replies %v", body, composer.v.drafts, composer.client.Replies())
+		if len(composer.view.drafts) != 0 || len(composer.client.Replies()) != 0 {
+			test.Errorf("%q: drafts %v, replies %v", body, composer.view.drafts, composer.client.Replies())
 		}
 	}
 }
@@ -165,8 +165,8 @@ func TestEditorFailureShowsError(test *testing.T) {
 	if _, ok := composer.lastConfirm(); ok {
 		test.Error("asked to confirm after a failed editor")
 	}
-	if composer.v.drafts["t-resolved"] != "half written" {
-		test.Errorf("typed text not kept as the draft: %v", composer.v.drafts)
+	if composer.view.drafts["t-resolved"] != "half written" {
+		test.Errorf("typed text not kept as the draft: %v", composer.view.drafts)
 	}
 	composer.err, composer.body = nil, ""
 	composer.press("r")
@@ -187,8 +187,8 @@ func TestFailedPostKeepsDraft(test *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "post reply: boom") || strings.ContainsRune(err.Error(), 0x1b) {
 		test.Errorf("error = %v", err)
 	}
-	if composer.v.drafts["t-resolved"] != "important" {
-		test.Errorf("draft lost: %v", composer.v.drafts)
+	if composer.view.drafts["t-resolved"] != "important" {
+		test.Errorf("draft lost: %v", composer.view.drafts)
 	}
 	composer.press("r")
 	if got := composer.openedOn[len(composer.openedOn)-1]; got != "important" {
@@ -201,18 +201,18 @@ func TestStaleComposeResultsIgnored(test *testing.T) {
 	composer.onThread()
 	composer.body = "x"
 	composer.press("r")
-	stale := editedMessage{owner: composer.v, repository: testRepository, number: 7, sequence: composer.v.cseq - 1, target: target{kind: kindReply, threadIdentifier: "t-resolved"}, body: "late"}
+	stale := editedMessage{owner: composer.view, repository: testRepository, number: 7, sequence: composer.view.commentSequence - 1, target: target{kind: kindReply, threadIdentifier: "t-resolved"}, body: "late"}
 	composer.messages = nil
 	composer.send(stale)
 	if _, ok := composer.lastConfirm(); ok {
 		test.Error("stale edit result asked for confirmation")
 	}
 	other := stale
-	other.owner, other.sequence = &View{}, composer.v.cseq
+	other.owner, other.sequence = &View{}, composer.view.commentSequence
 	composer.send(other)
-	composer.send(editedMessage{owner: composer.v, repository: github.Repository{Owner: "x", Name: "y"}, number: 7, sequence: composer.v.cseq, body: "late"})
-	composer.send(editedMessage{owner: composer.v, repository: testRepository, number: 8, sequence: composer.v.cseq, body: "late"})
-	if _, ok := composer.lastConfirm(); ok || composer.v.drafts["t-resolved"] == "late" {
+	composer.send(editedMessage{owner: composer.view, repository: github.Repository{Owner: "x", Name: "y"}, number: 7, sequence: composer.view.commentSequence, body: "late"})
+	composer.send(editedMessage{owner: composer.view, repository: testRepository, number: 8, sequence: composer.view.commentSequence, body: "late"})
+	if _, ok := composer.lastConfirm(); ok || composer.view.drafts["t-resolved"] == "late" {
 		test.Error("foreign edit result was accepted")
 	}
 }
@@ -225,9 +225,9 @@ func TestPostResultAfterNewComposeIsHandled(test *testing.T) {
 	configuration, _ := composer.lastConfirm()
 	// The user starts another compose before the post returns.
 	composer.body = "second"
-	before := composer.v.cseq
+	before := composer.view.commentSequence
 	composer.press("h", "g g", "c")
-	if composer.v.cseq == before {
+	if composer.view.commentSequence == before {
 		test.Fatal("setup: no new compose started")
 	}
 	composer.drafts(map[string]string{"t-resolved": "first"})
@@ -236,31 +236,31 @@ func TestPostResultAfterNewComposeIsHandled(test *testing.T) {
 	if diff := cmp.Diff([]string{"Reply posted"}, composer.infoMessages()); diff != "" {
 		test.Errorf("info (-want +got):\n%s", diff)
 	}
-	if _, ok := composer.v.drafts["t-resolved"]; ok {
+	if _, ok := composer.view.drafts["t-resolved"]; ok {
 		test.Error("posted draft kept")
 	}
 
 	// A newer draft for the same target survives the older post.
 	composer.drafts(map[string]string{"t-resolved": "newer"})
-	composer.send(postedMessage{origin: composer.v.origin(), target: target{kind: kindReply, threadIdentifier: "t-resolved"}, body: "first"})
-	if composer.v.drafts["t-resolved"] != "newer" {
-		test.Errorf("newer draft deleted: %v", composer.v.drafts)
+	composer.send(postedMessage{origin: composer.view.origin(), target: target{kind: kindReply, threadIdentifier: "t-resolved"}, body: "first"})
+	if composer.view.drafts["t-resolved"] != "newer" {
+		test.Errorf("newer draft deleted: %v", composer.view.drafts)
 	}
 
 	// A failure is reported by the command itself, and keeps the draft.
 	composer.client.SetError(fake.MethodReplyToThread, errors.New("boom"))
 	composer.drafts(map[string]string{"t-resolved": "first"})
 	composer.messages = nil
-	composer.run(composer.v.post(target{kind: kindReply, threadIdentifier: "t-resolved"}, "first"))
+	composer.run(composer.view.post(target{kind: kindReply, threadIdentifier: "t-resolved"}, "first"))
 	if err := composer.lastErr(); err == nil || !strings.Contains(err.Error(), "post reply: boom") {
 		test.Errorf("error = %v", err)
 	}
-	if composer.v.drafts["t-resolved"] != "first" {
+	if composer.view.drafts["t-resolved"] != "first" {
 		test.Error("draft lost")
 	}
 }
 
-func (composer *composer) drafts(data map[string]string) { composer.v.drafts = data }
+func (composer *composer) drafts(data map[string]string) { composer.view.drafts = data }
 
 func TestReplyWithZeroOneAndSeveralThreads(test *testing.T) {
 	composer := newComposer(test)
@@ -270,7 +270,7 @@ func TestReplyWithZeroOneAndSeveralThreads(test *testing.T) {
 		{Identifier: "c", Path: "internal/sync/client.go", Line: 12, DiffSide: github.SideRight, Comments: []github.ReviewComment{tc("dan", "three", time.Hour)}},
 	}
 	composer.client.SetReviewThreads(testRepository, 7, two)
-	composer.run(composer.v.load())
+	composer.run(composer.view.load())
 	composer.selectFile()
 	composer.body = "hi"
 
@@ -294,11 +294,11 @@ func TestReplyWithZeroOneAndSeveralThreads(test *testing.T) {
 	composer.messages = nil
 	for range 12 { // walk the diff until the cursor is on line 14, two threads
 		composer.press("j")
-		if len(composer.v.filePane.FocusedThreads()) == 2 {
+		if len(composer.view.filePane.FocusedThreads()) == 2 {
 			break
 		}
 	}
-	if count := len(composer.v.filePane.FocusedThreads()); count != 2 {
+	if count := len(composer.view.filePane.FocusedThreads()); count != 2 {
 		test.Fatalf("setup: %d threads at the cursor", count)
 	}
 	composer.press("r")
@@ -324,8 +324,8 @@ func TestReplyWorksFromTheFilesPane(test *testing.T) {
 	composer.onThread()
 	composer.body = "from the files pane"
 	composer.press("h", "r") // the diff cursor stays on the thread
-	if composer.v.focus != paneFiles || len(composer.openedOn) != 1 {
-		test.Fatalf("focus %v, editor opened %d times", composer.v.focus, len(composer.openedOn))
+	if composer.view.focus != paneFiles || len(composer.openedOn) != 1 {
+		test.Fatalf("focus %v, editor opened %d times", composer.view.focus, len(composer.openedOn))
 	}
 	configuration, ok := composer.lastConfirm()
 	if !ok || !strings.HasPrefix(configuration.Text, "Post reply to internal/sync/client.go:12?") {
@@ -372,15 +372,15 @@ func TestConfirmationTextIsCleanAndFits(test *testing.T) {
 	if strings.ContainsFunc(configuration.Text, func(character rune) bool { return character < 0x20 || (character >= 0x7f && character < 0xa0) }) {
 		test.Errorf("control characters in %q", configuration.Text)
 	}
-	if width := ansi.StringWidth(configuration.Text); width > composer.v.width {
-		test.Errorf("text is %d wide, view is %d", width, composer.v.width)
+	if width := ansi.StringWidth(configuration.Text); width > composer.view.width {
+		test.Errorf("text is %d wide, view is %d", width, composer.view.width)
 	}
 }
 
 func TestReplyAndCommentAreInHelp(test *testing.T) {
 	harness := loaded(test, 100, 30)
 	got := map[string]string{}
-	for _, bindings := range harness.v.FullHelp() {
+	for _, bindings := range harness.view.FullHelp() {
 		for _, binding := range bindings {
 			if k := binding.Keys(); len(k) == 1 && (k[0] == "r" || k[0] == "c") {
 				got[k[0]] = binding.Help().Desc

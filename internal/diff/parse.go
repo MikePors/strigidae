@@ -23,7 +23,7 @@ var hunkRegex = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@ 
 // no error. The returned *Diff is never nil; when the error is non-nil it holds
 // the best-effort parse.
 func Parse(text string) (*Diff, error) {
-	parsed := &parser{d: &Diff{}}
+	parsed := &parser{diff: &Diff{}}
 	count := 0
 	for len(text) > 0 {
 		var line string
@@ -34,23 +34,23 @@ func Parse(text string) (*Diff, error) {
 	if parsed.inBody {
 		parsed.fail(count, "truncated hunk")
 	}
-	if len(parsed.d.Files) == 0 && parsed.sawText && parsed.err == nil {
+	if len(parsed.diff.Files) == 0 && parsed.sawText && parsed.err == nil {
 		parsed.err = &ParseError{Line: 1, Message: "no diff found"}
 	}
-	return parsed.d, parsed.err
+	return parsed.diff, parsed.err
 }
 
 type parser struct {
-	d       *Diff
-	file    *File
-	hasHunk bool // the current file has at least one hunk
-	inBody  bool // inside a hunk body: line counts not yet exhausted
-	oldRem  int
-	newRem  int
-	oldNo   int
-	newNo   int
-	err     error
-	sawText bool
+	diff         *Diff
+	file         *File
+	hasHunk      bool // the current file has at least one hunk
+	inBody       bool // inside a hunk body: line counts not yet exhausted
+	oldRemaining int
+	newRemaining int
+	oldNo        int
+	newNo        int
+	err          error
+	sawText      bool
 }
 
 func (parsed *parser) fail(count int, message string) {
@@ -103,32 +103,32 @@ func (parser *parser) bodyLine(line string) bool {
 		parser.addLine(Line{Kind: NoNewline, Text: markerText(line)})
 		return true
 	case line == "" || line == "\r" || line[0] == ' ':
-		if parser.oldRem == 0 || parser.newRem == 0 {
+		if parser.oldRemaining == 0 || parser.newRemaining == 0 {
 			return false
 		}
-		parser.oldRem--
-		parser.newRem--
+		parser.oldRemaining--
+		parser.newRemaining--
 		parser.addLine(Line{Kind: Context, Old: parser.oldNo, New: parser.newNo, Text: content(line)})
 		parser.oldNo++
 		parser.newNo++
 	case line[0] == '+':
-		if parser.newRem == 0 {
+		if parser.newRemaining == 0 {
 			return false
 		}
-		parser.newRem--
+		parser.newRemaining--
 		parser.addLine(Line{Kind: Add, New: parser.newNo, Text: content(line)})
 		parser.newNo++
 	case line[0] == '-':
-		if parser.oldRem == 0 {
+		if parser.oldRemaining == 0 {
 			return false
 		}
-		parser.oldRem--
+		parser.oldRemaining--
 		parser.addLine(Line{Kind: Delete, Old: parser.oldNo, Text: content(line)})
 		parser.oldNo++
 	default:
 		return false
 	}
-	parser.inBody = parser.oldRem > 0 || parser.newRem > 0
+	parser.inBody = parser.oldRemaining > 0 || parser.newRemaining > 0
 	return true
 }
 
@@ -138,7 +138,7 @@ func (parser *parser) addLine(line Line) {
 }
 
 func (parser *parser) startHunk(count int, messages []string) bool {
-	vals := [4]int{0, 1, 0, 1}
+	values := [4]int{0, 1, 0, 1}
 	for i, index := range []int{1, 2, 3, 4} {
 		if messages[index] == "" {
 			continue
@@ -148,24 +148,24 @@ func (parser *parser) startHunk(count int, messages []string) bool {
 			parser.fail(count, "bad hunk header")
 			return false
 		}
-		vals[i] = value
+		values[i] = value
 	}
 	parser.file.Hunks = append(parser.file.Hunks, Hunk{
-		OldStart: vals[0], OldLines: vals[1],
-		NewStart: vals[2], NewLines: vals[3],
+		OldStart: values[0], OldLines: values[1],
+		NewStart: values[2], NewLines: values[3],
 		Section: strings.TrimSpace(messages[5]),
 	})
 	parser.hasHunk = true
-	parser.oldRem, parser.newRem = vals[1], vals[3]
-	parser.oldNo, parser.newNo = vals[0], vals[2]
-	parser.inBody = parser.oldRem > 0 || parser.newRem > 0
+	parser.oldRemaining, parser.newRemaining = values[1], values[3]
+	parser.oldNo, parser.newNo = values[0], values[2]
+	parser.inBody = parser.oldRemaining > 0 || parser.newRemaining > 0
 	return true
 }
 
 func (parser *parser) startFile(rest string) {
 	file := &File{}
 	file.OldPath, file.NewPath = splitGitPaths(rest)
-	parser.d.Files = append(parser.d.Files, file)
+	parser.diff.Files = append(parser.diff.Files, file)
 	parser.file, parser.hasHunk, parser.inBody = file, false, false
 }
 

@@ -80,13 +80,13 @@ func violations(relative, source string) ([]string, error) {
 	bad := func(node ast.Node, format string, arguments ...any) {
 		out = append(out, fmt.Sprintf("%s: %s", fset.Position(node.Pos()), fmt.Sprintf(format, arguments...)))
 	}
-	pkgSel := func(expression ast.Expr) (packageName, selection string, ok bool) {
-		selector, isSel := expression.(*ast.SelectorExpr)
-		if !isSel {
+	pkgSelection := func(expression ast.Expr) (packageName, selection string, ok bool) {
+		selector, isSelection := expression.(*ast.SelectorExpr)
+		if !isSelection {
 			return "", "", false
 		}
-		column, isIdent := selector.X.(*ast.Ident)
-		if !isIdent {
+		column, isIdentifier := selector.X.(*ast.Ident)
+		if !isIdentifier {
 			return "", "", false
 		}
 		return paths[column.Name], selector.Sel.Name, paths[column.Name] != ""
@@ -111,15 +111,15 @@ func violations(relative, source string) ([]string, error) {
 				checkString(node, text)
 			}
 		case *ast.CallExpr:
-			if packageName, selection, ok := pkgSel(node.Fun); ok && colourConstructors[packageName][selection] && !colourFile {
+			if packageName, selection, ok := pkgSelection(node.Fun); ok && colourConstructors[packageName][selection] && !colourFile {
 				bad(node, "colour constructor %s.%s outside the palette files", filepath.Base(packageName), selection)
 			}
 		case *ast.CompositeLit:
-			if packageName, selection, ok := pkgSel(node.Type); ok && packageName == colorPath && colourTypes[selection] && relative != "theme/color.go" {
+			if packageName, selection, ok := pkgSelection(node.Type); ok && packageName == colorPath && colourTypes[selection] && relative != "theme/color.go" {
 				bad(node, "color.%s literal outside theme/color.go", selection)
 			}
 		case *ast.SelectorExpr:
-			if packageName, selection, ok := pkgSel(node); ok {
+			if packageName, selection, ok := pkgSelection(node); ok {
 				if (packageName == lipglossPath || packageName == ansiPath) && namedColours[selection] {
 					bad(node, "named colour %s.%s; use a role", filepath.Base(packageName), selection)
 				}

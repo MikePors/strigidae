@@ -37,7 +37,7 @@ func WithClock(now func() time.Time) Option { return func(view *View) { view.now
 // WithTheme sets the initial theme. Without it the default dark theme is used
 // until the root sends a userinterface.ThemeMsg; a view that pushes a workspace should
 // pass its own current theme.
-func WithTheme(theme theme.Theme) Option { return func(view *View) { view.th = theme } }
+func WithTheme(theme theme.Theme) Option { return func(view *View) { view.theme = theme } }
 
 // WithOpener replaces how `o` opens the pull request URL, which by default is
 // the user's browser.
@@ -53,22 +53,22 @@ type View struct {
 	repository github.Repository
 	number     int
 
-	now      func() time.Time
-	open     func(url string) error
-	th       theme.Theme
-	km       keys.Global
-	bind     bindings
-	navBind  diffBindings // hunk/thread keys, routed to the file pane from either focus
-	md       *markdown.Renderer
-	filePane FilePane
-	edit     EditFunction
+	now            func() time.Time
+	open           func(url string) error
+	theme          theme.Theme
+	globalKeys     keys.Global
+	bind           bindings
+	navigationBind diffBindings // hunk/thread keys, routed to the file pane from either focus
+	markdown       *markdown.Renderer
+	filePane       FilePane
+	edit           EditFunction
 
 	sequence           int // latest load request; older results are stale
 	pullRequestPending bool
 	diffPending        bool
-	thrPending         bool
-	thrLoaded          bool                  // a thread load has succeeded
-	thrErr             error                 // why the last thread load failed; cleared when a load starts
+	threadPending      bool
+	threadLoaded       bool                  // a thread load has succeeded
+	threadErr          error                 // why the last thread load failed; cleared when a load starts
 	threads            []github.ReviewThread // sorted by file and line
 	detail             *github.PullRequestDetail
 	diff               DiffState
@@ -76,7 +76,7 @@ type View struct {
 	err                error  // load failure while there is nothing to show
 	notFound           bool
 
-	cseq int // latest compose request; older results are stale
+	commentSequence int // latest compose request; older results are stale
 	// writes counts the comment writes in flight, from the start of a write
 	// until its result (or its question) arrives; reviews and merges wait for
 	// it, and no second write starts meanwhile.
@@ -85,12 +85,12 @@ type View struct {
 
 	viewedState map[string]*viewedToggle // by path; see viewedToggle
 
-	fw     scroll.Window // Files pane: row 0 is Overview, row i is Files[i-1]
-	focus  pane
-	ov     overview
-	picker *picker.Model // non-nil while the file picker is open
-	review reviewFlow    // submitting a review (see review.go)
-	merge  mergeFlow     // merging the pull request (see merge.go)
+	window   scroll.Window // Files pane: row 0 is Overview, row i is Files[i-1]
+	focus    pane
+	overview overview
+	picker   *picker.Model // non-nil while the file picker is open
+	review   reviewFlow    // submitting a review (see review.go)
+	merge    mergeFlow     // merging the pull request (see merge.go)
 	// pickerItems are the paths the picker was built from; a choice is
 	// resolved by path because a refresh may replace the file list meanwhile.
 	pickerItems []string
@@ -112,28 +112,28 @@ var (
 // New returns the workspace for pull request number in repo.
 func New(client github.Client, repository github.Repository, number int, options ...Option) *View {
 	view := &View{
-		client:      client,
-		repository:  repository,
-		number:      number,
-		now:         time.Now,
-		open:        openInBrowser,
-		th:          theme.Default(),
-		km:          keys.DefaultGlobal(),
-		bind:        defaultBindings(),
-		navBind:     defaultDiffBindings(),
-		edit:        execEditor,
-		drafts:      map[string]string{},
-		viewedState: map[string]*viewedToggle{},
+		client:         client,
+		repository:     repository,
+		number:         number,
+		now:            time.Now,
+		open:           openInBrowser,
+		theme:          theme.Default(),
+		globalKeys:     keys.DefaultGlobal(),
+		bind:           defaultBindings(),
+		navigationBind: defaultDiffBindings(),
+		edit:           execEditor,
+		drafts:         map[string]string{},
+		viewedState:    map[string]*viewedToggle{},
 	}
 	for _, option := range options {
 		option(view)
 	}
-	view.md = markdown.New(view.th)
-	view.ov = newOverview()
+	view.markdown = markdown.New(view.theme)
+	view.overview = newOverview()
 	if view.filePane == nil {
-		view.filePane = newDiffPane(view.th, func() time.Time { return view.now() })
+		view.filePane = newDiffPane(view.theme, func() time.Time { return view.now() })
 	}
-	view.filePane.SetTheme(view.th)
+	view.filePane.SetTheme(view.theme)
 	return view
 }
 
@@ -142,7 +142,7 @@ func (view *View) Title() string { return fmt.Sprintf("#%d", view.number) }
 
 // Loading implements userinterface.Loader.
 func (view *View) Loading() bool {
-	return view.pullRequestPending || view.diffPending || view.thrPending || view.review.submitting || view.merge.merging
+	return view.pullRequestPending || view.diffPending || view.threadPending || view.review.submitting || view.merge.merging
 }
 
 // CapturesKeys implements userinterface.KeyCapturer: the file picker, the verdict
@@ -163,7 +163,7 @@ func (view *View) Resumed() tea.Cmd { return nil }
 
 // ShortHelp implements userinterface.View.
 func (view *View) ShortHelp() []key.Binding {
-	return []key.Binding{view.bind.PaneLeft, view.bind.PaneRight, view.bind.FilePicker, view.km.Open}
+	return []key.Binding{view.bind.PaneLeft, view.bind.PaneRight, view.bind.FilePicker, view.globalKeys.Open}
 }
 
 // FullHelp implements userinterface.View. It also registers every multi-key sequence the
@@ -190,10 +190,10 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		view.width, view.height = message.Width, message.Height
 		view.layout()
 	case userinterface.ThemeMessage:
-		view.th = message.Theme
-		view.md = markdown.New(view.th)
-		view.ov.invalidate()
-		view.filePane.SetTheme(view.th)
+		view.theme = message.Theme
+		view.markdown = markdown.New(view.theme)
+		view.overview.invalidate()
+		view.filePane.SetTheme(view.theme)
 		view.layout()
 	case pullRequestLoadedMessage:
 		if !view.mine(message.owner, message.repository, message.number, message.sequence) {
@@ -247,7 +247,7 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		}
 		return view, view.commentAgreed(message)
 	case commentReadMessage:
-		if !view.owns(message.origin) || message.sequence != view.cseq { // another editor started meanwhile
+		if !view.owns(message.origin) || message.sequence != view.commentSequence { // another editor started meanwhile
 			return view, nil
 		}
 		return view, view.commentRead(message)

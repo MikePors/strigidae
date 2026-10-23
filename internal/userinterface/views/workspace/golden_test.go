@@ -73,13 +73,13 @@ func TestGolden(test *testing.T) {
 	test.Run("error", func(test *testing.T) {
 		harness := newHarness(test, 80, 10)
 		harness.client.SetError(fake.MethodGetPullRequest, errors.New("load pull request: connection refused"))
-		harness.run(harness.v.Init())
+		harness.run(harness.view.Init())
 		golden.Assert(test, "error", harness.render(), false)
 	})
 	test.Run("not_found", func(test *testing.T) {
 		harness := newHarness(test, 80, 10)
-		harness.v.number = 99
-		harness.run(harness.v.Init())
+		harness.view.number = 99
+		harness.run(harness.view.Init())
 		golden.Assert(test, "not_found", harness.render(), false)
 	})
 	test.Run("no_files_no_description", func(test *testing.T) {
@@ -89,7 +89,7 @@ func TestGolden(test *testing.T) {
 		client.SetPullRequest(detail)
 		client.SetDiff(testRepository, 7, readDiff(test))
 		view := New(client, testRepository, 7, WithClock(func() time.Time { return testNow }), WithTheme(theme.New(true)))
-		testHarness := &harness{t: test, v: view, client: client}
+		testHarness := &harness{test: test, view: view, client: client}
 		testHarness.send(tea.WindowSizeMsg{Width: 80, Height: 12})
 		testHarness.run(view.Init())
 		testHarness.press("}", "f")

@@ -30,23 +30,23 @@ type StartedReview struct {
 
 // AddedThreads returns the inputs of the successful AddReviewThread calls.
 func (client *Client) AddedThreads() []github.AddThreadInput {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	return slices.Clone(client.added)
 }
 
 // StartedReviews returns the recorded successful StartReview calls.
 func (client *Client) StartedReviews() []StartedReview {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	return slices.Clone(client.started)
 }
 
 // StartReview implements github.Client. Like GitHub it refuses a second
 // pending review, and an unknown pull request ID or an empty commit.
 func (client *Client) StartReview(ctx context.Context, in github.StartReviewInput) (github.PendingReview, error) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	if err := client.begin(ctx, Call{Method: MethodStartReview, Repository: in.Repository, Number: in.Number, PullRequestIdentifier: in.PullRequestIdentifier}); err != nil {
 		return github.PendingReview{}, err
 	}
@@ -76,8 +76,8 @@ func (client *Client) StartReview(ctx context.Context, in github.StartReviewInpu
 // Like GitHub it refuses an empty body and a malformed range; a missing
 // pending review yields ErrNotFound.
 func (client *Client) AddReviewThread(ctx context.Context, in github.AddThreadInput) (github.ReviewThread, error) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	if err := client.begin(ctx, Call{Method: MethodAddReviewThread, Repository: in.Repository, Number: in.Number, Path: in.Path, Body: in.Body}); err != nil {
 		return github.ReviewThread{}, err
 	}
@@ -170,8 +170,8 @@ func (client *Client) publishPending(key pullRequestKey) {
 // comments the viewer may update (see ViewerCanUpdate), in any state; an empty
 // body is refused.
 func (client *Client) UpdateReviewComment(ctx context.Context, commentIdentifier, body string) (github.ReviewComment, error) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	if err := client.begin(ctx, Call{Method: MethodUpdateReviewComment, Body: body}); err != nil {
 		return github.ReviewComment{}, err
 	}
@@ -193,8 +193,8 @@ func (client *Client) UpdateReviewComment(ctx context.Context, commentIdentifier
 // DeleteReviewComment implements github.Client. Deleting a thread's last
 // comment removes the thread, and the pending review's count drops.
 func (client *Client) DeleteReviewComment(ctx context.Context, commentIdentifier string) error {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	if err := client.begin(ctx, Call{Method: MethodDeleteReviewComment}); err != nil {
 		return err
 	}
@@ -219,16 +219,16 @@ func (client *Client) DeleteReviewComment(ctx context.Context, commentIdentifier
 
 // DeletedComments returns the IDs of the successfully deleted review comments.
 func (client *Client) DeletedComments() []string {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	return slices.Clone(client.deleted)
 }
 
 // GetReviewComment implements github.Client. It finds the comment in any
 // pull request's threads; an unknown ID yields ErrNotFound.
 func (client *Client) GetReviewComment(ctx context.Context, commentIdentifier string) (github.ReviewComment, error) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
 	if err := client.begin(ctx, Call{Method: MethodGetReviewComment}); err != nil {
 		return github.ReviewComment{}, err
 	}

@@ -104,7 +104,7 @@ type (
 
 func (view *View) reviewEnvironment() reviewEnvironment {
 	return reviewEnvironment{
-		client: view.client, repository: view.repository, number: view.number, theme: view.th,
+		client: view.client, repository: view.repository, number: view.number, theme: view.theme,
 		edit: view.edit, reload: view.load,
 		loaded:      view.detail != nil,
 		diffHead:    view.diffHead,

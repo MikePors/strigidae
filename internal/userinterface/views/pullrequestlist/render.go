@@ -29,17 +29,17 @@ func (view *View) Render(width, height int) string {
 		return ""
 	}
 	view.width, view.height = width, height
-	view.win.SetRows(len(view.pullRequests))
-	view.win.SetSize(view.listHeight())
+	view.window.SetRows(len(view.pullRequests))
+	view.window.SetSize(view.listHeight())
 
 	var out string
 	switch {
 	case len(view.pullRequests) == 0 && view.loading:
-		out = view.th.Muted.Render(fmt.Sprintf("Loading pull requests in %s...", view.repositoryName()))
+		out = view.theme.Muted.Render(fmt.Sprintf("Loading pull requests in %s...", view.repositoryName()))
 	case len(view.pullRequests) == 0 && view.err != nil:
 		out = view.errorState(width)
 	case len(view.pullRequests) == 0:
-		out = view.th.Muted.Render(fmt.Sprintf("no open pull requests in %s", view.repositoryName()))
+		out = view.theme.Muted.Render(fmt.Sprintf("no open pull requests in %s", view.repositoryName()))
 	default:
 		out = view.table(width, height)
 	}
@@ -58,9 +58,9 @@ func fit(text string, width, height int) string {
 }
 
 func (view *View) errorState(width int) string {
-	head := view.th.PullRequestList.ChangesRequested.Render("Could not load pull requests")
+	head := view.theme.PullRequestList.ChangesRequested.Render("Could not load pull requests")
 	body := ansi.Wrap(terminaltext.SafeError(view.err).Error(), width, "")
-	return head + "\n" + body + "\n\n" + view.th.Muted.Render("Press R to retry.")
+	return head + "\n" + body + "\n\n" + view.theme.Muted.Render("Press R to retry.")
 }
 
 // layout holds the column widths for one render. A zero width hides a column.
@@ -101,11 +101,11 @@ func (layout layout) fixed() int {
 func (view *View) table(width, height int) string {
 	layout := view.layout(width - len(marker))
 	lines := make([]string, 0, height)
-	lines = append(lines, view.th.PullRequestList.Header.Render(pad(noMarker+layout.row("#", "TITLE", "AUTHOR", "UPD", "CI", "RV", "CMT"), width)))
+	lines = append(lines, view.theme.PullRequestList.Header.Render(pad(noMarker+layout.row("#", "TITLE", "AUTHOR", "UPD", "CI", "RV", "CMT"), width)))
 
-	end := min(len(view.pullRequests), view.win.Top()+view.listHeight())
-	for i := view.win.Top(); i < end; i++ {
-		lines = append(lines, view.row(layout, view.pullRequests[i], i == view.win.Cursor(), width))
+	end := min(len(view.pullRequests), view.window.Top()+view.listHeight())
+	for i := view.window.Top(); i < end; i++ {
+		lines = append(lines, view.row(layout, view.pullRequests[i], i == view.window.Cursor(), width))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -145,13 +145,13 @@ func (view *View) row(layout layout, pullRequest github.PullRequest, selected bo
 	comments := commentText(pullRequest.CommentCount)
 
 	if selected {
-		return view.th.PullRequestList.Selected.Render(pad(marker+layout.row(number, title, author, age, checksMark, reviewMark, comments), width))
+		return view.theme.PullRequestList.Selected.Render(pad(marker+layout.row(number, title, author, age, checksMark, reviewMark, comments), width))
 	}
 
-	styles := view.th.PullRequestList
-	styledTitle := view.th.Normal.Render(title)
+	styles := view.theme.PullRequestList
+	styledTitle := view.theme.Normal.Render(title)
 	if pullRequest.Draft && strings.HasPrefix(title, draftPrefix) {
-		styledTitle = styles.Draft.Render(draftPrefix) + view.th.Normal.Render(strings.TrimPrefix(title, draftPrefix))
+		styledTitle = styles.Draft.Render(draftPrefix) + view.theme.Normal.Render(strings.TrimPrefix(title, draftPrefix))
 	}
 	// Style after padding so the escape codes don't skew the widths.
 	out := []string{styles.Number.Render(padLeft(number, layout.number)), styledTitle + strings.Repeat(" ", max(0, layout.title-ansi.StringWidth(title)))}

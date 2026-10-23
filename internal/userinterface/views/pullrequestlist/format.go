@@ -57,7 +57,7 @@ func commentText(count int) string {
 
 // reviewMark returns the one-column glyph and style for a review decision.
 func (view *View) reviewMark(decision github.ReviewDecision) (string, lipgloss.Style) {
-	styles := view.th.PullRequestList
+	styles := view.theme.PullRequestList
 	switch decision {
 	case github.ReviewDecisionApproved:
 		return "✓", styles.Approved
@@ -73,7 +73,7 @@ func (view *View) reviewMark(decision github.ReviewDecision) (string, lipgloss.S
 // checksMark returns the one-column glyph and style for the head commit's
 // check state; no checks gives a blank.
 func (view *View) checksMark(state github.CheckState) (string, lipgloss.Style) {
-	styles := view.th.PullRequestList
+	styles := view.theme.PullRequestList
 	switch state {
 	case github.ChecksPassing:
 		return "✓", styles.ChecksPassing

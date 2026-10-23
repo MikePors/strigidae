@@ -17,24 +17,24 @@ import (
 // pressV delivers v and returns its command without running it, so a test
 // decides when the mutation reaches the server.
 func (harness *harness) pressV() tea.Cmd {
-	harness.t.Helper()
-	view, command := harness.v.Update(keys.Message{Sequence: "v"})
-	harness.v = view.(*View)
+	harness.test.Helper()
+	view, command := harness.view.Update(keys.Message{Sequence: "v"})
+	harness.view = view.(*View)
 	return command
 }
 
 // finish runs cmd, delivers its results and returns the follow-up command the
 // view issued, if any.
 func (harness *harness) finish(command tea.Cmd) tea.Cmd {
-	harness.t.Helper()
+	harness.test.Helper()
 	var next tea.Cmd
 	for _, message := range messages(command) {
 		switch message.(type) {
 		case userinterface.ErrorMessage, userinterface.InfoMessage:
 			harness.messages = append(harness.messages, message)
 		default:
-			view, command := harness.v.Update(message)
-			harness.v = view.(*View)
+			view, command := harness.view.Update(message)
+			harness.view = view.(*View)
 			if command != nil {
 				next = command
 			}
@@ -52,8 +52,8 @@ func sentStates(client *fake.Client) []bool {
 }
 
 func (harness *harness) reload(detail github.PullRequestDetail) {
-	harness.t.Helper()
-	harness.send(pullRequestLoadedMessage{owner: harness.v, repository: testRepository, number: 7, sequence: harness.v.sequence, detail: detail})
+	harness.test.Helper()
+	harness.send(pullRequestLoadedMessage{owner: harness.view, repository: testRepository, number: 7, sequence: harness.view.sequence, detail: detail})
 }
 
 func TestRapidTogglesAreSerialised(test *testing.T) {
@@ -139,15 +139,15 @@ func TestRefreshMidToggleKeepsOptimisticMark(test *testing.T) {
 		test.Errorf("after success shown = %q", got)
 	}
 	// Once settled, the next reload shows the server's state again.
-	harness.v.sequence++ // a reload started after the mutation settled
+	harness.view.sequence++ // a reload started after the mutation settled
 	detail := testDetail()
 	detail.Files[0].Viewed = github.FileDismissed
 	harness.reload(detail)
 	if got := harness.stateOf(); got != github.FileDismissed {
 		test.Errorf("settled entry still overrides the reload: %q", got)
 	}
-	if len(harness.v.viewedState) != 0 {
-		test.Errorf("settled entries kept: %v", harness.v.viewedState)
+	if len(harness.view.viewedState) != 0 {
+		test.Errorf("settled entries kept: %v", harness.view.viewedState)
 	}
 }
 
@@ -175,19 +175,19 @@ func TestToggleOnVanishedFileIsDropped(test *testing.T) {
 	detail := testDetail()
 	detail.Files = detail.Files[1:]
 	harness.reload(detail)
-	if len(harness.v.viewedState) != 0 {
-		test.Errorf("entry for a vanished file kept: %v", harness.v.viewedState)
+	if len(harness.view.viewedState) != 0 {
+		test.Errorf("entry for a vanished file kept: %v", harness.view.viewedState)
 	}
 	harness.finish(command) // must not panic or resurrect anything
-	if harness.v.viewedCount() != 0 {
+	if harness.view.viewedCount() != 0 {
 		test.Error("a mark appeared on another file")
 	}
 }
 
 func TestViewedResultForOtherViewIgnored(test *testing.T) {
 	tests := []struct {
-		name string
-		mut  func(message *viewedMessage)
+		name   string
+		mutate func(message *viewedMessage)
 	}{
 		{"other number", func(message *viewedMessage) { message.number = 8 }},
 		{"other repo", func(message *viewedMessage) { message.repository = github.Repository{Owner: "x", Name: "y"} }},
@@ -198,8 +198,8 @@ func TestViewedResultForOtherViewIgnored(test *testing.T) {
 			harness := viewedHarness(test, 100, 24)
 			harness.press("j")
 			harness.pressV()
-			message := viewedMessage{owner: harness.v, repository: testRepository, number: 7, path: firstFile, sent: github.FileViewed, err: errors.New("x")}
-			testCase.mut(&message)
+			message := viewedMessage{owner: harness.view, repository: testRepository, number: 7, path: firstFile, sent: github.FileViewed, err: errors.New("x")}
+			testCase.mutate(&message)
 			harness.send(message)
 			if got := harness.stateOf(); got != github.FileViewed {
 				test.Errorf("foreign result changed state to %q", got)
@@ -219,7 +219,7 @@ func TestReloadStartedBeforeSettleKeepsMark(test *testing.T) {
 		test.Fatalf("stale reload overwrote the settled mark: %q", got)
 	}
 	// A reload started afterwards (a newer seq) shows the server's state.
-	harness.v.sequence++
+	harness.view.sequence++
 	detail := unviewedDetail()
 	detail.Files[0].Viewed = github.FileDismissed
 	harness.reload(detail)

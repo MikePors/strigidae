@@ -29,8 +29,8 @@ func New(initial string, getenv func(string) string) (*Session, error) {
 		return nil, fmt.Errorf("create temporary file: %w", err)
 	}
 	path := file.Name()
-	_, werr := file.WriteString(initial)
-	if err := errors.Join(werr, file.Close()); err != nil {
+	_, writeError := file.WriteString(initial)
+	if err := errors.Join(writeError, file.Close()); err != nil {
 		_ = os.Remove(path)
 		return nil, fmt.Errorf("write temporary file: %w", err)
 	}
@@ -47,12 +47,12 @@ func (session *Session) Path() string { return session.path }
 // called once, after the editor exited (also when it failed, to clean up).
 func (session *Session) Result() (string, error) {
 	bytes, err := os.ReadFile(session.path)
-	rerr := os.Remove(session.path)
+	readError := os.Remove(session.path)
 	if err != nil {
 		return "", fmt.Errorf("read edited file: %w", err)
 	}
-	if rerr != nil && !errors.Is(rerr, os.ErrNotExist) {
-		return string(bytes), fmt.Errorf("remove temporary file: %w", rerr)
+	if readError != nil && !errors.Is(readError, os.ErrNotExist) {
+		return string(bytes), fmt.Errorf("remove temporary file: %w", readError)
 	}
 	return string(bytes), nil
 }

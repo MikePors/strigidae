@@ -36,10 +36,10 @@ func (composer *composer) setHead(sha string) {
 }
 
 func (composer *composer) command(name string) {
-	composer.t.Helper()
-	command, ok := composer.v.Command(name, "")
+	composer.test.Helper()
+	command, ok := composer.view.Command(name, "")
 	if !ok {
-		composer.t.Fatalf("command %q not handled", name)
+		composer.test.Fatalf("command %q not handled", name)
 	}
 	composer.run(command)
 }
@@ -101,10 +101,10 @@ func TestReviewVerdicts(test *testing.T) {
 			if diff := cmp.Diff([]string{"Submitting review…", testCase.info}, composer.infoMessages()); diff != "" {
 				test.Errorf("info (-want +got):\n%s", diff)
 			}
-			if composer.v.review.draft != "" {
-				test.Errorf("draft kept after success: %q", composer.v.review.draft)
+			if composer.view.review.draft != "" {
+				test.Errorf("draft kept after success: %q", composer.view.review.draft)
 			}
-			if reviews := composer.v.detail.Reviews; reviews[len(reviews)-1].Body != testCase.want.Body || reviews[len(reviews)-1].SubmittedAt.IsZero() {
+			if reviews := composer.view.detail.Reviews; reviews[len(reviews)-1].Body != testCase.want.Body || reviews[len(reviews)-1].SubmittedAt.IsZero() {
 				test.Errorf("workspace not refreshed after success: %+v", reviews[len(reviews)-1])
 			}
 		})
@@ -115,12 +115,12 @@ func TestReviewCommentThroughChooser(test *testing.T) {
 	composer := newReviewer(test)
 	composer.body = "Some thoughts."
 	composer.command("review")
-	if !composer.v.CapturesKeys() {
+	if !composer.view.CapturesKeys() {
 		test.Fatal("chooser does not capture keys")
 	}
 	composer.typ("com")
 	composer.send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if composer.v.CapturesKeys() {
+	if composer.view.CapturesKeys() {
 		test.Error("chooser still open after choosing")
 	}
 	configuration, ok := composer.lastConfirm()
@@ -137,7 +137,7 @@ func TestReviewCommentThroughChooser(test *testing.T) {
 func TestReviewCommandReview(test *testing.T) {
 	composer := newReviewer(test)
 	composer.command("review")
-	if composer.v.review.chooser == nil {
+	if composer.view.review.chooser == nil {
 		test.Fatal(":review did not open the chooser")
 	}
 	if !strings.Contains(composer.render(), "Request changes") {
@@ -149,7 +149,7 @@ func TestReviewChooserCancels(test *testing.T) {
 	composer := newReviewer(test)
 	composer.command("review")
 	composer.send(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if composer.v.CapturesKeys() || composer.v.review.chooser != nil {
+	if composer.view.CapturesKeys() || composer.view.review.chooser != nil {
 		test.Error("esc did not close the chooser")
 	}
 	if len(composer.openedOn) != 0 || len(composer.client.Submissions()) != 0 {
@@ -161,7 +161,7 @@ func TestReviewChooserCancels(test *testing.T) {
 // key routing is covered too.
 func TestReviewChooserReleasesOnEsc(test *testing.T) {
 	harness := loaded(test, 100, 24)
-	model := userinterface.New(harness.v, theme.New(true), userinterface.Options{})
+	model := userinterface.New(harness.view, theme.New(true), userinterface.Options{})
 	step := func(message tea.Msg) { _, _ = model.Update(message) }
 	step(tea.WindowSizeMsg{Width: 100, Height: 25})
 	step(tea.KeyPressMsg{Code: ':', Text: ":"})
@@ -172,15 +172,15 @@ func TestReviewChooserReleasesOnEsc(test *testing.T) {
 	if command != nil {
 		step(command())
 	}
-	if !harness.v.CapturesKeys() {
+	if !harness.view.CapturesKeys() {
 		test.Fatal(":review through the root should open the chooser")
 	}
 	step(tea.KeyPressMsg{Code: 'j', Text: "j"})
-	if harness.v.review.chooser.Query() != "j" {
-		test.Errorf("key did not reach the chooser raw: %q", harness.v.review.chooser.Query())
+	if harness.view.review.chooser.Query() != "j" {
+		test.Errorf("key did not reach the chooser raw: %q", harness.view.review.chooser.Query())
 	}
 	step(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if harness.v.CapturesKeys() {
+	if harness.view.CapturesKeys() {
 		test.Error("view still captures keys after esc")
 	}
 }
@@ -191,8 +191,8 @@ func TestReviewEmptyBodyIsAnError(test *testing.T) {
 			composer := newReviewer(test)
 			composer.body = "  \n"
 			if name == "comment" {
-				composer.v.review.chooser = nil
-				command := composer.v.review.start(composer.v.reviewEnvironment(), github.ReviewEventComment)
+				composer.view.review.chooser = nil
+				command := composer.view.review.start(composer.view.reviewEnvironment(), github.ReviewEventComment)
 				composer.run(command)
 			} else {
 				composer.command(name)
@@ -214,7 +214,7 @@ func TestReviewWithPendingReview(test *testing.T) {
 	composer := newReviewer(test)
 	composer.client.SetPendingReview(testRepository, 7, &github.PendingReview{Identifier: "PRR_1", Body: "draft on github", CommentCount: 3})
 	composer.body = "" // an empty body is fine with inline comments
-	command := composer.v.review.start(composer.v.reviewEnvironment(), github.ReviewEventComment)
+	command := composer.view.review.start(composer.view.reviewEnvironment(), github.ReviewEventComment)
 	composer.run(command)
 	if diff := cmp.Diff([]string{"draft on github"}, composer.openedOn); diff != "" {
 		test.Errorf("editor opened on (-want +got):\n%s", diff)
@@ -251,8 +251,8 @@ func TestReviewPendingGoneAtSubmit(test *testing.T) {
 	if got := composer.lastError(); !strings.Contains(got, "submitted or deleted elsewhere") {
 		test.Errorf("error = %q", got)
 	}
-	if composer.v.review.draft != "my summary" {
-		test.Errorf("draft = %q", composer.v.review.draft)
+	if composer.view.review.draft != "my summary" {
+		test.Errorf("draft = %q", composer.view.review.draft)
 	}
 	var reloaded bool
 	for _, call := range composer.client.Calls()[before:] {
@@ -279,8 +279,8 @@ func TestReviewHeadMoved(test *testing.T) {
 	if len(composer.client.Submissions()) != 0 {
 		test.Error("submitted although the head moved")
 	}
-	if composer.v.detail.HeadSHA != "bbbb2222" {
-		test.Errorf("workspace head = %q, want it refreshed", composer.v.detail.HeadSHA)
+	if composer.view.detail.HeadSHA != "bbbb2222" {
+		test.Errorf("workspace head = %q, want it refreshed", composer.view.detail.HeadSHA)
 	}
 }
 
@@ -329,8 +329,8 @@ func TestReviewEditorFailureKeepsText(test *testing.T) {
 	if _, ok := composer.lastConfirm(); ok {
 		test.Error("asked for confirmation after editor failure")
 	}
-	if !strings.Contains(composer.lastError(), "edit review") || composer.v.review.draft != "typed before crash" {
-		test.Errorf("error %q, draft %q", composer.lastError(), composer.v.review.draft)
+	if !strings.Contains(composer.lastError(), "edit review") || composer.view.review.draft != "typed before crash" {
+		test.Errorf("error %q, draft %q", composer.lastError(), composer.view.review.draft)
 	}
 }
 
@@ -349,8 +349,8 @@ func TestReviewStatusErrorIsShown(test *testing.T) {
 func TestReviewStaleResultsAreIgnored(test *testing.T) {
 	composer := newReviewer(test)
 	composer.body = "x"
-	old := composer.v.review.start(composer.v.reviewEnvironment(), github.ReviewEventApprove)
-	composer.v.review.sequence++ // another review was started meanwhile
+	old := composer.view.review.start(composer.view.reviewEnvironment(), github.ReviewEventApprove)
+	composer.view.review.sequence++ // another review was started meanwhile
 	composer.run(old)
 	if len(composer.openedOn) != 0 {
 		test.Error("stale status opened the editor")
@@ -363,7 +363,7 @@ func TestReviewStaleResultsAreIgnored(test *testing.T) {
 }
 
 func TestCommandsReachOnlyKnownNames(test *testing.T) {
-	view := newHarness(test, 80, 24).v
+	view := newHarness(test, 80, 24).view
 	for _, name := range []string{"approve", "request-changes", "review"} {
 		if _, ok := view.Command(name, ""); !ok {
 			test.Errorf("%s not handled", name)
@@ -375,7 +375,7 @@ func TestCommandsReachOnlyKnownNames(test *testing.T) {
 }
 
 func TestReviewBeforeLoad(test *testing.T) {
-	view := newHarness(test, 80, 24).v // Init not run: nothing loaded
+	view := newHarness(test, 80, 24).view // Init not run: nothing loaded
 	messageList := messages(view.review.openChooser(view.reviewEnvironment()))
 	if len(messageList) != 1 {
 		test.Fatalf("msgs = %v", messageList)

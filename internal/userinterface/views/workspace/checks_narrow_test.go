@@ -19,7 +19,7 @@ func TestHeaderChecksSurviveTruncation(test *testing.T) {
 	detail.ReviewDecision = github.ReviewDecisionReviewRequired
 	detail.Checks = github.ChecksPassing
 	harness.client.SetPullRequest(detail)
-	harness.run(harness.v.Init())
+	harness.run(harness.view.Init())
 	line := strings.Split(ansi.Strip(harness.render()), "\n")[1]
 	for _, want := range []string{"dependabot[bot]", "✓ checks passing", "review required"} {
 		if !strings.Contains(line, want) {

@@ -83,8 +83,8 @@ func testDetail() github.PullRequestDetail {
 }
 
 type harness struct {
-	t        *testing.T
-	v        *View
+	test     *testing.T
+	view     *View
 	client   *fake.Client
 	opened   []string
 	messages []tea.Msg // ui messages emitted by commands
@@ -104,8 +104,8 @@ func newHarness(test *testing.T, width, height int) *harness {
 	client := fake.New()
 	client.SetPullRequest(testDetail())
 	client.SetDiff(testRepository, 7, readDiff(test))
-	otherHarness := &harness{t: test, client: client}
-	otherHarness.v = New(client, testRepository, 7,
+	otherHarness := &harness{test: test, client: client}
+	otherHarness.view = New(client, testRepository, 7,
 		WithClock(func() time.Time { return testNow }),
 		WithTheme(theme.New(true)),
 		WithOpener(func(address string) error { otherHarness.opened = append(otherHarness.opened, address); return nil }),
@@ -117,20 +117,20 @@ func newHarness(test *testing.T, width, height int) *harness {
 // loaded returns a harness whose Init results have been delivered.
 func loaded(test *testing.T, width, height int) *harness {
 	otherHarness := newHarness(test, width, height)
-	otherHarness.run(otherHarness.v.Init())
+	otherHarness.run(otherHarness.view.Init())
 	return otherHarness
 }
 
 func (harness *harness) send(message tea.Msg) {
-	harness.t.Helper()
-	view, command := harness.v.Update(message)
-	harness.v = view.(*View)
+	harness.test.Helper()
+	view, command := harness.view.Update(message)
+	harness.view = view.(*View)
 	harness.run(command)
 }
 
 // run executes cmd, delivering result messages back to the view.
 func (harness *harness) run(command tea.Cmd) {
-	harness.t.Helper()
+	harness.test.Helper()
 	if command == nil {
 		return
 	}
@@ -148,7 +148,7 @@ func (harness *harness) run(command tea.Cmd) {
 }
 
 func (harness *harness) press(sequences ...string) {
-	harness.t.Helper()
+	harness.test.Helper()
 	for _, text := range sequences {
 		harness.send(keys.Message{Sequence: text})
 	}
@@ -156,13 +156,15 @@ func (harness *harness) press(sequences ...string) {
 
 // typ sends raw key presses, as the root does while the view captures keys.
 func (harness *harness) typ(text string) {
-	harness.t.Helper()
+	harness.test.Helper()
 	for _, character := range text {
 		harness.send(tea.KeyPressMsg{Code: character, Text: string(character)})
 	}
 }
 
-func (harness *harness) render() string { return harness.v.Render(harness.v.width, harness.v.height) }
+func (harness *harness) render() string {
+	return harness.view.Render(harness.view.width, harness.view.height)
+}
 
 func (harness *harness) lastErr() error {
 	for i := len(harness.messages) - 1; i >= 0; i-- {

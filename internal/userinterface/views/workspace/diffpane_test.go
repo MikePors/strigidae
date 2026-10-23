@@ -15,7 +15,7 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
-func (harness *harness) pane() *diffview.Model { return harness.v.filePane.(*diffPane).dv }
+func (harness *harness) pane() *diffview.Model { return harness.view.filePane.(*diffPane).diffView }
 
 // cursorText returns the text of the diff line under the cursor ("" on a hunk header).
 func (harness *harness) cursorText() string {
@@ -30,7 +30,7 @@ func (harness *harness) cursorText() string {
 func openClientDiff(test *testing.T, width, height int) *harness {
 	harness := loaded(test, width, height)
 	harness.press("}", "l")
-	if got := harness.v.selectedPath(); got != "internal/sync/client.go" {
+	if got := harness.view.selectedPath(); got != "internal/sync/client.go" {
 		test.Fatalf("selected %q", got)
 	}
 	return harness
@@ -108,7 +108,7 @@ func TestDiffPaneKeysReachOnlyWhenRightFocused(test *testing.T) {
 	harness := loaded(test, 100, 24)
 	harness.press("}") // Files pane still focused
 	harness.press("j") // moves the file selection, not the diff cursor
-	if got := harness.v.selectedPath(); got != "internal/sync/retry.go" {
+	if got := harness.view.selectedPath(); got != "internal/sync/retry.go" {
 		test.Errorf("selected %q", got)
 	}
 }
@@ -116,7 +116,7 @@ func TestDiffPaneKeysReachOnlyWhenRightFocused(test *testing.T) {
 func TestDiffLookupByOldPathAndRename(test *testing.T) {
 	harness := loaded(test, 100, 24)
 	harness.press("}", "}", "}") // legacy.go, deleted
-	if got := harness.v.selectedPath(); got != "internal/sync/legacy.go" {
+	if got := harness.view.selectedPath(); got != "internal/sync/legacy.go" {
 		test.Fatalf("selected %q", got)
 	}
 	if out := ansi.Strip(harness.render()); !strings.Contains(out, "retryForever") {
@@ -132,7 +132,7 @@ func TestDiffPaneLookupFallsBackToOldPath(test *testing.T) {
 	// A ChangedFile reporting the old path of a renamed file still finds it.
 	pane := newDiffPane(theme.New(true), func() time.Time { return testNow })
 	harness := loaded(test, 100, 24)
-	pane.SetDiff(harness.v.diff)
+	pane.SetDiff(harness.view.diff)
 	pane.SetFile(github.ChangedFile{Path: "docs/old-name.md", Change: github.FileRenamed})
 	pane.SetSize(80, 10)
 	if out := ansi.Strip(pane.Render(80, 10)); !strings.Contains(out, "New text.") {
@@ -144,7 +144,7 @@ func TestDiffPaneStates(test *testing.T) {
 	test.Run("unknown file", func(test *testing.T) {
 		harness := loaded(test, 100, 24)
 		pane := newDiffPane(theme.New(true), func() time.Time { return testNow })
-		pane.SetDiff(harness.v.diff)
+		pane.SetDiff(harness.view.diff)
 		pane.SetFile(github.ChangedFile{Path: "nope.go"})
 		if out := ansi.Strip(pane.Render(60, 5)); !strings.Contains(out, "No diff available") {
 			test.Errorf("got %q", out)
@@ -152,29 +152,29 @@ func TestDiffPaneStates(test *testing.T) {
 	})
 	test.Run("loading", func(test *testing.T) {
 		harness := newHarness(test, 100, 24)
-		harness.v.Init()
-		harness.send(pullRequestLoadedMessage{owner: harness.v, repository: testRepository, number: 7, sequence: harness.v.sequence, detail: testDetail()})
+		harness.view.Init()
+		harness.send(pullRequestLoadedMessage{owner: harness.view, repository: testRepository, number: 7, sequence: harness.view.sequence, detail: testDetail()})
 		harness.press("}")
 		golden.Assert(test, "diff_loading", harness.render(), false)
 	})
 	test.Run("too large", func(test *testing.T) {
 		harness := newHarness(test, 100, 24)
 		harness.client.SetError(fake.MethodGetDiff, github.ErrDiffTooLarge)
-		harness.run(harness.v.Init())
+		harness.run(harness.view.Init())
 		harness.press("}")
 		golden.Assert(test, "diff_too_large", harness.render(), false)
 	})
 	test.Run("error", func(test *testing.T) {
 		harness := newHarness(test, 100, 24)
 		harness.client.SetError(fake.MethodGetDiff, errors.New("connection reset"))
-		harness.run(harness.v.Init())
+		harness.run(harness.view.Init())
 		harness.press("}")
 		golden.Assert(test, "diff_error", harness.render(), false)
 	})
 	test.Run("parse error", func(test *testing.T) {
 		harness := newHarness(test, 100, 24)
 		harness.client.SetDiff(testRepository, 7, "diff --git a/x b/x\n@@ -1,2 +1,2 @@\n+only one line\n")
-		harness.run(harness.v.Init())
+		harness.run(harness.view.Init())
 		harness.press("}")
 		out := ansi.Strip(harness.render())
 		if !strings.Contains(out, "No diff available for this file.") || !strings.Contains(out, "could not be fully parsed") {

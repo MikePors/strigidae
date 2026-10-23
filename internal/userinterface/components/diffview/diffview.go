@@ -89,26 +89,26 @@ func WithClock(now func() time.Time) Option { return func(model *Model) { model.
 // row is one display row: a hunk header (line == nil, tr == nil), a diff line,
 // or one line of a review thread (tr != nil).
 type row struct {
-	hunk    int
-	line    *diff.Line
-	text    string // display text: tabs expanded, controls replaced
-	bi      int    // index in base of this row, or of the row a thread row follows
-	tr      *threadRow
-	message bool // one line of the file's notice (binary, renamed, ...), shown above its threads
+	hunk      int
+	line      *diff.Line
+	text      string // display text: tabs expanded, controls replaced
+	baseIndex int    // index in base of this row, or of the row a thread row follows
+	threadRow *threadRow
+	message   bool // one line of the file's notice (binary, renamed, ...), shown above its threads
 }
 
 // isLine reports whether r is a diff line a comment can be written on: not a
 // hunk header, notice or thread row, and not a "no newline" marker.
 func (row row) isLine() bool {
-	return row.tr == nil && row.line != nil && row.line.Kind != diff.NoNewline
+	return row.threadRow == nil && row.line != nil && row.line.Kind != diff.NoNewline
 }
 
 // threadRow places a row inside a thread's block of lines.
-type threadRow struct{ t, i int }
+type threadRow struct{ threadIndex, i int }
 
 // Model is the diff pane. Create it with New. It is not a tea.Model.
 type Model struct {
-	th        theme.Theme
+	theme     theme.Theme
 	highlight Highlighter
 	styles    styleSet
 
@@ -118,48 +118,48 @@ type Model struct {
 	rows    []row
 	hunkRow []int // row index of each hunk header
 
-	now         func() time.Time
-	md          *markdown.Renderer
-	threads     []github.ReviewThread // all of the pull request's threads
-	fthreads    []github.ReviewThread // the ones on the shown file
-	attach      map[int][]int         // base row -> indexes in fthreads
-	orphans     []int                 // fthreads that map to no diff line
-	open        map[string]bool       // thread ID -> expanded, once the user chose
-	blocks      [][]string            // rendered lines of each fthreads entry
-	bcache      map[blockKey][]string // rendered threads; dropped by SetThreads and when width or theme change
-	bsig        blockSignature
-	renders     int // thread blocks rendered, for tests
-	numberWidth int // width of one line-number column
-	maxWidth    int // widest code line, in cells
+	now            func() time.Time
+	markdown       *markdown.Renderer
+	threads        []github.ReviewThread // all of the pull request's threads
+	fthreads       []github.ReviewThread // the ones on the shown file
+	attach         map[int][]int         // base row -> indexes in fthreads
+	orphans        []int                 // fthreads that map to no diff line
+	open           map[string]bool       // thread ID -> expanded, once the user chose
+	blocks         [][]string            // rendered lines of each fthreads entry
+	blockCache     map[blockKey][]string // rendered threads; dropped by SetThreads and when width or theme change
+	blockSignature blockSignature
+	renders        int // thread blocks rendered, for tests
+	numberWidth    int // width of one line-number column
+	maximumWidth   int // widest code line, in cells
 
 	cache map[int][]Span // highlighted rows, by base row index; reset per file
 	saved *position      // position kept while a message replaces the file
 
-	w, h int
+	width, height int
 
-	vis bool // a line selection is in progress
-	vbi int  // base row where it started
+	visual          bool // a line selection is in progress
+	visualBaseIndex int  // base row where it started
 
-	win scroll.Window // cursor, top row and horizontal offset
+	window scroll.Window // cursor, top row and horizontal offset
 }
 
 // New returns an empty diff pane.
 func New(theme theme.Theme, options ...Option) *Model {
-	model := &Model{th: theme, highlight: ChromaHighlighter(), cache: map[int][]Span{}, now: time.Now, open: map[string]bool{}}
+	model := &Model{theme: theme, highlight: ChromaHighlighter(), cache: map[int][]Span{}, now: time.Now, open: map[string]bool{}}
 	for _, option := range options {
 		option(model)
 	}
 	model.styles = newStyleSet(theme)
-	model.md = markdown.New(theme)
+	model.markdown = markdown.New(theme)
 	return model
 }
 
 // SetTheme swaps the theme. The highlight cache holds token classes, not
 // colours, so it stays valid.
 func (model *Model) SetTheme(theme theme.Theme) {
-	model.th = theme
+	model.theme = theme
 	model.styles = newStyleSet(theme)
-	model.md = markdown.New(theme)
+	model.markdown = markdown.New(theme)
 	model.layout()
 }
 
@@ -230,13 +230,13 @@ func TooLargeMessage() string {
 }
 
 func (model *Model) reset() {
-	model.bcache = nil
-	model.vis = false // base rows are about to change
+	model.blockCache = nil
+	model.visual = false // base rows are about to change
 	model.base, model.rows, model.hunkRow = nil, nil, nil
 	model.fthreads, model.attach, model.orphans, model.blocks = nil, nil, nil, nil
 	model.cache = map[int][]Span{}
-	model.win.Reset()
-	model.maxWidth, model.numberWidth = 0, 0
+	model.window.Reset()
+	model.maximumWidth, model.numberWidth = 0, 0
 	model.sync()
 }
 
@@ -246,27 +246,27 @@ func (model *Model) build(file *diff.File) {
 		total += len(hunk.Lines) + 1
 	}
 	model.base = make([]row, 0, total)
-	maxNumber := 0
+	maximumNumber := 0
 	for high := range file.Hunks {
 		hunk := &file.Hunks[high]
-		model.base = append(model.base, row{hunk: high, bi: len(model.base)})
-		maxNumber = max(maxNumber, hunk.OldStart+hunk.OldLines, hunk.NewStart+hunk.NewLines)
+		model.base = append(model.base, row{hunk: high, baseIndex: len(model.base)})
+		maximumNumber = max(maximumNumber, hunk.OldStart+hunk.OldLines, hunk.NewStart+hunk.NewLines)
 		for lineIndex := range hunk.Lines {
 			line := &hunk.Lines[lineIndex]
 			text, width := displayText(line.Text)
-			model.maxWidth = max(model.maxWidth, width)
-			model.base = append(model.base, row{hunk: high, line: line, text: text, bi: len(model.base)})
+			model.maximumWidth = max(model.maximumWidth, width)
+			model.base = append(model.base, row{hunk: high, line: line, text: text, baseIndex: len(model.base)})
 		}
 	}
-	model.numberWidth = max(len(strconv.Itoa(maxNumber)), 3)
+	model.numberWidth = max(len(strconv.Itoa(maximumNumber)), 3)
 	model.placeThreads()
 	model.layout()
 }
 
 // SetSize sets the drawing area. Scroll positions are re-clamped.
 func (model *Model) SetSize(width, height int) {
-	relayout := width != model.w
-	model.w, model.h = max(width, 0), max(height, 0)
+	relayout := width != model.width
+	model.width, model.height = max(width, 0), max(height, 0)
 	if relayout {
 		model.layout() // thread text wraps to the width
 		return
@@ -275,39 +275,39 @@ func (model *Model) SetSize(width, height int) {
 }
 
 // Size returns the current drawing area.
-func (model *Model) Size() (width, height int) { return model.w, model.h }
+func (model *Model) Size() (width, height int) { return model.width, model.height }
 
 // gutterW is the fixed width of the non-scrolling left part of a row:
 // cursor mark, old number, new number, thread marker, change marker.
 func (model *Model) gutterWidth() int { return 2*model.numberWidth + 5 }
 
-func (model *Model) codeWidth() int { return max(model.w-model.gutterWidth(), 0) }
+func (model *Model) codeWidth() int { return max(model.width-model.gutterWidth(), 0) }
 
 // sync pushes the diff's row count and widths into the scroll window.
 func (model *Model) sync() {
-	model.win.SetRows(len(model.rows))
-	model.win.SetSize(model.h)
-	model.win.SetWidths(model.maxWidth, model.codeWidth())
+	model.window.SetRows(len(model.rows))
+	model.window.SetSize(model.height)
+	model.window.SetWidths(model.maximumWidth, model.codeWidth())
 }
 
 // cursorKey identifies the cursor row independently of how many thread rows
 // precede it. A thread row is identified by the thread's ID, so a reload that
 // adds or removes threads keeps the cursor on the same one.
 type cursorKey struct {
-	bi     int
-	thread string // ID of the thread the cursor is in, or ""
-	off    int    // row within the thread's block
+	baseIndex int
+	thread    string // ID of the thread the cursor is in, or ""
+	off       int    // row within the thread's block
 }
 
 func (model *Model) cursorKey() (cursorKey, bool) {
-	count := model.win.Cursor()
+	count := model.window.Cursor()
 	if count >= len(model.rows) {
 		return cursorKey{}, false
 	}
 	row := model.rows[count]
-	k := cursorKey{bi: row.bi}
-	if row.tr != nil {
-		k.thread, k.off = model.fthreads[row.tr.t].Identifier, row.tr.i
+	k := cursorKey{baseIndex: row.baseIndex}
+	if row.threadRow != nil {
+		k.thread, k.off = model.fthreads[row.threadRow.threadIndex].Identifier, row.threadRow.i
 	}
 	return k, true
 }
@@ -321,7 +321,7 @@ func (model *Model) keyRow(k cursorKey) int {
 		}
 	}
 	for i, row := range model.rows {
-		if row.tr == nil && row.bi == k.bi {
+		if row.threadRow == nil && row.baseIndex == k.baseIndex {
 			return i
 		}
 	}
@@ -333,7 +333,7 @@ func (model *Model) keyRow(k cursorKey) int {
 func (model *Model) threadRowFor(identifier string, off int) int {
 	best := -1
 	for i, row := range model.rows {
-		if row.tr != nil && model.fthreads[row.tr.t].Identifier == identifier && row.tr.i <= off {
+		if row.threadRow != nil && model.fthreads[row.threadRow.threadIndex].Identifier == identifier && row.threadRow.i <= off {
 			best = i
 		}
 	}
@@ -350,7 +350,7 @@ func (model *Model) layout() {
 // relayout is layout with the cursor key taken by the caller, for changes to
 // the thread list, which would make the current rows' thread indexes stale.
 func (model *Model) relayout(k cursorKey, found bool) {
-	off := model.win.Cursor() - model.win.Top()
+	off := model.window.Cursor() - model.window.Top()
 	model.rows = model.rows[:0]
 	model.hunkRow = model.hunkRow[:0]
 	model.blocks = make([][]string, len(model.fthreads))
@@ -365,7 +365,7 @@ func (model *Model) relayout(k cursorKey, found bool) {
 	flush := func(baseIndex int) {
 		for _, threadIndex := range pending {
 			for lineIndex := range model.blocks[threadIndex] {
-				model.rows = append(model.rows, row{bi: baseIndex, tr: &threadRow{t: threadIndex, i: lineIndex}})
+				model.rows = append(model.rows, row{baseIndex: baseIndex, threadRow: &threadRow{threadIndex: threadIndex, i: lineIndex}})
 			}
 		}
 		pending = pending[:0]
@@ -386,51 +386,51 @@ func (model *Model) relayout(k cursorKey, found bool) {
 	model.sync()
 	if found && len(model.rows) > 0 {
 		count := model.keyRow(k)
-		model.win.Restore(count, count-off, model.win.HorizontalOffset())
+		model.window.Restore(count, count-off, model.window.HorizontalOffset())
 	}
 }
 
 // --- vertical movement: cursor follows, view follows the cursor ---
 
 // CursorDown moves the cursor down n rows, scrolling to keep it visible.
-func (model *Model) CursorDown(count int) { model.win.Down(count) }
+func (model *Model) CursorDown(count int) { model.window.Down(count) }
 
 // CursorUp moves the cursor up n rows, scrolling to keep it visible.
-func (model *Model) CursorUp(count int) { model.win.Up(count) }
+func (model *Model) CursorUp(count int) { model.window.Up(count) }
 
 // GotoTop moves the cursor to the first row.
-func (model *Model) GotoTop() { model.win.GotoTop() }
+func (model *Model) GotoTop() { model.window.GotoTop() }
 
 // GotoBottom moves the cursor to the last row.
-func (model *Model) GotoBottom() { model.win.GotoBottom() }
+func (model *Model) GotoBottom() { model.window.GotoBottom() }
 
 // --- viewport movement: view and cursor move together, as in vim ---
 
 // ScrollDown scrolls the view down n rows without moving the cursor, unless
 // the cursor would leave the view, in which case it is pulled along.
-func (model *Model) ScrollDown(count int) { model.win.ScrollDown(count) }
+func (model *Model) ScrollDown(count int) { model.window.ScrollDown(count) }
 
 // ScrollUp is the opposite of ScrollDown.
-func (model *Model) ScrollUp(count int) { model.win.ScrollUp(count) }
+func (model *Model) ScrollUp(count int) { model.window.ScrollUp(count) }
 
 // HalfPageDown moves the view and the cursor down half a screen.
-func (model *Model) HalfPageDown() { model.win.HalfPageDown() }
+func (model *Model) HalfPageDown() { model.window.HalfPageDown() }
 
 // HalfPageUp moves the view and the cursor up half a screen.
-func (model *Model) HalfPageUp() { model.win.HalfPageUp() }
+func (model *Model) HalfPageUp() { model.window.HalfPageUp() }
 
 // PageDown moves the view and the cursor down a full screen.
-func (model *Model) PageDown() { model.win.PageDown() }
+func (model *Model) PageDown() { model.window.PageDown() }
 
 // PageUp moves the view and the cursor up a full screen.
-func (model *Model) PageUp() { model.win.PageUp() }
+func (model *Model) PageUp() { model.window.PageUp() }
 
 // NextHunk moves the cursor to the next hunk header (no-op on the last hunk),
 // putting the header at the top of the view.
 func (model *Model) NextHunk() {
 	for _, row := range model.hunkRow {
-		if row > model.win.Cursor() {
-			model.win.JumpTo(row)
+		if row > model.window.Cursor() {
+			model.window.JumpTo(row)
 			return
 		}
 	}
@@ -440,8 +440,8 @@ func (model *Model) NextHunk() {
 // current hunk's own header when the cursor is inside the hunk.
 func (model *Model) PreviousHunk() {
 	for i := len(model.hunkRow) - 1; i >= 0; i-- {
-		if model.hunkRow[i] < model.win.Cursor() {
-			model.win.JumpTo(model.hunkRow[i])
+		if model.hunkRow[i] < model.window.Cursor() {
+			model.window.JumpTo(model.hunkRow[i])
 			return
 		}
 	}
@@ -450,30 +450,30 @@ func (model *Model) PreviousHunk() {
 // --- horizontal scrolling ---
 
 // ScrollRight shifts the code area n cells to the right (reveals later text).
-func (model *Model) ScrollRight(count int) { model.win.Right(count) }
+func (model *Model) ScrollRight(count int) { model.window.Right(count) }
 
 // ScrollLeft shifts the code area n cells to the left.
-func (model *Model) ScrollLeft(count int) { model.win.Left(count) }
+func (model *Model) ScrollLeft(count int) { model.window.Left(count) }
 
 // HalfScrollRight scrolls right by half the code area.
-func (model *Model) HalfScrollRight() { model.win.HalfRight() }
+func (model *Model) HalfScrollRight() { model.window.HalfRight() }
 
 // HalfScrollLeft scrolls left by half the code area.
-func (model *Model) HalfScrollLeft() { model.win.HalfLeft() }
+func (model *Model) HalfScrollLeft() { model.window.HalfLeft() }
 
 // XOffset returns the horizontal scroll in cells.
-func (model *Model) HorizontalOffset() int { return model.win.HorizontalOffset() }
+func (model *Model) HorizontalOffset() int { return model.window.HorizontalOffset() }
 
 // Top returns the index of the first visible row (hunk headers count as rows).
-func (model *Model) Top() int { return model.win.Top() }
+func (model *Model) Top() int { return model.window.Top() }
 
 // Cursor describes the diff line under the cursor. ok is false when there is
 // no file, or the cursor is on a hunk header or a "no newline" marker.
 func (model *Model) Cursor() (cursorLine CursorLine, ok bool) {
-	if model.file == nil || model.win.Cursor() >= len(model.rows) {
+	if model.file == nil || model.window.Cursor() >= len(model.rows) {
 		return CursorLine{}, false
 	}
-	row := model.rows[model.win.Cursor()]
+	row := model.rows[model.window.Cursor()]
 	if !row.isLine() {
 		return CursorLine{}, false
 	}
@@ -491,15 +491,15 @@ func (model *Model) Cursor() (cursorLine CursorLine, ok bool) {
 // so hosts can call it from their own Render(width, height).
 func (model *Model) Render(width, height int) string {
 	model.SetSize(width, height)
-	if model.w == 0 || model.h == 0 {
+	if model.width == 0 || model.height == 0 {
 		return ""
 	}
 	if len(model.rows) == 0 {
 		return model.renderMessage()
 	}
-	end := min(model.win.Top()+model.h, len(model.rows))
-	lines := make([]string, 0, end-model.win.Top())
-	for i := model.win.Top(); i < end; i++ {
+	end := min(model.window.Top()+model.height, len(model.rows))
+	lines := make([]string, 0, end-model.window.Top())
+	for i := model.window.Top(); i < end; i++ {
 		lines = append(lines, model.renderRow(i))
 	}
 	return strings.Join(lines, "\n")
@@ -510,13 +510,13 @@ func (model *Model) renderMessage() string {
 	var out []string
 	for _, line := range lines {
 		line, _ = displayText(line)
-		out = append(out, strings.Split(ansi.Wrap(line, model.w, ""), "\n")...)
+		out = append(out, strings.Split(ansi.Wrap(line, model.width, ""), "\n")...)
 	}
-	if len(out) > model.h {
-		out = out[:model.h]
+	if len(out) > model.height {
+		out = out[:model.height]
 	}
 	for i, line := range out {
-		out[i] = model.th.Muted.Render(line)
+		out[i] = model.theme.Muted.Render(line)
 	}
 	// Anything built from diff content (paths, modes, errors) is untrusted.
 	return strings.Join(out, "\n")

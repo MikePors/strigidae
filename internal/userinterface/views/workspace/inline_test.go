@@ -35,12 +35,12 @@ func newInliner(test *testing.T) *inliner {
 }
 
 // dv is the diff component behind the right pane.
-func (inliner *inliner) diffView() *diffview.Model { return inliner.v.filePane.(*diffPane).dv }
+func (inliner *inliner) diffView() *diffview.Model { return inliner.view.filePane.(*diffPane).diffView }
 
 // cursorTo moves the diff cursor, from the top, to the first row where found
 // holds.
 func (inliner *inliner) cursorTo(what string, found func(diffView *diffview.Model) bool) {
-	inliner.t.Helper()
+	inliner.test.Helper()
 	diffView := inliner.diffView()
 	diffView.GotoTop()
 	for range 200 {
@@ -49,12 +49,12 @@ func (inliner *inliner) cursorTo(what string, found func(diffView *diffview.Mode
 		}
 		diffView.CursorDown(1)
 	}
-	inliner.t.Fatalf("cursor cannot reach %s", what)
+	inliner.test.Fatalf("cursor cannot reach %s", what)
 }
 
 // moveTo puts the diff cursor on the line with the given number on side.
 func (inliner *inliner) moveTo(side diffview.Side, count int) {
-	inliner.t.Helper()
+	inliner.test.Helper()
 	inliner.cursorTo(fmt.Sprintf("line %d on side %v", count, side), func(diffView *diffview.Model) bool {
 		line, ok := diffView.Cursor()
 		return ok && line.Side == side && line.Number() == count
@@ -63,7 +63,7 @@ func (inliner *inliner) moveTo(side diffview.Side, count int) {
 
 // toThread puts the diff cursor on the thread with the given ID.
 func (inliner *inliner) toThread(identifier string) {
-	inliner.t.Helper()
+	inliner.test.Helper()
 	inliner.cursorTo("thread "+identifier, func(diffView *diffview.Model) bool {
 		threads := diffView.ThreadsAtCursor()
 		return len(threads) == 1 && threads[0].Identifier == identifier
@@ -84,15 +84,15 @@ func (inliner *inliner) methods(names ...string) []string {
 }
 
 func (inliner *inliner) pendingThread() github.ReviewThread {
-	inliner.t.Helper()
-	for _, thread := range inliner.v.threads {
+	inliner.test.Helper()
+	for _, thread := range inliner.view.threads {
 		for _, comment := range thread.Comments {
 			if comment.Pending {
 				return thread
 			}
 		}
 	}
-	inliner.t.Fatal("no pending thread shown")
+	inliner.test.Fatal("no pending thread shown")
 	return github.ReviewThread{}
 }
 
@@ -132,8 +132,8 @@ func TestInlineCommentOnEachSide(test *testing.T) {
 			if diff := cmp.Diff([]string{"Pending comment added"}, inliner.infoMessages()); diff != "" {
 				test.Errorf("info (-want +got):\n%s", diff)
 			}
-			if len(inliner.v.drafts) != 0 {
-				test.Errorf("draft kept: %v", inliner.v.drafts)
+			if len(inliner.view.drafts) != 0 {
+				test.Errorf("draft kept: %v", inliner.view.drafts)
 			}
 			if thread := inliner.pendingThread(); thread.Line != testCase.line || thread.DiffSide != testCase.want.Side {
 				test.Errorf("shown thread = %+v", thread)
@@ -181,7 +181,7 @@ func TestInlineMultiLineComment(test *testing.T) {
 	inliner.body = "this whole block"
 	inliner.moveTo(diffview.SideRight, 14)
 	inliner.press("V")
-	if !inliner.v.CapturesKeys() {
+	if !inliner.view.CapturesKeys() {
 		test.Fatal("visual mode does not capture keys")
 	}
 	inliner.typ("jj")
@@ -189,7 +189,7 @@ func TestInlineMultiLineComment(test *testing.T) {
 		test.Errorf("want 2 selected rows marked plus the cursor row:\n%s", out)
 	}
 	inliner.typ("c")
-	if inliner.v.CapturesKeys() {
+	if inliner.view.CapturesKeys() {
 		test.Error("visual mode still active after c")
 	}
 	want := github.AddThreadInput{
@@ -218,7 +218,7 @@ func TestVisualRefusesTwoSidesAndEscLeaves(test *testing.T) {
 		test.Errorf("info (-want +got):\n%s", diff)
 	}
 	inliner.send(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if inliner.v.CapturesKeys() || inliner.v.filePane.VisualActive() {
+	if inliner.view.CapturesKeys() || inliner.view.filePane.VisualActive() {
 		test.Error("esc did not leave visual mode")
 	}
 	if len(inliner.openedOn) != 0 {
@@ -231,7 +231,7 @@ func TestVisualOnHunkHeaderDoesNotStart(test *testing.T) {
 	inliner.diffView().GotoTop()
 	inliner.messages = nil
 	inliner.press("V")
-	if inliner.v.CapturesKeys() {
+	if inliner.view.CapturesKeys() {
 		test.Error("visual mode started on a hunk header")
 	}
 	if diff := cmp.Diff([]string{"move onto a diff line to select lines"}, inliner.infoMessages()); diff != "" {
@@ -244,17 +244,17 @@ func TestVisualOnHunkHeaderDoesNotStart(test *testing.T) {
 func TestVisualReleasesOnEscThroughRoot(test *testing.T) {
 	inliner := newInliner(test)
 	noTick := func(time.Duration, func(time.Time) tea.Msg) tea.Cmd { return nil }
-	model := userinterface.New(inliner.v, theme.New(true), userinterface.Options{Tick: noTick})
+	model := userinterface.New(inliner.view, theme.New(true), userinterface.Options{Tick: noTick})
 	step := func(message tea.Msg) { _, _ = model.Update(message) }
 	step(tea.WindowSizeMsg{Width: 110, Height: 41})
 	inliner.moveTo(diffview.SideRight, 10)
 	step(tea.KeyPressMsg{Code: 'V', Text: "V"})
-	if !inliner.v.CapturesKeys() {
+	if !inliner.view.CapturesKeys() {
 		test.Fatal("V through the root did not start visual mode")
 	}
 	step(tea.KeyPressMsg{Code: 'x', Text: "x"}) // keys are raw while captured: x is not a command
 	step(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if inliner.v.CapturesKeys() {
+	if inliner.view.CapturesKeys() {
 		test.Error("view still captures keys after esc")
 	}
 }
@@ -283,16 +283,16 @@ func TestInlineFailedPostKeepsDraft(test *testing.T) {
 	if !strings.Contains(inliner.lastError(), "boom") || !strings.Contains(inliner.lastError(), "draft") {
 		test.Errorf("error = %q", inliner.lastError())
 	}
-	if len(inliner.v.drafts) != 1 {
-		test.Fatalf("drafts = %v", inliner.v.drafts)
+	if len(inliner.view.drafts) != 1 {
+		test.Fatalf("drafts = %v", inliner.view.drafts)
 	}
 	inliner.client.SetError(fake.MethodAddReviewThread, nil)
 	inliner.press("c")
 	if diff := cmp.Diff([]string{"", "my draft"}, inliner.openedOn); diff != "" {
 		test.Errorf("second editor (-want +got):\n%s", diff)
 	}
-	if len(inliner.client.AddedThreads()) != 1 || len(inliner.v.drafts) != 0 {
-		test.Errorf("retry: added %d, drafts %v", len(inliner.client.AddedThreads()), inliner.v.drafts)
+	if len(inliner.client.AddedThreads()) != 1 || len(inliner.view.drafts) != 0 {
+		test.Errorf("retry: added %d, drafts %v", len(inliner.client.AddedThreads()), inliner.view.drafts)
 	}
 	// The failed first try had already created the pending review; the retry joins it.
 	if len(inliner.client.StartedReviews()) != 1 {
@@ -305,8 +305,8 @@ func TestInlineEditorFailureKeepsTypedText(test *testing.T) {
 	inliner.body, inliner.err = "typed before the crash", errors.New("exit status 1")
 	inliner.moveTo(diffview.SideRight, 10)
 	inliner.press("c")
-	if len(inliner.v.drafts) != 1 || len(inliner.client.AddedThreads()) != 0 {
-		test.Errorf("drafts %v, added %d", inliner.v.drafts, len(inliner.client.AddedThreads()))
+	if len(inliner.view.drafts) != 1 || len(inliner.client.AddedThreads()) != 0 {
+		test.Errorf("drafts %v, added %d", inliner.view.drafts, len(inliner.client.AddedThreads()))
 	}
 }
 
@@ -314,7 +314,7 @@ func TestInlineRefusals(test *testing.T) {
 	test.Run("diff not loaded", func(test *testing.T) {
 		composer := newReviewer(test)
 		composer.selectFile()
-		composer.v.diff = DiffState{Err: errors.New("nope")} // as after a first load that failed
+		composer.view.diff = DiffState{Err: errors.New("nope")} // as after a first load that failed
 		composer.messages, composer.body = nil, "x"
 		composer.press("c")
 		if diff := cmp.Diff([]string{"diff not loaded"}, composer.infoMessages()); diff != "" || len(composer.openedOn) != 0 {
@@ -330,8 +330,8 @@ func TestInlineRefusals(test *testing.T) {
 		if !strings.Contains(inliner.lastError(), "head moved") {
 			test.Errorf("error = %q", inliner.lastError())
 		}
-		if got := inliner.methods(fake.MethodStartReview, fake.MethodAddReviewThread); len(got) != 0 || len(inliner.v.drafts) != 1 {
-			test.Errorf("calls %v, drafts %v", got, inliner.v.drafts)
+		if got := inliner.methods(fake.MethodStartReview, fake.MethodAddReviewThread); len(got) != 0 || len(inliner.view.drafts) != 1 {
+			test.Errorf("calls %v, drafts %v", got, inliner.view.drafts)
 		}
 	})
 	test.Run("pending review on another commit", func(test *testing.T) {
@@ -357,7 +357,7 @@ func TestInlineRefusals(test *testing.T) {
 
 // addPending adds a comment on new line 10 and moves the cursor onto its thread.
 func (inliner *inliner) addPending(body string) github.ReviewThread {
-	inliner.t.Helper()
+	inliner.test.Helper()
 	inliner.body = body
 	inliner.moveTo(diffview.SideRight, 10)
 	inliner.press("c")
@@ -400,8 +400,8 @@ func TestEditPendingEmptyBodyAndUnchanged(test *testing.T) {
 	inliner.client.SetError(fake.MethodUpdateReviewComment, errors.New("boom"))
 	inliner.body = "changed"
 	inliner.press("e")
-	if len(inliner.v.drafts) != 1 || !strings.Contains(inliner.lastError(), "boom") {
-		test.Errorf("failed edit: drafts %v, error %q", inliner.v.drafts, inliner.lastError())
+	if len(inliner.view.drafts) != 1 || !strings.Contains(inliner.lastError(), "boom") {
+		test.Errorf("failed edit: drafts %v, error %q", inliner.view.drafts, inliner.lastError())
 	}
 	inliner.client.SetError(fake.MethodUpdateReviewComment, nil)
 	inliner.messages, inliner.body = nil, "keep me"
@@ -448,7 +448,7 @@ func TestDeletePendingComment(test *testing.T) {
 	if diff := cmp.Diff([]string{thread.Comments[0].Identifier}, inliner.client.DeletedComments()); diff != "" {
 		test.Errorf("deleted (-want +got):\n%s", diff)
 	}
-	for _, secondThread := range inliner.v.threads {
+	for _, secondThread := range inliner.view.threads {
 		if secondThread.Identifier == thread.Identifier {
 			test.Error("deleted thread still shown")
 		}
@@ -474,7 +474,7 @@ func TestDeletePendingFailureIsReported(test *testing.T) {
 func TestInlineKeysAreInHelp(test *testing.T) {
 	harness := loaded(test, 100, 30)
 	got := map[string]bool{}
-	for _, bindings := range harness.v.FullHelp() {
+	for _, bindings := range harness.view.FullHelp() {
 		for _, binding := range bindings {
 			if k := binding.Keys(); len(k) == 1 {
 				got[k[0]] = true
@@ -491,21 +491,21 @@ func TestInlineKeysAreInHelp(test *testing.T) {
 // submitElsewhere publishes the pending review on the server, as submitting
 // it on github.com would, without the view hearing about it.
 func (inliner *inliner) submitElsewhere() {
-	inliner.t.Helper()
+	inliner.test.Helper()
 	in := github.SubmitReviewInput{
 		Repository: testRepository, Number: 7, PullRequestIdentifier: pullRequestNodeIdentifier, Event: github.ReviewEventComment,
 		PendingReviewIdentifier: inliner.client.StartedReviews()[0].ReviewIdentifier,
 	}
-	if err := inliner.client.SubmitReview(inliner.t.Context(), in); err != nil {
-		inliner.t.Fatal(err)
+	if err := inliner.client.SubmitReview(inliner.test.Context(), in); err != nil {
+		inliner.test.Fatal(err)
 	}
 }
 
 func (inliner *inliner) serverBody(identifier string) string {
-	inliner.t.Helper()
-	page, err := inliner.client.ListReviewThreads(inliner.t.Context(), testRepository, 7, github.PageRequest{})
+	inliner.test.Helper()
+	page, err := inliner.client.ListReviewThreads(inliner.test.Context(), testRepository, 7, github.PageRequest{})
 	if err != nil {
-		inliner.t.Fatal(err)
+		inliner.test.Fatal(err)
 	}
 	for _, thread := range page.Items {
 		for _, comment := range thread.Comments {
@@ -514,7 +514,7 @@ func (inliner *inliner) serverBody(identifier string) string {
 			}
 		}
 	}
-	inliner.t.Fatalf("comment %s not on the server", identifier)
+	inliner.test.Fatalf("comment %s not on the server", identifier)
 	return ""
 }
 
@@ -535,7 +535,7 @@ func (inliner *inliner) mine(canUpdate, canDelete bool, comments ...github.Revie
 
 // seed sets the server's threads (the shared ones plus extra) and refreshes the view.
 func (inliner *inliner) seed(extra ...github.ReviewThread) {
-	inliner.t.Helper()
+	inliner.test.Helper()
 	inliner.client.SetReviewThreads(testRepository, 7, append(testThreads(), extra...))
 	inliner.press("R")
 }
@@ -607,7 +607,7 @@ func TestEditPublishedUnchangedWithATrailingNewline(test *testing.T) {
 func TestPendingTurnedPublishedWhileTheEditorIsOpen(test *testing.T) {
 	inliner := newInliner(test)
 	identifier := inliner.addPending("original").Comments[0].Identifier
-	inliner.v.edit = func(_ string, done func(string, error) tea.Msg) tea.Cmd {
+	inliner.view.edit = func(_ string, done func(string, error) tea.Msg) tea.Cmd {
 		return func() tea.Msg {
 			inliner.submitElsewhere() // submitted on github.com while the editor is open
 			return done("rewritten", nil)
@@ -642,14 +642,14 @@ func TestPendingTurnedPublishedBeforeDeleteAsksTheRightQuestion(test *testing.T)
 // retitle changes the pull request on the server, so a reload can be told
 // from no reload.
 func (inliner *inliner) retitle() {
-	inliner.t.Helper()
+	inliner.test.Helper()
 	detail := testDetail()
 	detail.Identifier, detail.HeadSHA, detail.Title = pullRequestNodeIdentifier, headSHA, "retitled"
 	inliner.client.SetPullRequest(detail)
 }
 
 func (inliner *inliner) threadIDs() (identifiers []string) {
-	for _, thread := range inliner.v.threads {
+	for _, thread := range inliner.view.threads {
 		identifiers = append(identifiers, thread.Identifier)
 	}
 	return identifiers
@@ -675,7 +675,7 @@ func TestGoneOrCannotChangeIsRefusedAndRefreshed(test *testing.T) {
 		{"can no longer be changed", func(inliner *inliner, identifier string) {
 			inliner.client.SetReviewThreads(testRepository, 7, append(testThreads(), inliner.mine(false, false, github.ReviewComment{Identifier: identifier, Body: "published note"})))
 		}, "you can no longer change that comment", func(test *testing.T, inliner *inliner) {
-			for _, thread := range inliner.v.threads {
+			for _, thread := range inliner.view.threads {
 				if thread.Identifier == mineIdentifier && thread.Comments[0].ViewerCanUpdate {
 					test.Error("the view still shows the comment as changeable")
 				}
@@ -693,14 +693,14 @@ func TestGoneOrCannotChangeIsRefusedAndRefreshed(test *testing.T) {
 		}
 		refreshed := func(test *testing.T, inliner *inliner) {
 			test.Helper()
-			if inliner.v.detail.Title != "retitled" {
+			if inliner.view.detail.Title != "retitled" {
 				test.Error("the pull request was not reloaded")
 			}
 			testCase.check(test, inliner)
 		}
 		test.Run(testCase.name+"/edit", func(test *testing.T) {
 			inliner := prepare(test)
-			inliner.v.edit = func(_ string, done func(string, error) tea.Msg) tea.Cmd {
+			inliner.view.edit = func(_ string, done func(string, error) tea.Msg) tea.Cmd {
 				return func() tea.Msg {
 					testCase.change(inliner, "c-mine")
 					return done("rewritten", nil)
@@ -753,7 +753,7 @@ func TestDeleteRechecksAfterTheAnswer(test *testing.T) {
 	if !strings.Contains(inliner.lastError(), "that comment is gone") {
 		test.Errorf("error = %q", inliner.lastError())
 	}
-	if inliner.v.detail.Title != "retitled" {
+	if inliner.view.detail.Title != "retitled" {
 		test.Error("the view was not refreshed")
 	}
 }
@@ -766,7 +766,7 @@ func TestRefusedEditKeepsTheText(test *testing.T) {
 		return thread
 	}
 	rewrite := func(inliner *inliner, during func()) {
-		inliner.v.edit = func(initial string, done func(string, error) tea.Msg) tea.Cmd {
+		inliner.view.edit = func(initial string, done func(string, error) tea.Msg) tea.Cmd {
 			inliner.openedOn = append(inliner.openedOn, initial)
 			return func() tea.Msg {
 				if during != nil {
@@ -800,7 +800,7 @@ func TestRefusedEditKeepsTheText(test *testing.T) {
 		if want := "that comment is gone; refreshed; your text is kept as a reply draft"; inliner.lastError() != want {
 			test.Errorf("error = %q, want %q", inliner.lastError(), want)
 		}
-		if diff := cmp.Diff(map[string]string{replyKey: "my rewrite"}, inliner.v.drafts); diff != "" {
+		if diff := cmp.Diff(map[string]string{replyKey: "my rewrite"}, inliner.view.drafts); diff != "" {
 			test.Errorf("drafts (-want +got):\n%s", diff)
 		}
 		// The thread survives (bob's comment), and r starts from the text.
@@ -825,16 +825,16 @@ func TestRefusedEditKeepsTheText(test *testing.T) {
 		if !strings.Contains(inliner.lastError(), "your text is kept as a reply draft") {
 			test.Errorf("error = %q", inliner.lastError())
 		}
-		if diff := cmp.Diff(map[string]string{replyKey: "my rewrite"}, inliner.v.drafts); diff != "" {
+		if diff := cmp.Diff(map[string]string{replyKey: "my rewrite"}, inliner.view.drafts); diff != "" {
 			test.Errorf("drafts (-want +got):\n%s", diff)
 		}
 	})
 	test.Run("an existing reply draft is kept in front of it", func(test *testing.T) {
 		inliner := setup(test)
-		inliner.v.drafts[replyKey] = "half a reply"
+		inliner.view.drafts[replyKey] = "half a reply"
 		rewrite(inliner, deleteMine(inliner))
 		inliner.press("e")
-		if got := inliner.v.drafts[replyKey]; got != "half a reply\n\nmy rewrite" {
+		if got := inliner.view.drafts[replyKey]; got != "half a reply\n\nmy rewrite" {
 			test.Errorf("reply draft = %q", got)
 		}
 	})
@@ -848,7 +848,7 @@ func TestRefusedEditKeepsTheText(test *testing.T) {
 		if !strings.Contains(inliner.lastError(), "your text is kept as a reply draft") {
 			test.Errorf("error = %q", inliner.lastError())
 		}
-		if diff := cmp.Diff(map[string]string{replyKey: "my rewrite"}, inliner.v.drafts); diff != "" {
+		if diff := cmp.Diff(map[string]string{replyKey: "my rewrite"}, inliner.view.drafts); diff != "" {
 			test.Errorf("drafts (-want +got):\n%s", diff)
 		}
 	})
@@ -862,7 +862,7 @@ func TestRefusedEditKeepsTheText(test *testing.T) {
 		}
 		deleteMine(inliner)()
 		inliner.run(configuration.OnYes)
-		if diff := cmp.Diff(map[string]string{replyKey: "my rewrite"}, inliner.v.drafts); diff != "" {
+		if diff := cmp.Diff(map[string]string{replyKey: "my rewrite"}, inliner.view.drafts); diff != "" {
 			test.Errorf("drafts (-want +got):\n%s", diff)
 		}
 	})
@@ -897,7 +897,7 @@ func TestVisualModeEndsWhenTheFileGoes(test *testing.T) {
 	inliner := newInliner(test)
 	inliner.moveTo(diffview.SideRight, 10)
 	inliner.press("V")
-	if !inliner.v.CapturesKeys() {
+	if !inliner.view.CapturesKeys() {
 		test.Fatal("visual mode did not start")
 	}
 	// A reload no longer lists the file: the Overview is shown.
@@ -905,12 +905,12 @@ func TestVisualModeEndsWhenTheFileGoes(test *testing.T) {
 	detail.Identifier = pullRequestNodeIdentifier
 	detail.Files = detail.Files[:0]
 	detail.Files = append(detail.Files, github.ChangedFile{Path: "README.md", Additions: 2, Change: github.FileModified})
-	inliner.send(pullRequestLoadedMessage{owner: inliner.v, repository: testRepository, number: 7, sequence: inliner.v.sequence, detail: detail})
-	if inliner.v.selection() != 0 {
-		test.Fatalf("the selection did not move to the Overview: sel = %d", inliner.v.selection())
+	inliner.send(pullRequestLoadedMessage{owner: inliner.view, repository: testRepository, number: 7, sequence: inliner.view.sequence, detail: detail})
+	if inliner.view.selection() != 0 {
+		test.Fatalf("the selection did not move to the Overview: sel = %d", inliner.view.selection())
 	}
-	if inliner.v.CapturesKeys() || inliner.v.filePane.VisualActive() {
-		test.Errorf("visual mode survived onto the Overview: captures %v, active %v", inliner.v.CapturesKeys(), inliner.v.filePane.VisualActive())
+	if inliner.view.CapturesKeys() || inliner.view.filePane.VisualActive() {
+		test.Errorf("visual mode survived onto the Overview: captures %v, active %v", inliner.view.CapturesKeys(), inliner.view.filePane.VisualActive())
 	}
 	inliner.openedOn = nil
 	inliner.typ("c")
@@ -924,8 +924,8 @@ func TestVisualModeEndsWhenTheSelectionOrTheDiffChanges(test *testing.T) {
 		inliner := newInliner(test)
 		inliner.moveTo(diffview.SideRight, 10)
 		inliner.press("V")
-		inliner.v.selectEntry(inliner.v.selection() + 1)
-		if inliner.v.filePane.VisualActive() {
+		inliner.view.selectEntry(inliner.view.selection() + 1)
+		if inliner.view.filePane.VisualActive() {
 			test.Error("the selection outlived its file")
 		}
 	})
@@ -934,7 +934,7 @@ func TestVisualModeEndsWhenTheSelectionOrTheDiffChanges(test *testing.T) {
 		inliner.moveTo(diffview.SideRight, 10)
 		inliner.press("V")
 		inliner.press("R")
-		if inliner.v.CapturesKeys() {
+		if inliner.view.CapturesKeys() {
 			test.Error("visual mode outlived a diff reload")
 		}
 	})
@@ -946,10 +946,10 @@ func TestInlineCommentKeepsTheHeadOfItsDiff(test *testing.T) {
 	inliner.moveTo(diffview.SideRight, 10)
 	// While the editor is open a newer diff is shown, and the server moved on
 	// with it. The comment's lines come from the older diff.
-	inliner.v.edit = func(_ string, done func(string, error) tea.Msg) tea.Cmd {
+	inliner.view.edit = func(_ string, done func(string, error) tea.Msg) tea.Cmd {
 		return func() tea.Msg {
 			inliner.client.SetHeadSHA(testRepository, 7, "bbbb2222")
-			inliner.v.diffHead = "bbbb2222"
+			inliner.view.diffHead = "bbbb2222"
 			return done("x", nil)
 		}
 	}
@@ -1014,7 +1014,7 @@ func TestMultiLineCommentOnTheOldSide(test *testing.T) {
 // submitted holds back comments.
 func TestCommentWriteInFlightBlocksReviewsAndMerges(test *testing.T) {
 	inliner := newInliner(test)
-	inliner.v.writes = 1
+	inliner.view.writes = 1
 	for _, name := range []string{"approve", "request-changes", "review", "merge"} {
 		inliner.messages = nil
 		inliner.command(name)
@@ -1028,8 +1028,8 @@ func TestCommentWriteInFlightBlocksReviewsAndMerges(test *testing.T) {
 	if diff := cmp.Diff([]string{commentSavingText}, inliner.infoMessages()); diff != "" || len(inliner.openedOn) != 0 {
 		test.Errorf("c (-want +got):\n%s", diff)
 	}
-	inliner.v.writes = 0
-	inliner.v.review.submitting = true
+	inliner.view.writes = 0
+	inliner.view.review.submitting = true
 	inliner.messages = nil
 	inliner.press("c")
 	if diff := cmp.Diff([]string{"a review is being submitted"}, inliner.infoMessages()); diff != "" {
@@ -1042,20 +1042,20 @@ func TestCommentWriteFlagClears(test *testing.T) {
 	inliner.body = "x"
 	inliner.moveTo(diffview.SideRight, 10)
 	inliner.press("c") // the harness delivers the result
-	if inliner.v.writes > 0 {
+	if inliner.view.writes > 0 {
 		test.Error("the flag stayed set after the write finished")
 	}
 	inliner.client.SetError(fake.MethodAddReviewThread, errors.New("boom"))
 	inliner.moveTo(diffview.SideRight, 11)
 	inliner.press("c")
-	if inliner.v.writes > 0 {
+	if inliner.view.writes > 0 {
 		test.Error("the flag stayed set after a failed write")
 	}
 	inliner.toThread(inliner.pendingThread().Identifier)
 	inliner.messages = nil
 	inliner.press("D")
-	if _, asked := inliner.lastConfirm(); !asked || (inliner.v.writes > 0) {
-		test.Errorf("asked %v, flag %v: the flag must clear when the question is shown", asked, (inliner.v.writes > 0))
+	if _, asked := inliner.lastConfirm(); !asked || (inliner.view.writes > 0) {
+		test.Errorf("asked %v, flag %v: the flag must clear when the question is shown", asked, (inliner.view.writes > 0))
 	}
 }
 
@@ -1109,7 +1109,7 @@ func TestEditAndDeleteRefusedWhileSubmitting(test *testing.T) {
 	inliner := newInliner(test)
 	inliner.addPending("original")
 	inliner.openedOn, inliner.messages = nil, nil
-	inliner.v.review.submitting = true
+	inliner.view.review.submitting = true
 	inliner.body = "x"
 	inliner.press("e")
 	inliner.press("D")
@@ -1231,7 +1231,7 @@ func TestPublishedEditPromptIsDroppedWhenTheViewChanged(test *testing.T) {
 	inliner := newInliner(test)
 	other := New(inliner.client, testRepository, 12)
 	message := commentCheckedMessage{origin: origin{other, testRepository, 12}, question: "Update your published comment on #12 a.go:1?"}
-	if _, command := inliner.v.Update(message); command != nil {
+	if _, command := inliner.view.Update(message); command != nil {
 		test.Errorf("a prompt for another view produced %v", messages(command))
 	}
 }
@@ -1308,8 +1308,8 @@ func TestEditAndDeleteUseTheirOwnPermission(test *testing.T) {
 // agree answers a question as the root does, but leaves the write it starts
 // unrun, so the write is in flight until the returned command is run.
 func (inliner *inliner) agree(configuration userinterface.ConfirmMessage) tea.Cmd {
-	inliner.t.Helper()
-	_, command := inliner.v.Update(configuration.OnYes())
+	inliner.test.Helper()
+	_, command := inliner.view.Update(configuration.OnYes())
 	return command
 }
 
@@ -1330,17 +1330,17 @@ func TestWriteAfterYesIsInFlightUntilItsResult(test *testing.T) {
 		inliner.messages = nil
 		inliner.press("D")
 		configuration, _ := inliner.lastConfirm()
-		if inliner.v.writes > 0 {
+		if inliner.view.writes > 0 {
 			test.Fatal("flag set while the question is open")
 		}
 		write := inliner.agree(configuration)
-		if inliner.v.writes <= 0 {
+		if inliner.view.writes <= 0 {
 			test.Fatal("flag not set after the yes")
 		}
 		blocked(inliner)
 		inliner.run(write)
-		if (inliner.v.writes > 0) || len(inliner.client.DeletedComments()) != 1 {
-			test.Errorf("flag %v, deleted %v", (inliner.v.writes > 0), inliner.client.DeletedComments())
+		if (inliner.view.writes > 0) || len(inliner.client.DeletedComments()) != 1 {
+			test.Errorf("flag %v, deleted %v", (inliner.view.writes > 0), inliner.client.DeletedComments())
 		}
 	})
 	test.Run("published edit", func(test *testing.T) {
@@ -1353,7 +1353,7 @@ func TestWriteAfterYesIsInFlightUntilItsResult(test *testing.T) {
 		write := inliner.agree(configuration)
 		blocked(inliner)
 		inliner.run(write)
-		if inliner.v.writes > 0 {
+		if inliner.view.writes > 0 {
 			test.Error("flag still set after the result")
 		}
 	})
@@ -1365,7 +1365,7 @@ func TestWriteAfterYesIsInFlightUntilItsResult(test *testing.T) {
 		inliner.press("D")
 		configuration, _ := inliner.lastConfirm()
 		inliner.run(inliner.agree(configuration))
-		if inliner.v.writes > 0 {
+		if inliner.view.writes > 0 {
 			test.Error("flag still set after a failed write")
 		}
 	})
@@ -1379,7 +1379,7 @@ func TestWriteAfterYesIsInFlightUntilItsResult(test *testing.T) {
 			test.Fatal(err)
 		}
 		inliner.run(inliner.agree(configuration))
-		if inliner.v.writes > 0 {
+		if inliner.view.writes > 0 {
 			test.Error("flag still set after a stale refusal")
 		}
 	})
@@ -1392,12 +1392,12 @@ func TestWriteAfterYesIsInFlightUntilItsResult(test *testing.T) {
 		if !ok {
 			test.Fatal("no confirmation")
 		}
-		_, write := composer.v.Update(configuration.OnYes())
-		if composer.v.writes <= 0 {
+		_, write := composer.view.Update(configuration.OnYes())
+		if composer.view.writes <= 0 {
 			test.Fatal("flag not set for a reply")
 		}
 		composer.run(write)
-		if composer.v.writes > 0 {
+		if composer.view.writes > 0 {
 			test.Error("flag still set after the reply was posted")
 		}
 	})
@@ -1409,12 +1409,12 @@ func TestWriteAfterYesIsInFlightUntilItsResult(test *testing.T) {
 		if !ok {
 			test.Fatal("no confirmation")
 		}
-		_, write := composer.v.Update(configuration.OnYes())
-		if composer.v.writes <= 0 {
+		_, write := composer.view.Update(configuration.OnYes())
+		if composer.view.writes <= 0 {
 			test.Fatal("flag not set for a top-level comment")
 		}
 		composer.run(write)
-		if composer.v.writes > 0 {
+		if composer.view.writes > 0 {
 			test.Error("flag still set after the comment was posted")
 		}
 	})
@@ -1422,8 +1422,8 @@ func TestWriteAfterYesIsInFlightUntilItsResult(test *testing.T) {
 
 func TestYesIsRefusedWhileAReviewOrMergeRuns(test *testing.T) {
 	for name, busy := range map[string]func(testInliner *inliner){
-		"review": func(inliner *inliner) { inliner.v.review.submitting = true },
-		"merge":  func(inliner *inliner) { inliner.v.merge.merging = true },
+		"review": func(inliner *inliner) { inliner.view.review.submitting = true },
+		"merge":  func(inliner *inliner) { inliner.view.merge.merging = true },
 	} {
 		test.Run(name, func(test *testing.T) {
 			inliner := newInliner(test)
@@ -1434,8 +1434,8 @@ func TestYesIsRefusedWhileAReviewOrMergeRuns(test *testing.T) {
 			busy(inliner)
 			before := len(inliner.deletes())
 			inliner.run(configuration.OnYes)
-			if len(inliner.deletes()) != before || (inliner.v.writes > 0) {
-				test.Errorf("deletes %v, flag %v", inliner.deletes(), (inliner.v.writes > 0))
+			if len(inliner.deletes()) != before || (inliner.view.writes > 0) {
+				test.Errorf("deletes %v, flag %v", inliner.deletes(), (inliner.view.writes > 0))
 			}
 			if len(inliner.infoMessages()) == 0 {
 				test.Error("no message for the refused yes")
@@ -1446,16 +1446,16 @@ func TestYesIsRefusedWhileAReviewOrMergeRuns(test *testing.T) {
 
 func TestAgreedForAnotherViewIsIgnored(test *testing.T) {
 	inliner := newInliner(test)
-	inliner.v.writes = 1
+	inliner.view.writes = 1
 	other := New(inliner.client, testRepository, 12)
-	_, command := inliner.v.Update(commentAgreedMessage{origin: other.origin(), run: func() tea.Msg { return nil }})
-	if command != nil || inliner.v.writes <= 0 {
-		test.Errorf("cmd %v, flag %v: another view's yes must change nothing", command != nil, (inliner.v.writes > 0))
+	_, command := inliner.view.Update(commentAgreedMessage{origin: other.origin(), run: func() tea.Msg { return nil }})
+	if command != nil || inliner.view.writes <= 0 {
+		test.Errorf("cmd %v, flag %v: another view's yes must change nothing", command != nil, (inliner.view.writes > 0))
 	}
 	// A result for another view leaves the flag alone too.
 	inliner.send(commentDeletedMessage{origin: other.origin()})
 	inliner.send(postedMessage{origin: other.origin()})
-	if inliner.v.writes <= 0 {
+	if inliner.view.writes <= 0 {
 		test.Error("another view's result cleared the flag")
 	}
 }
@@ -1527,7 +1527,7 @@ func TestRefusedEditTextGoesToTheThreadOrTheLine(test *testing.T) {
 			inliner.toThread(mineIdentifier)
 			inliner.messages = nil
 			first := true
-			inliner.v.edit = func(initial string, done func(string, error) tea.Msg) tea.Cmd {
+			inliner.view.edit = func(initial string, done func(string, error) tea.Msg) tea.Cmd {
 				inliner.openedOn = append(inliner.openedOn, initial)
 				return func() tea.Msg {
 					if first {
@@ -1541,7 +1541,7 @@ func TestRefusedEditTextGoesToTheThreadOrTheLine(test *testing.T) {
 			if !strings.Contains(inliner.lastError(), testCase.suffix) {
 				test.Errorf("error = %q, want it to end with %q", inliner.lastError(), testCase.suffix)
 			}
-			if diff := cmp.Diff(map[string]string{testCase.wantKey: "my rewrite"}, inliner.v.drafts); diff != "" {
+			if diff := cmp.Diff(map[string]string{testCase.wantKey: "my rewrite"}, inliner.view.drafts); diff != "" {
 				test.Errorf("drafts (-want +got):\n%s", diff)
 			}
 			if testCase.wantKey == topKey {
@@ -1581,7 +1581,7 @@ func TestRefusedEditTextGoesToTheThreadOrTheLine(test *testing.T) {
 		// The comment is really gone with its thread by the time the thread list is read.
 		deleteIt(inliner)
 		inliner.run(configuration.OnYes)
-		if diff := cmp.Diff(map[string]string{lineKey: "my rewrite"}, inliner.v.drafts); diff != "" {
+		if diff := cmp.Diff(map[string]string{lineKey: "my rewrite"}, inliner.view.drafts); diff != "" {
 			test.Errorf("drafts (-want +got):\n%s", diff)
 		}
 	})
@@ -1595,27 +1595,27 @@ func TestRefusedEditTextGoesToTheThreadOrTheLine(test *testing.T) {
 		deleteIt(inliner)
 		inliner.client.SetError(fake.MethodListReviewThreads, errors.New("boom"))
 		inliner.run(configuration.OnYes)
-		if _, ok := inliner.v.drafts[lineKey]; !ok {
-			test.Errorf("drafts = %v, want the line draft", inliner.v.drafts)
+		if _, ok := inliner.view.drafts[lineKey]; !ok {
+			test.Errorf("drafts = %v, want the line draft", inliner.view.drafts)
 		}
 	})
 	test.Run("joined with an existing draft once", func(test *testing.T) {
 		inliner := newInliner(test)
 		inliner.seed(twoComments(inliner))
 		inliner.toThread(mineIdentifier)
-		inliner.v.drafts[replyKey] = "half a reply"
+		inliner.view.drafts[replyKey] = "half a reply"
 		inliner.body = "my rewrite"
 		inliner.press("e")
 		configuration, _ := inliner.lastConfirm()
 		deleteIt(inliner)
 		inliner.run(configuration.OnYes)
-		if got := inliner.v.drafts[replyKey]; got != "half a reply\n\nmy rewrite" {
+		if got := inliner.view.drafts[replyKey]; got != "half a reply\n\nmy rewrite" {
 			test.Errorf("reply draft = %q", got)
 		}
 		// The same text again is not appended a second time.
-		inliner.v.drafts[replyKey] = "my rewrite"
-		inliner.send(postedMessage{origin: inliner.v.origin(), target: target{kind: kindEdit, commentIdentifier: "c-mine", threadIdentifier: mineIdentifier}, body: "my rewrite", err: errCommentGone, threadLive: true})
-		if got := inliner.v.drafts[replyKey]; got != "my rewrite" {
+		inliner.view.drafts[replyKey] = "my rewrite"
+		inliner.send(postedMessage{origin: inliner.view.origin(), target: target{kind: kindEdit, commentIdentifier: "c-mine", threadIdentifier: mineIdentifier}, body: "my rewrite", err: errCommentGone, threadLive: true})
+		if got := inliner.view.drafts[replyKey]; got != "my rewrite" {
 			test.Errorf("a draft that already is the text was doubled: %q", got)
 		}
 	})
@@ -1628,7 +1628,7 @@ func TestSupersededReadDoesNotOpenAnEditor(test *testing.T) {
 	inliner.seed(inliner.mine(true, true))
 	inliner.toThread(mineIdentifier)
 	// e: the read is in flight (held).
-	_, read := inliner.v.Update(keys.Message{Sequence: "e"})
+	_, read := inliner.view.Update(keys.Message{Sequence: "e"})
 	if read == nil {
 		test.Fatal("e started no read")
 	}
@@ -1649,8 +1649,8 @@ func TestSupersededReadDoesNotOpenAnEditor(test *testing.T) {
 	secondInliner := newInliner(test)
 	secondInliner.seed(secondInliner.mine(true, true))
 	secondInliner.toThread(mineIdentifier)
-	_, first := secondInliner.v.Update(keys.Message{Sequence: "e"})
-	_, second := secondInliner.v.Update(keys.Message{Sequence: "e"})
+	_, first := secondInliner.view.Update(keys.Message{Sequence: "e"})
+	_, second := secondInliner.view.Update(keys.Message{Sequence: "e"})
 	secondInliner.openedOn, secondInliner.body = nil, "published note"
 	secondInliner.run(first)
 	if len(secondInliner.openedOn) != 0 {
@@ -1666,8 +1666,8 @@ func TestReadIsRefusedWhenAReviewStartedMeanwhile(test *testing.T) {
 	inliner := newInliner(test)
 	inliner.seed(inliner.mine(true, true))
 	inliner.toThread(mineIdentifier)
-	_, read := inliner.v.Update(keys.Message{Sequence: "e"})
-	inliner.v.review.submitting = true
+	_, read := inliner.view.Update(keys.Message{Sequence: "e"})
+	inliner.view.review.submitting = true
 	inliner.messages, inliner.openedOn = nil, nil
 	inliner.run(read)
 	if len(inliner.openedOn) != 0 {
@@ -1682,8 +1682,8 @@ func TestReadIsRefusedWhenAReviewStartedMeanwhile(test *testing.T) {
 func TestEachWriteIsCountedAndExcludesTheNext(test *testing.T) {
 	assertBlocked := func(test *testing.T, inliner *inliner, what string) {
 		test.Helper()
-		if inliner.v.writes != 1 {
-			test.Fatalf("%s: writes = %d, want 1", what, inliner.v.writes)
+		if inliner.view.writes != 1 {
+			test.Fatalf("%s: writes = %d, want 1", what, inliner.view.writes)
 		}
 		for _, name := range []string{"approve", "request-changes", "review", "merge"} {
 			inliner.messages = nil
@@ -1710,50 +1710,50 @@ func TestEachWriteIsCountedAndExcludesTheNext(test *testing.T) {
 		inliner := newInliner(test)
 		inliner.body = "x"
 		inliner.moveTo(diffview.SideRight, 10)
-		_, compose := inliner.v.Update(keys.Message{Sequence: "c"})
-		_, write := inliner.v.Update(compose()) // the editor closed: the add starts, unrun
+		_, compose := inliner.view.Update(keys.Message{Sequence: "c"})
+		_, write := inliner.view.Update(compose()) // the editor closed: the add starts, unrun
 		assertBlocked(test, inliner, "inline add")
 		inliner.run(write)
-		if inliner.v.writes != 0 {
-			test.Errorf("writes = %d after the result", inliner.v.writes)
+		if inliner.view.writes != 0 {
+			test.Errorf("writes = %d after the result", inliner.view.writes)
 		}
 	})
 	test.Run("pending edit", func(test *testing.T) {
 		inliner := newInliner(test)
 		inliner.addPending("first")
 		inliner.body = "second"
-		_, read := inliner.v.Update(keys.Message{Sequence: "e"})
-		_, compose := inliner.v.Update(read())
-		_, write := inliner.v.Update(compose())
+		_, read := inliner.view.Update(keys.Message{Sequence: "e"})
+		_, compose := inliner.view.Update(read())
+		_, write := inliner.view.Update(compose())
 		assertBlocked(test, inliner, "pending edit")
 		inliner.run(write)
-		if inliner.v.writes != 0 {
-			test.Errorf("writes = %d after the result", inliner.v.writes)
+		if inliner.view.writes != 0 {
+			test.Errorf("writes = %d after the result", inliner.view.writes)
 		}
 	})
 	test.Run("delete before its question", func(test *testing.T) {
 		inliner := newInliner(test)
 		inliner.addPending("x")
-		_, write := inliner.v.Update(keys.Message{Sequence: "D"})
+		_, write := inliner.view.Update(keys.Message{Sequence: "D"})
 		assertBlocked(test, inliner, "delete")
 		inliner.run(write)
-		if inliner.v.writes != 0 {
-			test.Errorf("writes = %d after the question", inliner.v.writes)
+		if inliner.view.writes != 0 {
+			test.Errorf("writes = %d after the question", inliner.view.writes)
 		}
 	})
 }
 
 func TestReviewAndMergeRefuseAtTheirYesWhileAWriteRuns(test *testing.T) {
 	inliner := newInliner(test)
-	inliner.v.writes = 1
+	inliner.view.writes = 1
 	before := len(inliner.client.Submissions())
-	inliner.send(reviewSendMessage{flow: &inliner.v.review, repository: testRepository, number: 7, event: github.ReviewEventApprove, status: github.ReviewStatus{PullRequestIdentifier: pullRequestNodeIdentifier, HeadSHA: headSHA}})
-	if inliner.v.review.submitting || len(inliner.client.Submissions()) != before {
-		test.Errorf("a review started at its yes: submitting %v", inliner.v.review.submitting)
+	inliner.send(reviewSendMessage{flow: &inliner.view.review, repository: testRepository, number: 7, event: github.ReviewEventApprove, status: github.ReviewStatus{PullRequestIdentifier: pullRequestNodeIdentifier, HeadSHA: headSHA}})
+	if inliner.view.review.submitting || len(inliner.client.Submissions()) != before {
+		test.Errorf("a review started at its yes: submitting %v", inliner.view.review.submitting)
 	}
-	inliner.send(mergeSendMessage{flow: &inliner.v.merge, repository: testRepository, number: 7, method: github.MergeMethodMerge, status: github.MergeStatus{PullRequestIdentifier: pullRequestNodeIdentifier, HeadSHA: headSHA}})
-	if inliner.v.merge.merging || len(inliner.client.Merges()) != 0 {
-		test.Errorf("a merge started at its yes: merging %v", inliner.v.merge.merging)
+	inliner.send(mergeSendMessage{flow: &inliner.view.merge, repository: testRepository, number: 7, method: github.MergeMethodMerge, status: github.MergeStatus{PullRequestIdentifier: pullRequestNodeIdentifier, HeadSHA: headSHA}})
+	if inliner.view.merge.merging || len(inliner.client.Merges()) != 0 {
+		test.Errorf("a merge started at its yes: merging %v", inliner.view.merge.merging)
 	}
 	if diff := cmp.Diff([]string{commentSavingText, commentSavingText}, inliner.infoMessages()); diff != "" {
 		test.Errorf("infos (-want +got):\n%s", diff)
@@ -1780,12 +1780,12 @@ func TestInlineDraftKeyIncludesTheStartLine(test *testing.T) {
 
 func TestAYesIsRefusedWhileAnotherWriteRuns(test *testing.T) {
 	inliner := newInliner(test)
-	inliner.v.writes = 1
+	inliner.view.writes = 1
 	ran := false
-	_, command := inliner.v.Update(commentAgreedMessage{origin: inliner.v.origin(), run: func() tea.Msg { ran = true; return nil }})
+	_, command := inliner.view.Update(commentAgreedMessage{origin: inliner.view.origin(), run: func() tea.Msg { ran = true; return nil }})
 	inliner.run(command)
-	if ran || inliner.v.writes != 1 {
-		test.Errorf("the write ran %v, writes = %d", ran, inliner.v.writes)
+	if ran || inliner.view.writes != 1 {
+		test.Errorf("the write ran %v, writes = %d", ran, inliner.view.writes)
 	}
 	if diff := cmp.Diff([]string{commentSavingText}, inliner.infoMessages()); diff != "" {
 		test.Errorf("infos (-want +got):\n%s", diff)
@@ -1795,7 +1795,7 @@ func TestAYesIsRefusedWhileAnotherWriteRuns(test *testing.T) {
 func TestTopLevelCommentIsRefusedWhileAWriteRuns(test *testing.T) {
 	inliner := newInliner(test)
 	inliner.press("h", "g g") // the Overview
-	inliner.v.writes = 1
+	inliner.view.writes = 1
 	inliner.messages, inliner.openedOn, inliner.body = nil, nil, "x"
 	inliner.press("c")
 	if len(inliner.openedOn) != 0 {
@@ -1810,13 +1810,13 @@ func TestTopLevelCommentIsRefusedWhileAWriteRuns(test *testing.T) {
 func TestEditorClosingWhileBlockedKeepsTheText(test *testing.T) {
 	for _, kind := range []targetKind{kindInline, kindEdit} {
 		inliner := newInliner(test)
-		inliner.v.review.submitting = true
+		inliner.view.review.submitting = true
 		currentTarget := target{kind: kind, commentIdentifier: "c1", threadIdentifier: "t1", inline: &github.AddThreadInput{Path: clientPath, Side: github.SideRight, Line: 10}}
-		inliner.send(editedMessage{owner: inliner.v, repository: testRepository, number: 7, sequence: inliner.v.cseq, target: currentTarget, body: "my text"})
+		inliner.send(editedMessage{owner: inliner.view, repository: testRepository, number: 7, sequence: inliner.view.commentSequence, target: currentTarget, body: "my text"})
 		if got := inliner.methods(fake.MethodStartReview, fake.MethodAddReviewThread, fake.MethodUpdateReviewComment, fake.MethodGetReviewComment); len(got) != 0 {
 			test.Errorf("kind %d: the client was called: %v", kind, got)
 		}
-		if got := inliner.v.drafts[currentTarget.draftKey()]; got != "my text" {
+		if got := inliner.view.drafts[currentTarget.draftKey()]; got != "my text" {
 			test.Errorf("kind %d: draft = %q", kind, got)
 		}
 	}
@@ -1824,16 +1824,16 @@ func TestEditorClosingWhileBlockedKeepsTheText(test *testing.T) {
 
 func TestResultsNeverTakeTheCountBelowZero(test *testing.T) {
 	inliner := newInliner(test)
-	inliner.send(commentDeletedMessage{origin: inliner.v.origin()})
-	inliner.send(postedMessage{origin: inliner.v.origin()})
-	if inliner.v.writes != 0 {
-		test.Errorf("writes = %d", inliner.v.writes)
+	inliner.send(commentDeletedMessage{origin: inliner.view.origin()})
+	inliner.send(postedMessage{origin: inliner.view.origin()})
+	if inliner.view.writes != 0 {
+		test.Errorf("writes = %d", inliner.view.writes)
 	}
-	inliner.v.writes = 1
+	inliner.view.writes = 1
 	inliner.moveTo(diffview.SideRight, 10)
 	inliner.press("c") // refused: one write is running
-	if inliner.v.writes != 1 {
-		test.Errorf("writes = %d, want 1", inliner.v.writes)
+	if inliner.view.writes != 1 {
+		test.Errorf("writes = %d, want 1", inliner.view.writes)
 	}
 }
 
@@ -1843,9 +1843,9 @@ func TestInlineSendIgnoresADiffLoadInFlight(test *testing.T) {
 	inliner := newInliner(test)
 	inliner.body = "x"
 	inliner.moveTo(diffview.SideRight, 10)
-	inliner.v.edit = func(_ string, done func(string, error) tea.Msg) tea.Cmd {
+	inliner.view.edit = func(_ string, done func(string, error) tea.Msg) tea.Cmd {
 		return func() tea.Msg {
-			inliner.v.diffPending = true // a reload of the same head is under way
+			inliner.view.diffPending = true // a reload of the same head is under way
 			return done("x", nil)
 		}
 	}

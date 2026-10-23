@@ -41,10 +41,10 @@ func (view *View) layout() {
 	height := max(0, view.panesHeight()-2)
 	view.sizeFilePane(filesWidth, rightWidth, height)
 	if rightWidth > 0 {
-		view.ov.ensure(view.th, view.md, view.detail, threadsView{view.threads, view.thrLoaded, view.thrPending, view.thrErr}, view.now(), max(1, rightWidth-4), height)
+		view.overview.ensure(view.theme, view.markdown, view.detail, threadsView{view.threads, view.threadLoaded, view.threadPending, view.threadErr}, view.now(), max(1, rightWidth-4), height)
 	}
-	view.fw.SetRows(view.entries())
-	view.fw.SetSize(height)
+	view.window.SetRows(view.entries())
+	view.window.SetSize(height)
 }
 
 // sizeFilePane tells the file pane its inner size, also while it is hidden in
@@ -74,8 +74,8 @@ func (view *View) Render(width, height int) string {
 	case view.detail == nil && view.err != nil:
 		return view.renderFailure()
 	case view.detail == nil:
-		return view.th.Title.Render(view.Title()) + "\n" +
-			view.th.Muted.Render(terminaltext.Clean(fmt.Sprintf("Loading %s#%d…", view.repository, view.number)))
+		return view.theme.Title.Render(view.Title()) + "\n" +
+			view.theme.Muted.Render(terminaltext.Clean(fmt.Sprintf("Loading %s#%d…", view.repository, view.number)))
 	}
 
 	filesWidth, rightWidth := view.paneWidths()
@@ -109,54 +109,54 @@ func (view *View) Render(width, height int) string {
 }
 
 func (view *View) renderFailure() string {
-	head := view.th.Title.Render(view.Title())
+	head := view.theme.Title.Render(view.Title())
 	if view.notFound {
 		return head + "\n" +
-			view.th.ErrorText.Render(terminaltext.Clean(fmt.Sprintf("Pull request %s#%d was not found.", view.repository, view.number))) + "\n" +
-			view.th.Muted.Render("It may not exist, or you may lack access. Press R to retry.")
+			view.theme.ErrorText.Render(terminaltext.Clean(fmt.Sprintf("Pull request %s#%d was not found.", view.repository, view.number))) + "\n" +
+			view.theme.Muted.Render("It may not exist, or you may lack access. Press R to retry.")
 	}
 	return head + "\n" +
-		view.th.ErrorText.Render("Could not load the pull request.") + "\n" +
-		view.th.Normal.Render(ansi.Wrap(terminaltext.SafeError(view.err).Error(), max(1, view.width), "")) + "\n" +
-		view.th.Muted.Render("Press R to retry.")
+		view.theme.ErrorText.Render("Could not load the pull request.") + "\n" +
+		view.theme.Normal.Render(ansi.Wrap(terminaltext.SafeError(view.err).Error(), max(1, view.width), "")) + "\n" +
+		view.theme.Muted.Render("Press R to retry.")
 }
 
 func (view *View) renderHeader(width int) []string {
 	detail := view.detail
 	badge := view.stateBadge()
-	line1 := badge + " " + view.th.Title.Render(fmt.Sprintf("#%d", detail.Number)) + " " + view.th.StrongText.Render(terminaltext.Clean(detail.Title))
+	line1 := badge + " " + view.theme.Title.Render(fmt.Sprintf("#%d", detail.Number)) + " " + view.theme.StrongText.Render(terminaltext.Clean(detail.Title))
 
-	separator := view.th.Muted.Render(" · ")
+	separator := view.theme.Muted.Render(" · ")
 	parts := []string{
-		view.th.Author.Render(terminaltext.Clean(detail.Author)),
+		view.theme.Author.Render(terminaltext.Clean(detail.Author)),
 	}
 	switch detail.Checks {
 	case github.ChecksPassing:
-		parts = append(parts, view.th.PullRequestList.ChecksPassing.Render("✓ checks passing"))
+		parts = append(parts, view.theme.PullRequestList.ChecksPassing.Render("✓ checks passing"))
 	case github.ChecksFailing:
-		parts = append(parts, view.th.PullRequestList.ChecksFailing.Render("✗ checks failing"))
+		parts = append(parts, view.theme.PullRequestList.ChecksFailing.Render("✗ checks failing"))
 	case github.ChecksRunning:
-		parts = append(parts, view.th.PullRequestList.ChecksRunning.Render("● checks running"))
+		parts = append(parts, view.theme.PullRequestList.ChecksRunning.Render("● checks running"))
 	case github.ChecksNone:
 	}
 	switch detail.ReviewDecision {
 	case github.ReviewDecisionApproved:
-		parts = append(parts, view.th.FileAdded.Render("approved"))
+		parts = append(parts, view.theme.FileAdded.Render("approved"))
 	case github.ReviewDecisionChangesRequested:
-		parts = append(parts, view.th.FileDeleted.Render("changes requested"))
+		parts = append(parts, view.theme.FileDeleted.Render("changes requested"))
 	case github.ReviewDecisionReviewRequired:
-		parts = append(parts, view.th.FileModified.Render("review required"))
+		parts = append(parts, view.theme.FileModified.Render("review required"))
 	case github.ReviewDecisionNone:
 	}
 	// Branches are the least glanceable part, so they come after the states
 	// and are what truncation eats first.
-	parts = append(parts, view.th.Muted.Render(terminaltext.Clean(detail.BaseBranch)+" ← "+terminaltext.Clean(detail.HeadBranch)))
+	parts = append(parts, view.theme.Muted.Render(terminaltext.Clean(detail.BaseBranch)+" ← "+terminaltext.Clean(detail.HeadBranch)))
 	if len(detail.Labels) > 0 {
 		names := make([]string, len(detail.Labels))
 		for i, label := range detail.Labels {
 			names[i] = "[" + terminaltext.Clean(label.Name) + "]"
 		}
-		parts = append(parts, view.th.Normal.Render(strings.Join(names, " ")))
+		parts = append(parts, view.theme.Normal.Render(strings.Join(names, " ")))
 	}
 	if len(detail.ReviewRequests) > 0 {
 		names := make([]string, len(detail.ReviewRequests))
@@ -166,7 +166,7 @@ func (view *View) renderHeader(width int) []string {
 				names[i] = "team " + names[i]
 			}
 		}
-		parts = append(parts, view.th.Muted.Render("reviewers: "+strings.Join(names, ", ")))
+		parts = append(parts, view.theme.Muted.Render("reviewers: "+strings.Join(names, ", ")))
 	}
 	line2 := strings.Join(parts, separator)
 	return []string{ansi.Truncate(line1, width, "…"), ansi.Truncate(line2, width, "…")}
@@ -176,13 +176,13 @@ func (view *View) stateBadge() string {
 	detail := view.detail
 	switch {
 	case detail.State == github.PullRequestStateMerged:
-		return view.th.StateMerged.Render("merged")
+		return view.theme.StateMerged.Render("merged")
 	case detail.State == github.PullRequestStateClosed:
-		return view.th.StateClosed.Render("closed")
+		return view.theme.StateClosed.Render("closed")
 	case detail.Draft:
-		return view.th.StateDraft.Render("draft")
+		return view.theme.StateDraft.Render("draft")
 	default:
-		return view.th.StateOpen.Render("open")
+		return view.theme.StateOpen.Render("open")
 	}
 }
 
@@ -197,8 +197,8 @@ func (view *View) rightTitle() string {
 func (view *View) fileRows(width, height int) []string {
 	files := view.files()
 	var rows []string
-	view.fw.SetSize(height)
-	for i := view.fw.Top(); i < view.entries() && len(rows) < height; i++ {
+	view.window.SetSize(height)
+	for i := view.window.Top(); i < view.entries() && len(rows) < height; i++ {
 		selected := i == view.selection()
 		if i == 0 {
 			rows = append(rows, view.overviewRow(selected))
@@ -211,9 +211,9 @@ func (view *View) fileRows(width, height int) []string {
 
 func (view *View) overviewRow(selected bool) string {
 	if selected {
-		return view.th.Selected.Render("> Overview")
+		return view.theme.Selected.Render("> Overview")
 	}
-	return view.th.Normal.Render("  Overview")
+	return view.theme.Normal.Render("  Overview")
 }
 
 func (view *View) fileRow(file github.ChangedFile, width int, selected bool) string {
@@ -234,31 +234,31 @@ func (view *View) fileRow(file github.ChangedFile, width int, selected bool) str
 	marker := changeMarker(file.Change)
 
 	if selected {
-		return view.th.Selected.Render("> " + viewedGlyph(file.Viewed) + " " + marker + " " + path + " " + counts)
+		return view.theme.Selected.Render("> " + viewedGlyph(file.Viewed) + " " + marker + " " + path + " " + counts)
 	}
-	mStyle := view.th.FileModified
+	mStyle := view.theme.FileModified
 	switch file.Change {
 	case github.FileAdded:
-		mStyle = view.th.FileAdded
+		mStyle = view.theme.FileAdded
 	case github.FileDeleted:
-		mStyle = view.th.FileDeleted
+		mStyle = view.theme.FileDeleted
 	case github.FileModified, github.FileRenamed, github.FileCopied, github.FileChanged:
 	}
 	var names []string
 	if file.Additions > 0 {
-		names = append(names, view.th.FileAdded.Render(fmt.Sprintf("+%d", file.Additions)))
+		names = append(names, view.theme.FileAdded.Render(fmt.Sprintf("+%d", file.Additions)))
 	}
 	if file.Deletions > 0 {
-		names = append(names, view.th.FileDeleted.Render(fmt.Sprintf("-%d", file.Deletions)))
+		names = append(names, view.theme.FileDeleted.Render(fmt.Sprintf("-%d", file.Deletions)))
 	}
-	pathStyle, glyph := view.th.Normal, " "
+	pathStyle, glyph := view.theme.Normal, " "
 	switch file.Viewed {
 	case github.FileViewed:
 		// Viewed files recede; the check is the only bright part of the row.
-		pathStyle, glyph = view.th.Muted, view.th.FileAdded.Render(viewedGlyph(file.Viewed))
+		pathStyle, glyph = view.theme.Muted, view.theme.FileAdded.Render(viewedGlyph(file.Viewed))
 	case github.FileDismissed:
 		// Changed since viewed: needs another look, so the row stays normal.
-		glyph = view.th.FileModified.Render(viewedGlyph(file.Viewed))
+		glyph = view.theme.FileModified.Render(viewedGlyph(file.Viewed))
 	case github.FileUnviewed:
 	}
 	return "  " + glyph + " " + mStyle.Render(marker) + " " + pathStyle.Render(path) + " " + strings.Join(names, " ")
@@ -300,7 +300,7 @@ func (view *View) rightRows(width, height int) []string {
 	if view.selection() > 0 {
 		return strings.Split(view.filePane.Render(width, height), "\n")
 	}
-	lines := strings.Split(view.ov.vp.View(), "\n")
+	lines := strings.Split(view.overview.viewport.View(), "\n")
 	for i, line := range lines {
 		lines[i] = " " + line
 	}
@@ -316,9 +316,9 @@ func padRight(text string, width int) string {
 
 // drawPane frames lines in a titled rounded box of exactly w x h cells.
 func drawPane(view *View, title string, lines []string, width, height int, focused bool) []string {
-	border, titleStyle := view.th.PaneBorder, view.th.PaneTitle
+	border, titleStyle := view.theme.PaneBorder, view.theme.PaneTitle
 	if focused {
-		border, titleStyle = view.th.PaneBorderFocus, view.th.PaneTitleFocus
+		border, titleStyle = view.theme.PaneBorderFocus, view.theme.PaneTitleFocus
 	}
 	inner := width - 2
 	title = ansi.Truncate(title, max(0, inner-3), "…")

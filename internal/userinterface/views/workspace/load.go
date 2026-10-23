@@ -101,8 +101,8 @@ func (view *View) fetchDiff(message pullRequestLoadedMessage) tea.Cmd {
 		}
 		// diff.Parse returns a best-effort result with its error, so
 		// files before a malformed hunk still show.
-		parsed, perr := diff.Parse(raw)
-		return diffLoadedMessage{owner: owner, repository: repository, number: number, sequence: sequence, head: head, raw: raw, parsed: parsed, parseErr: perr}
+		parsed, parseError := diff.Parse(raw)
+		return diffLoadedMessage{owner: owner, repository: repository, number: number, sequence: sequence, head: head, raw: raw, parsed: parsed, parseErr: parseError}
 	}
 }
 
@@ -112,7 +112,7 @@ func (view *View) reloadPullRequest() tea.Cmd { return view.fetchPullRequest(fal
 
 func (view *View) fetchPullRequest(thenDiff bool) tea.Cmd {
 	view.pullRequestPending = true
-	view.ov.invalidate()
+	view.overview.invalidate()
 	client, repository, number, sequence, owner := view.client, view.repository, view.number, view.sequence, view
 	return func() tea.Msg {
 		detail, err := client.GetPullRequest(context.Background(), repository, number)
@@ -123,7 +123,7 @@ func (view *View) fetchPullRequest(thenDiff bool) tea.Cmd {
 // reloadThreads loads the review threads again under the current request
 // sequence; after posting a reply it refreshes just the threads.
 func (view *View) reloadThreads() tea.Cmd {
-	view.thrPending, view.thrErr = true, nil
+	view.threadPending, view.threadErr = true, nil
 	client, repository, number, sequence, owner := view.client, view.repository, view.number, view.sequence, view
 	return func() tea.Msg {
 		threads, err := loadThreads(context.Background(), client, repository, number)
@@ -150,32 +150,32 @@ func (view *View) pullRequestLoaded(message pullRequestLoadedMessage) tea.Cmd {
 	previous := view.selectedPath()
 	view.detail, view.err, view.notFound = &message.detail, nil, false
 	view.reapplyViewed(message.sequence)
-	top, selection := view.fw.Top(), 0
+	top, selection := view.window.Top(), 0
 	for i, file := range message.detail.Files {
 		if previous != "" && file.Path == previous {
 			selection = i + 1
 		}
 	}
-	view.fw.SetRows(view.entries())
-	view.fw.Restore(selection, top, 0) // a refresh must not scroll the Files list
-	view.ov.invalidate()
+	view.window.SetRows(view.entries())
+	view.window.Restore(selection, top, 0) // a refresh must not scroll the Files list
+	view.overview.invalidate()
 	view.selectionChanged()
 	view.layout()
 	return nil
 }
 
 func (view *View) threadsLoaded(message threadsLoadedMessage) tea.Cmd {
-	view.thrPending = false
+	view.threadPending = false
 	if message.err != nil {
 		// Keep whatever threads were shown before; the error goes to the status
 		// bar, and to the Overview while there is nothing else to show.
-		view.thrErr = message.err
-		view.ov.invalidate()
+		view.threadErr = message.err
+		view.overview.invalidate()
 		return userinterface.Error(terminaltext.SafeError(fmt.Errorf("load review threads: %w", message.err)))
 	}
-	view.threads, view.thrLoaded = sortThreads(message.threads), true
+	view.threads, view.threadLoaded = sortThreads(message.threads), true
 	view.filePane.SetThreads(view.threads)
-	view.ov.invalidate()
+	view.overview.invalidate()
 	view.layout()
 	return nil
 }
