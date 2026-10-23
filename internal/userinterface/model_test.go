@@ -174,7 +174,7 @@ func TestCommandLine(test *testing.T) {
 			test.Fatal("expected a command")
 		}
 		if _, ok := command().(QuitMessage); !ok {
-			test.Error(":qa should produce QuitMsg")
+			test.Error(":qa should produce QuitMessage")
 		}
 	})
 	test.Run("unknown command shows an error", func(test *testing.T) {
@@ -557,7 +557,7 @@ func TestResizeAndTheme(test *testing.T) {
 
 	model.Update(tea.BackgroundColorMsg{})
 	if _, ok := child.last().(ThemeMessage); !ok {
-		test.Errorf("child last msg = %T, want ThemeMsg", child.last())
+		test.Errorf("child last msg = %T, want ThemeMessage", child.last())
 	}
 }
 

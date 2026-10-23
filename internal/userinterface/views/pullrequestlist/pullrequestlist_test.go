@@ -259,7 +259,7 @@ func TestLoadError(test *testing.T) {
 	}
 	message, ok := command().(userinterface.ErrorMessage)
 	if !ok || !errors.Is(message.Err, boom) {
-		test.Fatalf("cmd produced %#v, want userinterface.ErrorMsg wrapping boom", message)
+		test.Fatalf("cmd produced %#v, want userinterface.ErrorMessage wrapping boom", message)
 	}
 	if !strings.Contains(view.Render(80, 10), "boom") {
 		test.Error("error state should show the error")
@@ -315,7 +315,7 @@ func TestOpenInBrowser(test *testing.T) {
 
 	failing := loadedView(test, fakeWith(makePullRequests(1)), func(string) error { return errors.New("no browser") })
 	if _, ok := press(failing, "o")().(userinterface.ErrorMessage); !ok {
-		test.Error("launch failure should become userinterface.ErrorMsg")
+		test.Error("launch failure should become userinterface.ErrorMessage")
 	}
 
 	empty := loadedView(test, fakeWith(nil), open)
@@ -333,7 +333,7 @@ func TestEnterPushesWorkspace(test *testing.T) {
 	}
 	push, ok := command().(userinterface.PushMessage)
 	if !ok {
-		test.Fatalf("enter produced %T, want userinterface.PushMsg", command())
+		test.Fatalf("enter produced %T, want userinterface.PushMessage", command())
 	}
 	if got := push.View.Title(); got != "#2" {
 		test.Errorf("pushed view title = %q, want #2", got)
