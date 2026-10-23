@@ -37,8 +37,8 @@ func runTerminalInterface(application application, stderr io.Writer) error {
 	return nil
 }
 
-// firstView is the dashboard outside a checkout, else the repository's pull
-// request list.
+// firstView is the dashboard when there is no repository (outside a checkout,
+// or in one with no GitHub remote), else the repository's pull request list.
 func firstView(application application) userinterface.View {
 	if application.dashboard {
 		return dashboard.New(application.client, application.config.Tabs, application.theme, dashboard.Options{Notice: application.notice})

@@ -16,8 +16,9 @@ type application struct {
 	client     github.Client
 	repository github.Repository
 	theme      theme.Theme
-	// dashboard is set when strig runs outside a checkout without -R: there is
-	// no repository to list, so the first view is the dashboard of config.
+	// dashboard is set when strig runs without -R outside a checkout, or in one
+	// with no GitHub remote: there is no repository to list, so the first view
+	// is the dashboard of config.
 	dashboard bool
 	// notice is shown in the status bar when the dashboard starts, to say why
 	// it is showing.
