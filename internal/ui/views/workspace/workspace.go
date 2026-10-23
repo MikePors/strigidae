@@ -77,10 +77,11 @@ type View struct {
 	notFound    bool
 
 	cseq int // latest compose request; older results are stale
-	// commentWriting is set from when a comment write starts until its result
-	// (or its question) arrives; reviews and merges wait for it.
-	commentWriting bool
-	drafts         map[string]string // unposted bodies, by thread ID or topLevelDraft
+	// writes counts the comment writes in flight, from the start of a write
+	// until its result (or its question) arrives; reviews and merges wait for
+	// it, and no second write starts meanwhile.
+	writes int
+	drafts map[string]string // unposted bodies, by thread ID or topLevelDraft
 
 	viewedState map[string]*viewedToggle // by path; see viewedToggle
 
@@ -150,9 +151,8 @@ func (v *View) CapturesKeys() bool {
 	return v.picker != nil || v.review.chooser != nil || v.visualActive()
 }
 
-// visualActive reports whether a line selection is open on a file's diff. One
-// that outlived its file (the Overview is showing) does not count.
-func (v *View) visualActive() bool { return v.sel() > 0 && v.filePane.VisualActive() }
+// visualActive reports whether a line selection is open.
+func (v *View) visualActive() bool { return v.filePane.VisualActive() }
 
 // Init implements ui.View.
 func (v *View) Init() tea.Cmd { return v.load() }
@@ -239,7 +239,7 @@ func (v *View) Update(msg tea.Msg) (ui.View, tea.Cmd) {
 		if !v.owns(msg.origin) {
 			return v, nil
 		}
-		v.commentWriting = false // the write waits for the answer
+		v.writeDone() // the write waits for the answer
 		return v, ui.Confirm(msg.question, msg.onYes)
 	case commentAgreedMsg:
 		if !v.owns(msg.origin) {
@@ -247,7 +247,7 @@ func (v *View) Update(msg tea.Msg) (ui.View, tea.Cmd) {
 		}
 		return v, v.commentAgreed(msg)
 	case commentReadMsg:
-		if !v.owns(msg.origin) {
+		if !v.owns(msg.origin) || msg.seq != v.cseq { // another editor started meanwhile
 			return v, nil
 		}
 		return v, v.commentRead(msg)

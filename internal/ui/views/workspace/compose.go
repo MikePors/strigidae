@@ -45,7 +45,7 @@ type target struct {
 	// threadID is the thread replied to (kindReply) or the one the edited
 	// comment is in (kindEdit).
 	threadID string
-	label    string // "path:line" of the thread, for the reply confirmation
+	label    string // "path:line" of the thread, for the questions about it
 	// inline (kindInline) is the new comment's position; the repo, number and
 	// pending review are filled in when it is sent. head is the commit of the
 	// diff the lines were picked on.
@@ -56,6 +56,9 @@ type target struct {
 	// when no draft is kept.
 	commentID string
 	initial   string
+	// home (kindEdit) is where the thread is in the diff: when the comment's
+	// thread is gone, the text is kept as the draft of a new comment there.
+	home *github.AddThreadInput
 }
 
 func (t target) draftKey() string {
@@ -90,6 +93,9 @@ type (
 		tgt    target
 		body   string
 		err    error
+		// threadLive is, for an edit refused as stale, whether the comment's
+		// thread still exists (it is gone with its only comment).
+		threadLive bool
 	}
 )
 
@@ -111,6 +117,9 @@ func (v *View) composeMine(o origin, seq int) bool { return v.owns(o) && seq == 
 
 // reply starts a reply to the thread under the diff cursor.
 func (v *View) reply() tea.Cmd {
+	if busy := v.writeBusy(); busy != nil {
+		return busy
+	}
 	t, ok, hint := v.focusedThread(" to reply")
 	if !ok {
 		return hint
@@ -123,6 +132,9 @@ func (v *View) reply() tea.Cmd {
 func (v *View) comment() tea.Cmd {
 	if v.sel() != 0 {
 		return v.inlineComment()
+	}
+	if busy := v.writeBusy(); busy != nil {
+		return busy
 	}
 	return v.compose(target{})
 }
@@ -158,9 +170,13 @@ func (v *View) edited(msg editedMsg) tea.Cmd {
 	// A pending comment is a private draft, so it is sent without asking;
 	// sendEdit asks before changing a published one.
 	switch msg.tgt.kind {
-	case kindInline:
-		return v.sendInline(msg.tgt, body)
-	case kindEdit:
+	case kindInline, kindEdit:
+		if blocked := v.commentBlocked(); blocked != nil {
+			return blocked // the text stays a draft
+		}
+		if msg.tgt.kind == kindInline {
+			return v.sendInline(msg.tgt, body)
+		}
 		return v.sendEdit(msg.tgt, body)
 	}
 	return ui.Confirm(v.question(msg.tgt, body), v.agreed(v.post(msg.tgt, body)))
@@ -212,7 +228,7 @@ func (v *View) post(tgt target, body string) tea.Cmd {
 }
 
 func (v *View) posted(msg postedMsg) tea.Cmd {
-	v.commentWriting = false
+	v.writeDone()
 	if isStale(msg.err) {
 		return v.staleEdit(msg)
 	}

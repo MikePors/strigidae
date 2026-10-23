@@ -111,7 +111,7 @@ func (v *View) reviewEnv() reviewEnv {
 		diffPending: v.diffPending,
 		diffReady:   !v.diffPending && v.diff.Parsed != nil && v.diff.Err == nil,
 
-		commentWriting: v.commentWriting,
+		commentWriting: v.writes > 0,
 	}
 }
 
@@ -173,6 +173,9 @@ func (f *reviewFlow) update(msg tea.Msg, env reviewEnv) (cmd tea.Cmd, handled bo
 	case reviewSendMsg:
 		if !f.same(env, msg.flow, msg.repo, msg.number) {
 			return nil, true
+		}
+		if env.commentWriting { // a comment write started since the review did
+			return ui.Info(commentSavingText), true
 		}
 		f.submitting = true
 		return tea.Batch(ui.Info("Submitting review…"), f.submit(env, msg.event, msg.body, msg.status)), true

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -45,6 +46,7 @@ type commentAgreedMsg struct {
 // opens on it: tgt holds the fresh body, or err why it cannot be edited.
 type commentReadMsg struct {
 	origin origin
+	seq    int // the compose sequence it was asked under; a later compose supersedes it
 	tgt    target
 	err    error
 }
@@ -191,8 +193,10 @@ func (v *View) commentAgreed(msg commentAgreedMsg) tea.Cmd {
 		return ui.Info("a review is being submitted")
 	case v.merge.merging:
 		return ui.Info("a merge is in progress")
+	case v.writes > 0:
+		return ui.Info(commentSavingText)
 	}
-	v.commentWriting = true
+	v.writeStarted()
 	return msg.run
 }
 
@@ -200,6 +204,20 @@ func (v *View) commentAgreed(msg commentAgreedMsg) tea.Cmd {
 // shows even if the view was left meanwhile.
 func withShownError(res tea.Msg, shown error) tea.Msg {
 	return tea.BatchMsg{func() tea.Msg { return res }, func() tea.Msg { return ui.ErrorMsg{Err: shown} }}
+}
+
+// writeStarted and writeDone count the comment writes in flight; the count
+// never goes below zero.
+func (v *View) writeStarted() { v.writes++ }
+
+func (v *View) writeDone() { v.writes = max(0, v.writes-1) }
+
+// writeBusy refuses a new comment write while one is in flight.
+func (v *View) writeBusy() tea.Cmd {
+	if v.writes > 0 {
+		return ui.Info(commentSavingText)
+	}
+	return nil
 }
 
 // reloadPendingComments refreshes what shows pending comments: the threads in
@@ -309,12 +327,23 @@ func (v *View) editComment() tea.Cmd {
 		return cmd
 	}
 	o, client := v.origin(), v.client
-	tgt := target{kind: kindEdit, commentID: c.ID, threadID: t.ID, label: threadLocation(t)}
+	tgt := target{kind: kindEdit, commentID: c.ID, threadID: t.ID, label: threadLocation(t), home: threadHome(t)}
+	v.cseq++ // a compose started meanwhile supersedes this read
+	seq := v.cseq
 	return func() tea.Msg {
 		fresh, err := freshComment(context.Background(), client, tgt.commentID, changeEdit)
 		tgt.initial = fresh.Body
-		return commentReadMsg{origin: o, tgt: tgt, err: err}
+		return commentReadMsg{origin: o, seq: seq, tgt: tgt, err: err}
 	}
+}
+
+// threadHome is the position of a thread in the diff, as `c` would write a
+// comment there; nil when it has no line (outdated or file-level threads).
+func threadHome(t github.ReviewThread) *github.AddThreadInput {
+	if t.Line == 0 {
+		return nil
+	}
+	return &github.AddThreadInput{Path: t.Path, Side: t.DiffSide, Line: t.Line, StartLine: t.StartLine, StartSide: t.StartDiffSide}
 }
 
 // commentRead opens the editor on a freshly read comment, or refuses.
@@ -363,7 +392,7 @@ func (v *View) deleteComment() tea.Cmd {
 			return withShownError(res, commentFailure(err, "delete comment"))
 		},
 	}
-	v.commentWriting = true
+	v.writeStarted()
 	return func() tea.Msg { return w.run(answer{}) }
 }
 
@@ -378,7 +407,7 @@ func commentFailure(err error, what string) error {
 }
 
 func (v *View) commentDeleted(msg commentDeletedMsg) tea.Cmd {
-	v.commentWriting = false
+	v.writeDone()
 	if isStale(msg.err) {
 		return v.reloadPendingComments() // the error is already shown
 	}
@@ -415,39 +444,73 @@ func (v *View) sendEdit(tgt target, body string) tea.Cmd {
 			if err == nil {
 				return res
 			}
-			return withShownError(res, editFailure(err))
+			if isStale(err) {
+				res.threadLive = threadExists(client, o, tgt.threadID)
+			}
+			return withShownError(res, editFailure(err, tgt, res.threadLive))
 		},
 	}
-	v.commentWriting = true
+	v.writeStarted()
 	return func() tea.Msg { return w.run(answer{}) }
 }
 
-// editFailure is the error shown for a failed edit, saying where the text is
-// kept: a comment that is gone gets its text as a reply draft on its thread.
-func editFailure(err error) error {
-	var s staleError
-	switch {
-	case errors.Is(err, errCommentGone):
-		return staleError(string(errCommentGone) + "; your text is kept as a reply draft")
-	case errors.As(err, &s):
-		return staleError(string(s) + "; your text is kept as a draft")
-	}
-	return commentFailure(fmt.Errorf("%w; the comment is kept as a draft", err), "update comment")
+// threadExists reports whether a thread is still on the pull request. When the
+// threads cannot be listed it says no, which keeps the text where `c` finds it.
+func threadExists(client github.Client, o origin, threadID string) bool {
+	ts, err := loadThreads(context.Background(), client, o.repo, o.number)
+	return err == nil && slices.ContainsFunc(ts, func(t github.ReviewThread) bool { return t.ID == threadID })
 }
 
-// staleEdit handles an edit that was refused because its comment is stale: it
-// refreshes, and when the comment is gone it moves the text to the reply draft
-// of its thread, so `r` there starts from it. Otherwise the text stays under
-// the comment's own draft key, where the next e finds it. (If the thread is
-// gone after the refresh, the text is lost with it.)
+// homeKey is the draft a refused edit's text goes to: the reply draft of its
+// thread while the thread exists, else the draft of a new comment on its lines.
+func homeKey(msg postedMsg) string {
+	if msg.threadLive || msg.tgt.home == nil {
+		return target{kind: kindReply, threadID: msg.tgt.threadID}.draftKey()
+	}
+	return target{kind: kindInline, inline: msg.tgt.home}.draftKey()
+}
+
+// editFailure is the error shown for a failed edit, saying where its text is
+// kept. A refused edit (a stale comment) goes to the thread's reply draft, or
+// when the thread is gone too to the draft for a new comment on its lines; any
+// other failure leaves the text under the comment's own draft, which `e` finds.
+func editFailure(err error, tgt target, threadLive bool) error {
+	var s staleError
+	if !errors.As(err, &s) {
+		return commentFailure(fmt.Errorf("%w; the comment is kept as a draft", err), "update comment")
+	}
+	if threadLive || tgt.home == nil {
+		return staleError(string(s) + "; your text is kept as a reply draft")
+	}
+	return staleError(string(s) + "; your text is kept as a draft for a new comment on " + termtext.Clean(lineLabel(tgt.home)))
+}
+
+// lineLabel is "path:line" or "path:start-line" for a position.
+func lineLabel(in *github.AddThreadInput) string {
+	if in.StartLine > 0 && in.StartLine != in.Line {
+		return fmt.Sprintf("%s:%d-%d", in.Path, in.StartLine, in.Line)
+	}
+	return fmt.Sprintf("%s:%d", in.Path, in.Line)
+}
+
+// joinDraft appends text to an existing draft, separated by a blank line,
+// unless that draft already is the text.
+func joinDraft(old, text string) string {
+	if old == "" || old == text {
+		return text
+	}
+	return old + "\n\n" + text
+}
+
+// staleEdit handles an edit refused because its comment is stale: it
+// refreshes, and moves the text to its new home (see homeKey), joined with any
+// draft already there. Whether the thread still exists was read after the
+// refusal, in the command, because the refreshed list arrives too late and may
+// be an older snapshot.
 func (v *View) staleEdit(msg postedMsg) tea.Cmd {
-	if errors.Is(msg.err, errCommentGone) && msg.tgt.threadID != "" {
-		reply := target{kind: kindReply, threadID: msg.tgt.threadID}.draftKey()
-		text := msg.body
-		if old := v.drafts[reply]; old != "" && old != text {
-			text = old + "\n\n" + text
-		}
-		v.drafts[reply] = text
+	if msg.tgt.threadID != "" {
+		key := homeKey(msg)
+		v.drafts[key] = joinDraft(v.drafts[key], msg.body)
 		delete(v.drafts, msg.tgt.draftKey())
 	}
 	return v.reloadPendingComments()
@@ -456,14 +519,16 @@ func (v *View) staleEdit(msg postedMsg) tea.Cmd {
 // sendInline adds a new inline comment to the pending review (creating the
 // review if there is none), anchored to the commit the lines were picked on.
 func (v *View) sendInline(tgt target, body string) tea.Cmd {
-	if v.detail == nil || v.diffPending {
-		return ui.Error(errors.New("the diff is refreshing; the comment is kept as a draft, try again"))
+	// No check that the diff is settled: the lines are anchored to tgt.head,
+	// and addPendingThread refuses unless the server is still on it.
+	if v.detail == nil {
+		return ui.Error(errors.New("the pull request is not loaded; the comment is kept as a draft, try again"))
 	}
 	o, client := v.origin(), v.client
 	in := *tgt.inline
 	in.Repo, in.Number, in.Body = o.repo, o.number, body
 	prID := v.detail.ID
-	v.commentWriting = true
+	v.writeStarted()
 	return func() tea.Msg {
 		err := addPendingThread(context.Background(), client, in, prID, tgt.head)
 		res := postedMsg{origin: o, tgt: tgt, body: body, err: err}

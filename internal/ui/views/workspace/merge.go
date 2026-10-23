@@ -94,6 +94,9 @@ func (f *mergeFlow) update(msg tea.Msg, env reviewEnv) (cmd tea.Cmd, handled boo
 		if !f.same(env, msg.flow, msg.repo, msg.number) {
 			return nil, true
 		}
+		if env.commentWriting { // a comment write started since the merge did
+			return ui.Info(commentSavingText), true
+		}
 		f.merging = true
 		return tea.Batch(ui.Info("Merging…"), f.merge(env, msg.method, msg.status)), true
 	case mergedMsg:

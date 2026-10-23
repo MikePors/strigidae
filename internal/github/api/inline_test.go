@@ -164,7 +164,7 @@ func TestNullPayloads(t *testing.T) {
 			t.Errorf("err = %v", err)
 		}
 	})
-	t.Run("update and delete payloads", func(t *testing.T) {
+	t.Run("a null update payload", func(t *testing.T) {
 		c := newTestClient(t, jsonServer(`{"data":{"updatePullRequestReviewComment":null}}`))
 		if _, err := c.UpdateReviewComment(ctx, "x", "y"); !errors.Is(err, github.ErrNotFound) {
 			t.Errorf("err = %v", err)
