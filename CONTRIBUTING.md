@@ -30,26 +30,21 @@ Point Claude at the issue, for example:
 
 > Implement #12. Follow CLAUDE.md and the area guides. Branch off origin/main, keep to the issue's scope, run `make check`, and open a PR.
 
-Claude loads `CLAUDE.md` automatically, and the area guides when it reads files in those directories. Things worth checking in what it produces:
-
-- **It writes to GitHub only on its own PR**: pushing its branch, opening the PR, editing that PR's body, and replying to and resolving review threads on it. It never comments on, reviews or reacts to anything else, never merges, and never posts reviews (you run `/review-pr <N> post` yourself). strig's own write features are tested against `internal/github/fake`, and the maintainer verifies them live.
-- **Names are spelled out in full English** (the Naming section of CLAUDE.md). This is the most common thing review catches.
-- **It builds the simplest version** and lists extras under Follow-ups.
+Claude loads `CLAUDE.md` automatically, and the area guides when it reads files in those directories. The two things review most often catches are names that aren't spelled out in full (the Naming section of CLAUDE.md) and features that grew beyond the simplest version of the issue.
 
 ## Pull requests
 
 - Branch `<type>/<issue>-<slug>`, Conventional Commits, and the PR template; details are in CLAUDE.md's Workflow section.
 - Run `make check` before every push.
-- Open the PR from your branch, with the body in a temp file that starts with `Closes #<issue>`:
+- Open the PR from your branch; the body starts with `Closes #<issue>`:
 
   ```sh
   git push -u origin <branch>
-  body=$(mktemp)    # fill it in from .github/pull_request_template.md
-  gh pr create --base main --title "<type>(<scope>): <summary>" --body-file "$body"
+  gh pr create --base main --title "<type>(<scope>): <summary>"   # fill in the template
   ```
-- Visible UI changes need a screenshot: see [docs/screenshots.md](docs/screenshots.md).
+- PRs that change what's on screen include screenshots of the new states.
 - **Review:** run `/review-pr <number>` in Claude Code for an independent review. It reports in your terminal. `/review-pr <number> post` puts the same findings on the PR as one comment-only review. Fix findings in new commits, reply in each thread with the fixing commit, and resolve it.
-- The maintainer merges, with merge commits. Never merge, push to `main`, or force-push a branch you didn't create.
+- Never push to `main`. The maintainer merges, with merge commits.
 
 ## Odd tooling
 

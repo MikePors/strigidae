@@ -2,12 +2,11 @@
 name: review-pr
 description: Independent review of a strigidae pull request by a fresh agent, against the repo's rules. `/review-pr <number>` reports findings in the terminal; `/review-pr <number> post` also posts them on the PR as one comment-only review with inline comments.
 argument-hint: <number> [post]
-disable-model-invocation: true
 ---
 
 # Review a pull request
 
-This skill gets an independent second opinion on a PR from a fresh agent that didn't write it. Only a person starts it.
+This skill gets an independent second opinion on a PR from a fresh agent that didn't write it.
 
 Arguments: a PR number, then optionally the word `post`. If there's no number, ask for one. Any other argument is an error.
 
