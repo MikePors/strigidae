@@ -29,12 +29,18 @@ func (v *View) selectedPath() string {
 }
 
 func (v *View) selectionChanged() {
-	if s := v.sel(); s > 0 && s <= len(v.files()) {
-		f := v.files()[s-1]
-		if f != v.paneFile {
-			v.paneFile = f
-			v.filePane.SetFile(f)
-		}
+	s := v.sel()
+	if s == 0 || s > len(v.files()) {
+		// The one place a line selection ends when the file leaves the screen,
+		// including when a reload drops the file. (Another file or a reloaded
+		// diff ends it in the diff component.)
+		v.filePane.VisualEnd()
+		return
+	}
+	f := v.files()[s-1]
+	if f != v.paneFile {
+		v.paneFile = f
+		v.filePane.SetFile(f)
 	}
 }
 

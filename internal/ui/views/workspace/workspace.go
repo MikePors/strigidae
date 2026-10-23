@@ -76,7 +76,11 @@ type View struct {
 	err         error  // load failure while there is nothing to show
 	notFound    bool
 
-	cseq   int               // latest compose request; older results are stale
+	cseq int // latest compose request; older results are stale
+	// writes counts the comment writes in flight, from the start of a write
+	// until its result (or its question) arrives; reviews and merges wait for
+	// it, and no second write starts meanwhile.
+	writes int
 	drafts map[string]string // unposted bodies, by thread ID or topLevelDraft
 
 	viewedState map[string]*viewedToggle // by path; see viewedToggle
@@ -141,9 +145,14 @@ func (v *View) Loading() bool {
 	return v.prPending || v.diffPending || v.thrPending || v.review.submitting || v.merge.merging
 }
 
-// CapturesKeys implements ui.KeyCapturer: the file picker owns the keyboard
-// while it is open.
-func (v *View) CapturesKeys() bool { return v.picker != nil || v.review.chooser != nil }
+// CapturesKeys implements ui.KeyCapturer: the file picker, the verdict
+// chooser and a visual-line selection own the keyboard while they are open.
+func (v *View) CapturesKeys() bool {
+	return v.picker != nil || v.review.chooser != nil || v.visualActive()
+}
+
+// visualActive reports whether a line selection is open.
+func (v *View) visualActive() bool { return v.filePane.VisualActive() }
 
 // Init implements ui.View.
 func (v *View) Init() tea.Cmd { return v.load() }
@@ -163,6 +172,7 @@ func (v *View) FullHelp() [][]key.Binding {
 	out := [][]key.Binding{
 		{v.bind.PaneLeft, v.bind.PaneRight, v.bind.NextFile, v.bind.PrevFile, v.bind.FilePicker},
 		{v.bind.NextSection, v.bind.PrevSection, v.bind.Comment, v.bind.Reply, v.bind.Viewed},
+		{v.bind.Visual, v.bind.EditComment, v.bind.DeleteComment},
 	}
 	return append(out, v.filePane.FullHelp()...)
 }
@@ -209,20 +219,44 @@ func (v *View) Update(msg tea.Msg) (ui.View, tea.Cmd) {
 			return v, v.viewedDone(msg)
 		}
 	case editedMsg:
-		if !v.composeMine(msg.owner, msg.repo, msg.number, msg.seq) {
+		if !v.composeMine(origin{msg.owner, msg.repo, msg.number}, msg.seq) {
 			return v, nil
 		}
 		return v, v.edited(msg)
 	case postedMsg:
 		// A post is never superseded by a later compose, so it is identified
 		// by owner, repo and number only.
-		if msg.owner != v || msg.repo != v.repo || msg.number != v.number {
+		if !v.owns(msg.origin) {
 			return v, nil
 		}
 		return v, v.posted(msg)
+	case commentDeletedMsg:
+		if !v.owns(msg.origin) {
+			return v, nil
+		}
+		return v, v.commentDeleted(msg)
+	case commentCheckedMsg:
+		if !v.owns(msg.origin) {
+			return v, nil
+		}
+		v.writeDone() // the write waits for the answer
+		return v, ui.Confirm(msg.question, msg.onYes)
+	case commentAgreedMsg:
+		if !v.owns(msg.origin) {
+			return v, nil
+		}
+		return v, v.commentAgreed(msg)
+	case commentReadMsg:
+		if !v.owns(msg.origin) || msg.seq != v.cseq { // another editor started meanwhile
+			return v, nil
+		}
+		return v, v.commentRead(msg)
 	case keys.Msg:
 		return v, v.handleKey(msg)
 	case tea.KeyPressMsg:
+		if v.visualActive() {
+			return v, v.visualKey(msg)
+		}
 		if v.review.chooser != nil {
 			return v, v.review.chooserKey(msg, v.reviewEnv())
 		}

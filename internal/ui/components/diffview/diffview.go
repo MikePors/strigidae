@@ -95,6 +95,12 @@ type row struct {
 	msg  bool // one line of the file's notice (binary, renamed, ...), shown above its threads
 }
 
+// isLine reports whether r is a diff line a comment can be written on: not a
+// hunk header, notice or thread row, and not a "no newline" marker.
+func (r row) isLine() bool {
+	return r.tr == nil && r.line != nil && r.line.Kind != diff.NoNewline
+}
+
 // threadRow places a row inside a thread's block of lines.
 type threadRow struct{ t, i int }
 
@@ -128,6 +134,9 @@ type Model struct {
 	saved *position      // position kept while a message replaces the file
 
 	w, h int
+
+	vis bool // a line selection is in progress
+	vbi int  // base row where it started
 
 	win scroll.Window // cursor, top row and horizontal offset
 }
@@ -220,6 +229,7 @@ func TooLargeMessage() string {
 
 func (m *Model) reset() {
 	m.bcache = nil
+	m.vis = false // base rows are about to change
 	m.base, m.rows, m.hunkRow = nil, nil, nil
 	m.fthreads, m.attach, m.orphans, m.blocks = nil, nil, nil, nil
 	m.cache = map[int][]Span{}
@@ -462,7 +472,7 @@ func (m *Model) Cursor() (c CursorLine, ok bool) {
 		return CursorLine{}, false
 	}
 	r := m.rows[m.win.Cursor()]
-	if r.line == nil || r.line.Kind == diff.NoNewline {
+	if !r.isLine() {
 		return CursorLine{}, false
 	}
 	c = CursorLine{

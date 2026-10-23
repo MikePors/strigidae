@@ -29,17 +29,49 @@ type EditFunc func(initial string, done func(body string, err error) tea.Msg) te
 // WithEditor replaces how comment bodies are edited.
 func WithEditor(e EditFunc) Option { return func(v *View) { v.edit = e } }
 
-// target is what a comment is written for.
+// targetKind says what a comment being written is for.
+type targetKind int
+
+const (
+	kindTopLevel targetKind = iota // a comment on the pull request
+	kindReply                      // a reply to a review thread
+	kindInline                     // a new inline comment in the pending review
+	kindEdit                       // a change to one of the viewer's own comments
+)
+
+// target is what a comment is written for; kind says which fields apply.
 type target struct {
-	threadID string // empty for a top-level comment
-	label    string // "path:line" of the thread, for the confirmation
+	kind targetKind
+	// threadID is the thread replied to (kindReply) or the one the edited
+	// comment is in (kindEdit).
+	threadID string
+	label    string // "path:line" of the thread, for the questions about it
+	// inline (kindInline) is the new comment's position; the repo, number and
+	// pending review are filled in when it is sent. head is the commit of the
+	// diff the lines were picked on.
+	inline *github.AddThreadInput
+	head   string
+	// commentID (kindEdit) is the comment, pending or published, being
+	// edited; initial is its body when the editor was opened, shown there
+	// when no draft is kept.
+	commentID string
+	initial   string
+	// home (kindEdit) is where the thread is in the diff: when the comment's
+	// thread is gone, the text is kept as the draft of a new comment there.
+	home *github.AddThreadInput
 }
 
 func (t target) draftKey() string {
-	if t.threadID == "" {
-		return topLevelDraft
+	switch t.kind {
+	case kindInline:
+		in := t.inline
+		return fmt.Sprintf("inline:%s:%s:%d-%d", in.Path, in.Side, in.StartLine, in.Line)
+	case kindEdit:
+		return "edit:" + t.commentID
+	case kindReply:
+		return t.threadID
 	}
-	return t.threadID
+	return topLevelDraft
 }
 
 // Results of composing carry the same identity as load results. An edit
@@ -57,38 +89,52 @@ type (
 		err    error
 	}
 	postedMsg struct {
-		owner  *View
-		repo   github.Repo
-		number int
+		origin origin
 		tgt    target
 		body   string
 		err    error
+		// threadLive is, for an edit refused as stale, whether the comment's
+		// thread still exists (it is gone with its only comment).
+		threadLive bool
 	}
 )
 
-func (v *View) composeMine(owner *View, repo github.Repo, number, seq int) bool {
-	return owner == v && repo == v.repo && number == v.number && seq == v.cseq
+// origin is the identity of the workspace and pull request a result belongs
+// to: every view in the stack receives every result, so each ignores the ones
+// that are not its own.
+type origin struct {
+	owner  *View // compared, never dereferenced
+	repo   github.Repo
+	number int
 }
+
+func (v *View) origin() origin { return origin{owner: v, repo: v.repo, number: v.number} }
+
+// owns reports whether a result with origin o was asked for by this view.
+func (v *View) owns(o origin) bool { return o == v.origin() }
+
+func (v *View) composeMine(o origin, seq int) bool { return v.owns(o) && seq == v.cseq }
 
 // reply starts a reply to the thread under the diff cursor.
 func (v *View) reply() tea.Cmd {
-	if v.sel() == 0 {
-		return nil
+	if busy := v.writeBusy(); busy != nil {
+		return busy
 	}
-	switch ts := v.filePane.FocusedThreads(); len(ts) {
-	case 0:
-		return nil
-	case 1:
-		return v.compose(target{threadID: ts[0].ID, label: threadLocation(ts[0])})
-	default:
-		return ui.Info("several threads on this line: move onto one to reply")
+	t, ok, hint := v.focusedThread(" to reply")
+	if !ok {
+		return hint
 	}
+	return v.compose(target{kind: kindReply, threadID: t.ID, label: threadLocation(t)})
 }
 
-// comment starts a top-level comment from the Overview.
+// comment starts a top-level comment from the Overview, or an inline one on a
+// diff line.
 func (v *View) comment() tea.Cmd {
 	if v.sel() != 0 {
-		return nil
+		return v.inlineComment()
+	}
+	if busy := v.writeBusy(); busy != nil {
+		return busy
 	}
 	return v.compose(target{})
 }
@@ -97,7 +143,11 @@ func (v *View) comment() tea.Cmd {
 func (v *View) compose(tgt target) tea.Cmd {
 	v.cseq++
 	owner, repo, number, seq := v, v.repo, v.number, v.cseq
-	return v.edit(v.drafts[tgt.draftKey()], func(body string, err error) tea.Msg {
+	initial := v.drafts[tgt.draftKey()]
+	if initial == "" {
+		initial = tgt.initial
+	}
+	return v.edit(initial, func(body string, err error) tea.Msg {
 		return editedMsg{owner: owner, repo: repo, number: number, seq: seq, tgt: tgt, body: body, err: err}
 	})
 }
@@ -117,13 +167,29 @@ func (v *View) edited(msg editedMsg) tea.Cmd {
 	}
 	// Kept until the post succeeds, so declining or a failure loses nothing.
 	v.drafts[msg.tgt.draftKey()] = body
-	return ui.Confirm(v.question(msg.tgt, body), v.post(msg.tgt, body))
+	// A pending comment is a private draft, so it is sent without asking;
+	// sendEdit asks before changing a published one.
+	switch msg.tgt.kind {
+	case kindInline, kindEdit:
+		// The diff being reloaded does not matter now: the head check in the
+		// send covers it. The text stays a draft if the send is refused.
+		env := v.reviewEnv()
+		env.diffReady = true
+		if blocked := v.review.blocked(env); blocked != nil {
+			return blocked
+		}
+		if msg.tgt.kind == kindInline {
+			return v.sendInline(msg.tgt, body)
+		}
+		return v.sendEdit(msg.tgt, body)
+	}
+	return ui.Confirm(v.question(msg.tgt, body), v.agreed(v.post(msg.tgt, body)))
 }
 
 // question is the confirmation text: where the text goes and its first line.
 func (v *View) question(tgt target, body string) string {
 	prefix := "Post comment?"
-	if tgt.threadID != "" {
+	if tgt.kind == kindReply {
 		prefix = "Post reply to " + termtext.Clean(tgt.label) + "?"
 	}
 	first := firstLine(body)
@@ -144,20 +210,20 @@ func firstLine(body string) string {
 // post is the command that runs when the user confirms. On failure it also
 // returns the error itself, so it shows even if the view was left meanwhile.
 func (v *View) post(tgt target, body string) tea.Cmd {
-	client, repo, number, owner := v.client, v.repo, v.number, v
+	client, o := v.client, v.origin()
 	return func() tea.Msg {
 		var err error
-		if tgt.threadID != "" {
+		if tgt.kind == kindReply {
 			_, err = client.ReplyToThread(context.Background(), tgt.threadID, body)
 		} else {
-			_, err = client.AddComment(context.Background(), repo, number, body)
+			_, err = client.AddComment(context.Background(), o.repo, o.number, body)
 		}
-		res := postedMsg{owner: owner, repo: repo, number: number, tgt: tgt, body: body, err: err}
+		res := postedMsg{origin: o, tgt: tgt, body: body, err: err}
 		if err == nil {
 			return res
 		}
 		what := "comment"
-		if tgt.threadID != "" {
+		if tgt.kind == kindReply {
 			what = "reply"
 		}
 		shown := ui.ErrorMsg{Err: termtext.SafeError(fmt.Errorf("post %s: %w", what, err))}
@@ -166,18 +232,26 @@ func (v *View) post(tgt target, body string) tea.Cmd {
 }
 
 func (v *View) posted(msg postedMsg) tea.Cmd {
+	v.writeDone()
+	if isStale(msg.err) {
+		return v.staleEdit(msg)
+	}
 	if msg.err != nil {
 		return nil // the draft stays; the command already reported the error
-	}
-	what, reload := "Comment", v.reloadPR
-	if msg.tgt.threadID != "" {
-		what, reload = "Reply", v.reloadThreads
 	}
 	// A newer draft for the same target must survive.
 	if v.drafts[msg.tgt.draftKey()] == msg.body {
 		delete(v.drafts, msg.tgt.draftKey())
 	}
-	return tea.Batch(ui.Info(what+" posted"), reload())
+	switch msg.tgt.kind {
+	case kindReply:
+		return tea.Batch(ui.Info("Reply posted"), v.reloadThreads())
+	case kindInline:
+		return tea.Batch(ui.Info("Pending comment added"), v.reloadPendingComments())
+	case kindEdit:
+		return tea.Batch(ui.Info("Comment updated"), v.reloadPendingComments())
+	}
+	return tea.Batch(ui.Info("Comment posted"), v.reloadPR())
 }
 
 // threadLocation is "path:line" for a thread.

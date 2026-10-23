@@ -48,7 +48,7 @@ Reserved globally:
 | `/`, `n` / `N` | filter or search, next / previous match |
 | `o` | open the current item in the browser |
 | `R` | refresh |
-| `c` | new comment (top-level, or on the cursor line in a diff) |
+| `c` | new comment (top-level, or on the cursor line / visual selection in a diff) |
 | `r` | reply to the focused comment thread |
 | `:` | command line |
 | `]` / `[` | next / previous chunk of what the pane shows: hunk in a diff, section in the Overview |
@@ -66,6 +66,7 @@ Commands (`:` then `enter`):
 | `:approve`, `:request-changes`, `:review` | PR workspace: submit a review verdict (`:review` opens the chooser) |
 | `:merge [merge\|squash\|rebase]` | PR workspace: merge the pull request after a `y/N` confirmation; no argument uses the first method the repo allows (merge commit, squash, rebase) |
 | `:copy-filename` | PR workspace: copy the selected file's path to the clipboard (OSC 52; tmux needs `set -g set-clipboard on`) |
+| `:edit-comment`, `:delete-comment` | PR workspace: change your comment at the diff cursor (same as `e` / `D`): the last comment of the focused thread you may change, pending ones first; deleting always asks `y/N`, editing a published comment asks `y/N` after the editor closes |
 
 **View commands.** The table above is static. A view with commands of its own implements `ui.Commander` (`Command(name, args) (tea.Cmd, handled bool)`) and its names are added to `viewCommands` in `command.go`. The root consults only the top view, and only when the static table has no match, so a command never reaches two views the way a broadcast result would. A listed name the top view declines (or a top view that is not a Commander) gives "not available here: name"; any other name gives "not a command: name". List the view's commands in the table above.
 

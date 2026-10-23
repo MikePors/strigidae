@@ -32,7 +32,7 @@ const (
 
 	reviewSelection = `id state body submittedAt author { login }`
 
-	reviewCommentSelection = `id url state body diffHunk createdAt author { login } ` + reactionSelection
+	reviewCommentSelection = `id url state body diffHunk createdAt viewerCanUpdate viewerCanDelete viewerDidAuthor author { login } ` + reactionSelection
 )
 
 const listPullRequestsQuery = `
@@ -102,6 +102,12 @@ var (
 	moreReviewsQuery  = moreQuery("PullRequestReviews", "reviews", reviewSelection)
 )
 
+// threadSelection is the fields of a review thread, shared by the thread list
+// and the mutation that adds one.
+const threadSelection = `id subjectType isResolved isOutdated path line originalLine startLine originalStartLine diffSide startDiffSide
+          resolvedBy { login }
+          comments(first: 100) { nodes { ` + reviewCommentSelection + ` } }`
+
 const reviewThreadsQuery = `
 query ` + opReviewThreads + `($owner: String!, $name: String!, $number: Int!, $first: Int!, $after: String) {
   repository(owner: $owner, name: $name) {
@@ -109,11 +115,7 @@ query ` + opReviewThreads + `($owner: String!, $name: String!, $number: Int!, $f
       reviewThreads(first: $first, after: $after) {
         totalCount
         pageInfo { hasNextPage endCursor }
-        nodes {
-          id subjectType isResolved isOutdated path line originalLine startLine originalStartLine diffSide startDiffSide
-          resolvedBy { login }
-          comments(first: 100) { nodes { ` + reviewCommentSelection + ` } }
-        }
+        nodes { ` + threadSelection + ` }
       }
     }
   }

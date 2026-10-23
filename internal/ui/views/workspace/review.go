@@ -38,6 +38,8 @@ type reviewEnv struct {
 	diffHead    string         // head SHA the diff on screen was loaded for
 	diffPending bool           // a diff load is in flight
 	diffReady   bool           // a diff is loaded and shown
+	// commentWriting is set while a comment is being saved.
+	commentWriting bool
 }
 
 // Results carry the identity of the flow, repo and number that asked. The
@@ -108,17 +110,23 @@ func (v *View) reviewEnv() reviewEnv {
 		diffHead:    v.diffHead,
 		diffPending: v.diffPending,
 		diffReady:   !v.diffPending && v.diff.Parsed != nil && v.diff.Err == nil,
+
+		commentWriting: v.writes > 0,
 	}
 }
 
 // Command implements ui.Commander: :approve, :request-changes, :review,
-// :merge and :copy-filename.
+// :merge, :copy-filename, :edit-comment and :delete-comment.
 func (v *View) Command(name, args string) (tea.Cmd, bool) {
 	switch name {
 	case "copy-filename":
 		return v.copyFilename(), true
 	case "merge":
 		return v.merge.command(args, v.reviewEnv()), true
+	case "edit-comment":
+		return v.editComment(), true
+	case "delete-comment":
+		return v.deleteComment(), true
 	}
 	return v.review.command(name, v.reviewEnv())
 }
@@ -166,6 +174,9 @@ func (f *reviewFlow) update(msg tea.Msg, env reviewEnv) (cmd tea.Cmd, handled bo
 		if !f.same(env, msg.flow, msg.repo, msg.number) {
 			return nil, true
 		}
+		if env.commentWriting { // a comment write started since the review did
+			return ui.Info(commentSavingText), true
+		}
 		f.submitting = true
 		return tea.Batch(ui.Info("Submitting review…"), f.submit(env, msg.event, msg.body, msg.status)), true
 	case reviewSubmittedMsg:
@@ -188,6 +199,8 @@ func (f *reviewFlow) blocked(env reviewEnv) tea.Cmd {
 	switch {
 	case f.submitting:
 		return ui.Info("a review is being submitted")
+	case env.commentWriting:
+		return ui.Info(commentSavingText)
 	case !env.loaded:
 		return ui.Info("pull request not loaded yet")
 	case !env.diffReady:

@@ -7,7 +7,6 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/MikePors/strigidae/internal/diff"
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/ui/components/thread"
 )
@@ -40,7 +39,7 @@ func (m *Model) placeThreads() {
 	}
 	byNew, byOld := map[int]int{}, map[int]int{}
 	for i, r := range m.base {
-		if r.line == nil || r.line.Kind == diff.NoNewline {
+		if !r.isLine() {
 			continue
 		}
 		if r.line.New > 0 {

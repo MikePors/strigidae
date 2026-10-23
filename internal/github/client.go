@@ -43,4 +43,27 @@ type Client interface {
 	// default commit title and message. GitHub's refusal (failing checks,
 	// conflicts, a moved head) comes back as an error.
 	MergePullRequest(ctx context.Context, in MergeInput) error
+	// StartReview creates the viewer's pending review on in.CommitOID and
+	// returns it. GitHub allows one pending review per user per pull request,
+	// so this fails when one exists; call GetReviewStatus first.
+	StartReview(ctx context.Context, in StartReviewInput) (PendingReview, error)
+	// AddReviewThread adds an inline comment, as a new thread, to the pending
+	// review in.PendingReviewID and returns the thread. The comment stays
+	// private until the review is submitted. A pending review that no longer
+	// exists yields ErrNotFound; a position GitHub does not accept (for example
+	// a line outside the diff) yields ErrCommentRejected.
+	AddReviewThread(ctx context.Context, in AddThreadInput) (ReviewThread, error)
+	// GetReviewComment returns one review comment by node ID, with its current
+	// state (Pending) and what the viewer may do with it. A comment that does
+	// not exist any more yields ErrNotFound.
+	GetReviewComment(ctx context.Context, commentID string) (ReviewComment, error)
+	// UpdateReviewComment changes the body of a review comment, pending or
+	// published, and returns it. GitHub decides by permissions (see
+	// ReviewComment.ViewerCanUpdate): the viewer's own comments, and with write
+	// access other people's too.
+	UpdateReviewComment(ctx context.Context, commentID, body string) (ReviewComment, error)
+	// DeleteReviewComment deletes a review comment, pending or published, under
+	// the same permissions (see ReviewComment.ViewerCanDelete).
+	// Deleting a thread's only comment removes the thread.
+	DeleteReviewComment(ctx context.Context, commentID string) error
 }

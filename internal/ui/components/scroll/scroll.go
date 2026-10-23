@@ -105,6 +105,9 @@ func (w *Window) GotoTop() { w.cursor = 0; w.clamp() }
 // GotoBottom moves the cursor to the last row.
 func (w *Window) GotoBottom() { w.cursor = w.rows - 1; w.clamp() }
 
+// GotoRow moves the cursor to row r, scrolling to keep it visible.
+func (w *Window) GotoRow(r int) { w.cursor = r; w.clamp() }
+
 // JumpTo puts the cursor on row r and r at the top of the view (as far as the
 // last page allows).
 func (w *Window) JumpTo(r int) { w.cursor, w.top = r, r; w.clamp() }

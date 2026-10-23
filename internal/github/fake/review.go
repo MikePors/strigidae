@@ -106,6 +106,7 @@ func (c *Client) SubmitReview(ctx context.Context, in github.SubmitReviewInput) 
 	if in.Event != github.ReviewEventApprove && strings.TrimSpace(in.Body) == "" && inline == 0 {
 		return fmt.Errorf("submit review on %s#%d: body is required", in.Repo, in.Number)
 	}
+	c.publishPending(key)
 	delete(c.pending, key)
 	c.nextID++
 	d.Reviews = append(slices.Clip(d.Reviews), github.Review{

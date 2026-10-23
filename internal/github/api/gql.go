@@ -79,6 +79,10 @@ type gqlReviewComment struct {
 	CreatedAt      time.Time
 	Author         *gqlActor
 	ReactionGroups []gqlReactionGroup
+
+	ViewerCanUpdate bool
+	ViewerCanDelete bool
+	ViewerDidAuthor bool
 }
 
 type gqlFile struct {
@@ -222,7 +226,11 @@ func mapReviewComment(n gqlReviewComment) github.ReviewComment {
 		URL:       n.URL,
 		DiffHunk:  n.DiffHunk,
 		Pending:   n.State == "PENDING",
-		Reactions: mapReactions(n.ReactionGroups),
+
+		ViewerCanUpdate: n.ViewerCanUpdate,
+		ViewerCanDelete: n.ViewerCanDelete,
+		ViewerDidAuthor: n.ViewerDidAuthor,
+		Reactions:       mapReactions(n.ReactionGroups),
 	}
 }
 

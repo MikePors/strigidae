@@ -216,6 +216,13 @@ type ReviewComment struct {
 	// Pending marks a draft comment of the viewer's own pending review, which
 	// nobody else can see yet.
 	Pending bool
+	// ViewerCanUpdate and ViewerCanDelete say whether the viewer may change or
+	// delete the comment. They are also true for other people's comments when
+	// the viewer has write access, so authorship needs ViewerDidAuthor.
+	ViewerCanUpdate bool
+	ViewerCanDelete bool
+	// ViewerDidAuthor is set when the viewer wrote the comment.
+	ViewerDidAuthor bool
 	// DiffHunk is the hunk the comment was made on, useful for outdated threads.
 	DiffHunk  string
 	Reactions []ReactionSummary
@@ -277,6 +284,8 @@ type PendingReview struct {
 	Body string
 	// CommentCount is the number of inline comments waiting in it.
 	CommentCount int
+	// CommitOID is the commit the review is anchored to; empty if unknown.
+	CommitOID string
 }
 
 // ReviewStatus is the state a review submission depends on.
@@ -302,4 +311,29 @@ type SubmitReviewInput struct {
 	// PendingReviewID, if set, submits that pending review instead of
 	// creating a new one.
 	PendingReviewID string
+}
+
+// StartReviewInput describes a new pending review.
+type StartReviewInput struct {
+	Repo          Repo
+	Number        int
+	PullRequestID string
+	// CommitOID is the commit the review's comments are anchored to.
+	CommitOID string
+}
+
+// AddThreadInput describes an inline comment thread to add to a pending
+// review. Line is the last line of the range and StartLine the first one for a
+// multi-line comment (zero for a single line); both are line numbers on the
+// given side of the diff, not positions in it.
+type AddThreadInput struct {
+	Repo            Repo
+	Number          int
+	PendingReviewID string
+	Path            string
+	Line            int
+	Side            DiffSide
+	StartLine       int
+	StartSide       DiffSide
+	Body            string
 }
