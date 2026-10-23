@@ -1334,7 +1334,7 @@ func TestWriteAfterYesIsInFlightUntilItsResult(t *testing.T) {
 			t.Fatal("flag set while the question is open")
 		}
 		write := c.agree(conf)
-		if !(c.v.writes > 0) {
+		if c.v.writes <= 0 {
 			t.Fatal("flag not set after the yes")
 		}
 		blocked(c)
@@ -1393,7 +1393,7 @@ func TestWriteAfterYesIsInFlightUntilItsResult(t *testing.T) {
 			t.Fatal("no confirmation")
 		}
 		_, write := c.v.Update(conf.OnYes())
-		if !(c.v.writes > 0) {
+		if c.v.writes <= 0 {
 			t.Fatal("flag not set for a reply")
 		}
 		c.run(write)
@@ -1410,7 +1410,7 @@ func TestWriteAfterYesIsInFlightUntilItsResult(t *testing.T) {
 			t.Fatal("no confirmation")
 		}
 		_, write := c.v.Update(conf.OnYes())
-		if !(c.v.writes > 0) {
+		if c.v.writes <= 0 {
 			t.Fatal("flag not set for a top-level comment")
 		}
 		c.run(write)
@@ -1449,13 +1449,13 @@ func TestAgreedForAnotherViewIsIgnored(t *testing.T) {
 	c.v.writes = 1
 	other := New(c.client, testRepo, 12)
 	_, cmd := c.v.Update(commentAgreedMsg{origin: other.origin(), run: func() tea.Msg { return nil }})
-	if cmd != nil || !(c.v.writes > 0) {
+	if cmd != nil || c.v.writes <= 0 {
 		t.Errorf("cmd %v, flag %v: another view's yes must change nothing", cmd != nil, (c.v.writes > 0))
 	}
 	// A result for another view leaves the flag alone too.
 	c.send(commentDeletedMsg{origin: other.origin()})
 	c.send(postedMsg{origin: other.origin()})
-	if !(c.v.writes > 0) {
+	if c.v.writes <= 0 {
 		t.Error("another view's result cleared the flag")
 	}
 }
