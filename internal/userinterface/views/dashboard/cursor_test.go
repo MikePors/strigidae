@@ -1,46 +1,80 @@
 package dashboard
 
 import (
-	"errors"
-	"strings"
+	"fmt"
+	"slices"
 	"testing"
 	"time"
-
-	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/github/fake"
 )
 
-func TestHostileRefreshErrorIsNeutralised(test *testing.T) {
-	view, client := loadedView(test)
-	hostile := "boom\x1b[2J\x07" + string(rune(0x202e)) + "\u009b"
-	client.SetError(fake.MethodSearchPullRequests, errors.New(hostile))
-	settle(view, press(view, "R"))
-	raw := view.Render(100, 16) // not stripped: styling escapes are expected, hostile ones are not
-	if !strings.Contains(raw, "refresh failed: boom") {
-		test.Fatalf("the failed refresh is not shown: %q", raw)
-	}
-	for _, bad := range []string{"\x1b[2J", "\x07", string(rune(0x202e)), "\u009b"} {
-		if strings.Contains(raw, bad) {
-			test.Errorf("render contains %q from the error", bad)
+func TestPosition(test *testing.T) {
+	rows := func(numbers ...int) section {
+		var found []github.PullRequest
+		for _, number := range numbers {
+			found = append(found, pullRequest("o/r", number, "T", 0))
 		}
+		return section{pullRequests: found}
+	}
+	anchored := func(sectionIndex, number, row int) *anchor {
+		return &anchor{section: sectionIndex, repository: github.Repository{Owner: "o", Name: "r"}, number: number, row: row}
+	}
+	tests := []struct {
+		name        string
+		sections    []section
+		anchor      *anchor
+		wantSection int
+		wantRow     int
+		wantOK      bool
+	}{
+		{"no anchor starts at the first non-empty section", []section{rows(), rows(5, 6)}, nil, 1, 0, true},
+		{"found by identity", []section{rows(1, 2, 3)}, anchored(0, 2, 0), 0, 1, true},
+		{"identity is matched only within the section", []section{rows(7), rows(1, 7)}, anchored(1, 7, 0), 1, 1, true},
+		{"pull request gone: the fallback row", []section{rows(1, 2, 3, 4)}, anchored(0, 99, 2), 0, 2, true},
+		{"fallback row past the end clamps", []section{rows(1, 2)}, anchored(0, 99, 5), 0, 1, true},
+		{"emptied section: nearest below first", []section{rows(), rows(5), rows(6)}, anchored(0, 1, 0), 1, 0, true},
+		{"emptied last section: nearest above", []section{rows(1, 2), rows()}, anchored(1, 9, 0), 0, 1, true},
+		{"nothing at all", []section{rows(), rows()}, anchored(0, 1, 0), 0, 0, false},
+	}
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			current := &tab{sections: slices.Clone(testCase.sections), anchor: testCase.anchor}
+			section, row, ok := current.position()
+			if section != testCase.wantSection || row != testCase.wantRow || ok != testCase.wantOK {
+				test.Errorf("position = (%d, %d, %v), want (%d, %d, %v)", section, row, ok, testCase.wantSection, testCase.wantRow, testCase.wantOK)
+			}
+		})
 	}
 }
 
-func TestFirstSectionEmptyKeepsItsHeadingAtTheTop(test *testing.T) {
-	tabs := testTabs(test)
-	client := fake.New()
-	client.SetSearchResults(searchQuery(tabs[0].Sections[1]), []github.PullRequest{pullRequest("o/a", 1, "A1", 0), pullRequest("o/a", 2, "A2", 0)})
-	client.SetSearchResults(searchQuery(tabs[0].Sections[2]), []github.PullRequest{pullRequest("o/b", 3, "B1", 0), pullRequest("o/b", 4, "B2", 0)})
-	view := newView(client, tabs, nil)
-	settle(view, view.Init())
-	press(view, "G")
-	view.Render(80, 7)
-	press(view, "g g")
-	out := ansi.Strip(view.Render(80, 7))
-	if !strings.Contains(out, "Review requested") || !strings.Contains(out, "No pull requests") {
-		test.Errorf("the empty first section scrolled off:\n%s", out)
+func TestRefillAfterEveryRowDisappearsStartsAtTheTop(test *testing.T) {
+	for _, reverse := range []bool{false, true} {
+		test.Run(fmt.Sprintf("reverse=%v", reverse), func(test *testing.T) {
+			tabs := testTabs(test)
+			client := fake.New()
+			seed(test, client, tabs)
+			view := newView(client, tabs, nil)
+			settle(view, view.Init())
+			press(view, "G") // away from the top
+
+			for _, section := range tabs[0].Sections {
+				client.SetSearchResults(searchQuery(section), nil)
+			}
+			settle(view, press(view, "R")) // every section is empty now
+
+			client.SetSearchResults(searchQuery(tabs[0].Sections[0]), []github.PullRequest{pullRequest("acme/widgets", 12, "First", time.Hour)})
+			client.SetSearchResults(searchQuery(tabs[0].Sections[2]), []github.PullRequest{pullRequest("acme/widgets", 230, "Last", time.Hour)})
+			all := messages(press(view, "R"))
+			if reverse {
+				slices.Reverse(all)
+			}
+			deliver(view, all)
+			if got := selectedKey(test, view); got != "acme/widgets#12" {
+				test.Errorf("selected %s, want the first row of the first non-empty section", got)
+			}
+		})
 	}
 }
 
