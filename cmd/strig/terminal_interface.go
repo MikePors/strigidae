@@ -41,7 +41,7 @@ func runTerminalInterface(application application, stderr io.Writer) error {
 // request list.
 func firstView(application application) userinterface.View {
 	if application.dashboard {
-		return dashboard.New(application.client, application.config.Tabs, application.theme, dashboard.Options{})
+		return dashboard.New(application.client, application.config.Tabs, application.theme, dashboard.Options{Notice: application.notice})
 	}
 	return pullrequestlist.New(application.client, application.repository, application.theme, pullrequestlist.Options{})
 }
