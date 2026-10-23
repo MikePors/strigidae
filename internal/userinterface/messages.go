@@ -25,7 +25,7 @@ type ErrorMessage struct{ Err error }
 // background was detected).
 type ThemeMessage struct{ Theme theme.Theme }
 
-// Push returns a command that pushes v.
+// Push returns a command that pushes view.
 func Push(view View) tea.Cmd { return messageCommand(PushMessage{View: view}) }
 
 // Pop returns a command that pops the active view.

@@ -58,7 +58,7 @@ func (model *Model) anchorAt(i int) anchor {
 	return anchor{kind: row.line.Kind, old: row.line.Old, new: row.line.New}
 }
 
-// restore puts the cursor back on the row matching p, or on the nearest one.
+// restore puts the cursor back on the row matching position, or on the nearest one.
 func (model *Model) restore(position position) {
 	if len(model.rows) == 0 {
 		return
@@ -90,7 +90,7 @@ func absolute(count int) int {
 	return count
 }
 
-// find returns the row for a: an exact match on kind and line numbers, else
+// find returns the row for anchor: an exact match on kind and line numbers, else
 // the row of the same sort whose line number is closest.
 func (model *Model) find(anchor anchor) int {
 	best, bestDistance := 0, -1

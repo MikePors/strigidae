@@ -7,7 +7,7 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-// node parses src and returns its root node.
+// node parses source and returns its root node.
 func node(test *testing.T, source string) *yaml.Node {
 	test.Helper()
 	var document yaml.Node

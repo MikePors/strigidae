@@ -143,7 +143,7 @@ func (view *View) comment() tea.Cmd {
 	return view.compose(target{})
 }
 
-// compose opens the editor, pre-filled with the draft for tgt if there is one.
+// compose opens the editor, pre-filled with the draft for target if there is one.
 func (view *View) compose(target target) tea.Cmd {
 	view.commentSequence++
 	owner, repository, number, sequence := view, view.repository, view.number, view.commentSequence

@@ -186,7 +186,7 @@ func (view *View) jumpSection(delta int) {
 	view.overview.jump(delta)
 }
 
-// diffNavigation reports whether msg is a hunk or thread movement key.
+// diffNavigation reports whether message is a hunk or thread movement key.
 func (view *View) diffNavigation(message keys.Message) bool {
 	bindings := view.navigationBind
 	return key.Matches(message, bindings.NextHunk, bindings.PreviousHunk, bindings.NextThread, bindings.PreviousThread)

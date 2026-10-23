@@ -47,7 +47,7 @@ func newRGB(red, green, blue float64) color.Color {
 	return color.RGBA{R: clamp(red), G: clamp(green), B: clamp(blue), A: 255}
 }
 
-// blend mixes a toward b: t=0 is a, t=1 is b. It mixes in sRGB, which is
+// blend mixes first toward second: fraction=0 is first, fraction=1 is second. It mixes in sRGB, which is
 // plain and predictable for the small ratios shades use.
 func blend(first, second color.Color, fraction float64) color.Color {
 	firstRed, firstGreen, firstBlue := rgb8(first)
@@ -56,7 +56,7 @@ func blend(first, second color.Color, fraction float64) color.Color {
 	return newRGB(mix(firstRed, secondRed), mix(firstGreen, secondGreen), mix(firstBlue, secondBlue))
 }
 
-// luminance is the WCAG relative luminance of c.
+// luminance is the WCAG relative luminance of colour.
 func luminance(colour color.Color) float64 {
 	red, green, blue := rgb8(colour)
 	linearize := func(channel uint8) float64 {
@@ -69,7 +69,7 @@ func luminance(colour color.Color) float64 {
 	return 0.2126*linearize(red) + 0.7152*linearize(green) + 0.0722*linearize(blue)
 }
 
-// contrast is the WCAG contrast ratio of a and b, from 1 (identical) to 21.
+// contrast is the WCAG contrast ratio of first and second, from 1 (identical) to 21.
 func contrast(first, second color.Color) float64 {
 	firstLuminance, secondLuminance := luminance(first), luminance(second)
 	if firstLuminance < secondLuminance {
@@ -78,7 +78,7 @@ func contrast(first, second color.Color) float64 {
 	return (firstLuminance + 0.05) / (secondLuminance + 0.05)
 }
 
-// extreme returns black or white, whichever reads better on bg. The two tie
+// extreme returns black or white, whichever reads better on background. The two tie
 // at a luminance of about 0.18, not 0.5.
 func extreme(background color.Color) color.Color {
 	if contrast(color.Black, background) > contrast(color.White, background) {
@@ -87,8 +87,8 @@ func extreme(background color.Color) color.Color {
 	return color.White
 }
 
-// nudge moves fg away from bg (towards black or white, whichever contrasts
-// more with bg) in small steps until it reaches the contrast ratio min, or
+// nudge moves foreground away from background (towards black or white, whichever contrasts
+// more with background) in small steps until it reaches the contrast ratio minimumRatio, or
 // runs out of room. A colour that already passes is returned unchanged.
 func nudge(foreground, background color.Color, minimumRatio float64) color.Color {
 	if contrast(foreground, background) >= minimumRatio {

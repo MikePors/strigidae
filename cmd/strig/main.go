@@ -40,7 +40,7 @@ func realDependencies() dependencies {
 		newClient: func(host string) (github.Client, error) {
 			client, err := network.New(network.Options{Host: host})
 			if err != nil {
-				return nil, err // not c: a nil *Client would be a non-nil interface
+				return nil, err // not client: a nil *Client would be a non-nil interface
 			}
 			return client, nil
 		},

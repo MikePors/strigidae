@@ -49,7 +49,7 @@ func ExecRunner(ctx context.Context, directory string, arguments ...string) (str
 	return strings.TrimSpace(string(out)), nil
 }
 
-// Infer finds the GitHub repository for the checkout containing dir.
+// Infer finds the GitHub repository for the checkout containing directory.
 //
 // A remote whose host knownHost rejects is skipped, so a mirror on another
 // forge falls through to the next remote. A nil knownHost accepts every host.

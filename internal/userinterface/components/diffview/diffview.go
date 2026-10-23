@@ -312,7 +312,7 @@ func (model *Model) cursorKey() (cursorKey, bool) {
 	return key, true
 }
 
-// keyRow returns the row for k; a thread row that is gone (a collapsed block
+// keyRow returns the row for key; a thread row that is gone (a collapsed block
 // is shorter) falls back to the nearest one in its block, then to its line.
 func (model *Model) keyRow(key cursorKey) int {
 	if key.thread != "" {
@@ -328,7 +328,7 @@ func (model *Model) keyRow(key cursorKey) int {
 	return 0
 }
 
-// threadRowFor returns the row at offset off in the block of the thread with
+// threadRowFor returns the row at offset blockOffset in the block of the thread with
 // the given ID (clamped to the block), or -1 if the thread is not shown.
 func (model *Model) threadRowFor(identifier string, blockOffset int) int {
 	best := -1

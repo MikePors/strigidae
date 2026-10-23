@@ -82,7 +82,7 @@ func (parser *parser) fail(node *yaml.Node, format string, arguments ...any) {
 	}
 }
 
-// rejectAliases fails on anchors, aliases and merge keys anywhere in n.
+// rejectAliases fails on anchors, aliases and merge keys anywhere in node.
 func (parser *parser) rejectAliases(node *yaml.Node) {
 	if parser.err != nil {
 		return
@@ -143,7 +143,7 @@ func (parser *parser) stringValue(node *yaml.Node, what string) string {
 	return value
 }
 
-// int reads an unquoted integer from lo to hi.
+// integer reads an unquoted integer from low to high.
 func (parser *parser) integer(node *yaml.Node, what string, low, high int) int {
 	value, err := strconv.Atoi(node.Value)
 	if node.Kind != yaml.ScalarNode || node.Tag != "!!int" || err != nil || value < low || value > high {

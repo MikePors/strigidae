@@ -95,7 +95,7 @@ func (change change) allowed(comment github.ReviewComment) bool {
 	return comment.ViewerCanUpdate
 }
 
-// freshComment re-reads comment id and returns it, or a staleError when it is
+// freshComment re-reads comment identifier and returns it, or a staleError when it is
 // missing, not the viewer's, or not changeable by them. The fresh state, not
 // the one on screen, decides what to ask.
 func freshComment(ctx context.Context, client github.Client, identifier string, change change) (github.ReviewComment, error) {
@@ -200,7 +200,7 @@ func (view *View) commentAgreed(message commentAgreedMessage) tea.Cmd {
 	return message.run
 }
 
-// withShownError returns res together with an error to show, so the error
+// withShownError returns result together with an error to show, so the error
 // shows even if the view was left meanwhile.
 func withShownError(result tea.Msg, shown error) tea.Msg {
 	return tea.BatchMsg{func() tea.Msg { return result }, func() tea.Msg { return userinterface.ErrorMessage{Err: shown} }}
@@ -548,7 +548,7 @@ func (view *View) staleEdit(message postedMessage) tea.Cmd {
 // sendInline adds a new inline comment to the pending review (creating the
 // review if there is none), anchored to the commit the lines were picked on.
 func (view *View) sendInline(target target, body string) tea.Cmd {
-	// A diff load in flight is no obstacle: the lines are anchored to tgt.head,
+	// A diff load in flight is no obstacle: the lines are anchored to target.head,
 	// and addPendingThread refuses unless the server is still on it. (The caller
 	// checked that the pull request is loaded.)
 	origin, client := view.origin(), view.client

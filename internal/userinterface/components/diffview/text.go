@@ -99,7 +99,7 @@ func spaces(count int) string {
 }
 
 // window returns the part of spans that falls in display columns
-// [off, off+width), plus its width. Grapheme clusters are the unit: one cut by
+// [startColumn, startColumn+width), plus its width. Grapheme clusters are the unit: one cut by
 // either edge is replaced by spaces so everything keeps its column.
 func window(spans []Span, startColumn, width int) ([]Span, int) {
 	end := startColumn + width

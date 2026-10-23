@@ -111,7 +111,7 @@ func newSyntax(roles Roles) Syntax {
 	return syntax
 }
 
-// For returns the style for class c.
+// For returns the style for the given class.
 func (syntax Syntax) For(class SyntaxClass) lipgloss.Style { return syntax.byClass[class] }
 
 // chromaMarkup holds the entries that do not follow the class mapping: errors

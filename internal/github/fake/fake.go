@@ -245,7 +245,7 @@ func (client *Client) Comments() []Comment {
 	return slices.Clone(client.comments)
 }
 
-// begin records the call and returns the injected error, if any. Callers hold c.mu.
+// begin records the call and returns the injected error, if any. Callers hold client.mu.
 func (client *Client) begin(ctx context.Context, call Call) error {
 	client.calls = append(client.calls, call)
 	if err := ctx.Err(); err != nil {

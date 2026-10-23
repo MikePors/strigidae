@@ -12,7 +12,7 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
-// sgrRGB is the tail of a true-colour SGR sequence for c.
+// sgrRGB is the tail of a true-colour SGR sequence for colour.
 func sgrRGB(colour color.Color) string {
 	red, green, blue, _ := colour.RGBA()
 	return fmt.Sprintf("2;%d;%d;%d", red>>8, green>>8, blue>>8)
@@ -105,7 +105,7 @@ func TestStyleConfigFollowsPalette(test *testing.T) {
 }
 
 // collectColours returns every non-nil *string field named Color or
-// BackgroundColor in v, by path.
+// BackgroundColor in value, by path.
 func collectColours(value any) map[string]string {
 	out := map[string]string{}
 	var walk func(reflect.Value, string)

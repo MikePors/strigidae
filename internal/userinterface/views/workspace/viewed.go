@@ -155,7 +155,7 @@ func (view *View) reapplyViewed(sequence int) {
 			delete(view.viewedState, path)
 		default:
 			// A settled entry whose reload began before it settled may hold
-			// older server data; t.want equals t.confirmed then.
+			// older server data; toggle.want equals toggle.confirmed then.
 			view.setViewed(path, toggle.want)
 		}
 	}

@@ -52,9 +52,9 @@ func Start(getEnvironment func(string) string, home func() (string, error)) (*sl
 	return slog.New(slog.NewTextHandler(io.Discard, nil)), func() {}, err
 }
 
-// Install routes the standard library's default loggers to l, so a
+// Install routes the standard library's default loggers to logger, so a
 // dependency calling log.Printf or slog.Info can never write to stderr and
-// corrupt the screen. slog.SetDefault also sends the log package through l's
+// corrupt the screen. slog.SetDefault also sends the log package through logger's
 // handler, so those lines get a timestamp and level. This is the one place the
 // program mutates the global loggers; pass a logger with an io.Discard
 // handler to silence them. The other allowed global mutations are listed in

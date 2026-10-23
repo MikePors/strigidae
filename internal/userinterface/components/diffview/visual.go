@@ -141,7 +141,7 @@ func (model *Model) rangeOf(first, second int) (Range, error) {
 	return rangeFor(model.file.Path(), lines)
 }
 
-// linesIn collects the diff lines of base rows lo to hi, which must all be in
+// linesIn collects the diff lines of base rows low to high, which must all be in
 // one hunk.
 func (model *Model) linesIn(low, high int) ([]*diff.Line, error) {
 	hunk := model.base[low].hunk
@@ -178,7 +178,7 @@ func rangeFor(path string, lines []*diff.Line) (Range, error) {
 	return Range{Path: path, Side: SideRight, Start: first.New, End: last.New}, nil
 }
 
-// selected reports whether base row bi is inside the selection.
+// selected reports whether base row baseIndex is inside the selection.
 func (model *Model) selected(baseIndex int) bool {
 	cursor, ok := model.cursorBase()
 	return model.visual && ok && baseIndex >= min(model.visualBaseIndex, cursor) && baseIndex <= max(model.visualBaseIndex, cursor)

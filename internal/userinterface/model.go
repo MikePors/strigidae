@@ -168,7 +168,7 @@ func (model *Model) sizeMessage() tea.WindowSizeMsg {
 	return tea.WindowSizeMsg{Width: width, Height: height}
 }
 
-// broadcast sends msg to every view in the stack.
+// broadcast sends message to every view in the stack.
 func (model *Model) broadcast(message tea.Msg) tea.Cmd {
 	commands := make([]tea.Cmd, len(model.stack))
 	for i, view := range model.stack {

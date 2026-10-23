@@ -51,7 +51,7 @@ var (
 	colourConstants = map[string]bool{"Black": true, "White": true, "Transparent": true, "Opaque": true}
 )
 
-// violations returns what is wrong with the Go file src at rel, a slash path
+// violations returns what is wrong with the Go file source at relative, a slash path
 // relative to internal/userinterface (such as "theme/roles.go").
 func violations(relative, source string) ([]string, error) {
 	fileSet := token.NewFileSet()

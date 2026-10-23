@@ -91,7 +91,7 @@ type blockKey struct {
 	location   bool
 }
 
-// renderBlock returns the lines of thread ti, from the cache when the thread,
+// renderBlock returns the lines of thread threadIndex, from the cache when the thread,
 // its expanded state, the width and the theme are unchanged.
 func (model *Model) renderBlock(threadIndex int) []string {
 	reviewThread := model.fileThreads[threadIndex]
@@ -210,7 +210,7 @@ func (model *Model) PreviousThread() {
 // or in the list after the diff.
 func (model *Model) ThreadCount() int { return len(model.fileThreads) }
 
-// threadGlyph returns the gutter marker for base row bi and whether it is the
+// threadGlyph returns the gutter marker for base row baseIndex and whether it is the
 // "open" kind.
 func (model *Model) threadGlyph(baseIndex int) (glyph string, open bool) {
 	timestamps := model.attach[baseIndex]

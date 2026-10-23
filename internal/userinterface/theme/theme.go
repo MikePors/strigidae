@@ -120,7 +120,7 @@ func New(isDark bool) Theme {
 func FromPalette(palette Palette) Theme { return FromPaletteWithOverrides(palette, Roles{}) }
 
 // FromPaletteWithOverrides builds a theme from a palette, replacing every
-// role that ov sets (non-nil fields) with its exact colour.
+// role that overrides sets (non-nil fields) with its exact colour.
 func FromPaletteWithOverrides(palette Palette, overrides Roles) Theme {
 	return newTheme(palette, deriveRoles(palette, overrides))
 }

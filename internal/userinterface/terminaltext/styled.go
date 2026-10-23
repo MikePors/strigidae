@@ -43,7 +43,7 @@ func CleanStyled(text string) string {
 }
 
 // escapeSequence returns the escape sequence at the start of s (which begins
-// with ESC) and its length. A sequence that never ends swallows the rest of s.
+// with ESC) and its length. A sequence that never ends swallows the rest of text.
 func escapeSequence(text string) (string, int) {
 	if len(text) < 2 {
 		return text, len(text)

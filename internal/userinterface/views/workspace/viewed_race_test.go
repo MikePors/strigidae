@@ -23,7 +23,7 @@ func (harness *harness) pressV() tea.Cmd {
 	return command
 }
 
-// finish runs cmd, delivers its results and returns the follow-up command the
+// finish runs command, delivers its results and returns the follow-up command the
 // view issued, if any.
 func (harness *harness) finish(command tea.Cmd) tea.Cmd {
 	harness.test.Helper()

@@ -105,7 +105,7 @@ func (window *Window) GotoTop() { window.cursor = 0; window.clamp() }
 // GotoBottom moves the cursor to the last row.
 func (window *Window) GotoBottom() { window.cursor = window.rows - 1; window.clamp() }
 
-// GotoRow moves the cursor to row r, scrolling to keep it visible.
+// GotoRow moves the cursor to the given row, scrolling to keep it visible.
 func (window *Window) GotoRow(row int) { window.cursor = row; window.clamp() }
 
 // JumpTo puts the cursor on row r and r at the top of the view (as far as the

@@ -13,7 +13,7 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface"
 )
 
-// feed delivers msgs to v, and then the messages its commands produce.
+// feed delivers messageList to view, and then the messages its commands produce.
 func feed(view *View, messageList []tea.Msg) {
 	for len(messageList) > 0 {
 		message := messageList[0]

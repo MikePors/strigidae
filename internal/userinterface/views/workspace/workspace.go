@@ -109,7 +109,7 @@ var (
 	_ userinterface.Commander   = (*View)(nil)
 )
 
-// New returns the workspace for pull request number in repo.
+// New returns the workspace for pull request number in repository.
 func New(client github.Client, repository github.Repository, number int, options ...Option) *View {
 	view := &View{
 		client:         client,

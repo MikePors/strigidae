@@ -128,7 +128,7 @@ func (harness *harness) send(message tea.Msg) {
 	harness.run(command)
 }
 
-// run executes cmd, delivering result messages back to the view.
+// run executes command, delivering result messages back to the view.
 func (harness *harness) run(command tea.Cmd) {
 	harness.test.Helper()
 	if command == nil {
@@ -175,7 +175,7 @@ func (harness *harness) lastErr() error {
 	return nil
 }
 
-// messages runs cmd (and the commands of any batch) and returns what they produce.
+// messages runs command (and the commands of any batch) and returns what they produce.
 func messages(command tea.Cmd) []tea.Msg {
 	if command == nil {
 		return nil

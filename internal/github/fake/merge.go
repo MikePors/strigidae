@@ -24,7 +24,7 @@ type Merge struct {
 	ExpectedHeadObjectIdentifier string
 }
 
-// SetMergeSettings sets the merge settings of repo. Without it every method
+// SetMergeSettings sets the merge settings of repository. Without it every method
 // is allowed and head branches are not deleted automatically.
 func (client *Client) SetMergeSettings(repository github.Repository, settings MergeSettings) {
 	client.mutex.Lock()

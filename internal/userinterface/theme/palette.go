@@ -61,7 +61,7 @@ type Palette struct {
 	colors  [numberSlots]color.Color
 }
 
-// Slot returns the colour in slot s. Only roles.go and the palette
+// Slot returns the colour in the given slot. Only roles.go and the palette
 // constructors may call it.
 func (palette Palette) Slot(slot Slot) color.Color { return palette.colors[slot] }
 

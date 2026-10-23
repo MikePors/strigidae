@@ -29,7 +29,7 @@ type Renderer struct {
 	cache            map[cacheKey]string
 }
 
-// New returns a Renderer styled by th. The style comes from the theme, never
+// New returns a Renderer styled by activeTheme. The style comes from the theme, never
 // from terminal detection, so output is deterministic. Build a new Renderer
 // when the theme changes.
 func New(activeTheme theme.Theme) *Renderer {

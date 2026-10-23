@@ -84,7 +84,7 @@ func tintsFor(variant Variant) tintSet {
 }
 
 // deriveRoles computes every role from the palette and applies the overrides
-// (non-nil fields of ov). The contrast guard then adjusts only the roles that
+// (non-nil fields of overrides). The contrast guard then adjusts only the roles that
 // were derived: an override is used exactly as written, and a warning is
 // logged if it is hard to read.
 func deriveRoles(palette Palette, overrides Roles) Roles {
@@ -192,7 +192,7 @@ func (roles Roles) set() map[string]bool {
 	return out
 }
 
-// override replaces every role ov sets. Tints that ov does not set are
+// override replaces every role overrides sets. Tints that overrides does not set are
 // recomputed from the final roles, so overriding Added also recolours the
 // added-line tint.
 func (roles *Roles) override(overrides Roles, tints tintSet) {

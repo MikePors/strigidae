@@ -11,7 +11,7 @@ import (
 	"github.com/MikePors/strigidae/internal/github/fake"
 )
 
-// mergeCommand runs :merge with args.
+// mergeCommand runs :merge with arguments.
 func (composer *composer) mergeCommand(arguments string) {
 	composer.test.Helper()
 	command, ok := composer.view.Command("merge", arguments)

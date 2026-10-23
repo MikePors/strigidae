@@ -471,7 +471,7 @@ var (
 )
 
 // walkColours calls f with the path and colour list of every style and bare
-// colour reachable from the exported fields of v, descending into structs.
+// colour reachable from the exported fields of value, descending into structs.
 func walkColours(value reflect.Value, path string, check func(path string, columns []string)) {
 	for i := range value.NumField() {
 		structField := value.Type().Field(i)

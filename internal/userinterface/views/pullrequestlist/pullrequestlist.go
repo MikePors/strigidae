@@ -74,7 +74,7 @@ var (
 	_ userinterface.Loader = (*View)(nil)
 )
 
-// New returns the PR list for repo. It starts loading when pushed (Init).
+// New returns the PR list for repository. It starts loading when pushed (Init).
 func New(client github.Client, repository github.Repository, activeTheme theme.Theme, options Options) *View {
 	if options.Now == nil {
 		options.Now = time.Now

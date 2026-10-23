@@ -47,7 +47,7 @@ func newView(client github.Client, open func(string) error) *View {
 	return view
 }
 
-// deliver runs cmd and feeds the resulting message back into the view.
+// deliver runs command and feeds the resulting message back into the view.
 func deliver(test *testing.T, view *View, command tea.Cmd) tea.Cmd {
 	test.Helper()
 	if command == nil {
