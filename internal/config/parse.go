@@ -63,9 +63,9 @@ func (parser *parser) tab(node *yaml.Node) (Tab, string) {
 	parser.mapping(node, "a tab", func(key string, node *yaml.Node) {
 		switch key {
 		case "name":
-			tab.Name = parser.str(node, "tab name")
+			tab.Name = parser.stringValue(node, "tab name")
 		case "user":
-			tab.User = parser.str(node, "user")
+			tab.User = parser.stringValue(node, "user")
 			if parser.err == nil && tab.User != Me && !login.MatchString(tab.User) {
 				parser.fail(node, "user %q is not a GitHub login (letters, digits and hyphens) or %q", tab.User, Me)
 			}
@@ -93,9 +93,9 @@ func (parser *parser) section(node *yaml.Node) (Section, string) {
 	parser.mapping(node, "a section", func(key string, node *yaml.Node) {
 		switch key {
 		case "name":
-			section.Name = parser.str(node, "section name")
+			section.Name = parser.stringValue(node, "section name")
 		case "query":
-			query := parser.str(node, "query")
+			query := parser.stringValue(node, "query")
 			if parser.err != nil {
 				return
 			}

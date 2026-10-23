@@ -14,7 +14,7 @@ import (
 	"github.com/MikePors/strigidae/internal/golden"
 )
 
-func tc(author, body string, ago time.Duration) github.ReviewComment {
+func newComment(author, body string, ago time.Duration) github.ReviewComment {
 	return github.ReviewComment{
 		Identifier: author + body, Author: author, Body: body, CreatedAt: testNow.Add(-ago),
 		Reactions: []github.ReactionSummary{{Content: github.ReactionHeart, Count: 1}},
@@ -28,19 +28,19 @@ func testThreads() []github.ReviewThread {
 	return []github.ReviewThread{
 		{
 			Identifier: "t-open", Path: "internal/sync/client.go", Line: 14, DiffSide: github.SideRight,
-			Comments: []github.ReviewComment{tc("bob", "Why retry here?", 5*time.Hour), tc("alice", "Handles flaky links.", 4*time.Hour)},
+			Comments: []github.ReviewComment{newComment("bob", "Why retry here?", 5*time.Hour), newComment("alice", "Handles flaky links.", 4*time.Hour)},
 		},
 		{
 			Identifier: "t-resolved", Path: "internal/sync/client.go", Line: 12, DiffSide: github.SideRight, IsResolved: true,
-			Comments: []github.ReviewComment{tc("carol", "Nit: unused import.", 30*time.Hour)},
+			Comments: []github.ReviewComment{newComment("carol", "Nit: unused import.", 30*time.Hour)},
 		},
 		{
 			Identifier: "t-outdated", Path: "internal/sync/client.go", OriginalLine: 3, DiffSide: github.SideRight, IsOutdated: true,
-			Comments: []github.ReviewComment{tc("dave", "This moved.", 70*time.Hour)},
+			Comments: []github.ReviewComment{newComment("dave", "This moved.", 70*time.Hour)},
 		},
 		{
 			Identifier: "t-readme", Path: "README.md", Line: 1, DiffSide: github.SideRight,
-			Comments: []github.ReviewComment{tc("erin", "Typo.", time.Hour)},
+			Comments: []github.ReviewComment{newComment("erin", "Typo.", time.Hour)},
 		},
 	}
 }
@@ -72,7 +72,7 @@ func TestThreadsPagedLoad(test *testing.T) {
 	harness := newHarness(test, 100, 40)
 	var many []github.ReviewThread
 	for i := range 75 {
-		many = append(many, github.ReviewThread{Identifier: fmt.Sprintf("t%02d", i), Path: "README.md", Line: i + 1, Comments: []github.ReviewComment{tc("x", "y", time.Hour)}})
+		many = append(many, github.ReviewThread{Identifier: fmt.Sprintf("t%02d", i), Path: "README.md", Line: i + 1, Comments: []github.ReviewComment{newComment("x", "y", time.Hour)}})
 	}
 	harness.client.SetReviewThreads(testRepository, 7, many)
 	harness.run(harness.view.Init())

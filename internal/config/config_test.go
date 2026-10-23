@@ -10,15 +10,15 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func sec(name, query string, limit int, sort Sort, order Order) Section {
+func newSection(name, query string, limit int, sort Sort, order Order) Section {
 	return Section{Name: name, Query: query, Limit: limit, Sort: sort, Order: order}
 }
 
 func defaultsFor(user string) []Section {
 	return []Section{
-		sec("Review requested", "is:pr is:open review-requested:"+user, 30, SortUpdated, OrderDescending),
-		sec("My PRs", "is:pr is:open author:"+user, 30, SortUpdated, OrderDescending),
-		sec("Involved", "is:pr is:open involves:"+user+" -author:"+user, 30, SortUpdated, OrderDescending),
+		newSection("Review requested", "is:pr is:open review-requested:"+user, 30, SortUpdated, OrderDescending),
+		newSection("My PRs", "is:pr is:open author:"+user, 30, SortUpdated, OrderDescending),
+		newSection("Involved", "is:pr is:open involves:"+user+" -author:"+user, 30, SortUpdated, OrderDescending),
 	}
 }
 
@@ -49,9 +49,9 @@ func TestParseValid(test *testing.T) {
       - {name: Type, query: 'type:pr label:x'}
 `,
 			Config{Tabs: []Tab{{Name: "A", User: "a", Sections: []Section{
-				sec("Bug", "is:pr label:bug author:a", 30, SortUpdated, OrderDescending),
-				sec("Has", "author:a IS:PR", 30, SortUpdated, OrderDescending),
-				sec("Type", "type:pr label:x", 30, SortUpdated, OrderDescending),
+				newSection("Bug", "is:pr label:bug author:a", 30, SortUpdated, OrderDescending),
+				newSection("Has", "author:a IS:PR", 30, SortUpdated, OrderDescending),
+				newSection("Type", "type:pr label:x", 30, SortUpdated, OrderDescending),
 			}}}},
 		},
 		{
@@ -79,8 +79,8 @@ func TestParseValid(test *testing.T) {
         query: is:pr label:bug
 `,
 			Config{Tabs: []Tab{{Name: "Bob", User: "bob", Sections: []Section{
-				sec("Theirs", "is:pr author:bob -author:bob-bot", 5, SortComments, OrderAscending),
-				sec("Plain", "is:pr label:bug", 30, SortUpdated, OrderDescending),
+				newSection("Theirs", "is:pr author:bob -author:bob-bot", 5, SortComments, OrderAscending),
+				newSection("Plain", "is:pr label:bug", 30, SortUpdated, OrderDescending),
 			}}}},
 		},
 	}

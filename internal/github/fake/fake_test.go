@@ -145,9 +145,9 @@ func TestErrors(test *testing.T) {
 
 	test.Run("cancelled context", func(test *testing.T) {
 		client := seeded()
-		cctx, cancel := context.WithCancel(ctx)
+		cancelContext, cancel := context.WithCancel(ctx)
 		cancel()
-		if _, err := client.GetDiff(cctx, repository, 1); !errors.Is(err, context.Canceled) {
+		if _, err := client.GetDiff(cancelContext, repository, 1); !errors.Is(err, context.Canceled) {
 			test.Errorf("want context.Canceled, got %v", err)
 		}
 	})

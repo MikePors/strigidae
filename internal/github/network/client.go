@@ -40,8 +40,8 @@ type Options struct {
 
 // Client is the real github.Client.
 type Client struct {
-	gql  *githubnetwork.GraphQLClient
-	rest *githubnetwork.RESTClient
+	graphqlClient *githubnetwork.GraphQLClient
+	rest          *githubnetwork.RESTClient
 	// diff is a REST client that asks for the unified diff media type.
 	diff  *githubnetwork.RESTClient
 	limit *limitTracker
@@ -101,7 +101,7 @@ func New(options Options) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create diff client: %w", err)
 	}
-	return &Client{gql: graphqlClient, rest: rest, diff: diff, limit: tracker, now: now, host: host}, nil
+	return &Client{graphqlClient: graphqlClient, rest: rest, diff: diff, limit: tracker, now: now, host: host}, nil
 }
 
 // Host returns the GitHub host this client talks to.
@@ -109,7 +109,7 @@ func (client *Client) Host() string { return client.host }
 
 // query runs a GraphQL operation and maps failures to typed errors.
 func (client *Client) query(ctx context.Context, query string, variables map[string]any, out any) error {
-	if err := client.gql.DoWithContext(ctx, query, variables, out); err != nil {
+	if err := client.graphqlClient.DoWithContext(ctx, query, variables, out); err != nil {
 		return client.mapError(err)
 	}
 	return nil
@@ -122,7 +122,7 @@ func (client *Client) query(ctx context.Context, query string, variables map[str
 type limitTracker struct {
 	base http.RoundTripper
 
-	mu     sync.Mutex
+	mutex  sync.Mutex
 	resets map[string]time.Time
 }
 
@@ -133,19 +133,19 @@ func (tracker *limitTracker) RoundTrip(request *http.Request) (*http.Response, e
 	}
 	resource := response.Header.Get("X-RateLimit-Resource")
 	if reset, ok := parseReset(response.Header.Get("X-RateLimit-Reset")); ok && resource != "" {
-		tracker.mu.Lock()
+		tracker.mutex.Lock()
 		if tracker.resets == nil {
 			tracker.resets = map[string]time.Time{}
 		}
 		tracker.resets[resource] = reset
-		tracker.mu.Unlock()
+		tracker.mutex.Unlock()
 	}
 	return response, nil
 }
 
 // resetFor returns the last reset time seen for the bucket, or zero.
 func (tracker *limitTracker) resetFor(resource string) time.Time {
-	tracker.mu.Lock()
-	defer tracker.mu.Unlock()
+	tracker.mutex.Lock()
+	defer tracker.mutex.Unlock()
 	return tracker.resets[resource]
 }

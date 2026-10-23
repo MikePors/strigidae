@@ -89,14 +89,14 @@ type Hunk struct {
 
 // Header reconstructs the hunk header line.
 func (hunk Hunk) Header() string {
-	hunkString := "@@ -" + rng(hunk.OldStart, hunk.OldLines) + " +" + rng(hunk.NewStart, hunk.NewLines) + " @@"
+	hunkString := "@@ -" + rangeText(hunk.OldStart, hunk.OldLines) + " +" + rangeText(hunk.NewStart, hunk.NewLines) + " @@"
 	if hunk.Section != "" {
 		hunkString += " " + hunk.Section
 	}
 	return hunkString
 }
 
-func rng(start, count int) string {
+func rangeText(start, count int) string {
 	if count == 1 {
 		return strconv.Itoa(start)
 	}

@@ -48,7 +48,7 @@ func reviewQuestion(event github.ReviewEvent, repository github.Repository, numb
 	return query + "?"
 }
 
-var submittedFmt = map[github.ReviewEvent]string{
+var submittedFormat = map[github.ReviewEvent]string{
 	github.ReviewEventApprove:        "Approved #%d",
 	github.ReviewEventRequestChanges: "Requested changes on #%d",
 	github.ReviewEventComment:        "Commented on #%d",
@@ -56,7 +56,7 @@ var submittedFmt = map[github.ReviewEvent]string{
 
 // submittedText is the success message.
 func submittedText(event github.ReviewEvent, number int) string {
-	return fmt.Sprintf(submittedFmt[event], number)
+	return fmt.Sprintf(submittedFormat[event], number)
 }
 
 // submitFailure is the error shown when SubmitReview failed. pending says the

@@ -63,10 +63,10 @@ func detailQuery(withTeams bool) string {
 	if !withTeams {
 		reviewer = `... on User { login } ... on Bot { login } ... on Mannequin { login }`
 	}
-	return fmt.Sprintf(pullRequestDetailQueryFmt, reviewer)
+	return fmt.Sprintf(pullRequestDetailQueryFormat, reviewer)
 }
 
-const pullRequestDetailQueryFmt = `
+const pullRequestDetailQueryFormat = `
 query ` + operationPullRequestDetail + `($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {

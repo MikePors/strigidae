@@ -118,7 +118,7 @@ func TestReviewCommentThroughChooser(test *testing.T) {
 	if !composer.view.CapturesKeys() {
 		test.Fatal("chooser does not capture keys")
 	}
-	composer.typ("com")
+	composer.typeText("com")
 	composer.send(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if composer.view.CapturesKeys() {
 		test.Error("chooser still open after choosing")

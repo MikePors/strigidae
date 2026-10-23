@@ -25,7 +25,7 @@ var (
 	testNow        = time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC)
 )
 
-func makePRs(count int) []github.PullRequest {
+func makePullRequests(count int) []github.PullRequest {
 	pullRequests := make([]github.PullRequest, count)
 	for i := range pullRequests {
 		pullRequests[i] = github.PullRequest{
@@ -76,7 +76,7 @@ func fakeWith(pullRequests []github.PullRequest) *fake.Client {
 }
 
 func TestFirstLoad(test *testing.T) {
-	client := fakeWith(makePRs(3))
+	client := fakeWith(makePullRequests(3))
 	view := newView(client, nil)
 	if !view.Loading() {
 		test.Fatal("new view should be loading")
@@ -97,7 +97,7 @@ func TestFirstLoad(test *testing.T) {
 }
 
 func TestPaginationTrigger(test *testing.T) {
-	client := fakeWith(makePRs(45))
+	client := fakeWith(makePullRequests(45))
 	view := loadedView(test, client, nil)
 	if len(view.pullRequests) != 30 || view.next == "" {
 		test.Fatalf("first page: prs=%d next=%q", len(view.pullRequests), view.next)
@@ -129,7 +129,7 @@ func TestPaginationTrigger(test *testing.T) {
 }
 
 func TestStaleResultsIgnored(test *testing.T) {
-	client := fakeWith(makePRs(3))
+	client := fakeWith(makePullRequests(3))
 	view := newView(client, nil)
 	first := view.Init()
 
@@ -143,7 +143,7 @@ func TestStaleResultsIgnored(test *testing.T) {
 		test.Errorf("stale result applied: prs=%d loading=%v", len(view.pullRequests), view.Loading())
 	}
 	// A result for another repository is not ours either.
-	view.Update(pullRequestsLoadedMessage{repository: github.Repository{Owner: "x", Name: "y"}, sequence: view.sequence, page: github.Page[github.PullRequest]{Items: makePRs(1)}})
+	view.Update(pullRequestsLoadedMessage{repository: github.Repository{Owner: "x", Name: "y"}, sequence: view.sequence, page: github.Page[github.PullRequest]{Items: makePullRequests(1)}})
 	if len(view.pullRequests) != 0 {
 		test.Error("other repo's result applied")
 	}
@@ -154,7 +154,7 @@ func TestStaleResultsIgnored(test *testing.T) {
 }
 
 func TestRefreshKeepsSelection(test *testing.T) {
-	client := fakeWith(makePRs(10))
+	client := fakeWith(makePullRequests(10))
 	view := loadedView(test, client, nil)
 	press(view, "j")
 	press(view, "j")
@@ -166,7 +166,7 @@ func TestRefreshKeepsSelection(test *testing.T) {
 }
 
 func TestRefreshKeepsSelectionPastFirstPage(test *testing.T) {
-	client := fakeWith(makePRs(45))
+	client := fakeWith(makePullRequests(45))
 	view := loadedView(test, client, nil)
 	deliver(test, view, press(view, "G"))
 	press(view, "G")
@@ -186,7 +186,7 @@ func TestRefreshKeepsSelectionPastFirstPage(test *testing.T) {
 }
 
 func TestRefreshCapsAtMaximumPageSize(test *testing.T) {
-	client := fakeWith(makePRs(250))
+	client := fakeWith(makePullRequests(250))
 	view := loadedView(test, client, nil)
 	for len(view.pullRequests) < 150 {
 		deliver(test, view, press(view, "G"))
@@ -234,22 +234,22 @@ func TestUntrustedTextIsCleaned(test *testing.T) {
 }
 
 func TestRefreshSelectionGone(test *testing.T) {
-	client := fakeWith(makePRs(10))
+	client := fakeWith(makePullRequests(10))
 	view := loadedView(test, client, nil)
 	for range 4 {
 		press(view, "j")
 	}
 	// The selected PR disappears from the list; the row index is kept.
-	client.SetPullRequests(testRepository, makePRs(10)[:3])
+	client.SetPullRequests(testRepository, makePullRequests(10)[:3])
 	press(view, "R")
-	view.Update(pullRequestsLoadedMessage{repository: testRepository, sequence: view.sequence, page: github.Page[github.PullRequest]{Items: makePRs(3)}})
+	view.Update(pullRequestsLoadedMessage{repository: testRepository, sequence: view.sequence, page: github.Page[github.PullRequest]{Items: makePullRequests(3)}})
 	if view.window.Cursor() != 2 {
 		test.Errorf("cursor = %d, want 2 (clamped)", view.window.Cursor())
 	}
 }
 
 func TestLoadError(test *testing.T) {
-	client := fakeWith(makePRs(3))
+	client := fakeWith(makePullRequests(3))
 	boom := errors.New("boom")
 	client.SetError(fake.MethodListPullRequests, boom)
 	view := newView(client, nil)
@@ -267,7 +267,7 @@ func TestLoadError(test *testing.T) {
 }
 
 func TestFailedNextPageIsNotRetried(test *testing.T) {
-	client := fakeWith(makePRs(45))
+	client := fakeWith(makePullRequests(45))
 	view := loadedView(test, client, nil)
 	command := press(view, "G")
 	client.SetError(fake.MethodListPullRequests, errors.New("rate limited"))
@@ -299,7 +299,7 @@ func TestFailedNextPageIsNotRetried(test *testing.T) {
 func TestOpenInBrowser(test *testing.T) {
 	var opened []string
 	open := func(address string) error { opened = append(opened, address); return nil }
-	view := loadedView(test, fakeWith(makePRs(3)), open)
+	view := loadedView(test, fakeWith(makePullRequests(3)), open)
 
 	command := press(view, "o")
 	if command == nil {
@@ -313,7 +313,7 @@ func TestOpenInBrowser(test *testing.T) {
 		test.Errorf("opened=%v msg=%#v", opened, message)
 	}
 
-	failing := loadedView(test, fakeWith(makePRs(1)), func(string) error { return errors.New("no browser") })
+	failing := loadedView(test, fakeWith(makePullRequests(1)), func(string) error { return errors.New("no browser") })
 	if _, ok := press(failing, "o")().(userinterface.ErrorMessage); !ok {
 		test.Error("launch failure should become userinterface.ErrorMsg")
 	}
@@ -325,7 +325,7 @@ func TestOpenInBrowser(test *testing.T) {
 }
 
 func TestEnterPushesWorkspace(test *testing.T) {
-	view := loadedView(test, fakeWith(makePRs(3)), nil)
+	view := loadedView(test, fakeWith(makePullRequests(3)), nil)
 	press(view, "j") // second row is PR #2
 	command := press(view, "enter")
 	if command == nil {
@@ -346,7 +346,7 @@ func TestEnterPushesWorkspace(test *testing.T) {
 }
 
 func TestNavigation(test *testing.T) {
-	view := loadedView(test, fakeWith(makePRs(25)), nil) // window shows 11 rows
+	view := loadedView(test, fakeWith(makePullRequests(25)), nil) // window shows 11 rows
 	tests := []struct {
 		keys []string
 		want int
@@ -373,7 +373,7 @@ func TestNavigation(test *testing.T) {
 }
 
 func TestHostileTextIsNeutralised(test *testing.T) {
-	pullRequests := makePRs(1)
+	pullRequests := makePullRequests(1)
 	pullRequests[0].Title = "evil\x1b]52;c;aGk=\x07\x1b[2J title\u202e\u009b"
 	pullRequests[0].Author = "a\x1b[31muthor"
 	view := loadedView(test, fakeWith(pullRequests), nil)
@@ -405,8 +405,8 @@ func TestRelativeAge(test *testing.T) {
 	}
 }
 
-func goldenPRs() []github.PullRequest {
-	pullRequests := makePRs(8)
+func goldenPullRequests() []github.PullRequest {
+	pullRequests := makePullRequests(8)
 	pullRequests[0].Title = "Add a really quite extraordinarily long title that cannot possibly fit in the available columns"
 	pullRequests[0].Author = "someone-with-a-long-name"
 	pullRequests[0].ReviewDecision = github.ReviewDecisionApproved
@@ -434,21 +434,21 @@ func TestGolden(test *testing.T) {
 		width, height int
 	}{
 		{"populated", func(test *testing.T) *View {
-			view := loadedView(test, fakeWith(goldenPRs()), nil)
+			view := loadedView(test, fakeWith(goldenPullRequests()), nil)
 			press(view, "j")
 			press(view, "j")
 			return view
 		}, 80, 12},
 		{"scrolled", func(test *testing.T) *View {
-			view := loadedView(test, fakeWith(makePRs(20)), nil)
+			view := loadedView(test, fakeWith(makePullRequests(20)), nil)
 			press(view, "G")
 			return view
 		}, 80, 8},
 		{"medium", func(test *testing.T) *View {
-			return loadedView(test, fakeWith(goldenPRs()), nil)
+			return loadedView(test, fakeWith(goldenPullRequests()), nil)
 		}, 56, 10},
 		{"narrow", func(test *testing.T) *View {
-			return loadedView(test, fakeWith(goldenPRs()), nil)
+			return loadedView(test, fakeWith(goldenPullRequests()), nil)
 		}, 36, 10},
 		{"loading", func(*testing.T) *View { return newView(fakeWith(nil), nil) }, 80, 6},
 		{"empty", func(test *testing.T) *View { return loadedView(test, fakeWith(nil), nil) }, 80, 6},
@@ -460,7 +460,7 @@ func TestGolden(test *testing.T) {
 			return view
 		}, 40, 8},
 		{"tiny", func(test *testing.T) *View {
-			return loadedView(test, fakeWith(goldenPRs()), nil)
+			return loadedView(test, fakeWith(goldenPullRequests()), nil)
 		}, 12, 3},
 		{"error_tiny", func(test *testing.T) *View {
 			client := fakeWith(nil)
@@ -512,7 +512,7 @@ func TestPagingKeysAtTheEnds(test *testing.T) {
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
-			view := loadedView(test, fakeWith(makePRs(25)), nil) // window shows 11 rows
+			view := loadedView(test, fakeWith(makePullRequests(25)), nil) // window shows 11 rows
 			for _, k := range testCase.start {
 				press(view, k)
 			}
@@ -530,7 +530,7 @@ func TestPagingKeysAtTheEnds(test *testing.T) {
 func TestPagingNearTheEndLoadsMore(test *testing.T) {
 	for _, k := range []string{"ctrl+d", "ctrl+f"} {
 		test.Run(k, func(test *testing.T) {
-			client := fakeWith(makePRs(45))
+			client := fakeWith(makePullRequests(45))
 			view := loadedView(test, client, nil) // 30 loaded, 11 visible
 			var command tea.Cmd
 			for i := 0; i < 10 && command == nil; i++ {

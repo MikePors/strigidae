@@ -39,18 +39,18 @@ type call struct {
 // server serves testdata fixtures in place of GitHub. It never opens a socket:
 // requests are handed to the handler through a RoundTripper.
 type server struct {
-	t *testing.T
+	test *testing.T
 	// override, if it returns true, has produced the response itself.
 	override func(recordedCall call, writer http.ResponseWriter) bool
 
-	mu    sync.Mutex
+	mutex sync.Mutex
 	calls []call
 }
 
 func (server *server) fixture(writer http.ResponseWriter, status int, name string) {
 	bytes, err := os.ReadFile(filepath.Join("testdata", name))
 	if err != nil {
-		server.t.Errorf("read fixture: %v", err)
+		server.test.Errorf("read fixture: %v", err)
 		writer.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -73,7 +73,7 @@ func (server *server) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 			Variables map[string]any
 		}
 		if err := json.Unmarshal(raw, &request); err != nil {
-			server.t.Errorf("bad graphql request: %v", err)
+			server.test.Errorf("bad graphql request: %v", err)
 		}
 		recordedCall.Variables = request.Variables
 		recordedCall.Query = request.Query
@@ -81,9 +81,9 @@ func (server *server) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 			recordedCall.Operation = messages[1]
 		}
 	}
-	server.mu.Lock()
+	server.mutex.Lock()
 	server.calls = append(server.calls, recordedCall)
-	server.mu.Unlock()
+	server.mutex.Unlock()
 
 	if server.override != nil && server.override(recordedCall, writer) {
 		return
@@ -100,22 +100,22 @@ func (server *server) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 	case recordedCall.Method == "POST" && recordedCall.Path == "/repos/MikePors/strigidae/issues/27/comments":
 		server.fixture(writer, http.StatusCreated, "issue_comment.json")
 	default:
-		server.t.Errorf("unexpected request %s %s", recordedCall.Method, recordedCall.Path)
+		server.test.Errorf("unexpected request %s %s", recordedCall.Method, recordedCall.Path)
 		writer.WriteHeader(http.StatusNotFound)
 	}
 }
 
 func (server *server) Calls() []call {
-	server.mu.Lock()
-	defer server.mu.Unlock()
+	server.mutex.Lock()
+	defer server.mutex.Unlock()
 	return append([]call(nil), server.calls...)
 }
 
-type handlerTransport struct{ h http.Handler }
+type handlerTransport struct{ handler http.Handler }
 
 func (transport handlerTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	recorder := httptest.NewRecorder()
-	transport.h.ServeHTTP(recorder, request)
+	transport.handler.ServeHTTP(recorder, request)
 	response := recorder.Result()
 	response.Request = request
 	return response, nil
@@ -123,7 +123,7 @@ func (transport handlerTransport) RoundTrip(request *http.Request) (*http.Respon
 
 func newTestClient(test *testing.T, server *server) *Client {
 	test.Helper()
-	server.t = test
+	server.test = test
 	client, err := New(Options{
 		Host:      "github.com",
 		APIHost:   "api.github.test",
@@ -608,7 +608,7 @@ func TestNewWithoutToken(test *testing.T) {
 
 func TestNewUsesTokenSource(test *testing.T) {
 	var asked string
-	testServer := &server{t: test}
+	testServer := &server{test: test}
 	client, err := New(Options{
 		Host:    "ghe.example.test",
 		APIHost: "api.ghe.example.test",
@@ -628,10 +628,10 @@ func TestNewUsesTokenSource(test *testing.T) {
 
 func TestSetFileViewed(test *testing.T) {
 	tests := []struct {
-		name   string
-		viewed bool
-		op     string
-		field  string
+		name      string
+		viewed    bool
+		operation string
+		field     string
 	}{
 		{"mark", true, "MarkFileViewed", "markFileAsViewed"},
 		{"unmark", false, "UnmarkFileViewed", "unmarkFileAsViewed"},
@@ -644,7 +644,7 @@ func TestSetFileViewed(test *testing.T) {
 				test.Fatal(err)
 			}
 			got := testServer.Calls()[0]
-			if got.Operation != testCase.op || !strings.Contains(got.Query, testCase.field+"(input:") {
+			if got.Operation != testCase.operation || !strings.Contains(got.Query, testCase.field+"(input:") {
 				test.Errorf("op = %q, query = %q", got.Operation, got.Query)
 			}
 			if got.Variables["pullRequestId"] != "PR_kwDOExample01" || got.Variables["path"] != "go.mod" {

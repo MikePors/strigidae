@@ -163,7 +163,7 @@ func TestHostileTextNeverReachesTheScreen(test *testing.T) {
 	assertTame(test, "cursor in hostile hunk", harness.render())
 
 	harness.press("f")
-	harness.typ("evil")
+	harness.typeText("evil")
 	assertTame(test, "picker", harness.render())
 	harness.send(keyEsc())
 
@@ -171,7 +171,7 @@ func TestHostileTextNeverReachesTheScreen(test *testing.T) {
 	harness.send(sizeMessage(60, 20))
 	assertTame(test, "narrow", harness.render())
 	harness.press("f")
-	harness.typ("evil")
+	harness.typeText("evil")
 	if !harness.view.CapturesKeys() {
 		test.Fatal("setup: picker should be open")
 	}

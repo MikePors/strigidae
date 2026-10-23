@@ -2,7 +2,7 @@ package scroll
 
 import "testing"
 
-func win(rows, height, content, view int) *Window {
+func newWindow(rows, height, content, view int) *Window {
 	var window Window
 	window.SetRows(rows)
 	window.SetSize(height)
@@ -54,7 +54,7 @@ func TestVertical(test *testing.T) {
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
-			window := win(testCase.rows, testCase.height, 0, 0)
+			window := newWindow(testCase.rows, testCase.height, 0, 0)
 			testCase.do(window)
 			if window.Cursor() != testCase.wantCursor || window.Top() != testCase.wantTop {
 				test.Errorf("cursor/top = %d/%d, want %d/%d", window.Cursor(), window.Top(), testCase.wantCursor, testCase.wantTop)
@@ -83,7 +83,7 @@ func TestHorizontal(test *testing.T) {
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
-			window := win(10, 5, testCase.content, testCase.view)
+			window := newWindow(10, 5, testCase.content, testCase.view)
 			testCase.do(window)
 			if window.HorizontalOffset() != testCase.want {
 				test.Errorf("XOffset = %d, want %d", window.HorizontalOffset(), testCase.want)
@@ -93,7 +93,7 @@ func TestHorizontal(test *testing.T) {
 }
 
 func TestHorizontalNeedsRows(test *testing.T) {
-	window := win(0, 5, 100, 40)
+	window := newWindow(0, 5, 100, 40)
 	window.Right(10)
 	if window.HorizontalOffset() != 0 {
 		test.Errorf("empty window scrolled to %d", window.HorizontalOffset())
@@ -101,7 +101,7 @@ func TestHorizontalNeedsRows(test *testing.T) {
 }
 
 func TestSettersReclamp(test *testing.T) {
-	window := win(20, 6, 100, 40)
+	window := newWindow(20, 6, 100, 40)
 	window.Down(15)
 	window.Right(50)
 	window.SetRows(5)
@@ -129,7 +129,7 @@ func TestSettersReclamp(test *testing.T) {
 }
 
 func TestResetAndRestore(test *testing.T) {
-	window := win(20, 6, 100, 40)
+	window := newWindow(20, 6, 100, 40)
 	window.Down(9)
 	window.Right(7)
 	window.Reset()
@@ -151,7 +151,7 @@ func TestResetAndRestore(test *testing.T) {
 }
 
 func TestAccessors(test *testing.T) {
-	window := win(20, 6, 100, 40)
+	window := newWindow(20, 6, 100, 40)
 	if window.Height() != 6 || window.MaximumTop() != 14 || window.MaximumHorizontalOffset() != 60 {
 		test.Errorf("Height/MaxTop/MaxX = %d/%d/%d", window.Height(), window.MaximumTop(), window.MaximumHorizontalOffset())
 	}

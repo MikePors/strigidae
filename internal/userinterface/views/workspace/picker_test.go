@@ -23,7 +23,7 @@ func TestFilePicker(test *testing.T) {
 	}
 
 	// Filtering narrows the list; enter jumps to the match.
-	harness.typ("retry")
+	harness.typeText("retry")
 	if got := harness.view.picker.Matches(); got != 2 {
 		test.Errorf("matches for %q = %d, want 2 (retry.go, retry-policy doc)", harness.view.picker.Query(), got)
 	}
@@ -38,7 +38,7 @@ func TestFilePicker(test *testing.T) {
 
 	// esc cancels and leaves the selection alone.
 	harness.press("f")
-	harness.typ("read")
+	harness.typeText("read")
 	harness.send(tea.KeyPressMsg{Code: tea.KeyEscape})
 	if harness.view.CapturesKeys() {
 		test.Error("esc should close the picker")
@@ -49,7 +49,7 @@ func TestFilePicker(test *testing.T) {
 
 	// Typed letters are filter text, not commands; backspace edits.
 	harness.press("f")
-	harness.typ("jl")
+	harness.typeText("jl")
 	if harness.view.focus != paneFiles {
 		test.Error("typing in the picker leaked into the view")
 	}
@@ -64,7 +64,7 @@ func TestFilePicker(test *testing.T) {
 func TestFilePickerNoMatchEnter(test *testing.T) {
 	harness := loaded(test, 100, 24)
 	harness.press("f")
-	harness.typ("zzzz")
+	harness.typeText("zzzz")
 	harness.send(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if !harness.view.CapturesKeys() {
 		test.Error("enter with no matches should keep the picker open")
@@ -105,7 +105,7 @@ func TestCapturerReleasesOnEsc(test *testing.T) {
 func TestPickerChoosesByPathAcrossRefresh(test *testing.T) {
 	harness := loaded(test, 100, 24)
 	harness.press("f")
-	harness.typ("legacy")
+	harness.typeText("legacy")
 	// A refresh lands while the picker is open, with a new file sorted first.
 	detail := testDetail()
 	detail.Files = append([]github.ChangedFile{{Path: "aaa/new.go", Additions: 1, Change: github.FileAdded}}, detail.Files...)

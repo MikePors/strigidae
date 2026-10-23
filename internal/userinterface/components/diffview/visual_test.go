@@ -136,7 +136,9 @@ func TestVisualRendering(test *testing.T) {
 }
 
 func TestRangeFor(test *testing.T) {
-	makeLine := func(k diff.LineKind, oldN, newN int) *diff.Line { return &diff.Line{Kind: k, Old: oldN, New: newN} }
+	makeLine := func(k diff.LineKind, oldNumber, newNumber int) *diff.Line {
+		return &diff.Line{Kind: k, Old: oldNumber, New: newNumber}
+	}
 	ctx, add, deleted := diff.Context, diff.Add, diff.Delete
 	tests := []struct {
 		name  string

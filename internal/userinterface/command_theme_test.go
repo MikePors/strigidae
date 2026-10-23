@@ -41,7 +41,7 @@ func TestCommandLineFollowsTheme(test *testing.T) {
 
 	model := newModel(newFake("v"))
 	model.Update(tea.BackgroundColorMsg{Color: color.White})
-	if !sameColour(model.cmdline.input.Styles().Focused.Text.GetForeground(), theme.New(false).Roles.Text) {
+	if !sameColour(model.commandLine.input.Styles().Focused.Text.GetForeground(), theme.New(false).Roles.Text) {
 		test.Error("a light background did not restyle the command line")
 	}
 }

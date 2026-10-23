@@ -9,7 +9,7 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
-func typ(model *Model, text string) {
+func typeText(model *Model, text string) {
 	for _, character := range text {
 		model.Update(tea.KeyPressMsg{Code: character, Text: string(character)})
 	}
@@ -20,7 +20,7 @@ func TestFilterAndChoose(test *testing.T) {
 	if model.Matches() != 3 {
 		test.Fatalf("matches = %d", model.Matches())
 	}
-	typ(model, "DGO") // case-insensitive subsequence
+	typeText(model, "DGO") // case-insensitive subsequence
 	if model.Matches() != 1 {
 		test.Fatalf("matches for %q = %d", model.Query(), model.Matches())
 	}
@@ -56,7 +56,7 @@ func TestRenderFitsAndHandlesNoRoom(test *testing.T) {
 	if got := model.Render(5, 3); got != "" {
 		test.Errorf("no room should render nothing, got %q", got)
 	}
-	typ(model, "zzz")
+	typeText(model, "zzz")
 	if ansi.Strip(model.Render(40, 10)) == out {
 		test.Error("filter should change the rendering")
 	}

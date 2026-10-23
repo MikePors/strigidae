@@ -76,11 +76,11 @@ func (model *Model) restore(position position) {
 	model.window.Restore(row, row-position.off, position.horizontalOffset)
 }
 
-func lineKey(oldNo, newNo int) int {
-	if newNo > 0 {
-		return newNo
+func lineKey(oldNumber, newNumber int) int {
+	if newNumber > 0 {
+		return newNumber
 	}
-	return oldNo
+	return oldNumber
 }
 
 func absolute(count int) int {

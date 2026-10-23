@@ -184,11 +184,11 @@ func TestInlineMultiLineComment(test *testing.T) {
 	if !inliner.view.CapturesKeys() {
 		test.Fatal("visual mode does not capture keys")
 	}
-	inliner.typ("jj")
+	inliner.typeText("jj")
 	if out := ansi.Strip(inliner.render()); strings.Count(out, markSelectedForTest) != 2 {
 		test.Errorf("want 2 selected rows marked plus the cursor row:\n%s", out)
 	}
-	inliner.typ("c")
+	inliner.typeText("c")
 	if inliner.view.CapturesKeys() {
 		test.Error("visual mode still active after c")
 	}
@@ -213,7 +213,7 @@ func TestVisualRefusesTwoSidesAndEscLeaves(test *testing.T) {
 	inliner.moveTo(diffview.SideLeft, 15)
 	inliner.press("V")
 	inliner.messages = nil
-	inliner.typ("j") // the next line is an added one
+	inliner.typeText("j") // the next line is an added one
 	if diff := cmp.Diff([]string{diffview.ErrMixesSides.Error()}, inliner.infoMessages()); diff != "" {
 		test.Errorf("info (-want +got):\n%s", diff)
 	}
@@ -648,7 +648,7 @@ func (inliner *inliner) retitle() {
 	inliner.client.SetPullRequest(detail)
 }
 
-func (inliner *inliner) threadIDs() (identifiers []string) {
+func (inliner *inliner) threadIdentifiers() (identifiers []string) {
 	for _, thread := range inliner.view.threads {
 		identifiers = append(identifiers, thread.Identifier)
 	}
@@ -668,7 +668,7 @@ func TestGoneOrCannotChangeIsRefusedAndRefreshed(test *testing.T) {
 				test.Fatal(err)
 			}
 		}, "that comment is gone", func(test *testing.T, inliner *inliner) {
-			if slices.Contains(inliner.threadIDs(), mineIdentifier) {
+			if slices.Contains(inliner.threadIdentifiers(), mineIdentifier) {
 				test.Error("the deleted comment's thread is still shown")
 			}
 		}},
@@ -913,7 +913,7 @@ func TestVisualModeEndsWhenTheFileGoes(test *testing.T) {
 		test.Errorf("visual mode survived onto the Overview: captures %v, active %v", inliner.view.CapturesKeys(), inliner.view.filePane.VisualActive())
 	}
 	inliner.openedOn = nil
-	inliner.typ("c")
+	inliner.typeText("c")
 	if len(inliner.openedOn) != 0 || len(inliner.client.AddedThreads()) != 0 {
 		test.Errorf("c after the file went opened %v, added %d", inliner.openedOn, len(inliner.client.AddedThreads()))
 	}
@@ -998,8 +998,8 @@ func TestMultiLineCommentOnTheOldSide(test *testing.T) {
 	inliner.body = "these two"
 	inliner.moveTo(diffview.SideLeft, 14)
 	inliner.press("V")
-	inliner.typ("j")
-	inliner.typ("c")
+	inliner.typeText("j")
+	inliner.typeText("c")
 	want := github.AddThreadInput{
 		Repository: testRepository, Number: 7, Path: clientPath, Line: 15, Side: github.SideLeft,
 		StartLine: 14, StartSide: github.SideLeft, Body: "these two",
@@ -1555,7 +1555,7 @@ func TestRefusedEditTextGoesToTheThreadOrTheLine(test *testing.T) {
 			}
 			if testCase.wantKey == lineKey {
 				// The thread is gone after the refresh; c on its line starts from the text.
-				if slices.Contains(inliner.threadIDs(), mineIdentifier) {
+				if slices.Contains(inliner.threadIdentifiers(), mineIdentifier) {
 					test.Fatal("the thread should be gone")
 				}
 				inliner.openedOn = nil
@@ -1766,13 +1766,13 @@ func TestInlineDraftKeyIncludesTheStartLine(test *testing.T) {
 	inliner.body = "for 14 to 16"
 	inliner.moveTo(diffview.SideRight, 14)
 	inliner.press("V")
-	inliner.typ("jj")
-	inliner.typ("c")
+	inliner.typeText("jj")
+	inliner.typeText("c")
 	inliner.openedOn = nil
 	inliner.moveTo(diffview.SideRight, 15) // 15 to 16 ends on the same line
 	inliner.press("V")
-	inliner.typ("j")
-	inliner.typ("c")
+	inliner.typeText("j")
+	inliner.typeText("c")
 	if diff := cmp.Diff([]string{""}, inliner.openedOn); diff != "" {
 		test.Errorf("the draft of 14-16 was offered for 15-16 (-want +got):\n%s", diff)
 	}

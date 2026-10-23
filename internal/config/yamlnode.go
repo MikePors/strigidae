@@ -134,7 +134,7 @@ func (parser *parser) mapping(node *yaml.Node, what string, each func(key string
 
 // str reads a non-empty scalar as trimmed text; numbers and booleans are
 // accepted as written.
-func (parser *parser) str(node *yaml.Node, what string) string {
+func (parser *parser) stringValue(node *yaml.Node, what string) string {
 	value := strings.TrimSpace(node.Value)
 	if node.Kind != yaml.ScalarNode || node.Tag == "!!null" || value == "" {
 		parser.fail(node, "%s must be a non-empty text value", what)
@@ -155,7 +155,7 @@ func (parser *parser) int(node *yaml.Node, what string, low, high int) int {
 
 // oneOf reads a text value that must be one of allowed.
 func (parser *parser) oneOf(node *yaml.Node, what string, allowed []string) string {
-	value := parser.str(node, what)
+	value := parser.stringValue(node, what)
 	if parser.err == nil && !slices.Contains(allowed, value) {
 		parser.fail(node, "%s %q is not one of: %s", what, value, strings.Join(allowed, ", "))
 	}

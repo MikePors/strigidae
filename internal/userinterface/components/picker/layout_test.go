@@ -18,7 +18,7 @@ func TestLongQueryAndPathsStayOnOneRow(test *testing.T) {
 	}
 	base := len(strings.Split(out, "\n"))
 
-	typ(model, strings.Repeat("i", 70))
+	typeText(model, strings.Repeat("i", 70))
 	lines := strings.Split(ansi.Strip(model.Render(40, 12)), "\n")
 	if len(lines) > base+1 { // +1: the "no matches" row replaces nothing else
 		test.Errorf("long query added rows: %d vs %d", len(lines), base)

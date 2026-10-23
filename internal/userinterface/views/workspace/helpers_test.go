@@ -155,7 +155,7 @@ func (harness *harness) press(sequences ...string) {
 }
 
 // typ sends raw key presses, as the root does while the view captures keys.
-func (harness *harness) typ(text string) {
+func (harness *harness) typeText(text string) {
 	harness.test.Helper()
 	for _, character := range text {
 		harness.send(tea.KeyPressMsg{Code: character, Text: string(character)})

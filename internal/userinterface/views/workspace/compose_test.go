@@ -265,9 +265,9 @@ func (composer *composer) drafts(data map[string]string) { composer.view.drafts 
 func TestReplyWithZeroOneAndSeveralThreads(test *testing.T) {
 	composer := newComposer(test)
 	two := []github.ReviewThread{
-		{Identifier: "a", Path: "internal/sync/client.go", Line: 14, DiffSide: github.SideRight, Comments: []github.ReviewComment{tc("bob", "one", time.Hour)}},
-		{Identifier: "b", Path: "internal/sync/client.go", Line: 14, DiffSide: github.SideRight, Comments: []github.ReviewComment{tc("eve", "two", time.Hour)}},
-		{Identifier: "c", Path: "internal/sync/client.go", Line: 12, DiffSide: github.SideRight, Comments: []github.ReviewComment{tc("dan", "three", time.Hour)}},
+		{Identifier: "a", Path: "internal/sync/client.go", Line: 14, DiffSide: github.SideRight, Comments: []github.ReviewComment{newComment("bob", "one", time.Hour)}},
+		{Identifier: "b", Path: "internal/sync/client.go", Line: 14, DiffSide: github.SideRight, Comments: []github.ReviewComment{newComment("eve", "two", time.Hour)}},
+		{Identifier: "c", Path: "internal/sync/client.go", Line: 12, DiffSide: github.SideRight, Comments: []github.ReviewComment{newComment("dan", "three", time.Hour)}},
 	}
 	composer.client.SetReviewThreads(testRepository, 7, two)
 	composer.run(composer.view.load())

@@ -54,10 +54,10 @@ type Model struct {
 	matcher            keys.Matcher
 	sequenceGeneration int
 
-	showHelp bool
-	confirm  *confirmPrompt // open yes/no question, or nil
-	cmdline  commandLine
-	status   struct {
+	showHelp    bool
+	confirm     *confirmPrompt // open yes/no question, or nil
+	commandLine commandLine
+	status      struct {
 		text       string
 		kind       statusKind
 		identifier int
@@ -88,7 +88,7 @@ func New(root View, theme theme.Theme, options Options) *Model {
 		tick:            options.Tick,
 		sequenceWait:    options.SequenceTimeout,
 		messageLifetime: options.MessageLifetime,
-		cmdline:         newCommandLine(theme),
+		commandLine:     newCommandLine(theme),
 		spin:            spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(theme.Spinner)),
 	}
 }
@@ -113,11 +113,11 @@ func (model *Model) update(message tea.Msg) tea.Cmd {
 	switch message := message.(type) {
 	case tea.WindowSizeMsg:
 		model.width, model.height = message.Width, message.Height
-		model.cmdline.input.SetWidth(max(1, message.Width-2)) // room for the prompt and cursor
+		model.commandLine.input.SetWidth(max(1, message.Width-2)) // room for the prompt and cursor
 		return model.broadcast(model.sizeMessage())
 	case tea.BackgroundColorMsg:
 		model.theme = theme.New(message.IsDark())
-		model.cmdline.setTheme(model.theme)
+		model.commandLine.setTheme(model.theme)
 		model.spin.Style = model.theme.Spinner
 		return model.broadcast(ThemeMessage{Theme: model.theme})
 	case tea.KeyPressMsg:
@@ -180,8 +180,8 @@ func (model *Model) broadcast(message tea.Msg) tea.Cmd {
 // broadcastOther sends a message the root does not consume to every view (and
 // to the command line, for cursor blink).
 func (model *Model) broadcastOther(message tea.Msg) tea.Cmd {
-	if model.cmdline.active {
-		return tea.Batch(model.cmdline.update(message), model.broadcast(message))
+	if model.commandLine.active {
+		return tea.Batch(model.commandLine.update(message), model.broadcast(message))
 	}
 	return model.broadcast(message)
 }
@@ -218,7 +218,7 @@ func (model *Model) pop() tea.Cmd {
 func (model *Model) resetKeys() {
 	model.showHelp = false
 	model.confirm = nil
-	model.cmdline.close()
+	model.commandLine.close()
 	model.matcher.Reset()
 	model.sequenceGeneration++
 }
@@ -261,8 +261,8 @@ func (model *Model) handleKey(message tea.KeyPressMsg) tea.Cmd {
 		model.confirm = nil
 		return confirmPrompt.answer(message)
 	}
-	if model.cmdline.active {
-		line, ok, command := model.cmdline.handleKey(message)
+	if model.commandLine.active {
+		line, ok, command := model.commandLine.handleKey(message)
 		if ok {
 			return parseCommand(line, model.top())
 		}
@@ -312,7 +312,7 @@ func (model *Model) dispatch(sequence string) tea.Cmd {
 		model.showHelp = true
 		return nil
 	case key.Matches(keyMessage, model.keys.Command):
-		return model.cmdline.open()
+		return model.commandLine.open()
 	}
 	return model.forward(keyMessage)
 }
@@ -378,8 +378,8 @@ func (model *Model) bottomRow() string {
 	if model.confirm != nil {
 		return model.theme.StatusInfo.Width(model.width).MaxWidth(model.width).MaxHeight(1).Render(model.confirm.render(model.width))
 	}
-	if model.cmdline.active {
-		return model.theme.StatusCommand.Width(model.width).MaxWidth(model.width).MaxHeight(1).Render(model.cmdline.input.View())
+	if model.commandLine.active {
+		return model.theme.StatusCommand.Width(model.width).MaxWidth(model.width).MaxHeight(1).Render(model.commandLine.input.View())
 	}
 	return model.bar().render(model.theme, model.width)
 }

@@ -85,7 +85,7 @@ func TestParserOneOf(test *testing.T) {
 func TestUniqueList(test *testing.T) {
 	read := func(parser *parser) func(*yaml.Node) (string, string) {
 		return func(node *yaml.Node) (string, string) {
-			text := parser.str(node, "item")
+			text := parser.stringValue(node, "item")
 			return "<" + text + ">", text
 		}
 	}

@@ -143,12 +143,12 @@ func TestCommandLine(test *testing.T) {
 		view := newFake("v")
 		model := newModel(view)
 		press(model, ":")
-		if !model.cmdline.active {
+		if !model.commandLine.active {
 			test.Fatal(": should open the command line")
 		}
 		press(model, "j")
-		if len(view.keyMessages()) != 0 || model.cmdline.input.Value() != "j" {
-			test.Errorf("keys leaked to view or were not captured; value = %q", model.cmdline.input.Value())
+		if len(view.keyMessages()) != 0 || model.commandLine.input.Value() != "j" {
+			test.Errorf("keys leaked to view or were not captured; value = %q", model.commandLine.input.Value())
 		}
 	})
 	test.Run(":q on root quits", func(test *testing.T) {
@@ -189,7 +189,7 @@ func TestCommandLine(test *testing.T) {
 		press(model, ":")
 		press(model, "q")
 		press(model, "esc")
-		if model.cmdline.active || len(model.stack) != 1 {
+		if model.commandLine.active || len(model.stack) != 1 {
 			test.Error("esc should cancel the command line without running it")
 		}
 	})
@@ -198,11 +198,11 @@ func TestCommandLine(test *testing.T) {
 		press(model, ":")
 		press(model, "q")
 		model.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
-		if !model.cmdline.active || model.cmdline.input.Value() != "" {
+		if !model.commandLine.active || model.commandLine.input.Value() != "" {
 			test.Fatal("first backspace should delete the character")
 		}
 		model.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
-		if model.cmdline.active {
+		if model.commandLine.active {
 			test.Error("backspace on an empty line should cancel")
 		}
 	})
@@ -219,7 +219,7 @@ func TestCommandLine(test *testing.T) {
 		model := newModel(newFake("root"))
 		press(model, "tab")
 		press(model, "ctrl+o")
-		if model.cmdline.active || model.showHelp || len(model.stack) != 1 {
+		if model.commandLine.active || model.showHelp || len(model.stack) != 1 {
 			test.Error("reserved keys must not navigate")
 		}
 	})
@@ -273,7 +273,7 @@ func TestCapturersReleaseOnEsc(test *testing.T) {
 			model := newModel(newFake("v"))
 			press(model, ":")
 			press(model, "x")
-			return model, model.cmdline.CapturesKeys
+			return model, model.commandLine.CapturesKeys
 		}},
 		{"confirm prompt", func() (*Model, func() bool) {
 			model := newModel(newFake("v"))
@@ -398,7 +398,7 @@ func TestKeyCapture(test *testing.T) {
 	model := newModel(view)
 	press(model, ":")
 	press(model, "?")
-	if model.cmdline.active || model.showHelp {
+	if model.commandLine.active || model.showHelp {
 		test.Error("captured keys must not open the command line or help")
 	}
 	if len(view.got) != 3 { // size + : + ?

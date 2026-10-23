@@ -47,8 +47,8 @@ type parser struct {
 	inBody       bool // inside a hunk body: line counts not yet exhausted
 	oldRemaining int
 	newRemaining int
-	oldNo        int
-	newNo        int
+	oldNumber    int
+	newNumber    int
 	err          error
 	sawText      bool
 }
@@ -108,23 +108,23 @@ func (parser *parser) bodyLine(line string) bool {
 		}
 		parser.oldRemaining--
 		parser.newRemaining--
-		parser.addLine(Line{Kind: Context, Old: parser.oldNo, New: parser.newNo, Text: content(line)})
-		parser.oldNo++
-		parser.newNo++
+		parser.addLine(Line{Kind: Context, Old: parser.oldNumber, New: parser.newNumber, Text: content(line)})
+		parser.oldNumber++
+		parser.newNumber++
 	case line[0] == '+':
 		if parser.newRemaining == 0 {
 			return false
 		}
 		parser.newRemaining--
-		parser.addLine(Line{Kind: Add, New: parser.newNo, Text: content(line)})
-		parser.newNo++
+		parser.addLine(Line{Kind: Add, New: parser.newNumber, Text: content(line)})
+		parser.newNumber++
 	case line[0] == '-':
 		if parser.oldRemaining == 0 {
 			return false
 		}
 		parser.oldRemaining--
-		parser.addLine(Line{Kind: Delete, Old: parser.oldNo, Text: content(line)})
-		parser.oldNo++
+		parser.addLine(Line{Kind: Delete, Old: parser.oldNumber, Text: content(line)})
+		parser.oldNumber++
 	default:
 		return false
 	}
@@ -157,7 +157,7 @@ func (parser *parser) startHunk(count int, messages []string) bool {
 	})
 	parser.hasHunk = true
 	parser.oldRemaining, parser.newRemaining = values[1], values[3]
-	parser.oldNo, parser.newNo = values[0], values[2]
+	parser.oldNumber, parser.newNumber = values[0], values[2]
 	parser.inBody = parser.oldRemaining > 0 || parser.newRemaining > 0
 	return true
 }

@@ -53,7 +53,7 @@ func TestGolden(test *testing.T) {
 	test.Run("picker", func(test *testing.T) {
 		harness := loaded(test, 100, 24)
 		harness.press("f")
-		harness.typ("retry")
+		harness.typeText("retry")
 		golden.Assert(test, "picker", harness.render(), false)
 	})
 	test.Run("narrow_files", func(test *testing.T) {

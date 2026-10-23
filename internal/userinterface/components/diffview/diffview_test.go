@@ -300,24 +300,24 @@ func TestGolden(test *testing.T) {
 // bigFile builds a single-hunk file of n context/add/delete lines.
 func bigFile(count int) *diff.File {
 	hunk := diff.Hunk{OldStart: 1, NewStart: 1}
-	oldNo, newNo := 1, 1
+	oldNumber, newNumber := 1, 1
 	for i := range count {
 		var line diff.Line
 		switch i % 5 {
 		case 3:
-			line = diff.Line{Kind: diff.Delete, Old: oldNo, Text: fmt.Sprintf("\tx := %d // old", i)}
-			oldNo++
+			line = diff.Line{Kind: diff.Delete, Old: oldNumber, Text: fmt.Sprintf("\tx := %d // old", i)}
+			oldNumber++
 		case 4:
-			line = diff.Line{Kind: diff.Add, New: newNo, Text: fmt.Sprintf("\tx := %d // new", i)}
-			newNo++
+			line = diff.Line{Kind: diff.Add, New: newNumber, Text: fmt.Sprintf("\tx := %d // new", i)}
+			newNumber++
 		default:
-			line = diff.Line{Kind: diff.Context, Old: oldNo, New: newNo, Text: fmt.Sprintf("func f%d() int { return %d }", i, i)}
-			oldNo++
-			newNo++
+			line = diff.Line{Kind: diff.Context, Old: oldNumber, New: newNumber, Text: fmt.Sprintf("func f%d() int { return %d }", i, i)}
+			oldNumber++
+			newNumber++
 		}
 		hunk.Lines = append(hunk.Lines, line)
 	}
-	hunk.OldLines, hunk.NewLines = oldNo-1, newNo-1
+	hunk.OldLines, hunk.NewLines = oldNumber-1, newNumber-1
 	return &diff.File{OldPath: "big.go", NewPath: "big.go", Hunks: []diff.Hunk{hunk}}
 }
 
