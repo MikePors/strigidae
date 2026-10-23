@@ -17,6 +17,9 @@ var (
 	// ErrCommentRejected means GitHub did not create a review comment, as it
 	// answers for a position that is not part of the diff.
 	ErrCommentRejected = errors.New("comment not created")
+	// ErrOwnPullRequest means GitHub refused an approval or a request for
+	// changes because the viewer authored the pull request.
+	ErrOwnPullRequest = errors.New("cannot approve or request changes on your own pull request")
 	// ErrDiffTooLarge means GitHub refuses to produce the diff over the API
 	// because the pull request exceeds its file or line limits.
 	ErrDiffTooLarge = errors.New("diff too large for the GitHub API")

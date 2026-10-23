@@ -104,10 +104,11 @@ type graphqlReview struct {
 
 type graphqlPullRequestDetail struct {
 	graphqlPullRequest
-	Body      string
-	Additions int
-	Deletions int
-	Labels    struct {
+	ViewerDidAuthor bool
+	Body            string
+	Additions       int
+	Deletions       int
+	Labels          struct {
 		Nodes []struct{ Name, Color string }
 	}
 
@@ -240,10 +241,11 @@ func mapDetail(node graphqlPullRequestDetail, files []graphqlFile, comments []gr
 		return github.PullRequestDetail{}, err
 	}
 	detail := github.PullRequestDetail{
-		PullRequest: pullRequest,
-		Body:        node.Body,
-		Additions:   node.Additions,
-		Deletions:   node.Deletions,
+		PullRequest:     pullRequest,
+		ViewerDidAuthor: node.ViewerDidAuthor,
+		Body:            node.Body,
+		Additions:       node.Additions,
+		Deletions:       node.Deletions,
 	}
 	for _, label := range node.Labels.Nodes {
 		detail.Labels = append(detail.Labels, github.Label{Name: label.Name, Color: label.Color})
