@@ -32,7 +32,7 @@ Point Claude at the issue, for example:
 
 Claude loads `CLAUDE.md` automatically, and the area guides when it reads files in those directories. Things worth checking in what it produces:
 
-- **It stays read-only against GitHub.** Agents never post comments, reviews or reactions, and never merge or edit other people's PRs. Features that write to GitHub are tested against `internal/github/fake`, and the maintainer verifies them live.
+- **It writes to GitHub only on its own PR**: pushing its branch, opening the PR, editing that PR's body, and replying to and resolving review threads on it. It never comments on, reviews or reacts to anything else, never merges, and never posts reviews (you run `/review-pr <N> post` yourself). strig's own write features are tested against `internal/github/fake`, and the maintainer verifies them live.
 - **Names are spelled out in full English** (the Naming section of CLAUDE.md). This is the most common thing review catches.
 - **It builds the simplest version** and lists extras under Follow-ups.
 
@@ -40,6 +40,13 @@ Claude loads `CLAUDE.md` automatically, and the area guides when it reads files 
 
 - Branch `<type>/<issue>-<slug>`, Conventional Commits, and the PR template; details are in CLAUDE.md's Workflow section.
 - Run `make check` before every push.
+- Open the PR from your branch, with the body in a temp file that starts with `Closes #<issue>`:
+
+  ```sh
+  git push -u origin <branch>
+  body=$(mktemp)    # fill it in from .github/pull_request_template.md
+  gh pr create --base main --title "<type>(<scope>): <summary>" --body-file "$body"
+  ```
 - Visible UI changes need a screenshot: see [docs/screenshots.md](docs/screenshots.md).
 - **Review:** run `/review-pr <number>` in Claude Code for an independent review. It reports in your terminal. `/review-pr <number> post` puts the same findings on the PR as one comment-only review. Fix findings in new commits, reply in each thread with the fixing commit, and resolve it.
 - The maintainer merges, with merge commits. Never merge, push to `main`, or force-push a branch you didn't create.

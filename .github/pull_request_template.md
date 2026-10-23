@@ -10,7 +10,7 @@ Closes #
 <!-- What the tests cover, and anything the maintainer should check live on GitHub. -->
 
 ## Screenshot / recording
-<!-- For visible UI changes: a screenshot or asciinema/vhs recording. Delete if not applicable. -->
+<!-- For visible UI changes: screenshots per docs/screenshots.md. Delete if not applicable. -->
 
 ## New keybindings
 <!-- Key, view, action, or "none". These need maintainer approval. -->

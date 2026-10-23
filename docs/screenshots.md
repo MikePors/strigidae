@@ -4,22 +4,22 @@ PRs that change what's on screen include PNG screenshots. Render them from `inte
 
 ## Rendering
 
-1. **A throwaway program.** In your checkout, create an *untracked* program, for example `cmd/zz-shot/main.go`. It must be `package main` so it can import internal packages.
+1. **A throwaway program.** Create an *untracked* program inside the module, for example `cmd/zz-shot/main.go`, so it can import `internal/…`. Delete it before running `make check` or committing.
    - It builds your view or component with fake data.
    - It sends the messages a real run would: `tea.WindowSizeMsg`, and the load results (run the returned `tea.Cmd`s synchronously).
    - It writes the styled output of `Render(width, height)` to `<name>.ansi`.
 
-   Use `theme.Default()`, the fixed Glamour style the tests use, and a fixed clock.
+   Use `theme.Default()`, the same fixed Markdown style the tests use (see the tests in `internal/userinterface/components/markdown`), and a fixed clock.
    - Don't strip ANSI codes: Lip Gloss v2 emits full colour whatever the output.
    - Use fictional people and data, such as `octo-dev`, `rivka` and `sam-k`, with realistic PR titles. Never use real people.
-2. **Convert** each file with [freeze](https://github.com/charmbracelet/freeze):
+2. **Convert** each file with [freeze](https://github.com/charmbracelet/freeze) into a folder outside the checkout (`shots=$(mktemp -d)`):
 
    ```sh
-   go run github.com/charmbracelet/freeze@v0.2.2 <name>.ansi --language ansi --window --padding 20 --font.size 14 -o shots/<name>.png
+   go run github.com/charmbracelet/freeze@v0.2.2 <name>.ansi --language ansi --window --padding 20 --font.size 14 -o "$shots/<name>.png"
    ```
 
-   The frame must be at least as wide as the render width, or lines wrap. Look at every PNG before using it.
-3. **Clean up.** Delete the throwaway program and the `.ansi` files, so that `git status` shows nothing but your untracked `shots/` folder. Never commit screenshots to your branch.
+   If lines wrap in the image, raise freeze's `--width` until the frame is at least as wide as the render. Look at every PNG before using it.
+3. **Clean up.** Delete the throwaway program and the `.ansi` files; `git status` must be clean. Never commit screenshots to your branch.
 
 ## Publishing
 
@@ -28,10 +28,10 @@ Screenshots live on the orphan `screenshots` branch, one folder per PR, and the 
 ```sh
 git fetch origin screenshots
 git worktree add --detach ../strig-shots origin/screenshots
-mkdir -p ../strig-shots/pr-<N> && cp shots/*.png ../strig-shots/pr-<N>/
+mkdir -p ../strig-shots/pr-<N> && cp "$shots"/*.png ../strig-shots/pr-<N>/
 git -C ../strig-shots add pr-<N>
 git -C ../strig-shots commit -m "screenshots for #<N>"
-git -C ../strig-shots push origin HEAD:screenshots
+git -C ../strig-shots push origin HEAD:screenshots   # if rejected: git -C ../strig-shots pull --rebase origin screenshots, then push again
 sha=$(git -C ../strig-shots rev-parse HEAD)
 git worktree remove ../strig-shots
 ```

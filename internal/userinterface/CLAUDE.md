@@ -24,11 +24,11 @@ Rules for the app shell, components and views. The root `CLAUDE.md` still applie
 
 The maintainer's rules for when strig asks before acting:
 
-- Anything that publishes or changes what other people see (submitting a review, merging, editing a published comment) asks `y/N`, and is started by a command (`:approve`, `:merge`) rather than a lone key. A key is acceptable only when it still ends in `y/N`.
+- Anything that publishes or changes what other people see (submitting a review, merging, editing a published comment) always asks `y/N`, and always has a command (`:approve`, `:merge`). A key may also start it, but the `y/N` still follows; no single keypress ever publishes.
 - Private drafts (pending review comments, the Files "viewed" mark) are added and edited without `y/N`.
 - **Every deletion asks `y/N`**, draft or published.
 - Cancelling happens only at the `y/N`. An empty body is an error, not a cancel, and nothing is written.
-- Keys backed by a command are welcome (`e` / `D` and `:edit-comment` / `:delete-comment`).
+- Keys with a command behind them are welcome (`e` / `D` and `:edit-comment` / `:delete-comment`).
 - Re-read the state before asking and again after `y`; if it changed, ask again or refuse and refresh. Never write on a stale yes.
 
 ## Keybindings
