@@ -16,14 +16,19 @@ type application struct {
 	client     github.Client
 	repository github.Repository
 	theme      theme.Theme
-	// config holds the tabs and sections the dashboard (#12) will show.
+	// dashboard is set when strig runs outside a checkout without -R: there is
+	// no repository to list, so the first view is the dashboard of config.
+	dashboard bool
+	// config holds the tabs and sections the dashboard shows.
 	config config.Config
 }
 
 // newApplication resolves the repository to show and a client for its host.
 func newApplication(repositoryFlag string, configuration config.Config, dependencies dependencies) (application, error) {
 	target, err := resolveTarget(repositoryFlag, dependencies)
-	if err != nil {
+	// Outside a checkout there is no host either: the client uses the gh default.
+	dashboard := repositoryFlag == "" && errors.Is(err, gitrepository.ErrNotCheckout)
+	if err != nil && !dashboard {
 		return application{}, err
 	}
 	client, err := dependencies.newClient(target.Host)
@@ -33,11 +38,12 @@ func newApplication(repositoryFlag string, configuration config.Config, dependen
 	if err != nil {
 		return application{}, err
 	}
-	return application{client: client, repository: target.Repository, theme: theme.Default(), config: configuration}, nil
+	return application{client: client, repository: target.Repository, theme: theme.Default(), dashboard: dashboard, config: configuration}, nil
 }
 
 // resolveTarget decides which repository to show: -R if given, else the
-// current checkout's remote.
+// current checkout's remote. Outside a checkout it fails with
+// gitrepository.ErrNotCheckout.
 func resolveTarget(repositoryFlag string, dependencies dependencies) (gitrepository.Remote, error) {
 	if repositoryFlag != "" {
 		repository, err := github.ParseRepository(repositoryFlag)

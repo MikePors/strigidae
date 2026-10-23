@@ -10,6 +10,7 @@ import (
 
 	"github.com/MikePors/strigidae/internal/logging"
 	"github.com/MikePors/strigidae/internal/userinterface"
+	"github.com/MikePors/strigidae/internal/userinterface/views/dashboard"
 	"github.com/MikePors/strigidae/internal/userinterface/views/pullrequestlist"
 	"github.com/MikePors/strigidae/internal/version"
 )
@@ -27,13 +28,22 @@ func runTerminalInterface(application application, stderr io.Writer) error {
 	silenceBrowser()
 	logger.Info("starting", "version", version.String(), "repo", application.repository.String())
 
-	model := userinterface.New(pullrequestlist.New(application.client, application.repository, application.theme, pullrequestlist.Options{}), application.theme, userinterface.Options{Logger: logger})
+	model := userinterface.New(firstView(application), application.theme, userinterface.Options{Logger: logger})
 	if _, err := tea.NewProgram(model).Run(); err != nil {
 		logger.Error("program failed", "err", err)
 		return fmt.Errorf("run: %w", err)
 	}
 	logger.Info("exiting")
 	return nil
+}
+
+// firstView is the dashboard outside a checkout, else the repository's pull
+// request list.
+func firstView(application application) userinterface.View {
+	if application.dashboard {
+		return dashboard.New(application.client, application.config.Tabs, application.theme, dashboard.Options{})
+	}
+	return pullrequestlist.New(application.client, application.repository, application.theme, pullrequestlist.Options{})
 }
 
 // silenceBrowser stops browser launchers writing to the terminal the TUI owns.
