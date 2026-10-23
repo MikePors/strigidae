@@ -20,6 +20,7 @@ const (
 	minimumTitleColumns = 12
 	maximumAuthor       = 16
 	maximumRepository   = 24
+	minimumRepository   = 10 // narrowest the repository column shrinks to before it is dropped
 	ageColumns          = 4
 	reviewColumns       = 2
 	checksColumns       = 2
@@ -56,7 +57,7 @@ func (table Table) Layout(pullRequests []github.PullRequest, width int) Layout {
 	layout := Layout{age: ageColumns, checks: checksColumns, review: reviewColumns, comments: commentColumns, number: len("#")}
 	for _, pullRequest := range pullRequests {
 		layout.number = max(layout.number, len(fmt.Sprintf("#%d", pullRequest.Number)))
-		layout.author = min(maximumAuthor, max(layout.author, ansi.StringWidth(pullRequest.Author)))
+		layout.author = min(maximumAuthor, max(layout.author, ansi.StringWidth(terminaltext.Clean(pullRequest.Author))))
 		if table.repository {
 			layout.repository = min(maximumRepository, max(layout.repository, ansi.StringWidth(terminaltext.Clean(pullRequest.Repository.String()))))
 		}
@@ -73,8 +74,43 @@ func (table Table) Layout(pullRequests []github.PullRequest, width int) Layout {
 		}
 		*drop = 0
 	}
+	if table.repository {
+		table.narrowRepository(&layout, width, fits)
+	}
 	layout.title = max(1, width-layout.fixed())
 	return layout
+}
+
+// narrowRepository makes room for the title in a list that spans repositories:
+// shrink the repository column to a floor, then drop it, then drop the age.
+// The title takes whatever is left.
+func (table Table) narrowRepository(layout *Layout, width int, fits func() bool) {
+	if fits() {
+		return
+	}
+	excess := layout.fixed() - (width - minimumTitleColumns)
+	layout.repository = max(layout.repository-excess, min(layout.repository, minimumRepository))
+	if fits() {
+		return
+	}
+	layout.repository = 0
+	if !fits() {
+		layout.age = 0
+	}
+}
+
+// shortRepository fits owner/name into width columns, giving up the owner
+// before the name: "…/widgets" rather than "acme/wi…". text must be clean.
+func shortRepository(text string, width int) string {
+	if ansi.StringWidth(text) <= width {
+		return text
+	}
+	if slash := strings.LastIndex(text, "/"); slash >= 0 {
+		if short := "…" + text[slash:]; ansi.StringWidth(short) <= width {
+			return short
+		}
+	}
+	return ansi.Truncate(text, width, "…")
 }
 
 // fixed is the width of every column but the title, including the gaps.
@@ -127,7 +163,7 @@ func (table Table) Row(layout Layout, pullRequest github.PullRequest, selected b
 	}
 	title = ansi.Truncate(title, layout.title, "…")
 	author := ansi.Truncate(terminaltext.Clean(pullRequest.Author), layout.author, "…")
-	repository := ansi.Truncate(terminaltext.Clean(pullRequest.Repository.String()), layout.repository, "…")
+	repository := shortRepository(terminaltext.Clean(pullRequest.Repository.String()), layout.repository)
 	number := fmt.Sprintf("#%d", pullRequest.Number)
 	age := relativeAge(table.now(), pullRequest.UpdatedAt)
 	checksMark, checksStyle := table.checksMark(pullRequest.Checks)
@@ -146,13 +182,15 @@ func (table Table) Row(layout Layout, pullRequest github.PullRequest, selected b
 	// Style after padding so the escape codes don't skew the widths.
 	var out []string
 	if layout.repository > 0 {
-		out = append(out, styles.Author.Render(pad(repository, layout.repository)))
+		out = append(out, styles.Repository.Render(pad(repository, layout.repository)))
 	}
 	out = append(out, styles.Number.Render(padLeft(number, layout.number)), styledTitle+strings.Repeat(" ", max(0, layout.title-ansi.StringWidth(title))))
 	if layout.author > 0 {
 		out = append(out, styles.Author.Render(pad(author, layout.author)))
 	}
-	out = append(out, styles.Age.Render(padLeft(age, layout.age)))
+	if layout.age > 0 {
+		out = append(out, styles.Age.Render(padLeft(age, layout.age)))
+	}
 	if layout.checks > 0 {
 		out = append(out, checksStyle.Render(pad(checksMark, layout.checks)))
 	}

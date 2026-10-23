@@ -13,7 +13,7 @@ import (
 	"github.com/MikePors/strigidae/internal/github"
 )
 
-// pad right-pads s with spaces to width w (display columns).
+// pad right-pads text with spaces to width columns (display columns).
 func pad(text string, width int) string {
 	if count := width - ansi.StringWidth(text); count > 0 {
 		return text + strings.Repeat(" ", count)
@@ -21,7 +21,7 @@ func pad(text string, width int) string {
 	return text
 }
 
-// padLeft left-pads s with spaces to width w (display columns).
+// padLeft left-pads text with spaces to width columns (display columns).
 func padLeft(text string, width int) string {
 	if count := width - ansi.StringWidth(text); count > 0 {
 		return strings.Repeat(" ", count) + text
