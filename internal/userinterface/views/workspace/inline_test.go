@@ -34,7 +34,7 @@ func newInliner(test *testing.T) *inliner {
 	return &inliner{composer}
 }
 
-// dv is the diff component behind the right pane.
+// diffView is the diff component behind the right pane.
 func (inliner *inliner) diffView() *diffview.Model { return inliner.view.filePane.(*diffPane).diffView }
 
 // cursorTo moves the diff cursor, from the top, to the first row where found
@@ -437,14 +437,14 @@ func TestDeletePendingComment(test *testing.T) {
 	thread := inliner.addPending("oops")
 	inliner.messages = nil
 	inliner.press("D")
-	configuration, ok := inliner.lastConfirm()
-	if !ok || configuration.Text != "Delete pending comment on "+clientPath+":10?" {
-		test.Fatalf("confirmation = %q (%v)", configuration.Text, ok)
+	confirmation, ok := inliner.lastConfirm()
+	if !ok || confirmation.Text != "Delete pending comment on "+clientPath+":10?" {
+		test.Fatalf("confirmation = %q (%v)", confirmation.Text, ok)
 	}
 	if len(inliner.client.DeletedComments()) != 0 {
 		test.Fatal("deleted before the answer")
 	}
-	inliner.run(configuration.OnYes)
+	inliner.run(confirmation.OnYes)
 	if diff := cmp.Diff([]string{thread.Comments[0].Identifier}, inliner.client.DeletedComments()); diff != "" {
 		test.Errorf("deleted (-want +got):\n%s", diff)
 	}
@@ -464,8 +464,8 @@ func TestDeletePendingFailureIsReported(test *testing.T) {
 	inliner.client.SetError(fake.MethodDeleteReviewComment, errors.New("boom"))
 	inliner.messages = nil
 	inliner.press("D")
-	configuration, _ := inliner.lastConfirm()
-	inliner.run(configuration.OnYes)
+	confirmation, _ := inliner.lastConfirm()
+	inliner.run(confirmation.OnYes)
 	if !strings.Contains(inliner.lastError(), "boom") {
 		test.Errorf("error = %q", inliner.lastError())
 	}
@@ -553,14 +553,14 @@ func TestEditPublishedCommentAsksAfterTheEditor(test *testing.T) {
 	if diff := cmp.Diff([]string{"published note"}, inliner.openedOn); diff != "" {
 		test.Errorf("editor opened on (-want +got):\n%s", diff)
 	}
-	configuration, ok := inliner.lastConfirm()
-	if !ok || configuration.Text != "Update your published comment on #7 "+clientPath+":10?" {
-		test.Fatalf("confirmation = %q (%v)", configuration.Text, ok)
+	confirmation, ok := inliner.lastConfirm()
+	if !ok || confirmation.Text != "Update your published comment on #7 "+clientPath+":10?" {
+		test.Fatalf("confirmation = %q (%v)", confirmation.Text, ok)
 	}
 	if len(inliner.updates()) != 0 {
 		test.Fatal("updated before the answer")
 	}
-	inliner.run(configuration.OnYes)
+	inliner.run(confirmation.OnYes)
 	if got := inliner.serverBody("c-mine"); got != "published, revised" {
 		test.Errorf("body = %q", got)
 	}
@@ -575,14 +575,14 @@ func TestDeletePublishedCommentAsks(test *testing.T) {
 	inliner.toThread(mineIdentifier)
 	inliner.messages = nil
 	inliner.press("D")
-	configuration, ok := inliner.lastConfirm()
-	if !ok || configuration.Text != "Delete your published comment on #7 "+clientPath+":10?" {
-		test.Fatalf("confirmation = %q (%v)", configuration.Text, ok)
+	confirmation, ok := inliner.lastConfirm()
+	if !ok || confirmation.Text != "Delete your published comment on #7 "+clientPath+":10?" {
+		test.Fatalf("confirmation = %q (%v)", confirmation.Text, ok)
 	}
 	if len(inliner.deletes()) != 0 {
 		test.Fatal("deleted before the answer")
 	}
-	inliner.run(configuration.OnYes)
+	inliner.run(confirmation.OnYes)
 	if diff := cmp.Diff([]string{"c-mine"}, inliner.client.DeletedComments()); diff != "" {
 		test.Errorf("deleted (-want +got):\n%s", diff)
 	}
@@ -619,11 +619,11 @@ func TestPendingTurnedPublishedWhileTheEditorIsOpen(test *testing.T) {
 	if len(inliner.updates()) != 0 {
 		test.Fatal("a published comment was updated without asking")
 	}
-	configuration, ok := inliner.lastConfirm()
-	if !ok || configuration.Text != "Update your published comment on #7 "+clientPath+":10?" {
-		test.Fatalf("confirmation = %q (%v)", configuration.Text, ok)
+	confirmation, ok := inliner.lastConfirm()
+	if !ok || confirmation.Text != "Update your published comment on #7 "+clientPath+":10?" {
+		test.Fatalf("confirmation = %q (%v)", confirmation.Text, ok)
 	}
-	inliner.run(configuration.OnYes)
+	inliner.run(confirmation.OnYes)
 	if got := inliner.serverBody(identifier); got != "rewritten" {
 		test.Errorf("body = %q", got)
 	}
@@ -635,8 +635,8 @@ func TestPendingTurnedPublishedBeforeDeleteAsksTheRightQuestion(test *testing.T)
 	inliner.submitElsewhere() // the view still shows it as pending
 	inliner.messages = nil
 	inliner.press("D")
-	if configuration, ok := inliner.lastConfirm(); !ok || !strings.HasPrefix(configuration.Text, "Delete your published comment on #7 ") {
-		test.Errorf("confirmation = %q (%v)", configuration.Text, ok)
+	if confirmation, ok := inliner.lastConfirm(); !ok || !strings.HasPrefix(confirmation.Text, "Delete your published comment on #7 ") {
+		test.Errorf("confirmation = %q (%v)", confirmation.Text, ok)
 	}
 }
 
@@ -738,7 +738,7 @@ func TestDeleteRechecksAfterTheAnswer(test *testing.T) {
 	inliner.retitle()
 	inliner.messages = nil
 	inliner.press("D")
-	configuration, ok := inliner.lastConfirm()
+	confirmation, ok := inliner.lastConfirm()
 	if !ok {
 		test.Fatal("no confirmation")
 	}
@@ -747,7 +747,7 @@ func TestDeleteRechecksAfterTheAnswer(test *testing.T) {
 		test.Fatal(err)
 	}
 	before := len(inliner.deletes())
-	inliner.run(configuration.OnYes)
+	inliner.run(confirmation.OnYes)
 	if len(inliner.deletes()) != before {
 		test.Error("delete sent for a comment that is gone")
 	}
@@ -818,11 +818,11 @@ func TestRefusedEditKeepsTheText(test *testing.T) {
 		// The re-read finds the comment; the write finds it gone.
 		inliner.client.SetError(fake.MethodUpdateReviewComment, github.ErrNotFound)
 		inliner.press("e")
-		configuration, ok := inliner.lastConfirm() // a published comment asks first
+		confirmation, ok := inliner.lastConfirm() // a published comment asks first
 		if !ok {
 			test.Fatal("no confirmation")
 		}
-		inliner.run(configuration.OnYes)
+		inliner.run(confirmation.OnYes)
 		if !strings.Contains(inliner.lastError(), "your text is kept as a reply draft") {
 			test.Errorf("error = %q", inliner.lastError())
 		}
@@ -857,12 +857,12 @@ func TestRefusedEditKeepsTheText(test *testing.T) {
 		inliner := setup(test)
 		rewrite(inliner, nil)
 		inliner.press("e")
-		configuration, ok := inliner.lastConfirm()
+		confirmation, ok := inliner.lastConfirm()
 		if !ok {
 			test.Fatal("no confirmation")
 		}
 		deleteMine(inliner)()
-		inliner.run(configuration.OnYes)
+		inliner.run(confirmation.OnYes)
 		if diff := cmp.Diff(map[string]string{replyKey: "my rewrite"}, inliner.view.drafts); diff != "" {
 			test.Errorf("drafts (-want +got):\n%s", diff)
 		}
@@ -1082,8 +1082,8 @@ func TestCommandsBehaveLikeTheKeys(test *testing.T) {
 		inliner.toThread(mineIdentifier)
 		inliner.messages, inliner.body = nil, "revised"
 		inliner.command("edit-comment")
-		if configuration, ok := inliner.lastConfirm(); !ok || !strings.HasPrefix(configuration.Text, "Update your published comment") {
-			test.Errorf("confirmation = %q (%v)", configuration.Text, ok)
+		if confirmation, ok := inliner.lastConfirm(); !ok || !strings.HasPrefix(confirmation.Text, "Update your published comment") {
+			test.Errorf("confirmation = %q (%v)", confirmation.Text, ok)
 		}
 	})
 	test.Run("delete", func(test *testing.T) {
@@ -1091,8 +1091,8 @@ func TestCommandsBehaveLikeTheKeys(test *testing.T) {
 		inliner.addPending("x")
 		inliner.messages = nil
 		inliner.command("delete-comment")
-		if configuration, ok := inliner.lastConfirm(); !ok || !strings.HasPrefix(configuration.Text, "Delete pending comment on ") {
-			test.Errorf("confirmation = %q (%v)", configuration.Text, ok)
+		if confirmation, ok := inliner.lastConfirm(); !ok || !strings.HasPrefix(confirmation.Text, "Delete pending comment on ") {
+			test.Errorf("confirmation = %q (%v)", confirmation.Text, ok)
 		}
 	})
 	test.Run("in the overview", func(test *testing.T) {
@@ -1158,11 +1158,11 @@ func TestOtherPeoplesCommentsAreNeverTargeted(test *testing.T) {
 		inliner.toThread(mineIdentifier)
 		inliner.messages = nil
 		inliner.press("D")
-		configuration, ok := inliner.lastConfirm()
+		confirmation, ok := inliner.lastConfirm()
 		if !ok {
 			test.Fatal("no confirmation")
 		}
-		inliner.run(configuration.OnYes)
+		inliner.run(confirmation.OnYes)
 		if diff := cmp.Diff([]string{"c-mine"}, inliner.client.DeletedComments()); diff != "" {
 			test.Errorf("deleted (-want +got):\n%s", diff)
 		}
@@ -1208,13 +1208,13 @@ func TestDeleteMustNotDeleteAPublishedCommentThatWasAskedAboutAsPending(test *te
 	identifier := inliner.addPending("original").Comments[0].Identifier
 	inliner.messages = nil
 	inliner.press("D")
-	configuration, ok := inliner.lastConfirm()
-	if !ok || !strings.HasPrefix(configuration.Text, "Delete pending comment on ") {
-		test.Fatalf("confirmation = %q (%v)", configuration.Text, ok)
+	confirmation, ok := inliner.lastConfirm()
+	if !ok || !strings.HasPrefix(confirmation.Text, "Delete pending comment on ") {
+		test.Fatalf("confirmation = %q (%v)", confirmation.Text, ok)
 	}
 	inliner.submitElsewhere() // published while the question is open
 	before := len(inliner.deletes())
-	inliner.run(configuration.OnYes)
+	inliner.run(confirmation.OnYes)
 	if len(inliner.deletes()) != before {
 		test.Fatal("a published comment was deleted on the answer to the pending question")
 	}
@@ -1308,9 +1308,9 @@ func TestEditAndDeleteUseTheirOwnPermission(test *testing.T) {
 
 // agree answers a question as the root does, but leaves the write it starts
 // unrun, so the write is in flight until the returned command is run.
-func (inliner *inliner) agree(configuration userinterface.ConfirmMessage) tea.Cmd {
+func (inliner *inliner) agree(confirmation userinterface.ConfirmMessage) tea.Cmd {
 	inliner.test.Helper()
-	_, command := inliner.view.Update(configuration.OnYes())
+	_, command := inliner.view.Update(confirmation.OnYes())
 	return command
 }
 
@@ -1330,11 +1330,11 @@ func TestWriteAfterYesIsInFlightUntilItsResult(test *testing.T) {
 		inliner.addPending("x")
 		inliner.messages = nil
 		inliner.press("D")
-		configuration, _ := inliner.lastConfirm()
+		confirmation, _ := inliner.lastConfirm()
 		if inliner.view.writes > 0 {
 			test.Fatal("flag set while the question is open")
 		}
-		write := inliner.agree(configuration)
+		write := inliner.agree(confirmation)
 		if inliner.view.writes <= 0 {
 			test.Fatal("flag not set after the yes")
 		}
@@ -1350,8 +1350,8 @@ func TestWriteAfterYesIsInFlightUntilItsResult(test *testing.T) {
 		inliner.toThread(mineIdentifier)
 		inliner.messages, inliner.body = nil, "revised"
 		inliner.press("e")
-		configuration, _ := inliner.lastConfirm()
-		write := inliner.agree(configuration)
+		confirmation, _ := inliner.lastConfirm()
+		write := inliner.agree(confirmation)
 		blocked(inliner)
 		inliner.run(write)
 		if inliner.view.writes > 0 {
@@ -1364,8 +1364,8 @@ func TestWriteAfterYesIsInFlightUntilItsResult(test *testing.T) {
 		inliner.client.SetError(fake.MethodDeleteReviewComment, errors.New("boom"))
 		inliner.messages = nil
 		inliner.press("D")
-		configuration, _ := inliner.lastConfirm()
-		inliner.run(inliner.agree(configuration))
+		confirmation, _ := inliner.lastConfirm()
+		inliner.run(inliner.agree(confirmation))
 		if inliner.view.writes > 0 {
 			test.Error("flag still set after a failed write")
 		}
@@ -1375,11 +1375,11 @@ func TestWriteAfterYesIsInFlightUntilItsResult(test *testing.T) {
 		inliner.addPending("x")
 		inliner.messages = nil
 		inliner.press("D")
-		configuration, _ := inliner.lastConfirm()
+		confirmation, _ := inliner.lastConfirm()
 		if err := inliner.client.DeleteReviewComment(test.Context(), inliner.pendingThread().Comments[0].Identifier); err != nil {
 			test.Fatal(err)
 		}
-		inliner.run(inliner.agree(configuration))
+		inliner.run(inliner.agree(confirmation))
 		if inliner.view.writes > 0 {
 			test.Error("flag still set after a stale refusal")
 		}
@@ -1389,11 +1389,11 @@ func TestWriteAfterYesIsInFlightUntilItsResult(test *testing.T) {
 		composer.onThread()
 		composer.body = "thanks"
 		composer.press("r")
-		configuration, ok := composer.lastConfirm()
+		confirmation, ok := composer.lastConfirm()
 		if !ok {
 			test.Fatal("no confirmation")
 		}
-		_, write := composer.view.Update(configuration.OnYes())
+		_, write := composer.view.Update(confirmation.OnYes())
 		if composer.view.writes <= 0 {
 			test.Fatal("flag not set for a reply")
 		}
@@ -1406,11 +1406,11 @@ func TestWriteAfterYesIsInFlightUntilItsResult(test *testing.T) {
 		composer := newComposer(test)
 		composer.body = "LGTM"
 		composer.press("c")
-		configuration, ok := composer.lastConfirm()
+		confirmation, ok := composer.lastConfirm()
 		if !ok {
 			test.Fatal("no confirmation")
 		}
-		_, write := composer.view.Update(configuration.OnYes())
+		_, write := composer.view.Update(confirmation.OnYes())
 		if composer.view.writes <= 0 {
 			test.Fatal("flag not set for a top-level comment")
 		}
@@ -1431,10 +1431,10 @@ func TestYesIsRefusedWhileAReviewOrMergeRuns(test *testing.T) {
 			inliner.addPending("x")
 			inliner.messages = nil
 			inliner.press("D")
-			configuration, _ := inliner.lastConfirm()
+			confirmation, _ := inliner.lastConfirm()
 			busy(inliner)
 			before := len(inliner.deletes())
-			inliner.run(configuration.OnYes)
+			inliner.run(confirmation.OnYes)
 			if len(inliner.deletes()) != before || (inliner.view.writes > 0) {
 				test.Errorf("deletes %v, flag %v", inliner.deletes(), (inliner.view.writes > 0))
 			}
@@ -1575,13 +1575,13 @@ func TestRefusedEditTextGoesToTheThreadOrTheLine(test *testing.T) {
 		inliner.body = "my rewrite"
 		inliner.client.SetError(fake.MethodUpdateReviewComment, github.ErrNotFound)
 		inliner.press("e")
-		configuration, ok := inliner.lastConfirm()
+		confirmation, ok := inliner.lastConfirm()
 		if !ok {
 			test.Fatal("no confirmation")
 		}
 		// The comment is really gone with its thread by the time the thread list is read.
 		deleteIt(inliner)
-		inliner.run(configuration.OnYes)
+		inliner.run(confirmation.OnYes)
 		if diff := cmp.Diff(map[string]string{lineKey: "my rewrite"}, inliner.view.drafts); diff != "" {
 			test.Errorf("drafts (-want +got):\n%s", diff)
 		}
@@ -1592,10 +1592,10 @@ func TestRefusedEditTextGoesToTheThreadOrTheLine(test *testing.T) {
 		inliner.toThread(mineIdentifier)
 		inliner.body = "my rewrite"
 		inliner.press("e")
-		configuration, _ := inliner.lastConfirm()
+		confirmation, _ := inliner.lastConfirm()
 		deleteIt(inliner)
 		inliner.client.SetError(fake.MethodListReviewThreads, errors.New("boom"))
-		inliner.run(configuration.OnYes)
+		inliner.run(confirmation.OnYes)
 		if _, ok := inliner.view.drafts[lineKey]; !ok {
 			test.Errorf("drafts = %v, want the line draft", inliner.view.drafts)
 		}
@@ -1607,9 +1607,9 @@ func TestRefusedEditTextGoesToTheThreadOrTheLine(test *testing.T) {
 		inliner.view.drafts[replyKey] = "half a reply"
 		inliner.body = "my rewrite"
 		inliner.press("e")
-		configuration, _ := inliner.lastConfirm()
+		confirmation, _ := inliner.lastConfirm()
 		deleteIt(inliner)
-		inliner.run(configuration.OnYes)
+		inliner.run(confirmation.OnYes)
 		if got := inliner.view.drafts[replyKey]; got != "half a reply\n\nmy rewrite" {
 			test.Errorf("reply draft = %q", got)
 		}

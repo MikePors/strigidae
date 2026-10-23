@@ -13,7 +13,7 @@ import (
 // View is a screen held by the root model's view stack.
 //
 // The root forwards to the active (top) view:
-//   - keys.Msg for key presses and sequences that match a binding active in
+//   - keys.Message for key presses and sequences that match a binding active in
 //     the view (the global bindings plus anything in FullHelp). Test with
 //     key.Matches(msg, binding).
 //   - raw tea.KeyPressMsg for keys that match nothing, and for every key
@@ -30,8 +30,8 @@ import (
 //     filter their own ticks by ID.
 //
 // Embedded bubbles components (viewport, list, ...) are driven through their
-// methods in response to keys.Msg (vp.ScrollDown, vp.HalfPageDown, vp.GotoTop,
-// ...). Do not pass a keys.Msg into a component's Update: those match only
+// methods in response to keys.Message (viewport.ScrollDown, viewport.HalfPageDown, viewport.GotoTop,
+// ...). Do not pass a keys.Message into a component's Update: those match only
 // tea.KeyPressMsg and would silently do nothing.
 //
 // The root handles Help (?) and the command line (:) itself and never

@@ -40,7 +40,7 @@ type Section struct {
 }
 
 // Path returns the config file location: $XDG_CONFIG_HOME/strig/config.yml,
-// falling back to ~/.config/strig/config.yml. getenv and home are injected
+// falling back to ~/.config/strig/config.yml. getEnvironment and home are injected
 // for tests.
 func Path(getEnvironment func(string) string, home func() (string, error)) (string, error) {
 	if directory := getEnvironment("XDG_CONFIG_HOME"); directory != "" && filepath.IsAbs(directory) {

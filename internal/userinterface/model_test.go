@@ -326,7 +326,7 @@ func TestPushPop(test *testing.T) {
 	}
 	_, command := model.Update(PopMessage{})
 	if !isQuit(command) {
-		test.Error("PopMsg on root should quit")
+		test.Error("PopMessage on root should quit")
 	}
 }
 

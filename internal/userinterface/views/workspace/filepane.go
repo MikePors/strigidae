@@ -57,7 +57,7 @@ type LineRange struct {
 //     first Render), so Update can use it for page scrolling.
 //
 // The workspace calls SetTheme, SetDiff, SetFile and SetSize outside of rendering,
-// forwards every keys.Msg it does not handle itself (movement, scrolling and
+// forwards every keys.Message it does not handle itself (movement, scrolling and
 // the pane's own sequences) to Update while the right pane has focus, and
 // calls Render with the pane's inner size. FullHelp must list every binding
 // Update reacts to, so multi-key sequences are recognised.

@@ -27,7 +27,7 @@ func TestRelativeTime(test *testing.T) {
 	}
 	for _, testCase := range tests {
 		if got := RelativeTime(now, now.Add(-testCase.duration)); got != testCase.want {
-			test.Errorf("RelTime(%v) = %q, want %q", testCase.duration, got, testCase.want)
+			test.Errorf("RelativeTime(%v) = %q, want %q", testCase.duration, got, testCase.want)
 		}
 	}
 }

@@ -86,7 +86,7 @@ func TestHorizontal(test *testing.T) {
 			window := newWindow(10, 5, testCase.content, testCase.view)
 			testCase.do(window)
 			if window.HorizontalOffset() != testCase.want {
-				test.Errorf("XOffset = %d, want %d", window.HorizontalOffset(), testCase.want)
+				test.Errorf("HorizontalOffset = %d, want %d", window.HorizontalOffset(), testCase.want)
 			}
 		})
 	}
@@ -153,7 +153,7 @@ func TestResetAndRestore(test *testing.T) {
 func TestAccessors(test *testing.T) {
 	window := newWindow(20, 6, 100, 40)
 	if window.Height() != 6 || window.MaximumTop() != 14 || window.MaximumHorizontalOffset() != 60 {
-		test.Errorf("Height/MaxTop/MaxX = %d/%d/%d", window.Height(), window.MaximumTop(), window.MaximumHorizontalOffset())
+		test.Errorf("Height/MaximumTop/MaximumHorizontalOffset = %d/%d/%d", window.Height(), window.MaximumTop(), window.MaximumHorizontalOffset())
 	}
 	var zero Window
 	zero.Down(3)

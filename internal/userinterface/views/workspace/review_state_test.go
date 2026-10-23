@@ -35,9 +35,9 @@ func TestReviewDiffRefreshFailedMeansHeadMoved(test *testing.T) {
 		test.Fatalf("detail head %q, diff head %q", composer.view.detail.HeadSHA, composer.view.diffHead)
 	}
 	composer.command("approve")
-	configuration, ok := composer.lastConfirm()
-	if !ok || !configuration.Notice {
-		test.Fatalf("confirm = %+v, %v; want the head-moved notice", configuration, ok)
+	confirmation, ok := composer.lastConfirm()
+	if !ok || !confirmation.Notice {
+		test.Fatalf("confirm = %+v, %v; want the head-moved notice", confirmation, ok)
 	}
 	if len(composer.client.Submissions()) != 0 {
 		test.Error("submitted")
@@ -66,8 +66,8 @@ func TestReviewRefusedWhileDiffLoads(test *testing.T) {
 func TestReviewDiffHeadIsTheCommit(test *testing.T) {
 	composer := newReviewer(test)
 	composer.command("approve")
-	configuration, _ := composer.lastConfirm()
-	composer.run(configuration.OnYes)
+	confirmation, _ := composer.lastConfirm()
+	composer.run(confirmation.OnYes)
 	if submissions := composer.client.Submissions(); len(submissions) != 1 || submissions[0].CommitObjectIdentifier != composer.view.diffHead || composer.view.diffHead != headSHA {
 		test.Errorf("submissions = %+v, diff head %q", submissions, composer.view.diffHead)
 	}
@@ -76,9 +76,9 @@ func TestReviewDiffHeadIsTheCommit(test *testing.T) {
 func TestReviewSecondSubmitWhileInFlight(test *testing.T) {
 	composer := newReviewer(test)
 	composer.command("approve")
-	configuration, _ := composer.lastConfirm()
+	confirmation, _ := composer.lastConfirm()
 	// The user said yes: handle the send message but do not deliver the result.
-	messageList := messages(configuration.OnYes)
+	messageList := messages(confirmation.OnYes)
 	_, send := composer.view.Update(messageList[0])
 	if !composer.view.Loading() {
 		test.Error("not loading while submitting")
@@ -108,10 +108,10 @@ func TestReviewSubmitFailureRefreshes(test *testing.T) {
 	composer := newReviewer(test)
 	composer.body = "x"
 	composer.command("approve")
-	configuration, _ := composer.lastConfirm()
+	confirmation, _ := composer.lastConfirm()
 	composer.client.SetError(fake.MethodSubmitReview, errors.New("502 Bad Gateway"))
 	before := len(composer.client.Calls())
-	composer.run(configuration.OnYes)
+	composer.run(confirmation.OnYes)
 	var reloaded bool
 	for _, call := range composer.client.Calls()[before:] {
 		reloaded = reloaded || call.Method == fake.MethodGetPullRequest
@@ -131,11 +131,11 @@ func TestReviewEmptyBodyKeepsEarlierDraft(test *testing.T) {
 	if composer.view.review.draft != "earlier thoughts" {
 		test.Errorf("draft = %q", composer.view.review.draft)
 	}
-	configuration, ok := composer.lastConfirm()
+	confirmation, ok := composer.lastConfirm()
 	if !ok {
 		test.Fatal("no confirmation")
 	}
-	composer.run(configuration.OnYes)
+	composer.run(confirmation.OnYes)
 	submissions := composer.client.Submissions()
 	if len(submissions) != 1 || submissions[0].Body != "" {
 		test.Errorf("submissions = %+v, want an empty body", submissions)

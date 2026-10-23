@@ -84,17 +84,17 @@ func TestReviewVerdicts(test *testing.T) {
 			composer := newReviewer(test)
 			composer.body = testCase.body
 			composer.command(testCase.command)
-			configuration, ok := composer.lastConfirm()
+			confirmation, ok := composer.lastConfirm()
 			if !ok {
 				test.Fatalf("no confirmation; error: %q", composer.lastError())
 			}
-			if configuration.Text != testCase.wantText || configuration.Notice {
-				test.Errorf("confirm = %+v, want text %q", configuration, testCase.wantText)
+			if confirmation.Text != testCase.wantText || confirmation.Notice {
+				test.Errorf("confirm = %+v, want text %q", confirmation, testCase.wantText)
 			}
 			if len(composer.client.Submissions()) != 0 {
 				test.Fatal("submitted before the answer")
 			}
-			composer.run(configuration.OnYes)
+			composer.run(confirmation.OnYes)
 			if diff := cmp.Diff([]fake.Submission{testCase.want}, composer.client.Submissions()); diff != "" {
 				test.Errorf("submissions (-want +got):\n%s", diff)
 			}
@@ -123,11 +123,11 @@ func TestReviewCommentThroughChooser(test *testing.T) {
 	if composer.view.CapturesKeys() {
 		test.Error("chooser still open after choosing")
 	}
-	configuration, ok := composer.lastConfirm()
-	if !ok || configuration.Text != "Comment on #7 in acme/widgets?" {
-		test.Fatalf("confirm = %+v, %v", configuration, ok)
+	confirmation, ok := composer.lastConfirm()
+	if !ok || confirmation.Text != "Comment on #7 in acme/widgets?" {
+		test.Fatalf("confirm = %+v, %v", confirmation, ok)
 	}
-	composer.run(configuration.OnYes)
+	composer.run(confirmation.OnYes)
 	submissions := composer.client.Submissions()
 	if len(submissions) != 1 || submissions[0].Event != github.ReviewEventComment {
 		test.Errorf("submissions = %+v", submissions)
@@ -219,14 +219,14 @@ func TestReviewWithPendingReview(test *testing.T) {
 	if diff := cmp.Diff([]string{"draft on github"}, composer.openedOn); diff != "" {
 		test.Errorf("editor opened on (-want +got):\n%s", diff)
 	}
-	configuration, ok := composer.lastConfirm()
+	confirmation, ok := composer.lastConfirm()
 	if !ok {
 		test.Fatalf("no confirmation; error: %q", composer.lastError())
 	}
-	if want := "Comment on #7 in acme/widgets with 3 pending comments?"; configuration.Text != want {
-		test.Errorf("text = %q, want %q", configuration.Text, want)
+	if want := "Comment on #7 in acme/widgets with 3 pending comments?"; confirmation.Text != want {
+		test.Errorf("text = %q, want %q", confirmation.Text, want)
 	}
-	composer.run(configuration.OnYes)
+	composer.run(confirmation.OnYes)
 	want := []fake.Submission{{Repository: testRepository, Number: 7, PullRequestIdentifier: pullRequestNodeIdentifier, Event: github.ReviewEventComment, CommitObjectIdentifier: headSHA, PendingReviewIdentifier: "PRR_1"}}
 	if diff := cmp.Diff(want, composer.client.Submissions()); diff != "" {
 		test.Errorf("submissions (-want +got):\n%s", diff)
@@ -238,13 +238,13 @@ func TestReviewPendingGoneAtSubmit(test *testing.T) {
 	composer.client.SetPendingReview(testRepository, 7, &github.PendingReview{Identifier: "PRR_1", CommentCount: 1})
 	composer.body = "my summary"
 	composer.command("approve")
-	configuration, ok := composer.lastConfirm()
+	confirmation, ok := composer.lastConfirm()
 	if !ok {
 		test.Fatal("no confirmation")
 	}
 	composer.client.SetPendingReview(testRepository, 7, nil) // submitted elsewhere meanwhile
 	before := len(composer.client.Calls())
-	composer.run(configuration.OnYes)
+	composer.run(confirmation.OnYes)
 	if len(composer.client.Submissions()) != 0 {
 		test.Error("submitted")
 	}
@@ -268,14 +268,14 @@ func TestReviewHeadMoved(test *testing.T) {
 	composer.body = "ok"
 	composer.client.SetHeadSHA(testRepository, 7, "bbbb2222") // pushed after the view loaded
 	composer.command("approve")
-	configuration, ok := composer.lastConfirm()
+	confirmation, ok := composer.lastConfirm()
 	if !ok {
 		test.Fatal("no notice shown")
 	}
-	if !configuration.Notice || !strings.Contains(configuration.Text, "Head moved") || configuration.OnYes != nil {
-		test.Errorf("confirm = %+v", configuration)
+	if !confirmation.Notice || !strings.Contains(confirmation.Text, "Head moved") || confirmation.OnYes != nil {
+		test.Errorf("confirm = %+v", confirmation)
 	}
-	composer.run(configuration.OnDismiss) // any key
+	composer.run(confirmation.OnDismiss) // any key
 	if len(composer.client.Submissions()) != 0 {
 		test.Error("submitted although the head moved")
 	}
@@ -288,9 +288,9 @@ func TestReviewServerErrorKeepsDraft(test *testing.T) {
 	composer := newReviewer(test)
 	composer.body = "needs work"
 	composer.command("request-changes")
-	configuration, _ := composer.lastConfirm()
+	confirmation, _ := composer.lastConfirm()
 	composer.client.SetError(fake.MethodSubmitReview, errors.New("Can not request changes on your own pull request\x1b[31m"))
-	composer.run(configuration.OnYes)
+	composer.run(confirmation.OnYes)
 	got := composer.lastError()
 	if !strings.Contains(got, "Can not request changes on your own pull request") || !strings.Contains(got, "refreshed to show the current state") || strings.ContainsRune(got, 0x1b) {
 		test.Errorf("error = %q", got)

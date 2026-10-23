@@ -15,7 +15,7 @@ import (
 )
 
 // These tests enforce the three-layer colour model (see the package doc and
-// internal/ui/CLAUDE.md) over every non-test Go file under internal/ui:
+// internal/userinterface/CLAUDE.md) over every non-test Go file under internal/userinterface:
 //
 //   - colour values (hex literals, lipgloss.Color, ANSI indices, colour
 //     constants, color.RGBA literals) exist only in the palette files;
@@ -48,11 +48,11 @@ var (
 		"RGBA": true, "RGBA64": true, "NRGBA": true, "NRGBA64": true, "Gray": true, "Gray16": true,
 		"CMYK": true, "YCbCr": true, "Alpha": true, "Alpha16": true,
 	}
-	colourConsts = map[string]bool{"Black": true, "White": true, "Transparent": true, "Opaque": true}
+	colourConstants = map[string]bool{"Black": true, "White": true, "Transparent": true, "Opaque": true}
 )
 
 // violations returns what is wrong with the Go file src at rel, a slash path
-// relative to internal/ui (such as "theme/roles.go").
+// relative to internal/userinterface (such as "theme/roles.go").
 func violations(relative, source string) ([]string, error) {
 	fileSet := token.NewFileSet()
 	file, err := parser.ParseFile(fileSet, relative, source, 0)
@@ -123,7 +123,7 @@ func violations(relative, source string) ([]string, error) {
 				if (packageName == lipglossPath || packageName == ansiPath) && namedColours[selection] {
 					bad(node, "named colour %s.%s; use a role", filepath.Base(packageName), selection)
 				}
-				if packageName == colorPath && colourConsts[selection] && !inTheme {
+				if packageName == colorPath && colourConstants[selection] && !inTheme {
 					bad(node, "color.%s outside the theme package", selection)
 				}
 			}

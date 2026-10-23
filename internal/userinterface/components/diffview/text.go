@@ -30,7 +30,7 @@ func isUnsafe(character rune) bool {
 // inject escape sequences or reorder text) become a visible dot. It returns
 // the text and its width in cells. Every string from a diff that reaches the
 // screen must pass through it. It applies the same unsafe-rune rule as
-// internal/ui/termtext, but also expands tabs and measures grapheme widths.
+// internal/userinterface/terminaltext, but also expands tabs and measures grapheme widths.
 func displayText(text string) (string, int) {
 	if isPlainASCII(text) {
 		return text, len(text)

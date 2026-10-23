@@ -12,7 +12,7 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
-// hScrollStep is how many columns `z h` / `z l` scroll.
+// horizontalScrollStep is how many columns `z h` / `z l` scroll.
 const horizontalScrollStep = 4
 
 // diffBindings are the diff pane's own keys; the movement keys come from

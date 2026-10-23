@@ -14,7 +14,7 @@ import (
 	"github.com/MikePors/strigidae/internal/version"
 )
 
-// runTUI starts the interactive program. Logs go to a file because the TUI
+// runTerminalInterface starts the interactive program. Logs go to a file because the TUI
 // owns the terminal; if the file can't be opened we warn once and carry on
 // with logging discarded.
 func runTerminalInterface(application application, stderr io.Writer) error {

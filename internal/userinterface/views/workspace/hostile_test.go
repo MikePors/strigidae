@@ -23,11 +23,11 @@ import (
 const hostile = "evil\x1b[2J\x1b]0;pwned\x07\x1b]8;;http://evil.test\x07link\x1b]8;;\x07" +
 	"\x1b]52;c;aGk=\x07\u009b31m\u0090dcs\u009c\u202eevil\u2066x\u2069\rafter\xff\xfe\x00end"
 
-// refs are HTML character references that Glamour decodes into real escape
+// references are HTML character references that Glamour decodes into real escape
 // sequences and bidi controls unless its output is cleaned.
 const references = "&#x1b;[2J &#x1b;]52;c;aGk=&#x07; &#x202e;gnp.exe &rlm; &lrm; &#27;[2J &#7;"
 
-// refsBody exercises the references in text, inline HTML, a code span, a
+// referencesBody exercises the references in text, inline HTML, a code span, a
 // fenced block, link text and a heading.
 const referencesBody = "\n\n" + references + "\n\n<span>&#x1b;]0;t&#x07;</span>\n\n`&#x1b;]52;c;aGk=&#x07;`\n\n" +
 	"```\n&#x1b;[2J &#x202e;\n```\n\n[&#x1b;[2J](http://x/)\n\n# &#x1b;]0;h&#x07;"

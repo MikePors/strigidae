@@ -98,7 +98,7 @@ Exceptions, which keep their short form:
 - anything GitHub or a library defines: GraphQL field names (`headRefOid`) and the structs decoded from them, JSON and YAML tags, config keys, and identifiers from imported packages (`tea.Cmd`, `tea.Msg`, `key.Binding`);
 - user-visible text (keys, commands, messages).
 
-When the full name of a variable would shadow an imported package (`theme`, `config`, `diff`, `color`), pick a more specific name (`activeTheme`, `loadedConfig`, `parsedDiff`, `colour`) rather than an abbreviation or an import alias.
+A local or parameter may share the name of an imported package (`theme`, `config`, `diff`, `color`, `key`) only when that package is not used anywhere in the same function, its signature included. Where the function does use the package, pick a more specific name (`activeTheme`, `loadedConfig`, `parsedDiff`, `colour`, `pressed`) rather than an abbreviation or an import alias. So `theme theme.Theme` is not allowed in a signature; `activeTheme theme.Theme` is.
 
 ## Workflow
 

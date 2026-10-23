@@ -67,17 +67,17 @@ func TestReplyAsksThenPosts(test *testing.T) {
 	if diff := cmp.Diff([]string{""}, composer.openedOn); diff != "" {
 		test.Fatalf("editor opened on (-want +got):\n%s", diff)
 	}
-	configuration, ok := composer.lastConfirm()
+	confirmation, ok := composer.lastConfirm()
 	if !ok {
 		test.Fatal("no confirmation asked")
 	}
-	if want := `Post reply to internal/sync/client.go:12? "Thanks, fixed."`; configuration.Text != want {
-		test.Errorf("text = %q, want %q", configuration.Text, want)
+	if want := `Post reply to internal/sync/client.go:12? "Thanks, fixed."`; confirmation.Text != want {
+		test.Errorf("text = %q, want %q", confirmation.Text, want)
 	}
 	if len(composer.client.Replies()) != 0 {
 		test.Fatal("posted before the answer")
 	}
-	composer.run(configuration.OnYes)
+	composer.run(confirmation.OnYes)
 	want := []fake.Reply{{ThreadIdentifier: "t-resolved", Body: "Thanks, fixed.\nmore"}}
 	if diff := cmp.Diff(want, composer.client.Replies()); diff != "" {
 		test.Errorf("replies (-want +got):\n%s", diff)
@@ -181,8 +181,8 @@ func TestFailedPostKeepsDraft(test *testing.T) {
 	composer.client.SetError(fake.MethodReplyToThread, errors.New("boom\x1b[31m"))
 	composer.body = "important"
 	composer.press("r")
-	configuration, _ := composer.lastConfirm()
-	composer.run(configuration.OnYes)
+	confirmation, _ := composer.lastConfirm()
+	composer.run(confirmation.OnYes)
 	err := composer.lastErr()
 	if err == nil || !strings.Contains(err.Error(), "post reply: boom") || strings.ContainsRune(err.Error(), 0x1b) {
 		test.Errorf("error = %v", err)
@@ -222,7 +222,7 @@ func TestPostResultAfterNewComposeIsHandled(test *testing.T) {
 	composer.onThread()
 	composer.body = "first"
 	composer.press("r")
-	configuration, _ := composer.lastConfirm()
+	confirmation, _ := composer.lastConfirm()
 	// The user starts another compose before the post returns.
 	composer.body = "second"
 	before := composer.view.commentSequence
@@ -232,7 +232,7 @@ func TestPostResultAfterNewComposeIsHandled(test *testing.T) {
 	}
 	composer.drafts(map[string]string{"t-resolved": "first"})
 	composer.messages = nil
-	composer.run(configuration.OnYes)
+	composer.run(confirmation.OnYes)
 	if diff := cmp.Diff([]string{"Reply posted"}, composer.infoMessages()); diff != "" {
 		test.Errorf("info (-want +got):\n%s", diff)
 	}
@@ -285,8 +285,8 @@ func TestReplyWithZeroOneAndSeveralThreads(test *testing.T) {
 	if len(composer.openedOn) != 1 {
 		test.Fatalf("one thread: editor opened %d times", len(composer.openedOn))
 	}
-	configuration, _ := composer.lastConfirm()
-	composer.run(configuration.OnYes)
+	confirmation, _ := composer.lastConfirm()
+	composer.run(confirmation.OnYes)
 	if replies := composer.client.Replies(); len(replies) != 1 || replies[0].ThreadIdentifier != "c" {
 		test.Errorf("replies = %v", replies)
 	}
@@ -327,9 +327,9 @@ func TestReplyWorksFromTheFilesPane(test *testing.T) {
 	if composer.view.focus != paneFiles || len(composer.openedOn) != 1 {
 		test.Fatalf("focus %v, editor opened %d times", composer.view.focus, len(composer.openedOn))
 	}
-	configuration, ok := composer.lastConfirm()
-	if !ok || !strings.HasPrefix(configuration.Text, "Post reply to internal/sync/client.go:12?") {
-		test.Errorf("confirmation = %q (%v)", configuration.Text, ok)
+	confirmation, ok := composer.lastConfirm()
+	if !ok || !strings.HasPrefix(confirmation.Text, "Post reply to internal/sync/client.go:12?") {
+		test.Errorf("confirmation = %q (%v)", confirmation.Text, ok)
 	}
 }
 
@@ -337,11 +337,11 @@ func TestTopLevelCommentIsPostedFromTheOverview(test *testing.T) {
 	composer := newComposer(test)
 	composer.body = "LGTM, one question\nbelow"
 	composer.press("l", "c")
-	configuration, ok := composer.lastConfirm()
-	if !ok || configuration.Text != `Post comment? "LGTM, one question"` {
-		test.Fatalf("confirmation = %q (%v)", configuration.Text, ok)
+	confirmation, ok := composer.lastConfirm()
+	if !ok || confirmation.Text != `Post comment? "LGTM, one question"` {
+		test.Fatalf("confirmation = %q (%v)", confirmation.Text, ok)
 	}
-	composer.run(configuration.OnYes)
+	composer.run(confirmation.OnYes)
 	want := []fake.Comment{{Repository: testRepository, Number: 7, Body: "LGTM, one question\nbelow"}}
 	if diff := cmp.Diff(want, composer.client.Comments()); diff != "" {
 		test.Errorf("comments (-want +got):\n%s", diff)
@@ -368,11 +368,11 @@ func TestConfirmationTextIsCleanAndFits(test *testing.T) {
 	composer := newComposer(test)
 	composer.body = hostile + strings.Repeat(" long", 60)
 	composer.press("c")
-	configuration, _ := composer.lastConfirm()
-	if strings.ContainsFunc(configuration.Text, func(character rune) bool { return character < 0x20 || (character >= 0x7f && character < 0xa0) }) {
-		test.Errorf("control characters in %q", configuration.Text)
+	confirmation, _ := composer.lastConfirm()
+	if strings.ContainsFunc(confirmation.Text, func(character rune) bool { return character < 0x20 || (character >= 0x7f && character < 0xa0) }) {
+		test.Errorf("control characters in %q", confirmation.Text)
 	}
-	if width := ansi.StringWidth(configuration.Text); width > composer.view.width {
+	if width := ansi.StringWidth(confirmation.Text); width > composer.view.width {
 		test.Errorf("text is %d wide, view is %d", width, composer.view.width)
 	}
 }

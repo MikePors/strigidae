@@ -51,7 +51,7 @@ func (statusBar statusBar) render(activeTheme theme.Theme, width int) string {
 	}
 	left := activeTheme.StatusContext.Render(fitLeft(statusBar.crumbs, budget))
 
-	midWidth := available - lipgloss.Width(left)
+	middleWidth := available - lipgloss.Width(left)
 	style := activeTheme.StatusHint
 	switch statusBar.kind {
 	case statusInfo:
@@ -59,8 +59,8 @@ func (statusBar statusBar) render(activeTheme theme.Theme, width int) string {
 	case statusError:
 		style = activeTheme.StatusError
 	}
-	text = ansi.Truncate(text, midWidth, "…")
-	pad := strings.Repeat(" ", max(0, midWidth-ansi.StringWidth(text)))
+	text = ansi.Truncate(text, middleWidth, "…")
+	pad := strings.Repeat(" ", max(0, middleWidth-ansi.StringWidth(text)))
 	return left + style.Render(text) + activeTheme.StatusBar.Render(pad) + right
 }
 

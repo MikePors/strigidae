@@ -54,13 +54,13 @@ func newStyleSet(activeTheme theme.Theme) styleSet {
 			if current == 1 {
 				base, gutter = base.Background(cursorBackground), gutter.Background(cursorBackground)
 			}
-			view := variant{fill: base, gutter: gutter}
-			view.thread[0] = activeTheme.Muted.Background(gutter.GetBackground())
-			view.thread[1] = activeTheme.ThreadMarker.Background(gutter.GetBackground())
-			for count := range view.code {
-				view.code[count] = foreground[count].Background(base.GetBackground())
+			variantStyles := variant{fill: base, gutter: gutter}
+			variantStyles.thread[0] = activeTheme.Muted.Background(gutter.GetBackground())
+			variantStyles.thread[1] = activeTheme.ThreadMarker.Background(gutter.GetBackground())
+			for i := range variantStyles.code {
+				variantStyles.code[i] = foreground[i].Background(base.GetBackground())
 			}
-			style.variants[current][k] = view
+			style.variants[current][k] = variantStyles
 		}
 	}
 	style.hunk[0] = activeTheme.DiffHunk
@@ -97,9 +97,9 @@ func (model *Model) renderRow(i int) string {
 	case model.selected(row.baseIndex):
 		mark, current = markSelected, 1 // the selection takes the cursor tint
 	}
-	view := &model.styles.variants[current][kind]
+	variantStyles := &model.styles.variants[current][kind]
 
-	gutter := model.gutterText(row.line, row.baseIndex, mark, view)
+	gutter := model.gutterText(row.line, row.baseIndex, mark, variantStyles)
 	codeWidth := model.codeWidth()
 	if codeWidth == 0 {
 		return ansi.Truncate(gutter, model.width, "")
@@ -114,17 +114,17 @@ func (model *Model) renderRow(i int) string {
 	var builder strings.Builder
 	builder.WriteString(gutter)
 	for _, span := range visible {
-		builder.WriteString(view.code[span.Class].Render(span.Text))
+		builder.WriteString(variantStyles.code[span.Class].Render(span.Text))
 	}
 	if pad := codeWidth - used; pad > 0 {
-		builder.WriteString(view.fill.Render(spaces(pad)))
+		builder.WriteString(variantStyles.fill.Render(spaces(pad)))
 	}
 	return builder.String()
 }
 
 // gutterText is the styled fixed part of a diff row: cursor mark, line
 // numbers, thread marker, change marker.
-func (model *Model) gutterText(line *diff.Line, baseIndex int, mark string, view *variant) string {
+func (model *Model) gutterText(line *diff.Line, baseIndex int, mark string, variantStyles *variant) string {
 	marker := " "
 	switch line.Kind {
 	case diff.Add:
@@ -135,15 +135,15 @@ func (model *Model) gutterText(line *diff.Line, baseIndex int, mark string, view
 		marker = `\`
 	}
 	glyph, open := model.threadGlyph(baseIndex)
-	titleStyle := view.gutter
+	titleStyle := variantStyles.gutter
 	if glyph != " " {
-		titleStyle = view.thread[0]
+		titleStyle = variantStyles.thread[0]
 		if open {
-			titleStyle = view.thread[1]
+			titleStyle = variantStyles.thread[1]
 		}
 	}
-	return view.gutter.Render(mark+numberCell(line.Old, model.numberWidth)+" "+numberCell(line.New, model.numberWidth)+" ") +
-		titleStyle.Render(glyph) + view.gutter.Render(marker)
+	return variantStyles.gutter.Render(mark+numberCell(line.Old, model.numberWidth)+" "+numberCell(line.New, model.numberWidth)+" ") +
+		titleStyle.Render(glyph) + variantStyles.gutter.Render(marker)
 }
 
 func numberCell(count, width int) string {

@@ -6,12 +6,12 @@
 //
 // Usage:
 //
-//	var w scroll.Window
-//	w.SetRows(len(items))
-//	w.SetSize(height)
-//	w.SetWidths(widestItem, viewWidth)
-//	w.Down(1)
-//	for i := w.Top(); i < min(w.Top()+height, len(items)); i++ { /* draw; cursor row is w.Cursor() */ }
+//	var window scroll.Window
+//	window.SetRows(len(items))
+//	window.SetSize(height)
+//	window.SetWidths(widestItem, viewWidth)
+//	window.Down(1)
+//	for i := window.Top(); i < min(window.Top()+height, len(items)); i++ { /* draw; cursor row is window.Cursor() */ }
 //
 // Every method leaves the window clamped: the cursor is a valid row, the cursor
 // is inside the view, the top row is no further than the last full page, and

@@ -17,10 +17,10 @@
 //
 // Usage:
 //
-//	dv := diffview.New(theme.Default())
-//	dv.SetFile(parsed.File("main.go"))
-//	out := dv.Render(width, height)
-//	if c, ok := dv.Cursor(); ok { /* comment on c.Path line c.New or c.Old */ }
+//	diffView := diffview.New(theme.Default())
+//	diffView.SetFile(parsed.File("main.go"))
+//	out := diffView.Render(width, height)
+//	if cursor, ok := diffView.Cursor(); ok { /* comment on cursor.Path line cursor.New or cursor.Old */ }
 //
 // Review threads (SetThreads) are placed under the line they are anchored to
 // and take extra rows: one header row, plus the comments while expanded.
@@ -122,10 +122,10 @@ type Model struct {
 	markdownRenderer *markdown.Renderer
 	threads          []github.ReviewThread // all of the pull request's threads
 	fileThreads      []github.ReviewThread // the ones on the shown file
-	attach           map[int][]int         // base row -> indexes in fthreads
-	orphans          []int                 // fthreads that map to no diff line
+	attach           map[int][]int         // base row -> indexes in fileThreads
+	orphans          []int                 // fileThreads that map to no diff line
 	open             map[string]bool       // thread ID -> expanded, once the user chose
-	blocks           [][]string            // rendered lines of each fthreads entry
+	blocks           [][]string            // rendered lines of each fileThreads entry
 	blockCache       map[blockKey][]string // rendered threads; dropped by SetThreads and when width or theme change
 	blockSignature   blockSignature
 	renders          int // thread blocks rendered, for tests

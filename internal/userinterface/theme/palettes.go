@@ -1,6 +1,6 @@
 package theme
 
-// The built-in palettes, and the only file in internal/ui that may hold hex
+// The built-in palettes, and the only file in internal/userinterface that may hold hex
 // colour values. Each fills the 24 Base24 slots; slot meanings are in
 // palette.go.
 

@@ -87,17 +87,17 @@ func TestMergeConfirmationAndSuccess(test *testing.T) {
 			composer := newReviewer(test)
 			composer.client.SetMergeSettings(testRepository, testCase.settings)
 			composer.mergeCommand(testCase.arguments)
-			configuration, ok := composer.lastConfirm()
+			confirmation, ok := composer.lastConfirm()
 			if !ok {
 				test.Fatalf("no confirmation; error: %q", composer.lastError())
 			}
-			if configuration.Text != testCase.question || configuration.Notice {
-				test.Errorf("confirm = %+v, want text %q", configuration, testCase.question)
+			if confirmation.Text != testCase.question || confirmation.Notice {
+				test.Errorf("confirm = %+v, want text %q", confirmation, testCase.question)
 			}
 			if len(composer.client.Merges()) != 0 {
 				test.Fatal("merged before the answer")
 			}
-			composer.run(configuration.OnYes)
+			composer.run(confirmation.OnYes)
 			want := []fake.Merge{{Repository: testRepository, Number: 7, PullRequestIdentifier: pullRequestNodeIdentifier, Method: testCase.method, ExpectedHeadObjectIdentifier: headSHA}}
 			if diff := cmp.Diff(want, composer.client.Merges()); diff != "" {
 				test.Errorf("merges (-want +got):\n%s", diff)
@@ -146,14 +146,14 @@ func TestMergeHeadMoved(test *testing.T) {
 	composer := newReviewer(test)
 	composer.client.SetHeadSHA(testRepository, 7, "bbbb2222") // pushed after the view loaded
 	composer.mergeCommand("")
-	configuration, ok := composer.lastConfirm()
+	confirmation, ok := composer.lastConfirm()
 	if !ok {
 		test.Fatal("no notice shown")
 	}
-	if !configuration.Notice || configuration.Text != headMovedText || configuration.OnYes != nil {
-		test.Errorf("confirm = %+v", configuration)
+	if !confirmation.Notice || confirmation.Text != headMovedText || confirmation.OnYes != nil {
+		test.Errorf("confirm = %+v", confirmation)
 	}
-	composer.run(configuration.OnDismiss)
+	composer.run(confirmation.OnDismiss)
 	if len(composer.client.Merges()) != 0 || composer.callCount(fake.MethodMergePullRequest) != 0 {
 		test.Error("merged although the head moved")
 	}
@@ -165,9 +165,9 @@ func TestMergeHeadMoved(test *testing.T) {
 func TestMergeHeadMovesAfterConfirmationIsRefusedAndNotRetried(test *testing.T) {
 	composer := newReviewer(test)
 	composer.mergeCommand("")
-	configuration, _ := composer.lastConfirm()
+	confirmation, _ := composer.lastConfirm()
 	composer.client.SetHeadSHA(testRepository, 7, "bbbb2222") // pushed while the question was open
-	composer.run(configuration.OnYes)
+	composer.run(confirmation.OnYes)
 	if composer.callCount(fake.MethodMergePullRequest) != 1 || len(composer.client.Merges()) != 0 {
 		test.Errorf("merge calls = %d, merges = %d", composer.callCount(fake.MethodMergePullRequest), len(composer.client.Merges()))
 	}
@@ -182,10 +182,10 @@ func TestMergeHeadMovesAfterConfirmationIsRefusedAndNotRetried(test *testing.T) 
 func TestMergeRefusalShownThenRefreshed(test *testing.T) {
 	composer := newReviewer(test)
 	composer.mergeCommand("")
-	configuration, _ := composer.lastConfirm()
+	confirmation, _ := composer.lastConfirm()
 	loads := composer.callCount(fake.MethodGetPullRequest)
 	composer.client.SetError(fake.MethodMergePullRequest, errors.New("2 of 3 required status checks are expected\x1b[31m"))
-	composer.run(configuration.OnYes)
+	composer.run(confirmation.OnYes)
 
 	got := composer.lastError()
 	if !strings.Contains(got, "2 of 3 required status checks are expected") || strings.Contains(got, "\x1b") {
@@ -208,9 +208,9 @@ func TestMergeRefusalShownThenRefreshed(test *testing.T) {
 func TestMergeBlockedWhileInFlight(test *testing.T) {
 	composer := newReviewer(test)
 	composer.mergeCommand("")
-	configuration, _ := composer.lastConfirm()
+	confirmation, _ := composer.lastConfirm()
 	// Deliver the confirmation's message without running the merge command.
-	send := configuration.OnYes()
+	send := confirmation.OnYes()
 	view, _ := composer.view.Update(send)
 	composer.view = view.(*View)
 	if !composer.view.merge.merging || !composer.view.Loading() {

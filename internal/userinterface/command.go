@@ -11,7 +11,7 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
-// commandSpec is one entry in the command registry.
+// commandDefinition is one entry in the command registry.
 type commandDefinition struct {
 	names []string // the command and its aliases, without the leading ":"
 	run   func(arguments string) tea.Cmd

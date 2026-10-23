@@ -21,7 +21,7 @@ const (
 	DefaultMessageLifetime = 4 * time.Second
 )
 
-// TickFunction schedules fn after d, like tea.Tick. Tests inject their own.
+// TickFunction schedules function after duration, like tea.Tick. Tests inject their own.
 type TickFunction func(duration time.Duration, function func(time.Time) tea.Msg) tea.Cmd
 
 // Options configures the root Model. Zero values select defaults.

@@ -26,11 +26,11 @@ func TestParseRepository(test *testing.T) {
 	for _, testCase := range tests {
 		got, err := ParseRepository(testCase.in)
 		if (err != nil) != testCase.wantErr {
-			test.Errorf("ParseRepo(%q) error = %v, wantErr %v", testCase.in, err, testCase.wantErr)
+			test.Errorf("ParseRepository(%q) error = %v, wantErr %v", testCase.in, err, testCase.wantErr)
 			continue
 		}
 		if got != testCase.want {
-			test.Errorf("ParseRepo(%q) = %v, want %v", testCase.in, got, testCase.want)
+			test.Errorf("ParseRepository(%q) = %v, want %v", testCase.in, got, testCase.want)
 		}
 		if err == nil && got.String() != testCase.want.Owner+"/"+testCase.want.Name {
 			test.Errorf("String() = %q", got.String())

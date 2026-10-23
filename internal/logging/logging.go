@@ -11,7 +11,7 @@ import (
 )
 
 // Path returns the log file location: $XDG_STATE_HOME/strig/strig.log, falling
-// back to ~/.local/state/strig/strig.log. getenv and home are injected for tests.
+// back to ~/.local/state/strig/strig.log. getEnvironment and home are injected for tests.
 func Path(getEnvironment func(string) string, home func() (string, error)) (string, error) {
 	if directory := getEnvironment("XDG_STATE_HOME"); directory != "" && filepath.IsAbs(directory) {
 		return filepath.Join(directory, "strig", "strig.log"), nil
@@ -36,7 +36,7 @@ func Open(path string) (*slog.Logger, *os.File, error) {
 	return slog.New(slog.NewTextHandler(file, nil)), file, nil
 }
 
-// Start opens the log file at Path(getenv, home) and returns a logger writing
+// Start opens the log file at Path(getEnvironment, home) and returns a logger writing
 // to it and a func that closes the file. Logging is never fatal: if the file
 // can't be opened, Start returns the error along with a logger that discards
 // everything and a no-op close, so the logger and close are always usable.

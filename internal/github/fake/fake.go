@@ -174,7 +174,7 @@ func cloneDetail(detail github.PullRequestDetail) github.PullRequestDetail {
 	return detail
 }
 
-// SetPullRequests sets the pull requests known for repo. ListPullRequests
+// SetPullRequests sets the pull requests known for the repository. ListPullRequests
 // returns the open ones, most recently updated first.
 func (client *Client) SetPullRequests(repository github.Repository, pullRequests []github.PullRequest) {
 	client.mutex.Lock()
@@ -190,7 +190,7 @@ func (client *Client) SetSearchResults(query string, pullRequests []github.PullR
 	client.search[query] = slices.Clone(pullRequests)
 }
 
-// SetPullRequest sets the detail returned for d.Repository and d.Number.
+// SetPullRequest sets the detail returned for detail.Repository and detail.Number.
 func (client *Client) SetPullRequest(detail github.PullRequestDetail) {
 	client.mutex.Lock()
 	defer client.mutex.Unlock()

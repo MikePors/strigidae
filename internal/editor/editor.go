@@ -21,7 +21,7 @@ type Session struct {
 }
 
 // New writes initial to a new temporary .md file and returns a session whose
-// command opens it in $VISUAL, then $EDITOR, then vi. getenv looks up
+// command opens it in $VISUAL, then $EDITOR, then vi. getEnvironment looks up
 // environment variables (os.Getenv in production).
 func New(initial string, getEnvironment func(string) string) (*Session, error) {
 	file, err := os.CreateTemp("", "strig-*.md")

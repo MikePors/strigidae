@@ -426,7 +426,7 @@ func TestOverrideChangesIdentity(test *testing.T) {
 	base := FromPalette(builtinDark)
 	over := FromPaletteWithOverrides(builtinDark, Roles{SyntaxString: hex("#ff00ff")})
 	if base.Identifier == over.Identifier {
-		test.Fatal("a role override did not change Theme.ID")
+		test.Fatal("a role override did not change Theme.Identifier")
 	}
 	if base.ChromaStyleName() == over.ChromaStyleName() {
 		test.Fatal("a role override did not change the Chroma style name")
