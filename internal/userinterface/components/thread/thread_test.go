@@ -15,12 +15,12 @@ import (
 var now = time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)
 
 func environment() Environment {
-	th := theme.New(true)
-	return Environment{Theme: th, Markdown: markdown.New(th), Now: now}
+	activeTheme := theme.New(true)
+	return Environment{Theme: activeTheme, Markdown: markdown.New(activeTheme), Now: now}
 }
 
-func TestLines(t *testing.T) {
-	th := github.ReviewThread{
+func TestLines(test *testing.T) {
+	thread := github.ReviewThread{
 		Path: "a/b.go", Line: 7, IsResolved: true, IsOutdated: true,
 		Comments: []github.ReviewComment{
 			{
@@ -40,68 +40,68 @@ func TestLines(t *testing.T) {
 		{"collapsed with location", Options{Location: true}, []string{"▸ a/b.go:7 ghost"}, nil},
 		{"expanded", Options{Expanded: true}, []string{"▾ ghost", "│ ghost · 1h ago PENDING", "❤️ 3", "second", "│ bob · 1m ago"}, []string{"👀"}},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			out := ansi.Strip(strings.Join(Lines(environment(), th, 80, tt.o), "\n"))
-			for _, w := range tt.want {
-				if !strings.Contains(out, w) {
-					t.Errorf("missing %q in:\n%s", w, out)
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			out := ansi.Strip(strings.Join(Lines(environment(), thread, 80, testCase.o), "\n"))
+			for _, word := range testCase.want {
+				if !strings.Contains(out, word) {
+					test.Errorf("missing %q in:\n%s", word, out)
 				}
 			}
-			for _, n := range tt.not {
-				if strings.Contains(out, n) {
-					t.Errorf("unexpected %q in:\n%s", n, out)
+			for _, name := range testCase.not {
+				if strings.Contains(out, name) {
+					test.Errorf("unexpected %q in:\n%s", name, out)
 				}
 			}
 		})
 	}
 }
 
-func TestLinesFitWidth(t *testing.T) {
-	th := github.ReviewThread{
+func TestLinesFitWidth(test *testing.T) {
+	thread := github.ReviewThread{
 		Path: strings.Repeat("long/", 30) + "f.go", Line: 1,
 		Comments: []github.ReviewComment{{Author: strings.Repeat("n", 60), Body: strings.Repeat("word ", 60), CreatedAt: now}},
 	}
-	for _, o := range []Options{{}, {Expanded: true, Location: true}} {
-		for i, l := range Lines(environment(), th, 40, o) {
-			if w := ansi.StringWidth(l); w > 40 {
-				t.Errorf("%+v line %d is %d cells wide: %q", o, i, w, ansi.Strip(l))
+	for _, options := range []Options{{}, {Expanded: true, Location: true}} {
+		for i, line := range Lines(environment(), thread, 40, options) {
+			if width := ansi.StringWidth(line); width > 40 {
+				test.Errorf("%+v line %d is %d cells wide: %q", options, i, width, ansi.Strip(line))
 			}
 		}
 	}
 }
 
-func TestHostileText(t *testing.T) {
+func TestHostileText(test *testing.T) {
 	const evil = "x\x1b]0;pwned\x07\x1b[2J\u202e\rend &#x1b;[2J"
-	th := github.ReviewThread{Path: "p" + evil, Line: 1, Comments: []github.ReviewComment{
+	thread := github.ReviewThread{Path: "p" + evil, Line: 1, Comments: []github.ReviewComment{
 		{Author: "a" + evil, Body: evil, CreatedAt: now, Reactions: []github.ReactionSummary{{Content: github.ReactionContent("R" + evil), Count: 1}}},
 	}}
-	for _, o := range []Options{{}, {Expanded: true, Location: true}} {
-		out := strings.Join(Lines(environment(), th, 80, o), "\n")
+	for _, options := range []Options{{}, {Expanded: true, Location: true}} {
+		out := strings.Join(Lines(environment(), thread, 80, options), "\n")
 		plain := regexpSGR(out)
-		for _, r := range plain {
-			if r == 0x1b || r == 0x07 || r == '\r' || r == 0x202e {
-				t.Errorf("%+v: output holds %U: %q", o, r, plain)
+		for _, character := range plain {
+			if character == 0x1b || character == 0x07 || character == '\r' || character == 0x202e {
+				test.Errorf("%+v: output holds %U: %q", options, character, plain)
 			}
 		}
 	}
 }
 
 // regexpSGR removes the SGR styling our own styles emit.
-func regexpSGR(s string) string {
-	var b strings.Builder
-	for i := 0; i < len(s); i++ {
-		if s[i] == 0x1b && i+1 < len(s) && s[i+1] == '[' {
+func regexpSGR(text string) string {
+	var builder strings.Builder
+	for i := 0; i < len(text); i++ {
+		if text[i] == 0x1b && i+1 < len(text) && text[i+1] == '[' {
 			j := i + 2
-			for j < len(s) && (s[j] == ';' || s[j] == ':' || (s[j] >= '0' && s[j] <= '9')) {
+			for j < len(text) && (text[j] == ';' || text[j] == ':' || (text[j] >= '0' && text[j] <= '9')) {
 				j++
 			}
-			if j < len(s) && s[j] == 'm' {
+			if j < len(text) && text[j] == 'm' {
 				i = j
 				continue
 			}
 		}
-		b.WriteByte(s[i])
+		builder.WriteByte(text[i])
 	}
-	return b.String()
+	return builder.String()
 }

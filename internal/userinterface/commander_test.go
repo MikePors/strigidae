@@ -6,12 +6,12 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-func typeCommand(m *Model, line string) tea.Cmd {
-	press(m, ":")
-	for _, r := range line {
-		press(m, string(r))
+func typeCommand(model *Model, line string) tea.Cmd {
+	press(model, ":")
+	for _, character := range line {
+		press(model, string(character))
 	}
-	return press(m, "enter")
+	return press(model, "enter")
 }
 
 // cmdView is a fake view that owns the command "review".
@@ -20,61 +20,61 @@ type commandView struct {
 	pings []string
 }
 
-func (c *commandView) Update(msg tea.Msg) (View, tea.Cmd) {
-	_, cmd := c.fakeView.Update(msg)
-	return c, cmd
+func (commandView *commandView) Update(message tea.Msg) (View, tea.Cmd) {
+	_, command := commandView.fakeView.Update(message)
+	return commandView, command
 }
 
-func (c *commandView) Command(name, args string) (tea.Cmd, bool) {
+func (commandView *commandView) Command(name, arguments string) (tea.Cmd, bool) {
 	if name != "review" {
 		return nil, false
 	}
-	c.pings = append(c.pings, args)
+	commandView.pings = append(commandView.pings, arguments)
 	return Info("pong"), true
 }
 
-func TestCommanderReachesOnlyTopView(t *testing.T) {
+func TestCommanderReachesOnlyTopView(test *testing.T) {
 	below := &commandView{fakeView: newFake("below")}
 	top := &commandView{fakeView: newFake("top")}
-	m := newModel(below)
-	run(m, Push(top))
+	model := newModel(below)
+	run(model, Push(top))
 
-	run(m, typeCommand(m, "review now"))
+	run(model, typeCommand(model, "review now"))
 	if len(top.pings) != 1 || top.pings[0] != "now" || len(below.pings) != 0 {
-		t.Errorf("pings: top %v, below %v", top.pings, below.pings)
+		test.Errorf("pings: top %v, below %v", top.pings, below.pings)
 	}
-	if m.status.text != "pong" {
-		t.Errorf("status = %q", m.status.text)
+	if model.status.text != "pong" {
+		test.Errorf("status = %q", model.status.text)
 	}
 }
 
-func TestCommanderDeclinedAndPlainViews(t *testing.T) {
-	t.Run("commander declines", func(t *testing.T) {
-		m := newModel(&commandView{fakeView: newFake("v")})
-		run(m, typeCommand(m, "approve"))
-		if m.status.text != "not available here: approve" || m.status.kind != statusError {
-			t.Errorf("status = %+v", m.status)
+func TestCommanderDeclinedAndPlainViews(test *testing.T) {
+	test.Run("commander declines", func(test *testing.T) {
+		model := newModel(&commandView{fakeView: newFake("v")})
+		run(model, typeCommand(model, "approve"))
+		if model.status.text != "not available here: approve" || model.status.kind != statusError {
+			test.Errorf("status = %+v", model.status)
 		}
 	})
-	t.Run("a typo is not a command, whatever the view", func(t *testing.T) {
-		m := newModel(&commandView{fakeView: newFake("v")})
-		run(m, typeCommand(m, "aprove"))
-		if m.status.text != "not a command: aprove" {
-			t.Errorf("status = %q", m.status.text)
+	test.Run("a typo is not a command, whatever the view", func(test *testing.T) {
+		model := newModel(&commandView{fakeView: newFake("v")})
+		run(model, typeCommand(model, "aprove"))
+		if model.status.text != "not a command: aprove" {
+			test.Errorf("status = %q", model.status.text)
 		}
 	})
-	t.Run("static commands win and still work", func(t *testing.T) {
-		m := newModel(&commandView{fakeView: newFake("v")})
-		if _, ok := typeCommand(m, "qa")().(QuitMessage); !ok {
-			t.Error(":qa should still quit")
+	test.Run("static commands win and still work", func(test *testing.T) {
+		model := newModel(&commandView{fakeView: newFake("v")})
+		if _, ok := typeCommand(model, "qa")().(QuitMessage); !ok {
+			test.Error(":qa should still quit")
 		}
 	})
-	t.Run("a view that is not a Commander", func(t *testing.T) {
-		m := newModel(&commandView{fakeView: newFake("below")})
-		run(m, Push(newFake("plain")))
-		run(m, typeCommand(m, "merge squash"))
-		if m.status.text != "not available here: merge" {
-			t.Errorf("status = %q", m.status.text)
+	test.Run("a view that is not a Commander", func(test *testing.T) {
+		model := newModel(&commandView{fakeView: newFake("below")})
+		run(model, Push(newFake("plain")))
+		run(model, typeCommand(model, "merge squash"))
+		if model.status.text != "not available here: merge" {
+			test.Errorf("status = %q", model.status.text)
 		}
 	})
 }
@@ -85,36 +85,36 @@ type copyView struct {
 	calls int
 }
 
-func (c *copyView) Update(msg tea.Msg) (View, tea.Cmd) {
-	_, cmd := c.fakeView.Update(msg)
-	return c, cmd
+func (copyView *copyView) Update(message tea.Msg) (View, tea.Cmd) {
+	_, command := copyView.fakeView.Update(message)
+	return copyView, command
 }
 
-func (c *copyView) Command(name, _ string) (tea.Cmd, bool) {
+func (copyView *copyView) Command(name, _ string) (tea.Cmd, bool) {
 	if name != "copy-filename" {
 		return nil, false
 	}
-	c.calls++
+	copyView.calls++
 	return Info("copied"), true
 }
 
-func TestCopyFilenameRoutedThroughCommandLine(t *testing.T) {
+func TestCopyFilenameRoutedThroughCommandLine(test *testing.T) {
 	below := &copyView{fakeView: newFake("below")}
 	top := &copyView{fakeView: newFake("top")}
-	m := newModel(below)
-	run(m, Push(top))
+	model := newModel(below)
+	run(model, Push(top))
 
-	run(m, typeCommand(m, "copy-filename"))
+	run(model, typeCommand(model, "copy-filename"))
 	if top.calls != 1 || below.calls != 0 {
-		t.Errorf("calls: top %d, below %d", top.calls, below.calls)
+		test.Errorf("calls: top %d, below %d", top.calls, below.calls)
 	}
-	if m.status.text != "copied" {
-		t.Errorf("status = %q", m.status.text)
+	if model.status.text != "copied" {
+		test.Errorf("status = %q", model.status.text)
 	}
 
-	run(m, Push(newFake("plain")))
-	run(m, typeCommand(m, "copy-filename"))
-	if m.status.text != "not available here: copy-filename" || top.calls != 1 {
-		t.Errorf("status = %q, top calls %d", m.status.text, top.calls)
+	run(model, Push(newFake("plain")))
+	run(model, typeCommand(model, "copy-filename"))
+	if model.status.text != "not available here: copy-filename" || top.calls != 1 {
+		test.Errorf("status = %q, top calls %d", model.status.text, top.calls)
 	}
 }

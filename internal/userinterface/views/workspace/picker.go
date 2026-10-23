@@ -7,33 +7,33 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/terminaltext"
 )
 
-func (v *View) openPicker() {
-	files := v.files()
+func (view *View) openPicker() {
+	files := view.files()
 	if len(files) == 0 {
 		return
 	}
 	items := make([]string, len(files))
 	paths := make([]string, len(files))
-	for i, f := range files {
-		items[i] = terminaltext.Clean(f.Path)
-		paths[i] = f.Path
+	for i, file := range files {
+		items[i] = terminaltext.Clean(file.Path)
+		paths[i] = file.Path
 	}
-	v.pickerItems, v.pickerPaths = items, paths
-	v.picker = picker.New(v.th, "Go to file", items)
+	view.pickerItems, view.pickerPaths = items, paths
+	view.picker = picker.New(view.th, "Go to file", items)
 }
 
 // pickerKey feeds a raw key to the open picker.
-func (v *View) pickerKey(msg tea.KeyPressMsg) {
-	res := v.picker.Update(msg)
-	switch res.Outcome {
+func (view *View) pickerKey(message tea.KeyPressMsg) {
+	result := view.picker.Update(message)
+	switch result.Outcome {
 	case picker.Cancelled:
-		v.picker = nil
+		view.picker = nil
 	case picker.Chosen:
-		v.picker = nil
-		path := v.pickerPaths[res.Index]
-		for i, f := range v.files() {
-			if f.Path == path {
-				v.selectEntry(i + 1)
+		view.picker = nil
+		path := view.pickerPaths[result.Index]
+		for i, file := range view.files() {
+			if file.Path == path {
+				view.selectEntry(i + 1)
 			}
 		}
 	case picker.Open:

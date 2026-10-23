@@ -45,43 +45,43 @@ type confirmPrompt struct {
 
 var _ KeyCapturer = (*confirmPrompt)(nil)
 
-func newConfirmPrompt(msg ConfirmMessage) *confirmPrompt {
+func newConfirmPrompt(message ConfirmMessage) *confirmPrompt {
 	return &confirmPrompt{
-		text:      msg.Text,
-		onYes:     msg.OnYes,
+		text:      message.Text,
+		onYes:     message.OnYes,
 		yes:       key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "yes")),
-		notice:    msg.Notice,
-		onDismiss: msg.OnDismiss,
+		notice:    message.Notice,
+		onDismiss: message.OnDismiss,
 	}
 }
 
 // CapturesKeys implements KeyCapturer: a nil prompt captures nothing.
-func (c *confirmPrompt) CapturesKeys() bool { return c != nil }
+func (confirmPrompt *confirmPrompt) CapturesKeys() bool { return confirmPrompt != nil }
 
 // answer returns the command for a key press: OnYes for `y`, nil otherwise.
-func (c *confirmPrompt) answer(msg tea.KeyPressMsg) tea.Cmd {
-	if c.notice {
-		return c.onDismiss
+func (confirmPrompt *confirmPrompt) answer(message tea.KeyPressMsg) tea.Cmd {
+	if confirmPrompt.notice {
+		return confirmPrompt.onDismiss
 	}
-	if key.Matches(msg, c.yes) {
-		return c.onYes
+	if key.Matches(message, confirmPrompt.yes) {
+		return confirmPrompt.onYes
 	}
 	return nil
 }
 
 // render fits the question and the choices in width columns; the choices
 // always stay visible.
-func (c *confirmPrompt) render(width int) string {
+func (confirmPrompt *confirmPrompt) render(width int) string {
 	choices := " y/N"
-	if c.notice {
+	if confirmPrompt.notice {
 		choices = " (any key)"
 	}
 	// Tabs and other controls would be measured differently than drawn.
-	text := " " + strings.Map(func(r rune) rune {
-		if unicode.IsSpace(r) || unicode.IsControl(r) {
+	text := " " + strings.Map(func(character rune) rune {
+		if unicode.IsSpace(character) || unicode.IsControl(character) {
 			return ' '
 		}
-		return r
-	}, ansi.Strip(c.text))
+		return character
+	}, ansi.Strip(confirmPrompt.text))
 	return ansi.Truncate(text, max(0, width-len(choices)), "…") + choices
 }

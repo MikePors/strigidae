@@ -63,11 +63,11 @@ type tintParams struct{ lightMix, chroma float64 }
 // the same blend reads very differently on a dark and a light background.
 type tintSet struct{ row, gutter, hunk, hunkCursor tintParams }
 
-func tintsFor(v Variant) tintSet {
+func tintsFor(view Variant) tintSet {
 	// Fitted so the built-in palettes reproduce the earlier hand-picked row
 	// colours closely: deep green and red on dark, pastel mint and pink on
 	// light, with the same hunk-header shades.
-	if v == Light {
+	if view == Light {
 		return tintSet{
 			row:        tintParams{0.07, 0.20},
 			gutter:     tintParams{0.085, 0.52},
@@ -87,92 +87,92 @@ func tintsFor(v Variant) tintSet {
 // (non-nil fields of ov). The contrast guard then adjusts only the roles that
 // were derived: an override is used exactly as written, and a warning is
 // logged if it is hard to read.
-func deriveRoles(p Palette, ov Roles) Roles {
-	r := defaultRoles(p)
-	r.override(ov, tintsFor(p.Variant))
-	r.guard(ov.set())
-	return r
+func deriveRoles(palette Palette, overrides Roles) Roles {
+	roles := defaultRoles(palette)
+	roles.override(overrides, tintsFor(palette.Variant))
+	roles.guard(overrides.set())
+	return roles
 }
 
-func defaultRoles(p Palette) Roles {
-	s := p.Slot
-	r := Roles{
-		Background: s(Base00),
-		Surface:    s(Base01),
-		Text:       s(Base05),
-		Muted:      s(Base03),
-		Selection:  s(Base02),
+func defaultRoles(palette Palette) Roles {
+	colorOf := palette.Slot
+	roles := Roles{
+		Background: colorOf(Base00),
+		Surface:    colorOf(Base01),
+		Text:       colorOf(Base05),
+		Muted:      colorOf(Base03),
+		Selection:  colorOf(Base02),
 
-		Accent:       s(Base0E),
-		AccentStrong: blend(s(Base0E), s(Base07), 0.4),
-		OnAccent:     s(Base00),
-		Info:         s(Base0D),
-		Link:         s(Base0C),
-		Warning:      s(Base09),
-		Error:        s(Base08),
-		Success:      s(Base0B),
-		Added:        s(Base0B),
-		Removed:      s(Base08),
+		Accent:       colorOf(Base0E),
+		AccentStrong: blend(colorOf(Base0E), colorOf(Base07), 0.4),
+		OnAccent:     colorOf(Base00),
+		Info:         colorOf(Base0D),
+		Link:         colorOf(Base0C),
+		Warning:      colorOf(Base09),
+		Error:        colorOf(Base08),
+		Success:      colorOf(Base0B),
+		Added:        colorOf(Base0B),
+		Removed:      colorOf(Base08),
 
-		SyntaxKeyword:  s(Base0E),
-		SyntaxString:   s(Base0B),
-		SyntaxComment:  s(Base03),
-		SyntaxNumber:   s(Base09),
-		SyntaxFunction: s(Base0D),
-		SyntaxType:     s(Base0A),
-		SyntaxOperator: s(Base0C),
-		SyntaxVariable: s(Base08),
-		SyntaxEscape:   s(Base0C),
+		SyntaxKeyword:  colorOf(Base0E),
+		SyntaxString:   colorOf(Base0B),
+		SyntaxComment:  colorOf(Base03),
+		SyntaxNumber:   colorOf(Base09),
+		SyntaxFunction: colorOf(Base0D),
+		SyntaxType:     colorOf(Base0A),
+		SyntaxOperator: colorOf(Base0C),
+		SyntaxVariable: colorOf(Base08),
+		SyntaxEscape:   colorOf(Base0C),
 	}
-	r.deriveTints(tintsFor(p.Variant))
-	return r
+	roles.deriveTints(tintsFor(palette.Variant))
+	return roles
 }
 
-func (r *Roles) deriveTints(t tintSet) {
-	mk := func(role color.Color, p tintParams) color.Color {
-		return tint(r.Background, role, p.lightMix, p.chroma)
+func (roles *Roles) deriveTints(tints tintSet) {
+	makeColor := func(role color.Color, parameters tintParams) color.Color {
+		return tint(roles.Background, role, parameters.lightMix, parameters.chroma)
 	}
-	r.AddedTint = mk(r.Added, t.row)
-	r.AddedGutterTint = mk(r.Added, t.gutter)
-	r.RemovedTint = mk(r.Removed, t.row)
-	r.RemovedGutterTint = mk(r.Removed, t.gutter)
-	r.HunkTint = mk(r.Info, t.hunk)
-	r.HunkCursorTint = mk(r.Info, t.hunkCursor)
+	roles.AddedTint = makeColor(roles.Added, tints.row)
+	roles.AddedGutterTint = makeColor(roles.Added, tints.gutter)
+	roles.RemovedTint = makeColor(roles.Removed, tints.row)
+	roles.RemovedGutterTint = makeColor(roles.Removed, tints.gutter)
+	roles.HunkTint = makeColor(roles.Info, tints.hunk)
+	roles.HunkCursorTint = makeColor(roles.Info, tints.hunkCursor)
 }
 
 // fields lists every role by name, for overriding, guarding and tests.
-func (r *Roles) fields() []roleField {
+func (roles *Roles) fields() []roleField {
 	return []roleField{
-		{"background", &r.Background},
-		{"surface", &r.Surface},
-		{"text", &r.Text},
-		{"muted", &r.Muted},
-		{"selection", &r.Selection},
-		{"accent", &r.Accent},
-		{"accent-strong", &r.AccentStrong},
-		{"on-accent", &r.OnAccent},
-		{"info", &r.Info},
-		{"link", &r.Link},
-		{"warning", &r.Warning},
-		{"error", &r.Error},
-		{"success", &r.Success},
-		{"added", &r.Added},
-		{"removed", &r.Removed},
-		{"added-tint", &r.AddedTint},
-		{"added-gutter-tint", &r.AddedGutterTint},
-		{"removed-tint", &r.RemovedTint},
-		{"removed-gutter-tint", &r.RemovedGutterTint},
-		{"hunk-tint", &r.HunkTint},
-		{"hunk-cursor-tint", &r.HunkCursorTint},
-		{"syn-keyword", &r.SyntaxKeyword},
-		{"syn-string", &r.SyntaxString},
-		{"syn-comment", &r.SyntaxComment},
-		{"syn-number", &r.SyntaxNumber},
-		{"syn-function", &r.SyntaxFunction},
-		{"syn-type", &r.SyntaxType},
-		{"syn-operator", &r.SyntaxOperator},
-		{"syn-variable", &r.SyntaxVariable},
-		{"syn-escape", &r.SyntaxEscape},
+		{"background", &roles.Background},
+		{"surface", &roles.Surface},
+		{"text", &roles.Text},
+		{"muted", &roles.Muted},
+		{"selection", &roles.Selection},
+		{"accent", &roles.Accent},
+		{"accent-strong", &roles.AccentStrong},
+		{"on-accent", &roles.OnAccent},
+		{"info", &roles.Info},
+		{"link", &roles.Link},
+		{"warning", &roles.Warning},
+		{"error", &roles.Error},
+		{"success", &roles.Success},
+		{"added", &roles.Added},
+		{"removed", &roles.Removed},
+		{"added-tint", &roles.AddedTint},
+		{"added-gutter-tint", &roles.AddedGutterTint},
+		{"removed-tint", &roles.RemovedTint},
+		{"removed-gutter-tint", &roles.RemovedGutterTint},
+		{"hunk-tint", &roles.HunkTint},
+		{"hunk-cursor-tint", &roles.HunkCursorTint},
+		{"syn-keyword", &roles.SyntaxKeyword},
+		{"syn-string", &roles.SyntaxString},
+		{"syn-comment", &roles.SyntaxComment},
+		{"syn-number", &roles.SyntaxNumber},
+		{"syn-function", &roles.SyntaxFunction},
+		{"syn-type", &roles.SyntaxType},
+		{"syn-operator", &roles.SyntaxOperator},
+		{"syn-variable", &roles.SyntaxVariable},
+		{"syn-escape", &roles.SyntaxEscape},
 	}
 }
 
@@ -182,11 +182,11 @@ type roleField struct {
 }
 
 // set returns the names of the roles r overrides (its non-nil fields).
-func (r Roles) set() map[string]bool {
+func (roles Roles) set() map[string]bool {
 	out := map[string]bool{}
-	for _, f := range r.fields() {
-		if *f.c != nil {
-			out[f.name] = true
+	for _, field := range roles.fields() {
+		if *field.c != nil {
+			out[field.name] = true
 		}
 	}
 	return out
@@ -195,19 +195,19 @@ func (r Roles) set() map[string]bool {
 // override replaces every role ov sets. Tints that ov does not set are
 // recomputed from the final roles, so overriding Added also recolours the
 // added-line tint.
-func (r *Roles) override(ov Roles, t tintSet) {
-	ovf := ov.fields()
-	for i, f := range r.fields() {
-		if *ovf[i].c != nil {
-			*f.c = *ovf[i].c
+func (roles *Roles) override(overrides Roles, tints tintSet) {
+	overridden := overrides.fields()
+	for i, field := range roles.fields() {
+		if *overridden[i].c != nil {
+			*field.c = *overridden[i].c
 		}
 	}
-	derived := *r
-	derived.deriveTints(t)
-	df := derived.fields()
-	for i, f := range r.fields() {
-		if strings.HasSuffix(f.name, "-tint") && *ovf[i].c == nil {
-			*f.c = *df[i].c
+	derived := *roles
+	derived.deriveTints(tints)
+	defaults := derived.fields()
+	for i, field := range roles.fields() {
+		if strings.HasSuffix(field.name, "-tint") && *overridden[i].c == nil {
+			*field.c = *defaults[i].c
 		}
 	}
 }
@@ -224,11 +224,11 @@ const (
 // palette comes out exactly as derived. A role in overridden is never
 // changed: it is the theme author's exact choice, so a failing one is only
 // logged.
-func (r *Roles) guard(overridden map[string]bool) {
-	check := func(name string, fg *color.Color, floor float64, bgs ...color.Color) {
+func (roles *Roles) guard(overridden map[string]bool) {
+	check := func(name string, foreground *color.Color, floor float64, colors ...color.Color) {
 		worst := math.Inf(1)
-		for _, bg := range bgs {
-			worst = math.Min(worst, contrast(*fg, bg))
+		for _, background := range colors {
+			worst = math.Min(worst, contrast(*foreground, background))
 		}
 		if worst >= floor {
 			return
@@ -237,47 +237,47 @@ func (r *Roles) guard(overridden map[string]bool) {
 			slog.Warn("theme role is hard to read", "role", name, "contrast", math.Round(worst*100)/100, "want", floor)
 			return
 		}
-		for _, bg := range bgs {
-			*fg = nudge(*fg, bg, floor)
+		for _, background := range colors {
+			*foreground = nudge(*foreground, background, floor)
 		}
 	}
 	// Text sits on the page and on the status bar.
-	check("text", &r.Text, minTextContrast, r.Background, r.Surface)
-	check("muted", &r.Muted, minAccentContrast, r.Background, r.Surface)
-	for _, f := range []roleField{
-		{"accent", &r.Accent},
-		{"accent-strong", &r.AccentStrong},
-		{"info", &r.Info},
-		{"link", &r.Link},
-		{"warning", &r.Warning},
-		{"error", &r.Error},
-		{"success", &r.Success},
-		{"added", &r.Added},
-		{"removed", &r.Removed},
-		{"syn-keyword", &r.SyntaxKeyword},
-		{"syn-string", &r.SyntaxString},
-		{"syn-comment", &r.SyntaxComment},
-		{"syn-number", &r.SyntaxNumber},
-		{"syn-function", &r.SyntaxFunction},
-		{"syn-type", &r.SyntaxType},
-		{"syn-operator", &r.SyntaxOperator},
-		{"syn-variable", &r.SyntaxVariable},
-		{"syn-escape", &r.SyntaxEscape},
+	check("text", &roles.Text, minTextContrast, roles.Background, roles.Surface)
+	check("muted", &roles.Muted, minAccentContrast, roles.Background, roles.Surface)
+	for _, field := range []roleField{
+		{"accent", &roles.Accent},
+		{"accent-strong", &roles.AccentStrong},
+		{"info", &roles.Info},
+		{"link", &roles.Link},
+		{"warning", &roles.Warning},
+		{"error", &roles.Error},
+		{"success", &roles.Success},
+		{"added", &roles.Added},
+		{"removed", &roles.Removed},
+		{"syn-keyword", &roles.SyntaxKeyword},
+		{"syn-string", &roles.SyntaxString},
+		{"syn-comment", &roles.SyntaxComment},
+		{"syn-number", &roles.SyntaxNumber},
+		{"syn-function", &roles.SyntaxFunction},
+		{"syn-type", &roles.SyntaxType},
+		{"syn-operator", &roles.SyntaxOperator},
+		{"syn-variable", &roles.SyntaxVariable},
+		{"syn-escape", &roles.SyntaxEscape},
 	} {
-		check(f.name, f.c, minAccentContrast, r.Background)
+		check(field.name, field.c, minAccentContrast, roles.Background)
 	}
-	check("on-accent", &r.OnAccent, minAccentContrast, r.Accent)
+	check("on-accent", &roles.OnAccent, minAccentContrast, roles.Accent)
 }
 
 // fingerprint identifies the final roles and the variant. Every style and the
 // generated Chroma style are functions of them, so it is the identity
 // rendered-output caches key on. extra carries anything else that affects
 // rendering, such as a named syntax style.
-func (r *Roles) fingerprint(v Variant, extra string) string {
-	h := fnv.New64a()
-	_, _ = fmt.Fprintf(h, "%d|%s", v, extra)
-	for _, f := range r.fields() {
-		_, _ = h.Write([]byte(HexString(*f.c)))
+func (roles *Roles) fingerprint(view Variant, extra string) string {
+	hasher := fnv.New64a()
+	_, _ = fmt.Fprintf(hasher, "%d|%s", view, extra)
+	for _, field := range roles.fields() {
+		_, _ = hasher.Write([]byte(HexString(*field.c)))
 	}
-	return fmt.Sprintf("%016x", h.Sum64())
+	return fmt.Sprintf("%016x", hasher.Sum64())
 }

@@ -7,138 +7,138 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestFocusAndFileNavigation(t *testing.T) {
-	h := loaded(t, 100, 30)
-	if h.v.focus != paneFiles || h.v.sel() != 0 {
-		t.Fatalf("initial focus=%v sel=%d", h.v.focus, h.v.sel())
+func TestFocusAndFileNavigation(test *testing.T) {
+	harness := loaded(test, 100, 30)
+	if harness.v.focus != paneFiles || harness.v.sel() != 0 {
+		test.Fatalf("initial focus=%v sel=%d", harness.v.focus, harness.v.sel())
 	}
-	h.press("l")
-	if h.v.focus != paneRight {
-		t.Error("l should focus the right pane")
+	harness.press("l")
+	if harness.v.focus != paneRight {
+		test.Error("l should focus the right pane")
 	}
-	h.press("h")
-	if h.v.focus != paneFiles {
-		t.Error("h should focus the files pane")
+	harness.press("h")
+	if harness.v.focus != paneFiles {
+		test.Error("h should focus the files pane")
 	}
 
-	h.press("j", "j")
-	if h.v.sel() != 2 {
-		t.Errorf("j j: sel = %d", h.v.sel())
+	harness.press("j", "j")
+	if harness.v.sel() != 2 {
+		test.Errorf("j j: sel = %d", harness.v.sel())
 	}
-	h.press("k")
-	if h.v.sel() != 1 {
-		t.Errorf("k: sel = %d", h.v.sel())
+	harness.press("k")
+	if harness.v.sel() != 1 {
+		test.Errorf("k: sel = %d", harness.v.sel())
 	}
-	h.press("G")
-	if h.v.sel() != 5 {
-		t.Errorf("G: sel = %d", h.v.sel())
+	harness.press("G")
+	if harness.v.sel() != 5 {
+		test.Errorf("G: sel = %d", harness.v.sel())
 	}
-	h.press("j")
-	if h.v.sel() != 5 {
-		t.Errorf("j past the end: sel = %d", h.v.sel())
+	harness.press("j")
+	if harness.v.sel() != 5 {
+		test.Errorf("j past the end: sel = %d", harness.v.sel())
 	}
-	h.press("g g")
-	if h.v.sel() != 0 {
-		t.Errorf("g g: sel = %d", h.v.sel())
+	harness.press("g g")
+	if harness.v.sel() != 0 {
+		test.Errorf("g g: sel = %d", harness.v.sel())
 	}
-	h.press("ctrl+f")
-	if h.v.sel() != 5 {
-		t.Errorf("ctrl+f: sel = %d", h.v.sel())
+	harness.press("ctrl+f")
+	if harness.v.sel() != 5 {
+		test.Errorf("ctrl+f: sel = %d", harness.v.sel())
 	}
 
 	// enter in the Files pane focuses the right pane.
-	h.press("enter")
-	if h.v.focus != paneRight {
-		t.Error("enter should focus the right pane")
+	harness.press("enter")
+	if harness.v.focus != paneRight {
+		test.Error("enter should focus the right pane")
 	}
 
 	// } and { work from either pane and never land on Overview.
-	h.press("g g") // scrolls the overview, selection unchanged
-	if h.v.sel() != 5 {
-		t.Errorf("g g in the right pane moved the selection to %d", h.v.sel())
+	harness.press("g g") // scrolls the overview, selection unchanged
+	if harness.v.sel() != 5 {
+		test.Errorf("g g in the right pane moved the selection to %d", harness.v.sel())
 	}
-	h.press("{")
-	if h.v.sel() != 4 {
-		t.Errorf("{: sel = %d", h.v.sel())
+	harness.press("{")
+	if harness.v.sel() != 4 {
+		test.Errorf("{: sel = %d", harness.v.sel())
 	}
-	h.press("h", "g g", "{")
-	if h.v.sel() != 0 {
-		t.Errorf("{ from Overview should stay: sel = %d", h.v.sel())
+	harness.press("h", "g g", "{")
+	if harness.v.sel() != 0 {
+		test.Errorf("{ from Overview should stay: sel = %d", harness.v.sel())
 	}
-	h.press("}")
-	if h.v.sel() != 1 {
-		t.Errorf("} from Overview: sel = %d", h.v.sel())
+	harness.press("}")
+	if harness.v.sel() != 1 {
+		test.Errorf("} from Overview: sel = %d", harness.v.sel())
 	}
-	h.press("l", "}", "}", "}", "}", "}")
-	if h.v.sel() != 5 {
-		t.Errorf("} clamps at the last file: sel = %d", h.v.sel())
+	harness.press("l", "}", "}", "}", "}", "}")
+	if harness.v.sel() != 5 {
+		test.Errorf("} clamps at the last file: sel = %d", harness.v.sel())
 	}
 }
 
-func TestSectionJumps(t *testing.T) {
-	h := loaded(t, 100, 14)
-	h.press("l")
-	if h.v.ov.vp.YOffset() != 0 {
-		t.Fatal("overview should start at the top")
+func TestSectionJumps(test *testing.T) {
+	harness := loaded(test, 100, 14)
+	harness.press("l")
+	if harness.v.ov.vp.YOffset() != 0 {
+		test.Fatal("overview should start at the top")
 	}
-	h.press("]")
-	conv := h.v.ov.sections[1]
-	if got := h.v.ov.vp.YOffset(); got != conv {
-		t.Errorf("]: offset = %d, want %d", got, conv)
+	harness.press("]")
+	conv := harness.v.ov.sections[1]
+	if got := harness.v.ov.vp.YOffset(); got != conv {
+		test.Errorf("]: offset = %d, want %d", got, conv)
 	}
-	h.press("[")
-	if got := h.v.ov.vp.YOffset(); got != 0 {
-		t.Errorf("[: offset = %d, want 0", got)
+	harness.press("[")
+	if got := harness.v.ov.vp.YOffset(); got != 0 {
+		test.Errorf("[: offset = %d, want 0", got)
 	}
 	// Works from the Files pane as well.
-	h.press("h", "]")
-	if got := h.v.ov.vp.YOffset(); got != conv {
-		t.Errorf("] from files: offset = %d, want %d", got, conv)
+	harness.press("h", "]")
+	if got := harness.v.ov.vp.YOffset(); got != conv {
+		test.Errorf("] from files: offset = %d, want %d", got, conv)
 	}
 	// Ignored while a file is selected.
-	h.press("j", "[")
-	h.press("g g", "]")
+	harness.press("j", "[")
+	harness.press("g g", "]")
 }
 
-func TestOverviewScrolling(t *testing.T) {
-	h := loaded(t, 100, 14)
-	h.press("l", "j")
-	if h.v.ov.vp.YOffset() != 1 {
-		t.Errorf("j: offset = %d", h.v.ov.vp.YOffset())
+func TestOverviewScrolling(test *testing.T) {
+	harness := loaded(test, 100, 14)
+	harness.press("l", "j")
+	if harness.v.ov.vp.YOffset() != 1 {
+		test.Errorf("j: offset = %d", harness.v.ov.vp.YOffset())
 	}
-	h.press("k")
-	h.press("ctrl+d")
-	if h.v.ov.vp.YOffset() == 0 {
-		t.Error("ctrl+d should scroll")
+	harness.press("k")
+	harness.press("ctrl+d")
+	if harness.v.ov.vp.YOffset() == 0 {
+		test.Error("ctrl+d should scroll")
 	}
-	h.press("G")
-	if !h.v.ov.vp.AtBottom() {
-		t.Error("G should reach the bottom")
+	harness.press("G")
+	if !harness.v.ov.vp.AtBottom() {
+		test.Error("G should reach the bottom")
 	}
-	h.press("g g")
-	if !h.v.ov.vp.AtTop() {
-		t.Error("g g should reach the top")
+	harness.press("g g")
+	if !harness.v.ov.vp.AtTop() {
+		test.Error("g g should reach the top")
 	}
-	h.press("ctrl+f", "ctrl+b", "ctrl+u")
+	harness.press("ctrl+f", "ctrl+b", "ctrl+u")
 }
 
-func TestOpenInBrowser(t *testing.T) {
-	h := loaded(t, 100, 24)
-	h.press("o")
-	if diff := cmp.Diff([]string{"https://example.test/acme/widgets/pull/7"}, h.opened); diff != "" {
-		t.Errorf("opened (-want +got):\n%s", diff)
+func TestOpenInBrowser(test *testing.T) {
+	harness := loaded(test, 100, 24)
+	harness.press("o")
+	if diff := cmp.Diff([]string{"https://example.test/acme/widgets/pull/7"}, harness.opened); diff != "" {
+		test.Errorf("opened (-want +got):\n%s", diff)
 	}
 
-	h2 := newHarness(t, 100, 24) // not loaded yet
-	h2.press("o")
-	if len(h2.opened) != 0 || len(h2.messages) == 0 {
-		t.Errorf("o before load: opened=%v msgs=%v", h2.opened, h2.messages)
+	secondHarness := newHarness(test, 100, 24) // not loaded yet
+	secondHarness.press("o")
+	if len(secondHarness.opened) != 0 || len(secondHarness.messages) == 0 {
+		test.Errorf("o before load: opened=%v msgs=%v", secondHarness.opened, secondHarness.messages)
 	}
 
-	h3 := loaded(t, 100, 24)
-	h3.v.open = func(string) error { return errors.New("no browser") }
-	h3.press("o")
-	if h3.lastErr() == nil {
-		t.Error("browser failure should reach the status bar")
+	thirdHarness := loaded(test, 100, 24)
+	thirdHarness.v.open = func(string) error { return errors.New("no browser") }
+	thirdHarness.press("o")
+	if thirdHarness.lastErr() == nil {
+		test.Error("browser failure should reach the status bar")
 	}
 }

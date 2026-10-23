@@ -12,25 +12,25 @@ import (
 )
 
 // mergeCommand runs :merge with args.
-func (c *composer) mergeCommand(args string) {
-	c.t.Helper()
-	cmd, ok := c.v.Command("merge", args)
+func (composer *composer) mergeCommand(arguments string) {
+	composer.t.Helper()
+	command, ok := composer.v.Command("merge", arguments)
 	if !ok {
-		c.t.Fatal("merge not handled")
+		composer.t.Fatal("merge not handled")
 	}
-	c.run(cmd)
+	composer.run(command)
 }
 
-func (c *composer) callCount(method string) (n int) {
-	for _, call := range c.client.Calls() {
+func (composer *composer) callCount(method string) (count int) {
+	for _, call := range composer.client.Calls() {
 		if call.Method == method {
-			n++
+			count++
 		}
 	}
-	return n
+	return count
 }
 
-func TestResolveMethod(t *testing.T) {
+func TestResolveMethod(test *testing.T) {
 	all := github.MergeStatus{Allowed: github.MergeMethods}
 	squashOnly := github.MergeStatus{Allowed: []github.MergeMethod{github.MergeMethodSquash, github.MergeMethodRebase}}
 	tests := []struct {
@@ -47,17 +47,17 @@ func TestResolveMethod(t *testing.T) {
 		{"squash not allowed", github.MergeMethodSquash, github.MergeStatus{Allowed: []github.MergeMethod{github.MergeMethodMerge}}, "", "squash merges are not allowed in this repo"},
 		{"nothing allowed", "", github.MergeStatus{}, "", "no merge method is allowed in this repo"},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := resolveMethod(tt.requested, tt.st)
-			if got != tt.want || (err == nil) != (tt.err == "") || (err != nil && err.Error() != tt.err) {
-				t.Errorf("got %q, %v; want %q, %q", got, err, tt.want, tt.err)
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			got, err := resolveMethod(testCase.requested, testCase.st)
+			if got != testCase.want || (err == nil) != (testCase.err == "") || (err != nil && err.Error() != testCase.err) {
+				test.Errorf("got %q, %v; want %q, %q", got, err, testCase.want, testCase.err)
 			}
 		})
 	}
 }
 
-func TestMergeConfirmationAndSuccess(t *testing.T) {
+func TestMergeConfirmationAndSuccess(test *testing.T) {
 	tests := []struct {
 		name      string
 		arguments string
@@ -82,189 +82,189 @@ func TestMergeConfirmationAndSuccess(t *testing.T) {
 			"Merge #7 into main (rebase)? Branch will be kept.", github.MergeMethodRebase, "Merged #7 (rebase)",
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			c := newReviewer(t)
-			c.client.SetMergeSettings(testRepository, tt.settings)
-			c.mergeCommand(tt.arguments)
-			conf, ok := c.lastConfirm()
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			composer := newReviewer(test)
+			composer.client.SetMergeSettings(testRepository, testCase.settings)
+			composer.mergeCommand(testCase.arguments)
+			configuration, ok := composer.lastConfirm()
 			if !ok {
-				t.Fatalf("no confirmation; error: %q", c.lastError())
+				test.Fatalf("no confirmation; error: %q", composer.lastError())
 			}
-			if conf.Text != tt.question || conf.Notice {
-				t.Errorf("confirm = %+v, want text %q", conf, tt.question)
+			if configuration.Text != testCase.question || configuration.Notice {
+				test.Errorf("confirm = %+v, want text %q", configuration, testCase.question)
 			}
-			if len(c.client.Merges()) != 0 {
-				t.Fatal("merged before the answer")
+			if len(composer.client.Merges()) != 0 {
+				test.Fatal("merged before the answer")
 			}
-			c.run(conf.OnYes)
-			want := []fake.Merge{{Repository: testRepository, Number: 7, PullRequestIdentifier: pullRequestNodeIdentifier, Method: tt.method, ExpectedHeadObjectIdentifier: headSHA}}
-			if diff := cmp.Diff(want, c.client.Merges()); diff != "" {
-				t.Errorf("merges (-want +got):\n%s", diff)
+			composer.run(configuration.OnYes)
+			want := []fake.Merge{{Repository: testRepository, Number: 7, PullRequestIdentifier: pullRequestNodeIdentifier, Method: testCase.method, ExpectedHeadObjectIdentifier: headSHA}}
+			if diff := cmp.Diff(want, composer.client.Merges()); diff != "" {
+				test.Errorf("merges (-want +got):\n%s", diff)
 			}
-			if diff := cmp.Diff([]string{"Merging…", tt.info}, c.infos()); diff != "" {
-				t.Errorf("info (-want +got):\n%s", diff)
+			if diff := cmp.Diff([]string{"Merging…", testCase.info}, composer.infos()); diff != "" {
+				test.Errorf("info (-want +got):\n%s", diff)
 			}
-			if c.v.detail.State != github.PullRequestStateMerged {
-				t.Errorf("workspace not refreshed after success: state %v", c.v.detail.State)
+			if composer.v.detail.State != github.PullRequestStateMerged {
+				test.Errorf("workspace not refreshed after success: state %v", composer.v.detail.State)
 			}
-			if c.v.Loading() {
-				t.Error("still loading after the merge")
+			if composer.v.Loading() {
+				test.Error("still loading after the merge")
 			}
 		})
 	}
 }
 
-func TestMergeNotAllowedMethodDoesNothing(t *testing.T) {
-	c := newReviewer(t)
-	c.client.SetMergeSettings(testRepository, fake.MergeSettings{Allowed: []github.MergeMethod{github.MergeMethodMerge}})
-	c.mergeCommand("squash")
-	if got := c.lastError(); got != "squash merges are not allowed in this repo" {
-		t.Errorf("error = %q", got)
+func TestMergeNotAllowedMethodDoesNothing(test *testing.T) {
+	composer := newReviewer(test)
+	composer.client.SetMergeSettings(testRepository, fake.MergeSettings{Allowed: []github.MergeMethod{github.MergeMethodMerge}})
+	composer.mergeCommand("squash")
+	if got := composer.lastError(); got != "squash merges are not allowed in this repo" {
+		test.Errorf("error = %q", got)
 	}
-	if _, ok := c.lastConfirm(); ok {
-		t.Error("asked for confirmation")
+	if _, ok := composer.lastConfirm(); ok {
+		test.Error("asked for confirmation")
 	}
-	if c.callCount(fake.MethodMergePullRequest) != 0 {
-		t.Error("a merge was attempted")
-	}
-}
-
-func TestMergeUnknownMethodArgument(t *testing.T) {
-	c := newReviewer(t)
-	before := len(c.client.Calls())
-	c.mergeCommand("sqash \x1b[31m")
-	if got := c.lastError(); !strings.Contains(got, `unknown merge method "sqash `) || strings.Contains(got, "\x1b") {
-		t.Errorf("error = %q", got)
-	}
-	if len(c.client.Calls()) != before {
-		t.Error("the client was called")
+	if composer.callCount(fake.MethodMergePullRequest) != 0 {
+		test.Error("a merge was attempted")
 	}
 }
 
-func TestMergeHeadMoved(t *testing.T) {
-	c := newReviewer(t)
-	c.client.SetHeadSHA(testRepository, 7, "bbbb2222") // pushed after the view loaded
-	c.mergeCommand("")
-	conf, ok := c.lastConfirm()
+func TestMergeUnknownMethodArgument(test *testing.T) {
+	composer := newReviewer(test)
+	before := len(composer.client.Calls())
+	composer.mergeCommand("sqash \x1b[31m")
+	if got := composer.lastError(); !strings.Contains(got, `unknown merge method "sqash `) || strings.Contains(got, "\x1b") {
+		test.Errorf("error = %q", got)
+	}
+	if len(composer.client.Calls()) != before {
+		test.Error("the client was called")
+	}
+}
+
+func TestMergeHeadMoved(test *testing.T) {
+	composer := newReviewer(test)
+	composer.client.SetHeadSHA(testRepository, 7, "bbbb2222") // pushed after the view loaded
+	composer.mergeCommand("")
+	configuration, ok := composer.lastConfirm()
 	if !ok {
-		t.Fatal("no notice shown")
+		test.Fatal("no notice shown")
 	}
-	if !conf.Notice || conf.Text != headMovedText || conf.OnYes != nil {
-		t.Errorf("confirm = %+v", conf)
+	if !configuration.Notice || configuration.Text != headMovedText || configuration.OnYes != nil {
+		test.Errorf("confirm = %+v", configuration)
 	}
-	c.run(conf.OnDismiss)
-	if len(c.client.Merges()) != 0 || c.callCount(fake.MethodMergePullRequest) != 0 {
-		t.Error("merged although the head moved")
+	composer.run(configuration.OnDismiss)
+	if len(composer.client.Merges()) != 0 || composer.callCount(fake.MethodMergePullRequest) != 0 {
+		test.Error("merged although the head moved")
 	}
-	if c.v.detail.HeadSHA != "bbbb2222" {
-		t.Errorf("workspace head = %q, want it refreshed", c.v.detail.HeadSHA)
-	}
-}
-
-func TestMergeHeadMovesAfterConfirmationIsRefusedAndNotRetried(t *testing.T) {
-	c := newReviewer(t)
-	c.mergeCommand("")
-	conf, _ := c.lastConfirm()
-	c.client.SetHeadSHA(testRepository, 7, "bbbb2222") // pushed while the question was open
-	c.run(conf.OnYes)
-	if c.callCount(fake.MethodMergePullRequest) != 1 || len(c.client.Merges()) != 0 {
-		t.Errorf("merge calls = %d, merges = %d", c.callCount(fake.MethodMergePullRequest), len(c.client.Merges()))
-	}
-	if c.lastError() == "" {
-		t.Error("no error shown")
-	}
-	if c.v.detail.HeadSHA != "bbbb2222" {
-		t.Error("workspace not refreshed")
+	if composer.v.detail.HeadSHA != "bbbb2222" {
+		test.Errorf("workspace head = %q, want it refreshed", composer.v.detail.HeadSHA)
 	}
 }
 
-func TestMergeRefusalShownThenRefreshed(t *testing.T) {
-	c := newReviewer(t)
-	c.mergeCommand("")
-	conf, _ := c.lastConfirm()
-	loads := c.callCount(fake.MethodGetPullRequest)
-	c.client.SetError(fake.MethodMergePullRequest, errors.New("2 of 3 required status checks are expected\x1b[31m"))
-	c.run(conf.OnYes)
+func TestMergeHeadMovesAfterConfirmationIsRefusedAndNotRetried(test *testing.T) {
+	composer := newReviewer(test)
+	composer.mergeCommand("")
+	configuration, _ := composer.lastConfirm()
+	composer.client.SetHeadSHA(testRepository, 7, "bbbb2222") // pushed while the question was open
+	composer.run(configuration.OnYes)
+	if composer.callCount(fake.MethodMergePullRequest) != 1 || len(composer.client.Merges()) != 0 {
+		test.Errorf("merge calls = %d, merges = %d", composer.callCount(fake.MethodMergePullRequest), len(composer.client.Merges()))
+	}
+	if composer.lastError() == "" {
+		test.Error("no error shown")
+	}
+	if composer.v.detail.HeadSHA != "bbbb2222" {
+		test.Error("workspace not refreshed")
+	}
+}
 
-	got := c.lastError()
+func TestMergeRefusalShownThenRefreshed(test *testing.T) {
+	composer := newReviewer(test)
+	composer.mergeCommand("")
+	configuration, _ := composer.lastConfirm()
+	loads := composer.callCount(fake.MethodGetPullRequest)
+	composer.client.SetError(fake.MethodMergePullRequest, errors.New("2 of 3 required status checks are expected\x1b[31m"))
+	composer.run(configuration.OnYes)
+
+	got := composer.lastError()
 	if !strings.Contains(got, "2 of 3 required status checks are expected") || strings.Contains(got, "\x1b") {
-		t.Errorf("error = %q", got)
+		test.Errorf("error = %q", got)
 	}
-	if c.callCount(fake.MethodMergePullRequest) != 1 {
-		t.Errorf("merge attempted %d times, want 1 (never retried)", c.callCount(fake.MethodMergePullRequest))
+	if composer.callCount(fake.MethodMergePullRequest) != 1 {
+		test.Errorf("merge attempted %d times, want 1 (never retried)", composer.callCount(fake.MethodMergePullRequest))
 	}
-	if c.callCount(fake.MethodGetPullRequest) <= loads {
-		t.Error("workspace not refreshed after the refusal")
+	if composer.callCount(fake.MethodGetPullRequest) <= loads {
+		test.Error("workspace not refreshed after the refusal")
 	}
-	if c.v.merge.merging || c.v.Loading() {
-		t.Error("still merging after the refusal")
+	if composer.v.merge.merging || composer.v.Loading() {
+		test.Error("still merging after the refusal")
 	}
-	if len(c.client.Merges()) != 0 {
-		t.Error("a refused merge was recorded")
+	if len(composer.client.Merges()) != 0 {
+		test.Error("a refused merge was recorded")
 	}
 }
 
-func TestMergeBlockedWhileInFlight(t *testing.T) {
-	c := newReviewer(t)
-	c.mergeCommand("")
-	conf, _ := c.lastConfirm()
+func TestMergeBlockedWhileInFlight(test *testing.T) {
+	composer := newReviewer(test)
+	composer.mergeCommand("")
+	configuration, _ := composer.lastConfirm()
 	// Deliver the confirmation's message without running the merge command.
-	send := conf.OnYes()
-	v, _ := c.v.Update(send)
-	c.v = v.(*View)
-	if !c.v.merge.merging || !c.v.Loading() {
-		t.Fatalf("merging = %v, loading = %v", c.v.merge.merging, c.v.Loading())
+	send := configuration.OnYes()
+	view, _ := composer.v.Update(send)
+	composer.v = view.(*View)
+	if !composer.v.merge.merging || !composer.v.Loading() {
+		test.Fatalf("merging = %v, loading = %v", composer.v.merge.merging, composer.v.Loading())
 	}
-	before := len(c.client.Calls())
-	c.messages = nil
-	c.mergeCommand("")
-	if diff := cmp.Diff([]string{"a merge is in progress"}, c.infos()); diff != "" {
-		t.Errorf("info (-want +got):\n%s", diff)
+	before := len(composer.client.Calls())
+	composer.messages = nil
+	composer.mergeCommand("")
+	if diff := cmp.Diff([]string{"a merge is in progress"}, composer.infos()); diff != "" {
+		test.Errorf("info (-want +got):\n%s", diff)
 	}
-	if len(c.client.Calls()) != before {
-		t.Error("a second merge started querying")
+	if len(composer.client.Calls()) != before {
+		test.Error("a second merge started querying")
 	}
 }
 
-func TestMergeNeedsLoadedPullRequestAndDiff(t *testing.T) {
-	t.Run("not loaded", func(t *testing.T) {
-		c := &composer{harness: newHarness(t, 110, 40)} // Init not delivered
-		c.mergeCommand("")
-		if diff := cmp.Diff([]string{"pull request not loaded yet"}, c.infos()); diff != "" {
-			t.Errorf("info (-want +got):\n%s", diff)
+func TestMergeNeedsLoadedPullRequestAndDiff(test *testing.T) {
+	test.Run("not loaded", func(test *testing.T) {
+		testComposer := &composer{harness: newHarness(test, 110, 40)} // Init not delivered
+		testComposer.mergeCommand("")
+		if diff := cmp.Diff([]string{"pull request not loaded yet"}, testComposer.infos()); diff != "" {
+			test.Errorf("info (-want +got):\n%s", diff)
 		}
 	})
-	t.Run("diff not loaded", func(t *testing.T) {
-		c := newReviewer(t)
-		c.v.diff = DiffState{}
-		c.mergeCommand("")
-		if diff := cmp.Diff([]string{"diff not loaded"}, c.infos()); diff != "" {
-			t.Errorf("info (-want +got):\n%s", diff)
+	test.Run("diff not loaded", func(test *testing.T) {
+		composer := newReviewer(test)
+		composer.v.diff = DiffState{}
+		composer.mergeCommand("")
+		if diff := cmp.Diff([]string{"diff not loaded"}, composer.infos()); diff != "" {
+			test.Errorf("info (-want +got):\n%s", diff)
 		}
 	})
 }
 
-func TestMergeFlowIgnoresOtherFlowsAndStaleResults(t *testing.T) {
-	var f, other mergeFlow
-	env := flowEnvironment(fake.New())
-	if _, handled := f.update(refreshMessage{}, env); handled {
-		t.Error("an unrelated message was claimed")
+func TestMergeFlowIgnoresOtherFlowsAndStaleResults(test *testing.T) {
+	var flow, other mergeFlow
+	environment := flowEnvironment(fake.New())
+	if _, handled := flow.update(refreshMessage{}, environment); handled {
+		test.Error("an unrelated message was claimed")
 	}
-	cmd, handled := f.update(mergedMessage{flow: &other, repository: testRepository, number: 7}, env)
-	if !handled || cmd != nil {
-		t.Errorf("foreign result: handled=%v cmd=%v", handled, cmd != nil)
+	command, handled := flow.update(mergedMessage{flow: &other, repository: testRepository, number: 7}, environment)
+	if !handled || command != nil {
+		test.Errorf("foreign result: handled=%v cmd=%v", handled, command != nil)
 	}
-	f.sequence = 2
-	cmd, handled = f.update(mergeFreshMessage{flow: &f, repository: testRepository, number: 7, sequence: 1}, env)
-	if !handled || cmd != nil {
-		t.Errorf("stale result: handled=%v cmd=%v", handled, cmd != nil)
+	flow.sequence = 2
+	command, handled = flow.update(mergeFreshMessage{flow: &flow, repository: testRepository, number: 7, sequence: 1}, environment)
+	if !handled || command != nil {
+		test.Errorf("stale result: handled=%v cmd=%v", handled, command != nil)
 	}
 }
 
-func TestMergeQuestionCleansBaseBranch(t *testing.T) {
-	q := mergeQuestion(7, github.MergeMethodMerge, github.MergeStatus{BaseBranch: "ma\x1b[31min"})
-	if strings.Contains(q, "\x1b") {
-		t.Errorf("question = %q", q)
+func TestMergeQuestionCleansBaseBranch(test *testing.T) {
+	query := mergeQuestion(7, github.MergeMethodMerge, github.MergeStatus{BaseBranch: "ma\x1b[31min"})
+	if strings.Contains(query, "\x1b") {
+		test.Errorf("question = %q", query)
 	}
 }

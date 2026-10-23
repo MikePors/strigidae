@@ -45,46 +45,46 @@ func testThreads() []github.ReviewThread {
 	}
 }
 
-func threadHarness(t *testing.T, w, h int) *harness {
-	t.Helper()
-	hs := newHarness(t, w, h)
-	hs.client.SetReviewThreads(testRepository, 7, testThreads())
-	hs.run(hs.v.Init())
-	return hs
+func threadHarness(test *testing.T, width, height int) *harness {
+	test.Helper()
+	otherHarness := newHarness(test, width, height)
+	otherHarness.client.SetReviewThreads(testRepository, 7, testThreads())
+	otherHarness.run(otherHarness.v.Init())
+	return otherHarness
 }
 
-func TestThreadsLoadedAndSorted(t *testing.T) {
-	h := threadHarness(t, 100, 40)
-	var ids []string
-	for _, th := range h.v.threads {
-		ids = append(ids, th.Identifier)
+func TestThreadsLoadedAndSorted(test *testing.T) {
+	harness := threadHarness(test, 100, 40)
+	var identifiers []string
+	for _, thread := range harness.v.threads {
+		identifiers = append(identifiers, thread.Identifier)
 	}
 	want := "t-readme,t-outdated,t-resolved,t-open" // by path, then line (outdated by original line)
-	if got := strings.Join(ids, ","); got != want {
-		t.Errorf("threads = %s, want %s", got, want)
+	if got := strings.Join(identifiers, ","); got != want {
+		test.Errorf("threads = %s, want %s", got, want)
 	}
-	if h.v.Loading() {
-		t.Error("still loading")
+	if harness.v.Loading() {
+		test.Error("still loading")
 	}
 }
 
-func TestThreadsPagedLoad(t *testing.T) {
-	h := newHarness(t, 100, 40)
+func TestThreadsPagedLoad(test *testing.T) {
+	harness := newHarness(test, 100, 40)
 	var many []github.ReviewThread
 	for i := range 75 {
 		many = append(many, github.ReviewThread{Identifier: fmt.Sprintf("t%02d", i), Path: "README.md", Line: i + 1, Comments: []github.ReviewComment{tc("x", "y", time.Hour)}})
 	}
-	h.client.SetReviewThreads(testRepository, 7, many)
-	h.run(h.v.Init())
-	if len(h.v.threads) != 75 {
-		t.Errorf("loaded %d threads, want all 75", len(h.v.threads))
+	harness.client.SetReviewThreads(testRepository, 7, many)
+	harness.run(harness.v.Init())
+	if len(harness.v.threads) != 75 {
+		test.Errorf("loaded %d threads, want all 75", len(harness.v.threads))
 	}
 }
 
-func TestThreadsInOverview(t *testing.T) {
-	h := threadHarness(t, 100, 60)
-	h.press("l", "]", "]")
-	out := ansi.Strip(h.render())
+func TestThreadsInOverview(test *testing.T) {
+	harness := threadHarness(test, 100, 60)
+	harness.press("l", "]", "]")
+	out := ansi.Strip(harness.render())
 	for _, want := range []string{
 		"Review threads (4)",
 		"internal/sync/client.go:14 bob", "Why retry here?", "Handles flaky links.",
@@ -93,153 +93,153 @@ func TestThreadsInOverview(t *testing.T) {
 		"README.md:1 erin",
 	} {
 		if !strings.Contains(out, want) {
-			t.Errorf("overview is missing %q:\n%s", want, out)
+			test.Errorf("overview is missing %q:\n%s", want, out)
 		}
 	}
 }
 
-func TestOverviewWithoutThreads(t *testing.T) {
-	h := loaded(t, 100, 40)
-	h.press("l", "G")
-	if out := ansi.Strip(h.render()); !strings.Contains(out, "Review threads (0)") || !strings.Contains(out, "No review threads.") {
-		t.Errorf("empty state missing:\n%s", out)
+func TestOverviewWithoutThreads(test *testing.T) {
+	harness := loaded(test, 100, 40)
+	harness.press("l", "G")
+	if out := ansi.Strip(harness.render()); !strings.Contains(out, "Review threads (0)") || !strings.Contains(out, "No review threads.") {
+		test.Errorf("empty state missing:\n%s", out)
 	}
 }
 
-func TestThreadErrorKeepsPullRequestUsable(t *testing.T) {
-	h := newHarness(t, 100, 40)
-	h.client.SetError(fake.MethodListReviewThreads, errors.New("threads boom"))
-	h.run(h.v.Init())
-	if h.v.detail == nil || h.v.Loading() {
-		t.Fatalf("the pull request should load without threads (detail=%v loading=%v)", h.v.detail != nil, h.v.Loading())
+func TestThreadErrorKeepsPullRequestUsable(test *testing.T) {
+	harness := newHarness(test, 100, 40)
+	harness.client.SetError(fake.MethodListReviewThreads, errors.New("threads boom"))
+	harness.run(harness.v.Init())
+	if harness.v.detail == nil || harness.v.Loading() {
+		test.Fatalf("the pull request should load without threads (detail=%v loading=%v)", harness.v.detail != nil, harness.v.Loading())
 	}
-	if err := h.lastErr(); err == nil || !strings.Contains(err.Error(), "review threads") {
-		t.Errorf("status bar error = %v", err)
+	if err := harness.lastErr(); err == nil || !strings.Contains(err.Error(), "review threads") {
+		test.Errorf("status bar error = %v", err)
 	}
 	// A later good refresh brings them in; a failing refresh keeps them.
-	h.client.SetError(fake.MethodListReviewThreads, nil)
-	h.client.SetReviewThreads(testRepository, 7, testThreads())
-	h.press("R")
-	if len(h.v.threads) != 4 {
-		t.Fatalf("threads after refresh = %d", len(h.v.threads))
+	harness.client.SetError(fake.MethodListReviewThreads, nil)
+	harness.client.SetReviewThreads(testRepository, 7, testThreads())
+	harness.press("R")
+	if len(harness.v.threads) != 4 {
+		test.Fatalf("threads after refresh = %d", len(harness.v.threads))
 	}
-	h.client.SetError(fake.MethodListReviewThreads, errors.New("again"))
-	h.press("R")
-	if len(h.v.threads) != 4 {
-		t.Errorf("a failed refresh dropped the threads: %d", len(h.v.threads))
+	harness.client.SetError(fake.MethodListReviewThreads, errors.New("again"))
+	harness.press("R")
+	if len(harness.v.threads) != 4 {
+		test.Errorf("a failed refresh dropped the threads: %d", len(harness.v.threads))
 	}
 }
 
-func TestStaleThreadsIgnored(t *testing.T) {
-	h := loaded(t, 100, 30)
-	cur := h.v.sequence
+func TestStaleThreadsIgnored(test *testing.T) {
+	harness := loaded(test, 100, 30)
+	current := harness.v.sequence
 	stale := []github.ReviewThread{{Identifier: "stale", Path: "x"}}
-	for name, msg := range map[string]threadsLoadedMessage{
-		"old seq":      {owner: h.v, repository: testRepository, number: 7, sequence: cur - 1, threads: stale},
-		"other number": {owner: h.v, repository: testRepository, number: 8, sequence: cur, threads: stale},
-		"other view":   {owner: nil, repository: testRepository, number: 7, sequence: cur, threads: stale},
+	for name, message := range map[string]threadsLoadedMessage{
+		"old seq":      {owner: harness.v, repository: testRepository, number: 7, sequence: current - 1, threads: stale},
+		"other number": {owner: harness.v, repository: testRepository, number: 8, sequence: current, threads: stale},
+		"other view":   {owner: nil, repository: testRepository, number: 7, sequence: current, threads: stale},
 	} {
-		h.send(msg)
-		if len(h.v.threads) != 0 {
-			t.Errorf("%s: stale threads applied", name)
+		harness.send(message)
+		if len(harness.v.threads) != 0 {
+			test.Errorf("%s: stale threads applied", name)
 		}
 	}
 }
 
-func (h *harness) selectFile() {
+func (harness *harness) selectFile() {
 	const path = "internal/sync/client.go"
-	h.t.Helper()
-	for i, f := range h.v.files() {
-		if f.Path == path {
-			h.v.selectEntry(i + 1)
-			h.press("l")
+	harness.t.Helper()
+	for i, file := range harness.v.files() {
+		if file.Path == path {
+			harness.v.selectEntry(i + 1)
+			harness.press("l")
 			return
 		}
 	}
-	h.t.Fatalf("no file %s", path)
+	harness.t.Fatalf("no file %s", path)
 }
 
-func TestThreadsInDiff(t *testing.T) {
-	h := threadHarness(t, 110, 40)
-	h.selectFile()
-	out := ansi.Strip(h.render())
+func TestThreadsInDiff(test *testing.T) {
+	harness := threadHarness(test, 110, 40)
+	harness.selectFile()
+	out := ansi.Strip(harness.render())
 	for _, want := range []string{
 		"▾ bob 2 comments", "Why retry here?", "Handles flaky links.", "❤️ 1",
 		"▸ carol 1 comment · 1d ago [resolved] — Nit: unused import.",
 		"[outdated]",
 	} {
 		if !strings.Contains(out, want) {
-			t.Errorf("diff is missing %q:\n%s", want, out)
+			test.Errorf("diff is missing %q:\n%s", want, out)
 		}
 	}
 	if strings.Contains(out, "Typo.") {
-		t.Error("a thread on another file leaked into this diff")
+		test.Error("a thread on another file leaked into this diff")
 	}
 }
 
-func TestThreadKeys(t *testing.T) {
-	h := threadHarness(t, 110, 40)
-	h.selectFile()
-	has := func(s string) bool { return strings.Contains(ansi.Strip(h.render()), s) }
+func TestThreadKeys(test *testing.T) {
+	harness := threadHarness(test, 110, 40)
+	harness.selectFile()
+	has := func(text string) bool { return strings.Contains(ansi.Strip(harness.render()), text) }
 
-	h.press(")") // first thread in row order: the resolved one on line 12
-	if !strings.Contains(h.cursorRow(), "carol") {
-		t.Fatalf(") landed on %q", h.cursorRow())
+	harness.press(")") // first thread in row order: the resolved one on line 12
+	if !strings.Contains(harness.cursorRow(), "carol") {
+		test.Fatalf(") landed on %q", harness.cursorRow())
 	}
-	h.press("z o")
+	harness.press("z o")
 	if !has("Nit: unused import.") || !has("▾ carol") {
-		t.Error("z o should open the resolved thread")
+		test.Error("z o should open the resolved thread")
 	}
-	h.press("z c")
+	harness.press("z c")
 	if has("│ carol") {
-		t.Error("z c should close it")
+		test.Error("z c should close it")
 	}
-	h.press("enter")
+	harness.press("enter")
 	if !has("│ carol") {
-		t.Error("enter on a thread header should toggle it")
+		test.Error("enter on a thread header should toggle it")
 	}
-	h.press("z a")
+	harness.press("z a")
 	if has("│ carol") {
-		t.Error("z a should toggle it")
+		test.Error("z a should toggle it")
 	}
 
-	h.press(")")
-	if !strings.Contains(h.cursorRow(), "bob") {
-		t.Errorf("second ) landed on %q", h.cursorRow())
+	harness.press(")")
+	if !strings.Contains(harness.cursorRow(), "bob") {
+		test.Errorf("second ) landed on %q", harness.cursorRow())
 	}
-	h.press("(")
-	if !strings.Contains(h.cursorRow(), "carol") {
-		t.Errorf("( landed on %q", h.cursorRow())
+	harness.press("(")
+	if !strings.Contains(harness.cursorRow(), "carol") {
+		test.Errorf("( landed on %q", harness.cursorRow())
 	}
 
 	// enter on the commented diff line toggles its thread.
-	h.press("(", "k")
-	if h.cursorText() == "" || !strings.Contains(h.cursorRow(), "12") {
-		t.Fatalf("setup: expected the commented line 12, at %q", h.cursorRow())
+	harness.press("(", "k")
+	if harness.cursorText() == "" || !strings.Contains(harness.cursorRow(), "12") {
+		test.Fatalf("setup: expected the commented line 12, at %q", harness.cursorRow())
 	}
-	h.press("enter")
+	harness.press("enter")
 	if !has("│ carol") {
-		t.Error("enter on a commented line should open its thread")
+		test.Error("enter on a commented line should open its thread")
 	}
 }
 
 // cursorRow is the screen row holding the diff cursor mark.
-func (h *harness) cursorRow() string {
-	for _, l := range strings.Split(ansi.Strip(h.render()), "\n") {
-		if strings.Contains(l, "││>") {
-			return l
+func (harness *harness) cursorRow() string {
+	for _, line := range strings.Split(ansi.Strip(harness.render()), "\n") {
+		if strings.Contains(line, "││>") {
+			return line
 		}
 	}
-	h.t.Fatalf("no cursor row:\n%s", ansi.Strip(h.render()))
+	harness.t.Fatalf("no cursor row:\n%s", ansi.Strip(harness.render()))
 	return ""
 }
 
-func TestThreadKeysAreRegisteredForSequences(t *testing.T) {
-	h := loaded(t, 100, 30)
+func TestThreadKeysAreRegisteredForSequences(test *testing.T) {
+	harness := loaded(test, 100, 30)
 	want := map[string]bool{")": false, "(": false, "z a": false, "z o": false, "z c": false}
-	for _, group := range h.v.FullHelp() {
-		for _, b := range group {
-			for _, k := range b.Keys() {
+	for _, group := range harness.v.FullHelp() {
+		for _, binding := range group {
+			for _, k := range binding.Keys() {
 				if _, ok := want[k]; ok {
 					want[k] = true
 				}
@@ -248,75 +248,75 @@ func TestThreadKeysAreRegisteredForSequences(t *testing.T) {
 	}
 	for k, ok := range want {
 		if !ok {
-			t.Errorf("FullHelp does not register %q", k)
+			test.Errorf("FullHelp does not register %q", k)
 		}
 	}
 }
 
-func TestEnterInOverviewDoesNothingToThreads(t *testing.T) {
-	h := threadHarness(t, 100, 40)
-	h.press("l", "enter") // overview focused: must not panic or change selection
-	if h.v.sel() != 0 {
-		t.Error("enter in the overview changed the selection")
+func TestEnterInOverviewDoesNothingToThreads(test *testing.T) {
+	harness := threadHarness(test, 100, 40)
+	harness.press("l", "enter") // overview focused: must not panic or change selection
+	if harness.v.sel() != 0 {
+		test.Error("enter in the overview changed the selection")
 	}
 }
 
-func TestGoldenThreads(t *testing.T) {
-	t.Run("overview_threads", func(t *testing.T) {
-		h := threadHarness(t, 100, 40)
-		h.press("l", "]", "]")
-		golden.Assert(t, "overview_threads", h.render(), false)
+func TestGoldenThreads(test *testing.T) {
+	test.Run("overview_threads", func(test *testing.T) {
+		harness := threadHarness(test, 100, 40)
+		harness.press("l", "]", "]")
+		golden.Assert(test, "overview_threads", harness.render(), false)
 	})
-	t.Run("diff_threads", func(t *testing.T) {
-		h := threadHarness(t, 100, 40)
-		h.selectFile()
-		golden.Assert(t, "diff_threads", h.render(), false)
+	test.Run("diff_threads", func(test *testing.T) {
+		harness := threadHarness(test, 100, 40)
+		harness.selectFile()
+		golden.Assert(test, "diff_threads", harness.render(), false)
 	})
-	t.Run("diff_threads_narrow", func(t *testing.T) {
-		h := threadHarness(t, 60, 24)
-		h.selectFile()
-		golden.Assert(t, "diff_threads_narrow", h.render(), false)
+	test.Run("diff_threads_narrow", func(test *testing.T) {
+		harness := threadHarness(test, 60, 24)
+		harness.selectFile()
+		golden.Assert(test, "diff_threads_narrow", harness.render(), false)
 	})
 }
 
-func overviewThreadsText(h *harness) string {
-	h.press("l", "G")
-	return ansi.Strip(h.render())
+func overviewThreadsText(harness *harness) string {
+	harness.press("l", "G")
+	return ansi.Strip(harness.render())
 }
 
-func TestOverviewThreadsLoadingState(t *testing.T) {
-	h := newHarness(t, 100, 40)
-	for _, m := range messages(h.v.Init()) {
-		if _, ok := m.(threadsLoadedMessage); !ok { // the thread load is still in flight
-			h.send(m)
+func TestOverviewThreadsLoadingState(test *testing.T) {
+	harness := newHarness(test, 100, 40)
+	for _, message := range messages(harness.v.Init()) {
+		if _, ok := message.(threadsLoadedMessage); !ok { // the thread load is still in flight
+			harness.send(message)
 		}
 	}
-	out := overviewThreadsText(h)
+	out := overviewThreadsText(harness)
 	if !strings.Contains(out, "Loading review threads…") || strings.Contains(out, "No review threads.") {
-		t.Errorf("expected the loading state:\n%s", out)
+		test.Errorf("expected the loading state:\n%s", out)
 	}
 }
 
-func TestOverviewThreadsErrorState(t *testing.T) {
-	h := newHarness(t, 100, 40)
-	h.client.SetError(fake.MethodListReviewThreads, errors.New("boom\x1b[2J"))
-	h.run(h.v.Init())
-	out := overviewThreadsText(h)
+func TestOverviewThreadsErrorState(test *testing.T) {
+	harness := newHarness(test, 100, 40)
+	harness.client.SetError(fake.MethodListReviewThreads, errors.New("boom\x1b[2J"))
+	harness.run(harness.v.Init())
+	out := overviewThreadsText(harness)
 	if !strings.Contains(out, "Could not load review threads: ") || !strings.Contains(out, "boom") || strings.Contains(out, "No review threads.") {
-		t.Errorf("expected the error state:\n%s", out)
+		test.Errorf("expected the error state:\n%s", out)
 	}
-	assertTame(t, "thread error state", h.render())
+	assertTame(test, "thread error state", harness.render())
 	// The next load replaces it.
-	h.client.SetError(fake.MethodListReviewThreads, nil)
-	h.press("R")
-	if out := ansi.Strip(h.render()); !strings.Contains(out, "No review threads.") || strings.Contains(out, "Could not load") {
-		t.Errorf("expected the empty state after a good load:\n%s", out)
+	harness.client.SetError(fake.MethodListReviewThreads, nil)
+	harness.press("R")
+	if out := ansi.Strip(harness.render()); !strings.Contains(out, "No review threads.") || strings.Contains(out, "Could not load") {
+		test.Errorf("expected the empty state after a good load:\n%s", out)
 	}
 }
 
-func TestOverviewThreadsEmptyState(t *testing.T) {
-	h := loaded(t, 100, 40)
-	if out := overviewThreadsText(h); !strings.Contains(out, "Review threads (0)") || !strings.Contains(out, "No review threads.") {
-		t.Errorf("expected the empty state:\n%s", out)
+func TestOverviewThreadsEmptyState(test *testing.T) {
+	harness := loaded(test, 100, 40)
+	if out := overviewThreadsText(harness); !strings.Contains(out, "Review threads (0)") || !strings.Contains(out, "No review threads.") {
+		test.Errorf("expected the empty state:\n%s", out)
 	}
 }

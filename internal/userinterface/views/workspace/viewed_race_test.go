@@ -16,47 +16,47 @@ import (
 
 // pressV delivers v and returns its command without running it, so a test
 // decides when the mutation reaches the server.
-func (h *harness) pressV() tea.Cmd {
-	h.t.Helper()
-	v, cmd := h.v.Update(keys.Message{Sequence: "v"})
-	h.v = v.(*View)
-	return cmd
+func (harness *harness) pressV() tea.Cmd {
+	harness.t.Helper()
+	view, command := harness.v.Update(keys.Message{Sequence: "v"})
+	harness.v = view.(*View)
+	return command
 }
 
 // finish runs cmd, delivers its results and returns the follow-up command the
 // view issued, if any.
-func (h *harness) finish(cmd tea.Cmd) tea.Cmd {
-	h.t.Helper()
+func (harness *harness) finish(command tea.Cmd) tea.Cmd {
+	harness.t.Helper()
 	var next tea.Cmd
-	for _, m := range messages(cmd) {
-		switch m.(type) {
+	for _, message := range messages(command) {
+		switch message.(type) {
 		case userinterface.ErrorMessage, userinterface.InfoMessage:
-			h.messages = append(h.messages, m)
+			harness.messages = append(harness.messages, message)
 		default:
-			v, c := h.v.Update(m)
-			h.v = v.(*View)
-			if c != nil {
-				next = c
+			view, command := harness.v.Update(message)
+			harness.v = view.(*View)
+			if command != nil {
+				next = command
 			}
 		}
 	}
 	return next
 }
 
-func sentStates(c *fake.Client) []bool {
+func sentStates(client *fake.Client) []bool {
 	var out []bool
-	for _, call := range viewedCalls(c) {
+	for _, call := range viewedCalls(client) {
 		out = append(out, call.Viewed)
 	}
 	return out
 }
 
-func (h *harness) reload(d github.PullRequestDetail) {
-	h.t.Helper()
-	h.send(pullRequestLoadedMessage{owner: h.v, repository: testRepository, number: 7, sequence: h.v.sequence, detail: d})
+func (harness *harness) reload(detail github.PullRequestDetail) {
+	harness.t.Helper()
+	harness.send(pullRequestLoadedMessage{owner: harness.v, repository: testRepository, number: 7, sequence: harness.v.sequence, detail: detail})
 }
 
-func TestRapidTogglesAreSerialised(t *testing.T) {
+func TestRapidTogglesAreSerialised(test *testing.T) {
 	tests := []struct {
 		name       string
 		presses    int
@@ -67,169 +67,169 @@ func TestRapidTogglesAreSerialised(t *testing.T) {
 		{"three presses", 3, []bool{true}, github.FileViewed},
 		{"four presses", 4, []bool{true, false}, github.FileUnviewed},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			h := viewedHarness(t, 100, 24)
-			h.press("j")
-			cmd := h.pressV()
-			for range tt.presses - 1 {
-				if h.pressV() != nil {
-					t.Fatal("a second mutation was sent while one is in flight")
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			harness := viewedHarness(test, 100, 24)
+			harness.press("j")
+			command := harness.pressV()
+			for range testCase.presses - 1 {
+				if harness.pressV() != nil {
+					test.Fatal("a second mutation was sent while one is in flight")
 				}
 			}
-			if n := len(viewedCalls(h.client)); n != 0 {
-				t.Fatalf("%d calls before the first result", n)
+			if count := len(viewedCalls(harness.client)); count != 0 {
+				test.Fatalf("%d calls before the first result", count)
 			}
-			for cmd != nil {
-				cmd = h.finish(cmd)
+			for command != nil {
+				command = harness.finish(command)
 			}
-			if got := sentStates(h.client); !slices.Equal(got, tt.wantSent) {
-				t.Errorf("sent = %v, want %v", got, tt.wantSent)
+			if got := sentStates(harness.client); !slices.Equal(got, testCase.wantSent) {
+				test.Errorf("sent = %v, want %v", got, testCase.wantSent)
 			}
-			if got := h.serverState(); got != tt.wantServer {
-				t.Errorf("server = %q, want %q", got, tt.wantServer)
+			if got := harness.serverState(); got != testCase.wantServer {
+				test.Errorf("server = %q, want %q", got, testCase.wantServer)
 			}
-			if got := h.stateOf(); got != tt.wantServer {
-				t.Errorf("shown = %q, want %q", got, tt.wantServer)
+			if got := harness.stateOf(); got != testCase.wantServer {
+				test.Errorf("shown = %q, want %q", got, testCase.wantServer)
 			}
 		})
 	}
 }
 
-func TestRapidTogglesBothFailRevertToConfirmed(t *testing.T) {
-	h := viewedHarness(t, 100, 24, github.FileUnviewed)
-	h.client.SetError(fake.MethodSetFileViewed, errors.New("boom"))
-	h.press("j")
-	cmd := h.pressV()
-	h.pressV() // wants unviewed again
-	if next := h.finish(cmd); next != nil {
-		t.Error("nothing more should be sent: the wanted state is the confirmed one")
+func TestRapidTogglesBothFailRevertToConfirmed(test *testing.T) {
+	harness := viewedHarness(test, 100, 24, github.FileUnviewed)
+	harness.client.SetError(fake.MethodSetFileViewed, errors.New("boom"))
+	harness.press("j")
+	command := harness.pressV()
+	harness.pressV() // wants unviewed again
+	if next := harness.finish(command); next != nil {
+		test.Error("nothing more should be sent: the wanted state is the confirmed one")
 	}
-	if got := h.stateOf(); got != github.FileUnviewed {
-		t.Errorf("shown = %q", got)
+	if got := harness.stateOf(); got != github.FileUnviewed {
+		test.Errorf("shown = %q", got)
 	}
-	if n := len(viewedCalls(h.client)); n != 1 {
-		t.Errorf("%d calls, want 1", n)
+	if count := len(viewedCalls(harness.client)); count != 1 {
+		test.Errorf("%d calls, want 1", count)
 	}
-	if h.lastErr() == nil {
-		t.Error("no error shown")
+	if harness.lastErr() == nil {
+		test.Error("no error shown")
 	}
 }
 
-func TestFailureMessagesNameTheAction(t *testing.T) {
-	h := viewedHarness(t, 100, 24, github.FileViewed)
-	h.client.SetError(fake.MethodSetFileViewed, errors.New("boom"))
-	h.press("j", "v")
-	err := h.lastErr()
+func TestFailureMessagesNameTheAction(test *testing.T) {
+	harness := viewedHarness(test, 100, 24, github.FileViewed)
+	harness.client.SetError(fake.MethodSetFileViewed, errors.New("boom"))
+	harness.press("j", "v")
+	err := harness.lastErr()
 	if err == nil || !strings.HasPrefix(err.Error(), "unmark "+firstFile+" as viewed: boom") {
-		t.Errorf("error = %v", err)
+		test.Errorf("error = %v", err)
 	}
 }
 
-func TestRefreshMidToggleKeepsOptimisticMark(t *testing.T) {
-	h := viewedHarness(t, 100, 24)
-	h.press("j")
-	cmd := h.pressV()
-	h.reload(testDetail()) // read before the mutation landed: unviewed
-	if got := h.stateOf(); got != github.FileViewed {
-		t.Fatalf("refresh dropped the optimistic mark: %q", got)
+func TestRefreshMidToggleKeepsOptimisticMark(test *testing.T) {
+	harness := viewedHarness(test, 100, 24)
+	harness.press("j")
+	command := harness.pressV()
+	harness.reload(testDetail()) // read before the mutation landed: unviewed
+	if got := harness.stateOf(); got != github.FileViewed {
+		test.Fatalf("refresh dropped the optimistic mark: %q", got)
 	}
-	h.finish(cmd)
-	if got := h.stateOf(); got != github.FileViewed {
-		t.Errorf("after success shown = %q", got)
+	harness.finish(command)
+	if got := harness.stateOf(); got != github.FileViewed {
+		test.Errorf("after success shown = %q", got)
 	}
 	// Once settled, the next reload shows the server's state again.
-	h.v.sequence++ // a reload started after the mutation settled
-	d := testDetail()
-	d.Files[0].Viewed = github.FileDismissed
-	h.reload(d)
-	if got := h.stateOf(); got != github.FileDismissed {
-		t.Errorf("settled entry still overrides the reload: %q", got)
+	harness.v.sequence++ // a reload started after the mutation settled
+	detail := testDetail()
+	detail.Files[0].Viewed = github.FileDismissed
+	harness.reload(detail)
+	if got := harness.stateOf(); got != github.FileDismissed {
+		test.Errorf("settled entry still overrides the reload: %q", got)
 	}
-	if len(h.v.viewedState) != 0 {
-		t.Errorf("settled entries kept: %v", h.v.viewedState)
+	if len(harness.v.viewedState) != 0 {
+		test.Errorf("settled entries kept: %v", harness.v.viewedState)
 	}
 }
 
-func TestFailureAfterRefreshReverts(t *testing.T) {
-	h := viewedHarness(t, 100, 24, github.FileUnviewed)
-	h.client.SetError(fake.MethodSetFileViewed, errors.New("boom"))
-	h.press("j")
-	cmd := h.pressV()
-	h.reload(unviewedDetail())
-	h.finish(cmd)
-	if got := h.stateOf(); got != github.FileUnviewed {
-		t.Errorf("shown = %q, want reverted", got)
+func TestFailureAfterRefreshReverts(test *testing.T) {
+	harness := viewedHarness(test, 100, 24, github.FileUnviewed)
+	harness.client.SetError(fake.MethodSetFileViewed, errors.New("boom"))
+	harness.press("j")
+	command := harness.pressV()
+	harness.reload(unviewedDetail())
+	harness.finish(command)
+	if got := harness.stateOf(); got != github.FileUnviewed {
+		test.Errorf("shown = %q, want reverted", got)
 	}
 	// The next reload has nothing left to reapply.
-	h.reload(unviewedDetail())
-	if got := h.stateOf(); got != github.FileUnviewed {
-		t.Errorf("shown = %q", got)
+	harness.reload(unviewedDetail())
+	if got := harness.stateOf(); got != github.FileUnviewed {
+		test.Errorf("shown = %q", got)
 	}
 }
 
-func TestToggleOnVanishedFileIsDropped(t *testing.T) {
-	h := viewedHarness(t, 100, 24)
-	h.press("j")
-	cmd := h.pressV()
-	d := testDetail()
-	d.Files = d.Files[1:]
-	h.reload(d)
-	if len(h.v.viewedState) != 0 {
-		t.Errorf("entry for a vanished file kept: %v", h.v.viewedState)
+func TestToggleOnVanishedFileIsDropped(test *testing.T) {
+	harness := viewedHarness(test, 100, 24)
+	harness.press("j")
+	command := harness.pressV()
+	detail := testDetail()
+	detail.Files = detail.Files[1:]
+	harness.reload(detail)
+	if len(harness.v.viewedState) != 0 {
+		test.Errorf("entry for a vanished file kept: %v", harness.v.viewedState)
 	}
-	h.finish(cmd) // must not panic or resurrect anything
-	if h.v.viewedCount() != 0 {
-		t.Error("a mark appeared on another file")
+	harness.finish(command) // must not panic or resurrect anything
+	if harness.v.viewedCount() != 0 {
+		test.Error("a mark appeared on another file")
 	}
 }
 
-func TestViewedResultForOtherViewIgnored(t *testing.T) {
+func TestViewedResultForOtherViewIgnored(test *testing.T) {
 	tests := []struct {
 		name string
-		mut  func(m *viewedMessage)
+		mut  func(message *viewedMessage)
 	}{
-		{"other number", func(m *viewedMessage) { m.number = 8 }},
-		{"other repo", func(m *viewedMessage) { m.repository = github.Repository{Owner: "x", Name: "y"} }},
-		{"other view", func(m *viewedMessage) { m.owner = New(nil, testRepository, 7) }},
+		{"other number", func(message *viewedMessage) { message.number = 8 }},
+		{"other repo", func(message *viewedMessage) { message.repository = github.Repository{Owner: "x", Name: "y"} }},
+		{"other view", func(message *viewedMessage) { message.owner = New(nil, testRepository, 7) }},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			h := viewedHarness(t, 100, 24)
-			h.press("j")
-			h.pressV()
-			m := viewedMessage{owner: h.v, repository: testRepository, number: 7, path: firstFile, sent: github.FileViewed, err: errors.New("x")}
-			tt.mut(&m)
-			h.send(m)
-			if got := h.stateOf(); got != github.FileViewed {
-				t.Errorf("foreign result changed state to %q", got)
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			harness := viewedHarness(test, 100, 24)
+			harness.press("j")
+			harness.pressV()
+			message := viewedMessage{owner: harness.v, repository: testRepository, number: 7, path: firstFile, sent: github.FileViewed, err: errors.New("x")}
+			testCase.mut(&message)
+			harness.send(message)
+			if got := harness.stateOf(); got != github.FileViewed {
+				test.Errorf("foreign result changed state to %q", got)
 			}
 		})
 	}
 }
 
-func TestReloadStartedBeforeSettleKeepsMark(t *testing.T) {
-	h := viewedHarness(t, 100, 24, github.FileUnviewed)
-	h.press("j")
-	cmd := h.pressV()
-	h.finish(cmd) // settles at the current load seq
+func TestReloadStartedBeforeSettleKeepsMark(test *testing.T) {
+	harness := viewedHarness(test, 100, 24, github.FileUnviewed)
+	harness.press("j")
+	command := harness.pressV()
+	harness.finish(command) // settles at the current load seq
 	// A reload that began before the settle finishes with the old data.
-	h.reload(unviewedDetail())
-	if got := h.stateOf(); got != github.FileViewed {
-		t.Fatalf("stale reload overwrote the settled mark: %q", got)
+	harness.reload(unviewedDetail())
+	if got := harness.stateOf(); got != github.FileViewed {
+		test.Fatalf("stale reload overwrote the settled mark: %q", got)
 	}
 	// A reload started afterwards (a newer seq) shows the server's state.
-	h.v.sequence++
-	d := unviewedDetail()
-	d.Files[0].Viewed = github.FileDismissed
-	h.reload(d)
-	if got := h.stateOf(); got != github.FileDismissed {
-		t.Errorf("later reload not shown: %q", got)
+	harness.v.sequence++
+	detail := unviewedDetail()
+	detail.Files[0].Viewed = github.FileDismissed
+	harness.reload(detail)
+	if got := harness.stateOf(); got != github.FileDismissed {
+		test.Errorf("later reload not shown: %q", got)
 	}
 }
 
 func unviewedDetail() github.PullRequestDetail {
-	d := testDetail()
-	d.Files[0].Viewed = github.FileUnviewed
-	return d
+	detail := testDetail()
+	detail.Files[0].Viewed = github.FileUnviewed
+	return detail
 }

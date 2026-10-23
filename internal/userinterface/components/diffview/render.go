@@ -37,54 +37,54 @@ type styleSet struct {
 	hunk [2]lipgloss.Style
 }
 
-func newStyleSet(th theme.Theme) styleSet {
-	var s styleSet
-	cursorBG := th.DiffCursor.GetBackground()
-	bases := [numberKinds]lipgloss.Style{th.DiffContext, th.DiffAdd, th.DiffDelete}
-	gutters := [numberKinds]lipgloss.Style{th.DiffGutter, th.DiffGutterAdd, th.DiffGutterDelete}
-	var fg [numberClasses + 1]lipgloss.Style
-	for c := range Class(numberClasses) {
-		fg[c] = th.Syntax.For(c)
+func newStyleSet(theme theme.Theme) styleSet {
+	var style styleSet
+	cursorBackground := theme.DiffCursor.GetBackground()
+	bases := [numberKinds]lipgloss.Style{theme.DiffContext, theme.DiffAdd, theme.DiffDelete}
+	gutters := [numberKinds]lipgloss.Style{theme.DiffGutter, theme.DiffGutterAdd, theme.DiffGutterDelete}
+	var foreground [numberClasses + 1]lipgloss.Style
+	for class := range Class(numberClasses) {
+		foreground[class] = theme.Syntax.For(class)
 	}
-	fg[ClassPlain] = lipgloss.NewStyle()
-	fg[classNoNewline] = th.DiffNoNewline
-	for cur := range 2 {
+	foreground[ClassPlain] = lipgloss.NewStyle()
+	foreground[classNoNewline] = theme.DiffNoNewline
+	for current := range 2 {
 		for k := range numberKinds {
-			base, gut := bases[k], gutters[k]
-			if cur == 1 {
-				base, gut = base.Background(cursorBG), gut.Background(cursorBG)
+			base, gutter := bases[k], gutters[k]
+			if current == 1 {
+				base, gutter = base.Background(cursorBackground), gutter.Background(cursorBackground)
 			}
-			v := variant{fill: base, gutter: gut}
-			v.thread[0] = th.Muted.Background(gut.GetBackground())
-			v.thread[1] = th.ThreadMarker.Background(gut.GetBackground())
-			for c := range v.code {
-				v.code[c] = fg[c].Background(base.GetBackground())
+			view := variant{fill: base, gutter: gutter}
+			view.thread[0] = theme.Muted.Background(gutter.GetBackground())
+			view.thread[1] = theme.ThreadMarker.Background(gutter.GetBackground())
+			for count := range view.code {
+				view.code[count] = foreground[count].Background(base.GetBackground())
 			}
-			s.v[cur][k] = v
+			style.v[current][k] = view
 		}
 	}
-	s.hunk[0] = th.DiffHunk
-	s.hunk[1] = th.DiffHunkCursor
-	return s
+	style.hunk[0] = theme.DiffHunk
+	style.hunk[1] = theme.DiffHunkCursor
+	return style
 }
 
-func (m *Model) renderRow(i int) string {
-	r := m.rows[i]
-	cur := 0
-	if i == m.win.Cursor() {
-		cur = 1
+func (model *Model) renderRow(i int) string {
+	row := model.rows[i]
+	current := 0
+	if i == model.win.Cursor() {
+		current = 1
 	}
-	if r.tr != nil {
-		return m.renderThreadRow(i, r)
+	if row.tr != nil {
+		return model.renderThreadRow(i, row)
 	}
-	if r.message {
-		return m.renderNoticeRow(i, r)
+	if row.message {
+		return model.renderNoticeRow(i, row)
 	}
-	if r.line == nil {
-		return m.renderHunk(m.file.Hunks[r.hunk].Header(), cur)
+	if row.line == nil {
+		return model.renderHunk(model.file.Hunks[row.hunk].Header(), current)
 	}
 	var kind int
-	switch r.line.Kind {
+	switch row.line.Kind {
 	case diff.Add:
 		kind = kindAdd
 	case diff.Delete:
@@ -92,41 +92,41 @@ func (m *Model) renderRow(i int) string {
 	}
 	mark := " "
 	switch {
-	case cur == 1:
+	case current == 1:
 		mark = ">"
-	case m.selected(r.bi):
-		mark, cur = markSelected, 1 // the selection takes the cursor tint
+	case model.selected(row.bi):
+		mark, current = markSelected, 1 // the selection takes the cursor tint
 	}
-	v := &m.styles.v[cur][kind]
+	view := &model.styles.v[current][kind]
 
-	gutter := m.gutterText(r.line, r.bi, mark, v)
-	codeW := m.codeWidth()
-	if codeW == 0 {
-		return ansi.Truncate(gutter, m.w, "")
+	gutter := model.gutterText(row.line, row.bi, mark, view)
+	codeWidth := model.codeWidth()
+	if codeWidth == 0 {
+		return ansi.Truncate(gutter, model.w, "")
 	}
 
-	spans := m.spansFor(i)
-	if r.line.Kind == diff.NoNewline {
-		spans = []Span{{Text: r.text, Class: classNoNewline}}
+	spans := model.spansFor(i)
+	if row.line.Kind == diff.NoNewline {
+		spans = []Span{{Text: row.text, Class: classNoNewline}}
 	}
-	visible, used := window(spans, m.win.HorizontalOffset(), codeW)
+	visible, used := window(spans, model.win.HorizontalOffset(), codeWidth)
 
-	var b strings.Builder
-	b.WriteString(gutter)
-	for _, sp := range visible {
-		b.WriteString(v.code[sp.Class].Render(sp.Text))
+	var builder strings.Builder
+	builder.WriteString(gutter)
+	for _, span := range visible {
+		builder.WriteString(view.code[span.Class].Render(span.Text))
 	}
-	if pad := codeW - used; pad > 0 {
-		b.WriteString(v.fill.Render(spaces(pad)))
+	if pad := codeWidth - used; pad > 0 {
+		builder.WriteString(view.fill.Render(spaces(pad)))
 	}
-	return b.String()
+	return builder.String()
 }
 
 // gutterText is the styled fixed part of a diff row: cursor mark, line
 // numbers, thread marker, change marker.
-func (m *Model) gutterText(l *diff.Line, bi int, mark string, v *variant) string {
+func (model *Model) gutterText(line *diff.Line, baseIndex int, mark string, view *variant) string {
 	marker := " "
-	switch l.Kind {
+	switch line.Kind {
 	case diff.Add:
 		marker = "+"
 	case diff.Delete:
@@ -134,44 +134,44 @@ func (m *Model) gutterText(l *diff.Line, bi int, mark string, v *variant) string
 	case diff.NoNewline:
 		marker = `\`
 	}
-	glyph, open := m.threadGlyph(bi)
-	ts := v.gutter
+	glyph, open := model.threadGlyph(baseIndex)
+	titleStyle := view.gutter
 	if glyph != " " {
-		ts = v.thread[0]
+		titleStyle = view.thread[0]
 		if open {
-			ts = v.thread[1]
+			titleStyle = view.thread[1]
 		}
 	}
-	return v.gutter.Render(mark+numberCell(l.Old, m.numberWidth)+" "+numberCell(l.New, m.numberWidth)+" ") +
-		ts.Render(glyph) + v.gutter.Render(marker)
+	return view.gutter.Render(mark+numberCell(line.Old, model.numberWidth)+" "+numberCell(line.New, model.numberWidth)+" ") +
+		titleStyle.Render(glyph) + view.gutter.Render(marker)
 }
 
-func numberCell(n, w int) string {
-	s := ""
-	if n > 0 {
-		s = strconv.Itoa(n)
+func numberCell(count, width int) string {
+	text := ""
+	if count > 0 {
+		text = strconv.Itoa(count)
 	}
-	return spaces(w-len(s)) + s
+	return spaces(width-len(text)) + text
 }
 
-func (m *Model) renderHunk(header string, cur int) string {
+func (model *Model) renderHunk(header string, current int) string {
 	mark := " "
-	if cur == 1 {
+	if current == 1 {
 		mark = ">"
 	}
 	header, _ = displayText(header) // the section text is copied from file content
-	s := ansi.Truncate(mark+header, m.w, "")
-	s += spaces(m.w - ansi.StringWidth(s))
-	return m.styles.hunk[cur].Render(s)
+	text := ansi.Truncate(mark+header, model.w, "")
+	text += spaces(model.w - ansi.StringWidth(text))
+	return model.styles.hunk[current].Render(text)
 }
 
 // spansFor returns the highlighted spans of row i, highlighting on first use.
-func (m *Model) spansFor(i int) []Span {
-	bi := m.rows[i].bi
-	if s, ok := m.cache[bi]; ok {
-		return s
+func (model *Model) spansFor(i int) []Span {
+	baseIndex := model.rows[i].bi
+	if span, ok := model.cache[baseIndex]; ok {
+		return span
 	}
-	s := m.highlight(m.file.Path(), m.rows[i].text)
-	m.cache[bi] = s
-	return s
+	span := model.highlight(model.file.Path(), model.rows[i].text)
+	model.cache[baseIndex] = span
+	return span
 }

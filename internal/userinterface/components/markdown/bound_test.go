@@ -6,13 +6,13 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
-func TestCacheStaysBoundedAcrossResizes(t *testing.T) {
-	r := New(theme.New(true))
-	for w := 20; w < 120; w++ {
-		r.Render("# Title\n\ntext", w)
-		r.Render("other body", w)
+func TestCacheStaysBoundedAcrossResizes(test *testing.T) {
+	renderer := New(theme.New(true))
+	for width := 20; width < 120; width++ {
+		renderer.Render("# Title\n\ntext", width)
+		renderer.Render("other body", width)
 	}
-	if len(r.cache) != 2 {
-		t.Errorf("cache size = %d, want 2 (current width only)", len(r.cache))
+	if len(renderer.cache) != 2 {
+		test.Errorf("cache size = %d, want 2 (current width only)", len(renderer.cache))
 	}
 }

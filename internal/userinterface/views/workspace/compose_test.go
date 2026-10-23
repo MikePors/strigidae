@@ -24,29 +24,29 @@ type composer struct {
 	openedOn []string
 }
 
-func newComposer(t *testing.T) *composer {
-	c := &composer{harness: threadHarness(t, 110, 40)}
-	c.v.edit = func(initial string, done func(string, error) tea.Msg) tea.Cmd {
-		c.openedOn = append(c.openedOn, initial)
-		return func() tea.Msg { return done(c.body, c.err) }
+func newComposer(test *testing.T) *composer {
+	testComposer := &composer{harness: threadHarness(test, 110, 40)}
+	testComposer.v.edit = func(initial string, done func(string, error) tea.Msg) tea.Cmd {
+		testComposer.openedOn = append(testComposer.openedOn, initial)
+		return func() tea.Msg { return done(testComposer.body, testComposer.err) }
 	}
-	return c
+	return testComposer
 }
 
 // lastConfirm returns the most recent confirmation asked, and forgets it.
-func (c *composer) lastConfirm() (userinterface.ConfirmMessage, bool) {
-	for i := len(c.messages) - 1; i >= 0; i-- {
-		if m, ok := c.messages[i].(userinterface.ConfirmMessage); ok {
-			c.messages = c.messages[:i]
-			return m, true
+func (composer *composer) lastConfirm() (userinterface.ConfirmMessage, bool) {
+	for i := len(composer.messages) - 1; i >= 0; i-- {
+		if message, ok := composer.messages[i].(userinterface.ConfirmMessage); ok {
+			composer.messages = composer.messages[:i]
+			return message, true
 		}
 	}
 	return userinterface.ConfirmMessage{}, false
 }
 
-func (c *composer) infos() (out []string) {
-	for _, m := range c.messages {
-		if i, ok := m.(userinterface.InfoMessage); ok {
+func (composer *composer) infos() (out []string) {
+	for _, message := range composer.messages {
+		if i, ok := message.(userinterface.InfoMessage); ok {
 			out = append(out, i.Text)
 		}
 	}
@@ -54,340 +54,340 @@ func (c *composer) infos() (out []string) {
 }
 
 // onThread selects the client.go diff and moves to the resolved thread on line 12.
-func (c *composer) onThread() {
-	c.selectFile()
-	c.press(")")
+func (composer *composer) onThread() {
+	composer.selectFile()
+	composer.press(")")
 }
 
-func TestReplyAsksThenPosts(t *testing.T) {
-	c := newComposer(t)
-	c.onThread()
-	c.body = "Thanks, fixed.\nmore\n"
-	c.press("r")
-	if diff := cmp.Diff([]string{""}, c.openedOn); diff != "" {
-		t.Fatalf("editor opened on (-want +got):\n%s", diff)
+func TestReplyAsksThenPosts(test *testing.T) {
+	composer := newComposer(test)
+	composer.onThread()
+	composer.body = "Thanks, fixed.\nmore\n"
+	composer.press("r")
+	if diff := cmp.Diff([]string{""}, composer.openedOn); diff != "" {
+		test.Fatalf("editor opened on (-want +got):\n%s", diff)
 	}
-	conf, ok := c.lastConfirm()
+	configuration, ok := composer.lastConfirm()
 	if !ok {
-		t.Fatal("no confirmation asked")
+		test.Fatal("no confirmation asked")
 	}
-	if want := `Post reply to internal/sync/client.go:12? "Thanks, fixed."`; conf.Text != want {
-		t.Errorf("text = %q, want %q", conf.Text, want)
+	if want := `Post reply to internal/sync/client.go:12? "Thanks, fixed."`; configuration.Text != want {
+		test.Errorf("text = %q, want %q", configuration.Text, want)
 	}
-	if len(c.client.Replies()) != 0 {
-		t.Fatal("posted before the answer")
+	if len(composer.client.Replies()) != 0 {
+		test.Fatal("posted before the answer")
 	}
-	c.run(conf.OnYes)
+	composer.run(configuration.OnYes)
 	want := []fake.Reply{{ThreadIdentifier: "t-resolved", Body: "Thanks, fixed.\nmore"}}
-	if diff := cmp.Diff(want, c.client.Replies()); diff != "" {
-		t.Errorf("replies (-want +got):\n%s", diff)
+	if diff := cmp.Diff(want, composer.client.Replies()); diff != "" {
+		test.Errorf("replies (-want +got):\n%s", diff)
 	}
-	if diff := cmp.Diff([]string{"Reply posted"}, c.infos()); diff != "" {
-		t.Errorf("info (-want +got):\n%s", diff)
+	if diff := cmp.Diff([]string{"Reply posted"}, composer.infos()); diff != "" {
+		test.Errorf("info (-want +got):\n%s", diff)
 	}
-	if len(c.v.drafts) != 0 {
-		t.Errorf("draft kept after success: %v", c.v.drafts)
+	if len(composer.v.drafts) != 0 {
+		test.Errorf("draft kept after success: %v", composer.v.drafts)
 	}
-	var n int
-	for _, th := range c.v.threads {
-		if th.Identifier == "t-resolved" {
-			n = len(th.Comments)
+	var count int
+	for _, thread := range composer.v.threads {
+		if thread.Identifier == "t-resolved" {
+			count = len(thread.Comments)
 		}
 	}
-	if n != 2 {
-		t.Errorf("threads not reloaded: resolved thread has %d comments", n)
+	if count != 2 {
+		test.Errorf("threads not reloaded: resolved thread has %d comments", count)
 	}
 }
 
-func TestDeclinedConfirmationKeepsDraft(t *testing.T) {
-	c := newComposer(t)
-	c.onThread()
-	c.body = "my draft"
-	c.press("r")
-	if _, ok := c.lastConfirm(); !ok {
-		t.Fatal("no confirmation")
+func TestDeclinedConfirmationKeepsDraft(test *testing.T) {
+	composer := newComposer(test)
+	composer.onThread()
+	composer.body = "my draft"
+	composer.press("r")
+	if _, ok := composer.lastConfirm(); !ok {
+		test.Fatal("no confirmation")
 	}
 	// Declining is the shell dropping OnYes: nothing runs, nothing is posted.
-	if len(c.client.Replies()) != 0 {
-		t.Error("something was posted")
+	if len(composer.client.Replies()) != 0 {
+		test.Error("something was posted")
 	}
-	c.press("r")
-	if diff := cmp.Diff([]string{"", "my draft"}, c.openedOn); diff != "" {
-		t.Errorf("second editor not pre-filled (-want +got):\n%s", diff)
-	}
-}
-
-func TestDraftsAreKeyedByTarget(t *testing.T) {
-	c := newComposer(t)
-	c.onThread()
-	c.body = "reply draft"
-	c.press("r")
-	c.press("h", "g g") // back to the Files pane, Overview
-	c.body = "top draft"
-	c.press("c")
-	c.press("c")
-	if diff := cmp.Diff([]string{"", "", "top draft"}, c.openedOn); diff != "" {
-		t.Errorf("editor pre-fill (-want +got):\n%s", diff)
-	}
-	if diff := cmp.Diff(map[string]string{"t-resolved": "reply draft", "top-level": "top draft"}, c.v.drafts); diff != "" {
-		t.Errorf("drafts (-want +got):\n%s", diff)
+	composer.press("r")
+	if diff := cmp.Diff([]string{"", "my draft"}, composer.openedOn); diff != "" {
+		test.Errorf("second editor not pre-filled (-want +got):\n%s", diff)
 	}
 }
 
-func TestEmptyBodyPostsNothing(t *testing.T) {
+func TestDraftsAreKeyedByTarget(test *testing.T) {
+	composer := newComposer(test)
+	composer.onThread()
+	composer.body = "reply draft"
+	composer.press("r")
+	composer.press("h", "g g") // back to the Files pane, Overview
+	composer.body = "top draft"
+	composer.press("c")
+	composer.press("c")
+	if diff := cmp.Diff([]string{"", "", "top draft"}, composer.openedOn); diff != "" {
+		test.Errorf("editor pre-fill (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff(map[string]string{"t-resolved": "reply draft", "top-level": "top draft"}, composer.v.drafts); diff != "" {
+		test.Errorf("drafts (-want +got):\n%s", diff)
+	}
+}
+
+func TestEmptyBodyPostsNothing(test *testing.T) {
 	for _, body := range []string{"", "  \n\t\n"} {
-		c := newComposer(t)
-		c.onThread()
-		c.body = body
-		c.press("r")
-		if _, ok := c.lastConfirm(); ok {
-			t.Errorf("%q: asked to confirm an empty body", body)
+		composer := newComposer(test)
+		composer.onThread()
+		composer.body = body
+		composer.press("r")
+		if _, ok := composer.lastConfirm(); ok {
+			test.Errorf("%q: asked to confirm an empty body", body)
 		}
-		err := c.lastErr()
+		err := composer.lastErr()
 		if err == nil || !strings.Contains(err.Error(), "empty comment") {
-			t.Errorf("%q: error = %v", body, err)
+			test.Errorf("%q: error = %v", body, err)
 		}
-		if len(c.v.drafts) != 0 || len(c.client.Replies()) != 0 {
-			t.Errorf("%q: drafts %v, replies %v", body, c.v.drafts, c.client.Replies())
+		if len(composer.v.drafts) != 0 || len(composer.client.Replies()) != 0 {
+			test.Errorf("%q: drafts %v, replies %v", body, composer.v.drafts, composer.client.Replies())
 		}
 	}
 }
 
-func TestEditorFailureShowsError(t *testing.T) {
-	c := newComposer(t)
-	c.onThread()
-	c.err = errors.New("exit status 1")
-	c.body = "half written"
-	c.press("r")
-	if c.lastErr() == nil {
-		t.Error("no error shown")
+func TestEditorFailureShowsError(test *testing.T) {
+	composer := newComposer(test)
+	composer.onThread()
+	composer.err = errors.New("exit status 1")
+	composer.body = "half written"
+	composer.press("r")
+	if composer.lastErr() == nil {
+		test.Error("no error shown")
 	}
-	if _, ok := c.lastConfirm(); ok {
-		t.Error("asked to confirm after a failed editor")
+	if _, ok := composer.lastConfirm(); ok {
+		test.Error("asked to confirm after a failed editor")
 	}
-	if c.v.drafts["t-resolved"] != "half written" {
-		t.Errorf("typed text not kept as the draft: %v", c.v.drafts)
+	if composer.v.drafts["t-resolved"] != "half written" {
+		test.Errorf("typed text not kept as the draft: %v", composer.v.drafts)
 	}
-	c.err, c.body = nil, ""
-	c.press("r")
-	if got := c.openedOn[len(c.openedOn)-1]; got != "half written" {
-		t.Errorf("next editor opened on %q", got)
+	composer.err, composer.body = nil, ""
+	composer.press("r")
+	if got := composer.openedOn[len(composer.openedOn)-1]; got != "half written" {
+		test.Errorf("next editor opened on %q", got)
 	}
 }
 
-func TestFailedPostKeepsDraft(t *testing.T) {
-	c := newComposer(t)
-	c.onThread()
-	c.client.SetError(fake.MethodReplyToThread, errors.New("boom\x1b[31m"))
-	c.body = "important"
-	c.press("r")
-	conf, _ := c.lastConfirm()
-	c.run(conf.OnYes)
-	err := c.lastErr()
+func TestFailedPostKeepsDraft(test *testing.T) {
+	composer := newComposer(test)
+	composer.onThread()
+	composer.client.SetError(fake.MethodReplyToThread, errors.New("boom\x1b[31m"))
+	composer.body = "important"
+	composer.press("r")
+	configuration, _ := composer.lastConfirm()
+	composer.run(configuration.OnYes)
+	err := composer.lastErr()
 	if err == nil || !strings.Contains(err.Error(), "post reply: boom") || strings.ContainsRune(err.Error(), 0x1b) {
-		t.Errorf("error = %v", err)
+		test.Errorf("error = %v", err)
 	}
-	if c.v.drafts["t-resolved"] != "important" {
-		t.Errorf("draft lost: %v", c.v.drafts)
+	if composer.v.drafts["t-resolved"] != "important" {
+		test.Errorf("draft lost: %v", composer.v.drafts)
 	}
-	c.press("r")
-	if got := c.openedOn[len(c.openedOn)-1]; got != "important" {
-		t.Errorf("next editor opened on %q", got)
+	composer.press("r")
+	if got := composer.openedOn[len(composer.openedOn)-1]; got != "important" {
+		test.Errorf("next editor opened on %q", got)
 	}
 }
 
-func TestStaleComposeResultsIgnored(t *testing.T) {
-	c := newComposer(t)
-	c.onThread()
-	c.body = "x"
-	c.press("r")
-	stale := editedMessage{owner: c.v, repository: testRepository, number: 7, sequence: c.v.cseq - 1, target: target{kind: kindReply, threadIdentifier: "t-resolved"}, body: "late"}
-	c.messages = nil
-	c.send(stale)
-	if _, ok := c.lastConfirm(); ok {
-		t.Error("stale edit result asked for confirmation")
+func TestStaleComposeResultsIgnored(test *testing.T) {
+	composer := newComposer(test)
+	composer.onThread()
+	composer.body = "x"
+	composer.press("r")
+	stale := editedMessage{owner: composer.v, repository: testRepository, number: 7, sequence: composer.v.cseq - 1, target: target{kind: kindReply, threadIdentifier: "t-resolved"}, body: "late"}
+	composer.messages = nil
+	composer.send(stale)
+	if _, ok := composer.lastConfirm(); ok {
+		test.Error("stale edit result asked for confirmation")
 	}
 	other := stale
-	other.owner, other.sequence = &View{}, c.v.cseq
-	c.send(other)
-	c.send(editedMessage{owner: c.v, repository: github.Repository{Owner: "x", Name: "y"}, number: 7, sequence: c.v.cseq, body: "late"})
-	c.send(editedMessage{owner: c.v, repository: testRepository, number: 8, sequence: c.v.cseq, body: "late"})
-	if _, ok := c.lastConfirm(); ok || c.v.drafts["t-resolved"] == "late" {
-		t.Error("foreign edit result was accepted")
+	other.owner, other.sequence = &View{}, composer.v.cseq
+	composer.send(other)
+	composer.send(editedMessage{owner: composer.v, repository: github.Repository{Owner: "x", Name: "y"}, number: 7, sequence: composer.v.cseq, body: "late"})
+	composer.send(editedMessage{owner: composer.v, repository: testRepository, number: 8, sequence: composer.v.cseq, body: "late"})
+	if _, ok := composer.lastConfirm(); ok || composer.v.drafts["t-resolved"] == "late" {
+		test.Error("foreign edit result was accepted")
 	}
 }
 
-func TestPostResultAfterNewComposeIsHandled(t *testing.T) {
-	c := newComposer(t)
-	c.onThread()
-	c.body = "first"
-	c.press("r")
-	conf, _ := c.lastConfirm()
+func TestPostResultAfterNewComposeIsHandled(test *testing.T) {
+	composer := newComposer(test)
+	composer.onThread()
+	composer.body = "first"
+	composer.press("r")
+	configuration, _ := composer.lastConfirm()
 	// The user starts another compose before the post returns.
-	c.body = "second"
-	before := c.v.cseq
-	c.press("h", "g g", "c")
-	if c.v.cseq == before {
-		t.Fatal("setup: no new compose started")
+	composer.body = "second"
+	before := composer.v.cseq
+	composer.press("h", "g g", "c")
+	if composer.v.cseq == before {
+		test.Fatal("setup: no new compose started")
 	}
-	c.drafts(map[string]string{"t-resolved": "first"})
-	c.messages = nil
-	c.run(conf.OnYes)
-	if diff := cmp.Diff([]string{"Reply posted"}, c.infos()); diff != "" {
-		t.Errorf("info (-want +got):\n%s", diff)
+	composer.drafts(map[string]string{"t-resolved": "first"})
+	composer.messages = nil
+	composer.run(configuration.OnYes)
+	if diff := cmp.Diff([]string{"Reply posted"}, composer.infos()); diff != "" {
+		test.Errorf("info (-want +got):\n%s", diff)
 	}
-	if _, ok := c.v.drafts["t-resolved"]; ok {
-		t.Error("posted draft kept")
+	if _, ok := composer.v.drafts["t-resolved"]; ok {
+		test.Error("posted draft kept")
 	}
 
 	// A newer draft for the same target survives the older post.
-	c.drafts(map[string]string{"t-resolved": "newer"})
-	c.send(postedMessage{origin: c.v.origin(), target: target{kind: kindReply, threadIdentifier: "t-resolved"}, body: "first"})
-	if c.v.drafts["t-resolved"] != "newer" {
-		t.Errorf("newer draft deleted: %v", c.v.drafts)
+	composer.drafts(map[string]string{"t-resolved": "newer"})
+	composer.send(postedMessage{origin: composer.v.origin(), target: target{kind: kindReply, threadIdentifier: "t-resolved"}, body: "first"})
+	if composer.v.drafts["t-resolved"] != "newer" {
+		test.Errorf("newer draft deleted: %v", composer.v.drafts)
 	}
 
 	// A failure is reported by the command itself, and keeps the draft.
-	c.client.SetError(fake.MethodReplyToThread, errors.New("boom"))
-	c.drafts(map[string]string{"t-resolved": "first"})
-	c.messages = nil
-	c.run(c.v.post(target{kind: kindReply, threadIdentifier: "t-resolved"}, "first"))
-	if err := c.lastErr(); err == nil || !strings.Contains(err.Error(), "post reply: boom") {
-		t.Errorf("error = %v", err)
+	composer.client.SetError(fake.MethodReplyToThread, errors.New("boom"))
+	composer.drafts(map[string]string{"t-resolved": "first"})
+	composer.messages = nil
+	composer.run(composer.v.post(target{kind: kindReply, threadIdentifier: "t-resolved"}, "first"))
+	if err := composer.lastErr(); err == nil || !strings.Contains(err.Error(), "post reply: boom") {
+		test.Errorf("error = %v", err)
 	}
-	if c.v.drafts["t-resolved"] != "first" {
-		t.Error("draft lost")
+	if composer.v.drafts["t-resolved"] != "first" {
+		test.Error("draft lost")
 	}
 }
 
-func (c *composer) drafts(d map[string]string) { c.v.drafts = d }
+func (composer *composer) drafts(data map[string]string) { composer.v.drafts = data }
 
-func TestReplyWithZeroOneAndSeveralThreads(t *testing.T) {
-	c := newComposer(t)
+func TestReplyWithZeroOneAndSeveralThreads(test *testing.T) {
+	composer := newComposer(test)
 	two := []github.ReviewThread{
 		{Identifier: "a", Path: "internal/sync/client.go", Line: 14, DiffSide: github.SideRight, Comments: []github.ReviewComment{tc("bob", "one", time.Hour)}},
 		{Identifier: "b", Path: "internal/sync/client.go", Line: 14, DiffSide: github.SideRight, Comments: []github.ReviewComment{tc("eve", "two", time.Hour)}},
 		{Identifier: "c", Path: "internal/sync/client.go", Line: 12, DiffSide: github.SideRight, Comments: []github.ReviewComment{tc("dan", "three", time.Hour)}},
 	}
-	c.client.SetReviewThreads(testRepository, 7, two)
-	c.run(c.v.load())
-	c.selectFile()
-	c.body = "hi"
+	composer.client.SetReviewThreads(testRepository, 7, two)
+	composer.run(composer.v.load())
+	composer.selectFile()
+	composer.body = "hi"
 
-	c.press("g g") // a hunk header: no thread
-	c.press("r")
-	if len(c.openedOn) != 0 || c.lastErr() != nil || len(c.messages) != 0 {
-		t.Errorf("zero threads: opened %v, msgs %v", c.openedOn, c.messages)
+	composer.press("g g") // a hunk header: no thread
+	composer.press("r")
+	if len(composer.openedOn) != 0 || composer.lastErr() != nil || len(composer.messages) != 0 {
+		test.Errorf("zero threads: opened %v, msgs %v", composer.openedOn, composer.messages)
 	}
 
-	c.press(")") // line 12, one thread
-	c.press("r")
-	if len(c.openedOn) != 1 {
-		t.Fatalf("one thread: editor opened %d times", len(c.openedOn))
+	composer.press(")") // line 12, one thread
+	composer.press("r")
+	if len(composer.openedOn) != 1 {
+		test.Fatalf("one thread: editor opened %d times", len(composer.openedOn))
 	}
-	conf, _ := c.lastConfirm()
-	c.run(conf.OnYes)
-	if r := c.client.Replies(); len(r) != 1 || r[0].ThreadIdentifier != "c" {
-		t.Errorf("replies = %v", r)
+	configuration, _ := composer.lastConfirm()
+	composer.run(configuration.OnYes)
+	if review := composer.client.Replies(); len(review) != 1 || review[0].ThreadIdentifier != "c" {
+		test.Errorf("replies = %v", review)
 	}
 
-	c.messages = nil
+	composer.messages = nil
 	for range 12 { // walk the diff until the cursor is on line 14, two threads
-		c.press("j")
-		if len(c.v.filePane.FocusedThreads()) == 2 {
+		composer.press("j")
+		if len(composer.v.filePane.FocusedThreads()) == 2 {
 			break
 		}
 	}
-	if n := len(c.v.filePane.FocusedThreads()); n != 2 {
-		t.Fatalf("setup: %d threads at the cursor", n)
+	if count := len(composer.v.filePane.FocusedThreads()); count != 2 {
+		test.Fatalf("setup: %d threads at the cursor", count)
 	}
-	c.press("r")
-	if len(c.openedOn) != 1 {
-		t.Error("editor opened with several threads")
+	composer.press("r")
+	if len(composer.openedOn) != 1 {
+		test.Error("editor opened with several threads")
 	}
-	if diff := cmp.Diff([]string{"several threads on this line: move onto one to reply"}, c.infos()); diff != "" {
-		t.Errorf("status (-want +got):\n%s", diff)
-	}
-}
-
-func TestReplyInOverviewDoesNothing(t *testing.T) {
-	c := newComposer(t)
-	c.body = "x"
-	c.press("r") // Overview selected
-	if len(c.openedOn) != 0 || len(c.messages) != 0 {
-		t.Errorf("opened %v, msgs %v", c.openedOn, c.messages)
+	if diff := cmp.Diff([]string{"several threads on this line: move onto one to reply"}, composer.infos()); diff != "" {
+		test.Errorf("status (-want +got):\n%s", diff)
 	}
 }
 
-func TestReplyWorksFromTheFilesPane(t *testing.T) {
-	c := newComposer(t)
-	c.onThread()
-	c.body = "from the files pane"
-	c.press("h", "r") // the diff cursor stays on the thread
-	if c.v.focus != paneFiles || len(c.openedOn) != 1 {
-		t.Fatalf("focus %v, editor opened %d times", c.v.focus, len(c.openedOn))
-	}
-	conf, ok := c.lastConfirm()
-	if !ok || !strings.HasPrefix(conf.Text, "Post reply to internal/sync/client.go:12?") {
-		t.Errorf("confirmation = %q (%v)", conf.Text, ok)
+func TestReplyInOverviewDoesNothing(test *testing.T) {
+	composer := newComposer(test)
+	composer.body = "x"
+	composer.press("r") // Overview selected
+	if len(composer.openedOn) != 0 || len(composer.messages) != 0 {
+		test.Errorf("opened %v, msgs %v", composer.openedOn, composer.messages)
 	}
 }
 
-func TestTopLevelCommentIsPostedFromTheOverview(t *testing.T) {
-	c := newComposer(t)
-	c.body = "LGTM, one question\nbelow"
-	c.press("l", "c")
-	conf, ok := c.lastConfirm()
-	if !ok || conf.Text != `Post comment? "LGTM, one question"` {
-		t.Fatalf("confirmation = %q (%v)", conf.Text, ok)
+func TestReplyWorksFromTheFilesPane(test *testing.T) {
+	composer := newComposer(test)
+	composer.onThread()
+	composer.body = "from the files pane"
+	composer.press("h", "r") // the diff cursor stays on the thread
+	if composer.v.focus != paneFiles || len(composer.openedOn) != 1 {
+		test.Fatalf("focus %v, editor opened %d times", composer.v.focus, len(composer.openedOn))
 	}
-	c.run(conf.OnYes)
+	configuration, ok := composer.lastConfirm()
+	if !ok || !strings.HasPrefix(configuration.Text, "Post reply to internal/sync/client.go:12?") {
+		test.Errorf("confirmation = %q (%v)", configuration.Text, ok)
+	}
+}
+
+func TestTopLevelCommentIsPostedFromTheOverview(test *testing.T) {
+	composer := newComposer(test)
+	composer.body = "LGTM, one question\nbelow"
+	composer.press("l", "c")
+	configuration, ok := composer.lastConfirm()
+	if !ok || configuration.Text != `Post comment? "LGTM, one question"` {
+		test.Fatalf("confirmation = %q (%v)", configuration.Text, ok)
+	}
+	composer.run(configuration.OnYes)
 	want := []fake.Comment{{Repository: testRepository, Number: 7, Body: "LGTM, one question\nbelow"}}
-	if diff := cmp.Diff(want, c.client.Comments()); diff != "" {
-		t.Errorf("comments (-want +got):\n%s", diff)
+	if diff := cmp.Diff(want, composer.client.Comments()); diff != "" {
+		test.Errorf("comments (-want +got):\n%s", diff)
 	}
-	if diff := cmp.Diff([]string{"Comment posted"}, c.infos()); diff != "" {
-		t.Errorf("info (-want +got):\n%s", diff)
+	if diff := cmp.Diff([]string{"Comment posted"}, composer.infos()); diff != "" {
+		test.Errorf("info (-want +got):\n%s", diff)
 	}
-	c.press("G")
-	if out := ansi.Strip(c.render()); !strings.Contains(out, "LGTM, one question") {
-		t.Errorf("conversation not reloaded:\n%s", out)
+	composer.press("G")
+	if out := ansi.Strip(composer.render()); !strings.Contains(out, "LGTM, one question") {
+		test.Errorf("conversation not reloaded:\n%s", out)
 	}
 
-	c.messages, c.openedOn = nil, nil
-	c.selectFile()
-	c.press("c")
+	composer.messages, composer.openedOn = nil, nil
+	composer.selectFile()
+	composer.press("c")
 	// On a hunk header there is no line to comment on (inline comments have
 	// their own tests in inline_test.go).
-	if len(c.openedOn) != 0 || len(c.infos()) != 1 || !strings.Contains(c.infos()[0], "diff line") {
-		t.Errorf("c on a hunk header: %v %v", c.openedOn, c.messages)
+	if len(composer.openedOn) != 0 || len(composer.infos()) != 1 || !strings.Contains(composer.infos()[0], "diff line") {
+		test.Errorf("c on a hunk header: %v %v", composer.openedOn, composer.messages)
 	}
 }
 
-func TestConfirmationTextIsCleanAndFits(t *testing.T) {
-	c := newComposer(t)
-	c.body = hostile + strings.Repeat(" long", 60)
-	c.press("c")
-	conf, _ := c.lastConfirm()
-	if strings.ContainsFunc(conf.Text, func(r rune) bool { return r < 0x20 || (r >= 0x7f && r < 0xa0) }) {
-		t.Errorf("control characters in %q", conf.Text)
+func TestConfirmationTextIsCleanAndFits(test *testing.T) {
+	composer := newComposer(test)
+	composer.body = hostile + strings.Repeat(" long", 60)
+	composer.press("c")
+	configuration, _ := composer.lastConfirm()
+	if strings.ContainsFunc(configuration.Text, func(character rune) bool { return character < 0x20 || (character >= 0x7f && character < 0xa0) }) {
+		test.Errorf("control characters in %q", configuration.Text)
 	}
-	if w := ansi.StringWidth(conf.Text); w > c.v.width {
-		t.Errorf("text is %d wide, view is %d", w, c.v.width)
+	if width := ansi.StringWidth(configuration.Text); width > composer.v.width {
+		test.Errorf("text is %d wide, view is %d", width, composer.v.width)
 	}
 }
 
-func TestReplyAndCommentAreInHelp(t *testing.T) {
-	h := loaded(t, 100, 30)
+func TestReplyAndCommentAreInHelp(test *testing.T) {
+	harness := loaded(test, 100, 30)
 	got := map[string]string{}
-	for _, g := range h.v.FullHelp() {
-		for _, b := range g {
-			if k := b.Keys(); len(k) == 1 && (k[0] == "r" || k[0] == "c") {
-				got[k[0]] = b.Help().Desc
+	for _, bindings := range harness.v.FullHelp() {
+		for _, binding := range bindings {
+			if k := binding.Keys(); len(k) == 1 && (k[0] == "r" || k[0] == "c") {
+				got[k[0]] = binding.Help().Desc
 			}
 		}
 	}
 	if len(got) != 2 || got["r"] == "" || got["c"] == "" {
-		t.Errorf("help = %v", got)
+		test.Errorf("help = %v", got)
 	}
 }

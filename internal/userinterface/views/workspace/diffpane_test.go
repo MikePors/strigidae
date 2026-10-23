@@ -15,188 +15,188 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
-func (h *harness) pane() *diffview.Model { return h.v.filePane.(*diffPane).dv }
+func (harness *harness) pane() *diffview.Model { return harness.v.filePane.(*diffPane).dv }
 
 // cursorText returns the text of the diff line under the cursor ("" on a hunk header).
-func (h *harness) cursorText() string {
-	c, ok := h.pane().Cursor()
+func (harness *harness) cursorText() string {
+	cursorLine, ok := harness.pane().Cursor()
 	if !ok {
 		return ""
 	}
-	return c.Text
+	return cursorLine.Text
 }
 
 // openClientDiff selects client.go and focuses the right pane.
-func openClientDiff(t *testing.T, w, ht int) *harness {
-	h := loaded(t, w, ht)
-	h.press("}", "l")
-	if got := h.v.selectedPath(); got != "internal/sync/client.go" {
-		t.Fatalf("selected %q", got)
+func openClientDiff(test *testing.T, width, height int) *harness {
+	harness := loaded(test, width, height)
+	harness.press("}", "l")
+	if got := harness.v.selectedPath(); got != "internal/sync/client.go" {
+		test.Fatalf("selected %q", got)
 	}
-	return h
+	return harness
 }
 
-func TestDiffPaneKeys(t *testing.T) {
-	h := openClientDiff(t, 100, 24)
-	dv := h.pane()
+func TestDiffPaneKeys(test *testing.T) {
+	harness := openClientDiff(test, 100, 24)
+	diffView := harness.pane()
 
-	h.press("j")
-	if !strings.Contains(h.cursorText(), `"context"`) {
-		t.Errorf("j: cursor on %q", h.cursorText())
+	harness.press("j")
+	if !strings.Contains(harness.cursorText(), `"context"`) {
+		test.Errorf("j: cursor on %q", harness.cursorText())
 	}
-	h.press("k")
-	if h.cursorText() != "" {
-		t.Errorf("k: cursor on %q, want the hunk header", h.cursorText())
+	harness.press("k")
+	if harness.cursorText() != "" {
+		test.Errorf("k: cursor on %q, want the hunk header", harness.cursorText())
 	}
-	h.press("G")
-	if !strings.Contains(h.cursorText(), "}") {
-		t.Errorf("G: cursor on %q", h.cursorText())
+	harness.press("G")
+	if !strings.Contains(harness.cursorText(), "}") {
+		test.Errorf("G: cursor on %q", harness.cursorText())
 	}
-	h.press("g g")
-	if h.cursorText() != "" {
-		t.Errorf("g g: cursor on %q", h.cursorText())
+	harness.press("g g")
+	if harness.cursorText() != "" {
+		test.Errorf("g g: cursor on %q", harness.cursorText())
 	}
 
-	h.press("ctrl+d")
-	if !strings.Contains(h.cursorText(), "})") {
-		t.Errorf("ctrl+d: cursor on %q", h.cursorText())
+	harness.press("ctrl+d")
+	if !strings.Contains(harness.cursorText(), "})") {
+		test.Errorf("ctrl+d: cursor on %q", harness.cursorText())
 	}
-	h.press("ctrl+u")
-	if h.cursorText() != "" {
-		t.Errorf("ctrl+u: cursor on %q", h.cursorText())
+	harness.press("ctrl+u")
+	if harness.cursorText() != "" {
+		test.Errorf("ctrl+u: cursor on %q", harness.cursorText())
 	}
-	h.press("ctrl+f")
-	if !strings.Contains(h.cursorText(), "}") {
-		t.Errorf("ctrl+f: cursor on %q", h.cursorText())
+	harness.press("ctrl+f")
+	if !strings.Contains(harness.cursorText(), "}") {
+		test.Errorf("ctrl+f: cursor on %q", harness.cursorText())
 	}
-	h.press("ctrl+b")
-	if h.cursorText() != "" {
-		t.Errorf("ctrl+b: cursor on %q", h.cursorText())
+	harness.press("ctrl+b")
+	if harness.cursorText() != "" {
+		test.Errorf("ctrl+b: cursor on %q", harness.cursorText())
 	}
 
 	// Hunks: ] goes to the second hunk's header, [ back to the first.
-	h.press("]", "j")
-	if !strings.Contains(h.cursorText(), "c.conn.Ping") {
-		t.Errorf("]: cursor on %q", h.cursorText())
+	harness.press("]", "j")
+	if !strings.Contains(harness.cursorText(), "c.conn.Ping") {
+		test.Errorf("]: cursor on %q", harness.cursorText())
 	}
-	h.press("[", "[", "j")
-	if !strings.Contains(h.cursorText(), `"context"`) {
-		t.Errorf("[: cursor on %q", h.cursorText())
+	harness.press("[", "[", "j")
+	if !strings.Contains(harness.cursorText(), `"context"`) {
+		test.Errorf("[: cursor on %q", harness.cursorText())
 	}
 
 	// Horizontal scrolling: 4 columns, then half a screen.
-	h.press("z l")
-	if dv.HorizontalOffset() != 4 {
-		t.Errorf("z l: offset = %d, want 4", dv.HorizontalOffset())
+	harness.press("z l")
+	if diffView.HorizontalOffset() != 4 {
+		test.Errorf("z l: offset = %d, want 4", diffView.HorizontalOffset())
 	}
-	h.press("z h")
-	if dv.HorizontalOffset() != 0 {
-		t.Errorf("z h: offset = %d, want 0", dv.HorizontalOffset())
+	harness.press("z h")
+	if diffView.HorizontalOffset() != 0 {
+		test.Errorf("z h: offset = %d, want 0", diffView.HorizontalOffset())
 	}
-	h.press("z L")
-	half := dv.HorizontalOffset()
+	harness.press("z L")
+	half := diffView.HorizontalOffset()
 	if half <= 4 {
-		t.Errorf("z L: offset = %d, want half a screen", half)
+		test.Errorf("z L: offset = %d, want half a screen", half)
 	}
-	h.press("z H")
-	if dv.HorizontalOffset() != 0 {
-		t.Errorf("z H: offset = %d, want 0", dv.HorizontalOffset())
-	}
-}
-
-func TestDiffPaneKeysReachOnlyWhenRightFocused(t *testing.T) {
-	h := loaded(t, 100, 24)
-	h.press("}") // Files pane still focused
-	h.press("j") // moves the file selection, not the diff cursor
-	if got := h.v.selectedPath(); got != "internal/sync/retry.go" {
-		t.Errorf("selected %q", got)
+	harness.press("z H")
+	if diffView.HorizontalOffset() != 0 {
+		test.Errorf("z H: offset = %d, want 0", diffView.HorizontalOffset())
 	}
 }
 
-func TestDiffLookupByOldPathAndRename(t *testing.T) {
-	h := loaded(t, 100, 24)
-	h.press("}", "}", "}") // legacy.go, deleted
-	if got := h.v.selectedPath(); got != "internal/sync/legacy.go" {
-		t.Fatalf("selected %q", got)
-	}
-	if out := ansi.Strip(h.render()); !strings.Contains(out, "retryForever") {
-		t.Errorf("deleted file diff missing:\n%s", out)
-	}
-	h.press("}") // renamed file: ChangedFile carries the new path
-	if out := ansi.Strip(h.render()); !strings.Contains(out, "New text.") {
-		t.Errorf("renamed file diff missing:\n%s", out)
+func TestDiffPaneKeysReachOnlyWhenRightFocused(test *testing.T) {
+	harness := loaded(test, 100, 24)
+	harness.press("}") // Files pane still focused
+	harness.press("j") // moves the file selection, not the diff cursor
+	if got := harness.v.selectedPath(); got != "internal/sync/retry.go" {
+		test.Errorf("selected %q", got)
 	}
 }
 
-func TestDiffPaneLookupFallsBackToOldPath(t *testing.T) {
+func TestDiffLookupByOldPathAndRename(test *testing.T) {
+	harness := loaded(test, 100, 24)
+	harness.press("}", "}", "}") // legacy.go, deleted
+	if got := harness.v.selectedPath(); got != "internal/sync/legacy.go" {
+		test.Fatalf("selected %q", got)
+	}
+	if out := ansi.Strip(harness.render()); !strings.Contains(out, "retryForever") {
+		test.Errorf("deleted file diff missing:\n%s", out)
+	}
+	harness.press("}") // renamed file: ChangedFile carries the new path
+	if out := ansi.Strip(harness.render()); !strings.Contains(out, "New text.") {
+		test.Errorf("renamed file diff missing:\n%s", out)
+	}
+}
+
+func TestDiffPaneLookupFallsBackToOldPath(test *testing.T) {
 	// A ChangedFile reporting the old path of a renamed file still finds it.
-	p := newDiffPane(theme.New(true), func() time.Time { return testNow })
-	d := loaded(t, 100, 24)
-	p.SetDiff(d.v.diff)
-	p.SetFile(github.ChangedFile{Path: "docs/old-name.md", Change: github.FileRenamed})
-	p.SetSize(80, 10)
-	if out := ansi.Strip(p.Render(80, 10)); !strings.Contains(out, "New text.") {
-		t.Errorf("old-path lookup failed:\n%s", out)
+	pane := newDiffPane(theme.New(true), func() time.Time { return testNow })
+	harness := loaded(test, 100, 24)
+	pane.SetDiff(harness.v.diff)
+	pane.SetFile(github.ChangedFile{Path: "docs/old-name.md", Change: github.FileRenamed})
+	pane.SetSize(80, 10)
+	if out := ansi.Strip(pane.Render(80, 10)); !strings.Contains(out, "New text.") {
+		test.Errorf("old-path lookup failed:\n%s", out)
 	}
 }
 
-func TestDiffPaneStates(t *testing.T) {
-	t.Run("unknown file", func(t *testing.T) {
-		h := loaded(t, 100, 24)
-		p := newDiffPane(theme.New(true), func() time.Time { return testNow })
-		p.SetDiff(h.v.diff)
-		p.SetFile(github.ChangedFile{Path: "nope.go"})
-		if out := ansi.Strip(p.Render(60, 5)); !strings.Contains(out, "No diff available") {
-			t.Errorf("got %q", out)
+func TestDiffPaneStates(test *testing.T) {
+	test.Run("unknown file", func(test *testing.T) {
+		harness := loaded(test, 100, 24)
+		pane := newDiffPane(theme.New(true), func() time.Time { return testNow })
+		pane.SetDiff(harness.v.diff)
+		pane.SetFile(github.ChangedFile{Path: "nope.go"})
+		if out := ansi.Strip(pane.Render(60, 5)); !strings.Contains(out, "No diff available") {
+			test.Errorf("got %q", out)
 		}
 	})
-	t.Run("loading", func(t *testing.T) {
-		h := newHarness(t, 100, 24)
-		h.v.Init()
-		h.send(pullRequestLoadedMessage{owner: h.v, repository: testRepository, number: 7, sequence: h.v.sequence, detail: testDetail()})
-		h.press("}")
-		golden.Assert(t, "diff_loading", h.render(), false)
+	test.Run("loading", func(test *testing.T) {
+		harness := newHarness(test, 100, 24)
+		harness.v.Init()
+		harness.send(pullRequestLoadedMessage{owner: harness.v, repository: testRepository, number: 7, sequence: harness.v.sequence, detail: testDetail()})
+		harness.press("}")
+		golden.Assert(test, "diff_loading", harness.render(), false)
 	})
-	t.Run("too large", func(t *testing.T) {
-		h := newHarness(t, 100, 24)
-		h.client.SetError(fake.MethodGetDiff, github.ErrDiffTooLarge)
-		h.run(h.v.Init())
-		h.press("}")
-		golden.Assert(t, "diff_too_large", h.render(), false)
+	test.Run("too large", func(test *testing.T) {
+		harness := newHarness(test, 100, 24)
+		harness.client.SetError(fake.MethodGetDiff, github.ErrDiffTooLarge)
+		harness.run(harness.v.Init())
+		harness.press("}")
+		golden.Assert(test, "diff_too_large", harness.render(), false)
 	})
-	t.Run("error", func(t *testing.T) {
-		h := newHarness(t, 100, 24)
-		h.client.SetError(fake.MethodGetDiff, errors.New("connection reset"))
-		h.run(h.v.Init())
-		h.press("}")
-		golden.Assert(t, "diff_error", h.render(), false)
+	test.Run("error", func(test *testing.T) {
+		harness := newHarness(test, 100, 24)
+		harness.client.SetError(fake.MethodGetDiff, errors.New("connection reset"))
+		harness.run(harness.v.Init())
+		harness.press("}")
+		golden.Assert(test, "diff_error", harness.render(), false)
 	})
-	t.Run("parse error", func(t *testing.T) {
-		h := newHarness(t, 100, 24)
-		h.client.SetDiff(testRepository, 7, "diff --git a/x b/x\n@@ -1,2 +1,2 @@\n+only one line\n")
-		h.run(h.v.Init())
-		h.press("}")
-		out := ansi.Strip(h.render())
+	test.Run("parse error", func(test *testing.T) {
+		harness := newHarness(test, 100, 24)
+		harness.client.SetDiff(testRepository, 7, "diff --git a/x b/x\n@@ -1,2 +1,2 @@\n+only one line\n")
+		harness.run(harness.v.Init())
+		harness.press("}")
+		out := ansi.Strip(harness.render())
 		if !strings.Contains(out, "No diff available for this file.") || !strings.Contains(out, "could not be fully parsed") {
-			t.Errorf("a file missing from a partly parsed diff should say why:\n%s", out)
+			test.Errorf("a file missing from a partly parsed diff should say why:\n%s", out)
 		}
 	})
 }
 
-func TestGoldenDiffPane(t *testing.T) {
-	t.Run("populated", func(t *testing.T) {
-		h := openClientDiff(t, 100, 24)
-		h.press("j", "j")
-		golden.Assert(t, "diff_populated", h.render(), false)
+func TestGoldenDiffPane(test *testing.T) {
+	test.Run("populated", func(test *testing.T) {
+		harness := openClientDiff(test, 100, 24)
+		harness.press("j", "j")
+		golden.Assert(test, "diff_populated", harness.render(), false)
 	})
-	t.Run("hscroll", func(t *testing.T) {
-		h := openClientDiff(t, 100, 24)
-		h.press("]", "j", "j", "j", "z L")
-		golden.Assert(t, "diff_hscroll", h.render(), false)
+	test.Run("hscroll", func(test *testing.T) {
+		harness := openClientDiff(test, 100, 24)
+		harness.press("]", "j", "j", "j", "z L")
+		golden.Assert(test, "diff_hscroll", harness.render(), false)
 	})
-	t.Run("deleted", func(t *testing.T) {
-		h := loaded(t, 100, 24)
-		h.press("}", "}", "}")
-		golden.Assert(t, "diff_deleted", h.render(), false)
+	test.Run("deleted", func(test *testing.T) {
+		harness := loaded(test, 100, 24)
+		harness.press("}", "}", "}")
+		golden.Assert(test, "diff_deleted", harness.render(), false)
 	})
 }

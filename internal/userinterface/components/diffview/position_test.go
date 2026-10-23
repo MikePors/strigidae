@@ -7,13 +7,13 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
-func parseFile(t *testing.T, body string) *diff.File {
-	t.Helper()
-	d, err := diff.Parse("diff --git a/f b/f\n--- a/f\n+++ b/f\n" + body)
+func parseFile(test *testing.T, body string) *diff.File {
+	test.Helper()
+	parsedDiff, err := diff.Parse("diff --git a/f b/f\n--- a/f\n+++ b/f\n" + body)
 	if err != nil {
-		t.Fatal(err)
+		test.Fatal(err)
 	}
-	return d.Files[0]
+	return parsedDiff.Files[0]
 }
 
 const (
@@ -24,90 +24,90 @@ const (
 	v3 = "@@ -1,5 +1,5 @@\n a\n b\n c\n d\n e\n"
 )
 
-func TestReparseReanchorsOnSameLine(t *testing.T) {
-	m := New(theme.New(true))
-	m.SetFile(parseFile(t, v1))
-	m.SetSize(60, 4)
-	m.CursorDown(2) // the deleted "b"
-	if c, _ := m.Cursor(); c.Kind != diff.Delete || c.Old != 2 {
-		t.Fatalf("setup: %+v", c)
+func TestReparseReanchorsOnSameLine(test *testing.T) {
+	model := New(theme.New(true))
+	model.SetFile(parseFile(test, v1))
+	model.SetSize(60, 4)
+	model.CursorDown(2) // the deleted "b"
+	if cursorLine, _ := model.Cursor(); cursorLine.Kind != diff.Delete || cursorLine.Old != 2 {
+		test.Fatalf("setup: %+v", cursorLine)
 	}
 
-	m.SetFile(parseFile(t, v2))
-	c, ok := m.Cursor()
-	if !ok || c.Kind != diff.Delete || c.Old != 2 || c.Text != "b" {
-		t.Errorf("after rows moved: %+v ok=%v", c, ok)
+	model.SetFile(parseFile(test, v2))
+	cursorLine, ok := model.Cursor()
+	if !ok || cursorLine.Kind != diff.Delete || cursorLine.Old != 2 || cursorLine.Text != "b" {
+		test.Errorf("after rows moved: %+v ok=%v", cursorLine, ok)
 	}
-	if m.win.Cursor() != 4 {
-		t.Errorf("cursor row = %d, want 4", m.win.Cursor())
+	if model.win.Cursor() != 4 {
+		test.Errorf("cursor row = %d, want 4", model.win.Cursor())
 	}
-	if m.win.Cursor() < m.win.Top() || m.win.Cursor() >= m.win.Top()+4 {
-		t.Errorf("cursor %d not visible from top %d", m.win.Cursor(), m.win.Top())
+	if model.win.Cursor() < model.win.Top() || model.win.Cursor() >= model.win.Top()+4 {
+		test.Errorf("cursor %d not visible from top %d", model.win.Cursor(), model.win.Top())
 	}
 
-	m.SetFile(parseFile(t, v3))
-	c, ok = m.Cursor()
-	if !ok || c.Text != "b" || c.Kind != diff.Context {
-		t.Errorf("fallback to nearest line: %+v ok=%v", c, ok)
+	model.SetFile(parseFile(test, v3))
+	cursorLine, ok = model.Cursor()
+	if !ok || cursorLine.Text != "b" || cursorLine.Kind != diff.Context {
+		test.Errorf("fallback to nearest line: %+v ok=%v", cursorLine, ok)
 	}
 }
 
-func TestReparseKeepsHeaderAndMarkerAnchors(t *testing.T) {
+func TestReparseKeepsHeaderAndMarkerAnchors(test *testing.T) {
 	const withMarker = "@@ -1,2 +1,2 @@\n a\n-b\n\\ No newline at end of file\n+B\n@@ -9 +9 @@\n-z\n+Z\n"
-	m := New(theme.New(true))
-	m.SetFile(parseFile(t, withMarker))
-	m.SetSize(60, 10)
-	m.NextHunk()
-	m.SetFile(parseFile(t, withMarker))
-	if m.win.Cursor() != 5 {
-		t.Errorf("header anchor: cursor = %d", m.win.Cursor())
+	model := New(theme.New(true))
+	model.SetFile(parseFile(test, withMarker))
+	model.SetSize(60, 10)
+	model.NextHunk()
+	model.SetFile(parseFile(test, withMarker))
+	if model.win.Cursor() != 5 {
+		test.Errorf("header anchor: cursor = %d", model.win.Cursor())
 	}
-	m.GotoTop()
-	m.CursorDown(3) // the marker row
-	m.SetFile(parseFile(t, withMarker))
-	if c, ok := m.Cursor(); !ok || c.Text != "b" {
-		t.Errorf("marker anchors to its line: %+v ok=%v", c, ok)
+	model.GotoTop()
+	model.CursorDown(3) // the marker row
+	model.SetFile(parseFile(test, withMarker))
+	if cursorLine, ok := model.Cursor(); !ok || cursorLine.Text != "b" {
+		test.Errorf("marker anchors to its line: %+v ok=%v", cursorLine, ok)
 	}
 }
 
-func TestMessageKeepsSavedPosition(t *testing.T) {
-	m := New(theme.New(true))
-	m.SetFile(parseFile(t, v1))
-	m.SetSize(60, 4)
-	m.CursorDown(2)
+func TestMessageKeepsSavedPosition(test *testing.T) {
+	model := New(theme.New(true))
+	model.SetFile(parseFile(test, v1))
+	model.SetSize(60, 4)
+	model.CursorDown(2)
 
-	m.SetMessage("Loading diff...")
-	if m.Render(60, 4) == "" {
-		t.Error("message not rendered")
+	model.SetMessage("Loading diff...")
+	if model.Render(60, 4) == "" {
+		test.Error("message not rendered")
 	}
-	m.SetFile(parseFile(t, v2))
-	if c, ok := m.Cursor(); !ok || c.Kind != diff.Delete || c.Old != 2 {
-		t.Errorf("position lost across SetMessage: %+v ok=%v", c, ok)
+	model.SetFile(parseFile(test, v2))
+	if cursorLine, ok := model.Cursor(); !ok || cursorLine.Kind != diff.Delete || cursorLine.Old != 2 {
+		test.Errorf("position lost across SetMessage: %+v ok=%v", cursorLine, ok)
 	}
 
 	// An error shown mid-refresh keeps it too.
-	m.SetDiffError(errTest)
-	m.SetMessage("still loading")
-	m.SetFile(parseFile(t, v2))
-	if c, ok := m.Cursor(); !ok || c.Old != 2 {
-		t.Errorf("position lost across error: %+v ok=%v", c, ok)
+	model.SetDiffError(errTest)
+	model.SetMessage("still loading")
+	model.SetFile(parseFile(test, v2))
+	if cursorLine, ok := model.Cursor(); !ok || cursorLine.Old != 2 {
+		test.Errorf("position lost across error: %+v ok=%v", cursorLine, ok)
 	}
 
 	// A different file after a message starts fresh.
-	m.SetMessage("Loading diff...")
-	other := &diff.File{NewPath: "g", OldPath: "g", Hunks: parseFile(t, v1).Hunks}
-	m.SetFile(other)
-	if m.win.Cursor() != 0 {
-		t.Errorf("different path should start at 0, got %d", m.win.Cursor())
+	model.SetMessage("Loading diff...")
+	other := &diff.File{NewPath: "g", OldPath: "g", Hunks: parseFile(test, v1).Hunks}
+	model.SetFile(other)
+	if model.win.Cursor() != 0 {
+		test.Errorf("different path should start at 0, got %d", model.win.Cursor())
 	}
 	// And an explicit clear forgets the saved position.
-	m.SetFile(parseFile(t, v2))
-	m.CursorDown(4)
-	m.SetMessage("x")
-	m.SetFile(nil)
-	m.SetFile(parseFile(t, v2))
-	if m.win.Cursor() != 0 {
-		t.Errorf("SetFile(nil) should drop the saved position, got %d", m.win.Cursor())
+	model.SetFile(parseFile(test, v2))
+	model.CursorDown(4)
+	model.SetMessage("x")
+	model.SetFile(nil)
+	model.SetFile(parseFile(test, v2))
+	if model.win.Cursor() != 0 {
+		test.Errorf("SetFile(nil) should drop the saved position, got %d", model.win.Cursor())
 	}
 }
 

@@ -9,55 +9,55 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
-func typ(m *Model, s string) {
-	for _, r := range s {
-		m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
+func typ(model *Model, text string) {
+	for _, character := range text {
+		model.Update(tea.KeyPressMsg{Code: character, Text: string(character)})
 	}
 }
 
-func TestFilterAndChoose(t *testing.T) {
-	m := New(theme.Default(), "Files", []string{"a/b.go", "c/d.go", "README.md"})
-	if m.Matches() != 3 {
-		t.Fatalf("matches = %d", m.Matches())
+func TestFilterAndChoose(test *testing.T) {
+	model := New(theme.Default(), "Files", []string{"a/b.go", "c/d.go", "README.md"})
+	if model.Matches() != 3 {
+		test.Fatalf("matches = %d", model.Matches())
 	}
-	typ(m, "DGO") // case-insensitive subsequence
-	if m.Matches() != 1 {
-		t.Fatalf("matches for %q = %d", m.Query(), m.Matches())
+	typ(model, "DGO") // case-insensitive subsequence
+	if model.Matches() != 1 {
+		test.Fatalf("matches for %q = %d", model.Query(), model.Matches())
 	}
-	res := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if res.Outcome != Chosen || res.Index != 1 {
-		t.Errorf("result = %+v, want chosen index 1", res)
-	}
-}
-
-func TestCursorAndEsc(t *testing.T) {
-	m := New(theme.Default(), "Files", []string{"x", "y", "z"})
-	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
-	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
-	m.Update(tea.KeyPressMsg{Code: tea.KeyDown}) // clamps
-	if res := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter}); res.Index != 2 {
-		t.Errorf("index = %d, want 2", res.Index)
-	}
-	m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
-	if res := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter}); res.Index != 1 {
-		t.Errorf("index = %d, want 1", res.Index)
-	}
-	if res := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape}); res.Outcome != Cancelled {
-		t.Errorf("esc outcome = %v", res.Outcome)
+	result := model.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if result.Outcome != Chosen || result.Index != 1 {
+		test.Errorf("result = %+v, want chosen index 1", result)
 	}
 }
 
-func TestRenderFitsAndHandlesNoRoom(t *testing.T) {
-	m := New(theme.Default(), "Files", []string{"one", "two"})
-	out := ansi.Strip(m.Render(40, 10))
+func TestCursorAndEsc(test *testing.T) {
+	model := New(theme.Default(), "Files", []string{"x", "y", "z"})
+	model.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	model.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	model.Update(tea.KeyPressMsg{Code: tea.KeyDown}) // clamps
+	if result := model.Update(tea.KeyPressMsg{Code: tea.KeyEnter}); result.Index != 2 {
+		test.Errorf("index = %d, want 2", result.Index)
+	}
+	model.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+	if result := model.Update(tea.KeyPressMsg{Code: tea.KeyEnter}); result.Index != 1 {
+		test.Errorf("index = %d, want 1", result.Index)
+	}
+	if result := model.Update(tea.KeyPressMsg{Code: tea.KeyEscape}); result.Outcome != Cancelled {
+		test.Errorf("esc outcome = %v", result.Outcome)
+	}
+}
+
+func TestRenderFitsAndHandlesNoRoom(test *testing.T) {
+	model := New(theme.Default(), "Files", []string{"one", "two"})
+	out := ansi.Strip(model.Render(40, 10))
 	if out == "" {
-		t.Fatal("expected a box")
+		test.Fatal("expected a box")
 	}
-	if got := m.Render(5, 3); got != "" {
-		t.Errorf("no room should render nothing, got %q", got)
+	if got := model.Render(5, 3); got != "" {
+		test.Errorf("no room should render nothing, got %q", got)
 	}
-	typ(m, "zzz")
-	if ansi.Strip(m.Render(40, 10)) == out {
-		t.Error("filter should change the rendering")
+	typ(model, "zzz")
+	if ansi.Strip(model.Render(40, 10)) == out {
+		test.Error("filter should change the rendering")
 	}
 }

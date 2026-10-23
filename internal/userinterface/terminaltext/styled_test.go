@@ -2,7 +2,7 @@ package terminaltext
 
 import "testing"
 
-func TestCleanStyled(t *testing.T) {
+func TestCleanStyled(test *testing.T) {
 	tests := []struct{ name, in, want string }{
 		{"plain", "plain text\nline two", "plain text\nline two"},
 		{"sgr kept", "\x1b[1;38;5;12mbold\x1b[0m", "\x1b[1;38;5;12mbold\x1b[0m"},
@@ -33,10 +33,10 @@ func TestCleanStyled(t *testing.T) {
 		{"unicode kept", "unicode ✓ ok", "unicode ✓ ok"},
 		{"invalid utf8 does not break out", "a\xffb\xfe\x1b[2Jc", "a�b�c"},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := CleanStyled(tt.in); got != tt.want {
-				t.Errorf("CleanStyled(%q) = %q, want %q", tt.in, got, tt.want)
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			if got := CleanStyled(testCase.in); got != testCase.want {
+				test.Errorf("CleanStyled(%q) = %q, want %q", testCase.in, got, testCase.want)
 			}
 		})
 	}

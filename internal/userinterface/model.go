@@ -22,7 +22,7 @@ const (
 )
 
 // TickFunc schedules fn after d, like tea.Tick. Tests inject their own.
-type TickFunction func(d time.Duration, fn func(time.Time) tea.Msg) tea.Cmd
+type TickFunction func(duration time.Duration, function func(time.Time) tea.Msg) tea.Cmd
 
 // Options configures the root Model. Zero values select defaults.
 type Options struct {
@@ -67,319 +67,319 @@ type Model struct {
 }
 
 // New returns a root model whose stack holds just root.
-func New(root View, th theme.Theme, opts Options) *Model {
-	if opts.SequenceTimeout == 0 {
-		opts.SequenceTimeout = DefaultSequenceTimeout
+func New(root View, theme theme.Theme, options Options) *Model {
+	if options.SequenceTimeout == 0 {
+		options.SequenceTimeout = DefaultSequenceTimeout
 	}
-	if opts.MessageLifetime == 0 {
-		opts.MessageLifetime = DefaultMessageLifetime
+	if options.MessageLifetime == 0 {
+		options.MessageLifetime = DefaultMessageLifetime
 	}
-	if opts.Tick == nil {
-		opts.Tick = tea.Tick
+	if options.Tick == nil {
+		options.Tick = tea.Tick
 	}
-	if opts.Logger == nil {
-		opts.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	if options.Logger == nil {
+		options.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	return &Model{
 		stack:           []View{root},
-		th:              th,
+		th:              theme,
 		keys:            keys.DefaultGlobal(),
-		log:             opts.Logger,
-		tick:            opts.Tick,
-		sequenceWait:    opts.SequenceTimeout,
-		messageLifetime: opts.MessageLifetime,
-		cmdline:         newCommandLine(th),
-		spin:            spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(th.Spinner)),
+		log:             options.Logger,
+		tick:            options.Tick,
+		sequenceWait:    options.SequenceTimeout,
+		messageLifetime: options.MessageLifetime,
+		cmdline:         newCommandLine(theme),
+		spin:            spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(theme.Spinner)),
 	}
 }
 
 // Init starts the root view and asks the terminal for its background colour so
 // the theme can match light and dark terminals.
-func (m *Model) Init() tea.Cmd {
-	return tea.Batch(m.top().Init(), tea.RequestBackgroundColor)
+func (model *Model) Init() tea.Cmd {
+	return tea.Batch(model.top().Init(), tea.RequestBackgroundColor)
 }
 
-func (m *Model) top() View { return m.stack[len(m.stack)-1] }
+func (model *Model) top() View { return model.stack[len(model.stack)-1] }
 
-func (m *Model) contentSize() (w, h int) { return m.width, max(0, m.height-1) }
+func (model *Model) contentSize() (width, height int) { return model.width, max(0, model.height-1) }
 
 // Update implements tea.Model.
-func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	cmd := m.update(msg)
-	return m, tea.Batch(cmd, m.syncSpinner())
+func (model *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
+	command := model.update(message)
+	return model, tea.Batch(command, model.syncSpinner())
 }
 
-func (m *Model) update(msg tea.Msg) tea.Cmd {
-	switch msg := msg.(type) {
+func (model *Model) update(message tea.Msg) tea.Cmd {
+	switch message := message.(type) {
 	case tea.WindowSizeMsg:
-		m.width, m.height = msg.Width, msg.Height
-		m.cmdline.input.SetWidth(max(1, msg.Width-2)) // room for the prompt and cursor
-		return m.broadcast(m.sizeMessage())
+		model.width, model.height = message.Width, message.Height
+		model.cmdline.input.SetWidth(max(1, message.Width-2)) // room for the prompt and cursor
+		return model.broadcast(model.sizeMessage())
 	case tea.BackgroundColorMsg:
-		m.th = theme.New(msg.IsDark())
-		m.cmdline.setTheme(m.th)
-		m.spin.Style = m.th.Spinner
-		return m.broadcast(ThemeMessage{Theme: m.th})
+		model.th = theme.New(message.IsDark())
+		model.cmdline.setTheme(model.th)
+		model.spin.Style = model.th.Spinner
+		return model.broadcast(ThemeMessage{Theme: model.th})
 	case tea.KeyPressMsg:
-		return m.handleKey(msg)
+		return model.handleKey(message)
 	case PushMessage:
-		return m.push(msg.View)
+		return model.push(message.View)
 	case PopMessage:
-		return m.pop()
+		return model.pop()
 	case QuitMessage:
 		return tea.Quit
 	case ConfirmMessage:
-		m.resetKeys()
-		m.confirm = newConfirmPrompt(msg)
+		model.resetKeys()
+		model.confirm = newConfirmPrompt(message)
 		return nil
 	case InfoMessage:
-		return m.setStatus(msg.Text, statusInfo)
+		return model.setStatus(message.Text, statusInfo)
 	case ErrorMessage:
-		m.log.Warn("error shown to user", "err", msg.Err)
+		model.log.Warn("error shown to user", "err", message.Err)
 		text := "error"
-		if msg.Err != nil {
-			text = msg.Err.Error()
+		if message.Err != nil {
+			text = message.Err.Error()
 		}
-		return m.setStatus(text, statusError)
+		return model.setStatus(text, statusError)
 	case clearStatusMessage:
-		if msg.identifier == m.status.identifier {
-			m.status.text, m.status.kind = "", statusNone
+		if message.identifier == model.status.identifier {
+			model.status.text, model.status.kind = "", statusNone
 		}
 		return nil
 	case sequenceTimeoutMessage:
-		return m.expireSequence(msg.generation)
+		return model.expireSequence(message.generation)
 	case spinner.TickMsg:
-		if msg.ID != m.spin.ID() {
-			return m.broadcastOther(msg) // a view's own spinner
+		if message.ID != model.spin.ID() {
+			return model.broadcastOther(message) // a view's own spinner
 		}
-		if !m.spinning {
+		if !model.spinning {
 			return nil // let the tick chain die while idle
 		}
-		var cmd tea.Cmd
-		m.spin, cmd = m.spin.Update(msg)
-		return cmd
+		var command tea.Cmd
+		model.spin, command = model.spin.Update(message)
+		return command
 	default:
-		return m.broadcastOther(msg)
+		return model.broadcastOther(message)
 	}
 }
 
-func (m *Model) sizeMessage() tea.WindowSizeMsg {
-	w, h := m.contentSize()
-	return tea.WindowSizeMsg{Width: w, Height: h}
+func (model *Model) sizeMessage() tea.WindowSizeMsg {
+	width, height := model.contentSize()
+	return tea.WindowSizeMsg{Width: width, Height: height}
 }
 
 // broadcast sends msg to every view in the stack.
-func (m *Model) broadcast(msg tea.Msg) tea.Cmd {
-	cmds := make([]tea.Cmd, len(m.stack))
-	for i, v := range m.stack {
-		m.stack[i], cmds[i] = v.Update(msg)
+func (model *Model) broadcast(message tea.Msg) tea.Cmd {
+	commands := make([]tea.Cmd, len(model.stack))
+	for i, view := range model.stack {
+		model.stack[i], commands[i] = view.Update(message)
 	}
-	return tea.Batch(cmds...)
+	return tea.Batch(commands...)
 }
 
 // broadcastOther sends a message the root does not consume to every view (and
 // to the command line, for cursor blink).
-func (m *Model) broadcastOther(msg tea.Msg) tea.Cmd {
-	if m.cmdline.active {
-		return tea.Batch(m.cmdline.update(msg), m.broadcast(msg))
+func (model *Model) broadcastOther(message tea.Msg) tea.Cmd {
+	if model.cmdline.active {
+		return tea.Batch(model.cmdline.update(message), model.broadcast(message))
 	}
-	return m.broadcast(msg)
+	return model.broadcast(message)
 }
 
-func (m *Model) forward(msg tea.Msg) tea.Cmd {
-	v, cmd := m.top().Update(msg)
-	m.stack[len(m.stack)-1] = v
-	return cmd
+func (model *Model) forward(message tea.Msg) tea.Cmd {
+	view, command := model.top().Update(message)
+	model.stack[len(model.stack)-1] = view
+	return command
 }
 
-func (m *Model) push(v View) tea.Cmd {
-	if v == nil {
+func (model *Model) push(view View) tea.Cmd {
+	if view == nil {
 		return nil
 	}
-	m.resetKeys()
-	m.stack = append(m.stack, v)
-	m.log.Debug("push view", "title", v.Title(), "depth", len(m.stack))
-	return tea.Batch(v.Init(), m.forward(m.sizeMessage()))
+	model.resetKeys()
+	model.stack = append(model.stack, view)
+	model.log.Debug("push view", "title", view.Title(), "depth", len(model.stack))
+	return tea.Batch(view.Init(), model.forward(model.sizeMessage()))
 }
 
-func (m *Model) pop() tea.Cmd {
-	m.resetKeys()
-	if len(m.stack) == 1 {
+func (model *Model) pop() tea.Cmd {
+	model.resetKeys()
+	if len(model.stack) == 1 {
 		return tea.Quit
 	}
-	m.stack = m.stack[:len(m.stack)-1]
-	m.log.Debug("pop view", "depth", len(m.stack))
-	if r, ok := m.top().(Resumer); ok {
-		return r.Resumed()
+	model.stack = model.stack[:len(model.stack)-1]
+	model.log.Debug("pop view", "depth", len(model.stack))
+	if review, ok := model.top().(Resumer); ok {
+		return review.Resumed()
 	}
 	return nil
 }
 
-func (m *Model) resetKeys() {
-	m.showHelp = false
-	m.confirm = nil
-	m.cmdline.close()
-	m.matcher.Reset()
-	m.sequenceGeneration++
+func (model *Model) resetKeys() {
+	model.showHelp = false
+	model.confirm = nil
+	model.cmdline.close()
+	model.matcher.Reset()
+	model.sequenceGeneration++
 }
 
-func (m *Model) setStatus(text string, kind statusKind) tea.Cmd {
-	m.status.identifier++
-	m.status.text, m.status.kind = text, kind
-	id := m.status.identifier
-	return m.tick(m.messageLifetime, func(time.Time) tea.Msg { return clearStatusMessage{identifier: id} })
+func (model *Model) setStatus(text string, kind statusKind) tea.Cmd {
+	model.status.identifier++
+	model.status.text, model.status.kind = text, kind
+	identifier := model.status.identifier
+	return model.tick(model.messageLifetime, func(time.Time) tea.Msg { return clearStatusMessage{identifier: identifier} })
 }
 
 // syncSpinner starts the root spinner's tick chain when the top view is
 // loading and lets it die when it is not. It runs after every Update, so
 // push, pop and view state changes are all covered.
-func (m *Model) syncSpinner() tea.Cmd {
-	l, ok := m.top().(Loader)
-	want := ok && l.Loading()
+func (model *Model) syncSpinner() tea.Cmd {
+	loader, ok := model.top().(Loader)
+	want := ok && loader.Loading()
 	switch {
-	case want && !m.spinning:
-		m.spinning = true
-		return m.spin.Tick
+	case want && !model.spinning:
+		model.spinning = true
+		return model.spin.Tick
 	case !want:
-		m.spinning = false
+		model.spinning = false
 	}
 	return nil
 }
 
 // bindings returns every binding active now, for sequence matching.
-func (m *Model) bindings() []key.Binding {
-	out := m.keys.Bindings()
-	for _, g := range m.top().FullHelp() {
-		out = append(out, g...)
+func (model *Model) bindings() []key.Binding {
+	out := model.keys.Bindings()
+	for _, bindings := range model.top().FullHelp() {
+		out = append(out, bindings...)
 	}
 	return out
 }
 
-func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
-	k := msg.String()
-	if c := m.confirm; c.CapturesKeys() {
-		m.confirm = nil
-		return c.answer(msg)
+func (model *Model) handleKey(message tea.KeyPressMsg) tea.Cmd {
+	k := message.String()
+	if confirmPrompt := model.confirm; confirmPrompt.CapturesKeys() {
+		model.confirm = nil
+		return confirmPrompt.answer(message)
 	}
-	if m.cmdline.active {
-		line, ok, cmd := m.cmdline.handleKey(msg)
+	if model.cmdline.active {
+		line, ok, command := model.cmdline.handleKey(message)
 		if ok {
-			return parseCommand(line, m.top())
+			return parseCommand(line, model.top())
 		}
-		return cmd
+		return command
 	}
-	if m.showHelp {
-		if key.Matches(msg, m.keys.Help, m.keys.Cancel) {
-			m.showHelp = false
+	if model.showHelp {
+		if key.Matches(message, model.keys.Help, model.keys.Cancel) {
+			model.showHelp = false
 		}
 		return nil
 	}
-	if c, ok := m.top().(KeyCapturer); ok && c.CapturesKeys() {
-		m.resetKeys()
-		return m.forward(msg)
+	if capturer, ok := model.top().(KeyCapturer); ok && capturer.CapturesKeys() {
+		model.resetKeys()
+		return model.forward(message)
 	}
 
-	res := m.matcher.Feed(k, m.bindings())
-	m.sequenceGeneration++
-	switch res.Kind {
+	result := model.matcher.Feed(k, model.bindings())
+	model.sequenceGeneration++
+	switch result.Kind {
 	case keys.Pending:
-		gen := m.sequenceGeneration
-		return m.tick(m.sequenceWait, func(time.Time) tea.Msg { return sequenceTimeoutMessage{generation: gen} })
+		generation := model.sequenceGeneration
+		return model.tick(model.sequenceWait, func(time.Time) tea.Msg { return sequenceTimeoutMessage{generation: generation} })
 	case keys.Matched:
-		return m.dispatch(res.Sequence)
+		return model.dispatch(result.Sequence)
 	default:
-		return m.forward(msg)
+		return model.forward(message)
 	}
 }
 
-func (m *Model) expireSequence(gen int) tea.Cmd {
-	if gen != m.sequenceGeneration || !m.matcher.Pending() {
+func (model *Model) expireSequence(generation int) tea.Cmd {
+	if generation != model.sequenceGeneration || !model.matcher.Pending() {
 		return nil
 	}
-	m.sequenceGeneration++
-	if res := m.matcher.Expire(m.bindings()); res.Kind == keys.Matched {
-		return m.dispatch(res.Sequence)
+	model.sequenceGeneration++
+	if result := model.matcher.Expire(model.bindings()); result.Kind == keys.Matched {
+		return model.dispatch(result.Sequence)
 	}
 	return nil
 }
 
 // dispatch acts on a resolved key or sequence: the root consumes Help and
 // Command, everything else goes to the view.
-func (m *Model) dispatch(seq string) tea.Cmd {
-	km := keys.Message{Sequence: seq}
+func (model *Model) dispatch(sequence string) tea.Cmd {
+	keyMessage := keys.Message{Sequence: sequence}
 	switch {
-	case key.Matches(km, m.keys.Help):
-		m.showHelp = true
+	case key.Matches(keyMessage, model.keys.Help):
+		model.showHelp = true
 		return nil
-	case key.Matches(km, m.keys.Command):
-		return m.cmdline.open()
+	case key.Matches(keyMessage, model.keys.Command):
+		return model.cmdline.open()
 	}
-	return m.forward(km)
+	return model.forward(keyMessage)
 }
 
 // View implements tea.Model.
-func (m *Model) View() tea.View {
-	var v tea.View
-	if m.width > 0 && m.height > 0 {
-		v = tea.NewView(m.content() + "\n" + m.bottomRow())
+func (model *Model) View() tea.View {
+	var view tea.View
+	if model.width > 0 && model.height > 0 {
+		view = tea.NewView(model.content() + "\n" + model.bottomRow())
 	}
-	v.AltScreen = true
-	return v
+	view.AltScreen = true
+	return view
 }
 
 // content renders the area above the status bar, padded to full size.
-func (m *Model) content() string {
-	w, h := m.contentSize()
-	var s string
-	if m.showHelp {
-		s = renderHelp(m.th, m.top().Title(), m.keys.FullHelp(), m.top().FullHelp(), w)
+func (model *Model) content() string {
+	width, height := model.contentSize()
+	var text string
+	if model.showHelp {
+		text = renderHelp(model.th, model.top().Title(), model.keys.FullHelp(), model.top().FullHelp(), width)
 	} else {
-		s = m.top().Render(w, h)
+		text = model.top().Render(width, height)
 	}
-	s = m.th.Normal.MaxWidth(w).MaxHeight(h).Render(s)
-	if n := h - lipgloss.Height(s); n > 0 {
-		s += strings.Repeat("\n", n)
+	text = model.th.Normal.MaxWidth(width).MaxHeight(height).Render(text)
+	if count := height - lipgloss.Height(text); count > 0 {
+		text += strings.Repeat("\n", count)
 	}
-	return s
+	return text
 }
 
-func (m *Model) bar() statusBar {
-	crumbs := make([]string, len(m.stack))
-	for i, v := range m.stack {
-		crumbs[i] = v.Title()
+func (model *Model) bar() statusBar {
+	crumbs := make([]string, len(model.stack))
+	for i, view := range model.stack {
+		crumbs[i] = view.Title()
 	}
-	b := statusBar{
+	currentStatusBar := statusBar{
 		crumbs:  strings.Join(crumbs, " › "),
-		text:    m.status.text,
-		kind:    m.status.kind,
-		pending: m.matcher.Display(),
+		text:    model.status.text,
+		kind:    model.status.kind,
+		pending: model.matcher.Display(),
 	}
-	if b.kind == statusNone {
-		b.text = shortHelp(m.top().ShortHelp())
+	if currentStatusBar.kind == statusNone {
+		currentStatusBar.text = shortHelp(model.top().ShortHelp())
 	}
-	if m.spinning {
-		b.spinner = m.spin.View()
+	if model.spinning {
+		currentStatusBar.spinner = model.spin.View()
 	}
-	return b
+	return currentStatusBar
 }
 
-func shortHelp(bs []key.Binding) string {
+func shortHelp(bindings []key.Binding) string {
 	parts := []string{"? help"}
-	for _, b := range bs {
-		if h := b.Help(); b.Enabled() && h.Desc != "" {
-			parts = append(parts, h.Key+" "+h.Desc)
+	for _, binding := range bindings {
+		if help := binding.Help(); binding.Enabled() && help.Desc != "" {
+			parts = append(parts, help.Key+" "+help.Desc)
 		}
 	}
 	return strings.Join(parts, "  ")
 }
 
 // bottomRow is the status bar, or the command line while it is open.
-func (m *Model) bottomRow() string {
-	if m.confirm != nil {
-		return m.th.StatusInfo.Width(m.width).MaxWidth(m.width).MaxHeight(1).Render(m.confirm.render(m.width))
+func (model *Model) bottomRow() string {
+	if model.confirm != nil {
+		return model.th.StatusInfo.Width(model.width).MaxWidth(model.width).MaxHeight(1).Render(model.confirm.render(model.width))
 	}
-	if m.cmdline.active {
-		return m.th.StatusCommand.Width(m.width).MaxWidth(m.width).MaxHeight(1).Render(m.cmdline.input.View())
+	if model.cmdline.active {
+		return model.th.StatusCommand.Width(model.width).MaxWidth(model.width).MaxHeight(1).Render(model.cmdline.input.View())
 	}
-	return m.bar().render(m.th, m.width)
+	return model.bar().render(model.th, model.width)
 }

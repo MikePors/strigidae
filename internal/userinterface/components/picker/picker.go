@@ -46,70 +46,70 @@ type Model struct {
 }
 
 // New returns a picker over items.
-func New(th theme.Theme, title string, items []string) *Model {
-	m := &Model{th: th, title: title, items: items}
-	m.refilter()
-	return m
+func New(theme theme.Theme, title string, items []string) *Model {
+	model := &Model{th: theme, title: title, items: items}
+	model.refilter()
+	return model
 }
 
 // Query returns the current filter text.
-func (m *Model) Query() string { return string(m.query) }
+func (model *Model) Query() string { return string(model.query) }
 
 // Matches returns the number of items passing the filter.
-func (m *Model) Matches() int { return len(m.matches) }
+func (model *Model) Matches() int { return len(model.matches) }
 
 // Update handles one key press. Every key is consumed: printable text edits
 // the filter, so letters never trigger anything outside the picker.
-func (m *Model) Update(msg tea.KeyPressMsg) Result {
-	switch msg.String() {
+func (model *Model) Update(message tea.KeyPressMsg) Result {
+	switch message.String() {
 	case "esc":
 		return Result{Outcome: Cancelled}
 	case "enter":
-		if len(m.matches) == 0 {
+		if len(model.matches) == 0 {
 			return Result{Outcome: Open}
 		}
-		return Result{Outcome: Chosen, Index: m.matches[m.win.Cursor()]}
+		return Result{Outcome: Chosen, Index: model.matches[model.win.Cursor()]}
 	case "up", "ctrl+p":
-		m.win.Up(1)
+		model.win.Up(1)
 	case "down", "ctrl+n":
-		m.win.Down(1)
+		model.win.Down(1)
 	case "backspace":
-		if n := len(m.query); n > 0 {
-			m.query = m.query[:n-1]
-			m.refilter()
+		if count := len(model.query); count > 0 {
+			model.query = model.query[:count-1]
+			model.refilter()
 		}
 	case "ctrl+u":
-		m.query = nil
-		m.refilter()
+		model.query = nil
+		model.refilter()
 	default:
-		if txt := msg.Text; txt != "" && !strings.ContainsFunc(txt, unicode.IsControl) {
-			m.query = append(m.query, []rune(txt)...)
-			m.refilter()
+		if text := message.Text; text != "" && !strings.ContainsFunc(text, unicode.IsControl) {
+			model.query = append(model.query, []rune(text)...)
+			model.refilter()
 		}
 	}
 	return Result{Outcome: Open}
 }
 
-func (m *Model) refilter() {
-	m.matches = m.matches[:0]
-	q := strings.ToLower(string(m.query))
-	for i, it := range m.items {
-		if subsequence(strings.ToLower(it), q) {
-			m.matches = append(m.matches, i)
+func (model *Model) refilter() {
+	model.matches = model.matches[:0]
+	query := strings.ToLower(string(model.query))
+	for i, item := range model.items {
+		if subsequence(strings.ToLower(item), query) {
+			model.matches = append(model.matches, i)
 		}
 	}
-	m.win.Reset()
-	m.win.SetRows(len(m.matches))
+	model.win.Reset()
+	model.win.SetRows(len(model.matches))
 }
 
-func subsequence(s, q string) bool {
-	rs := []rune(s)
+func subsequence(text, query string) bool {
+	runes := []rune(text)
 	i := 0
-	for _, r := range q {
-		for i < len(rs) && rs[i] != r {
+	for _, character := range query {
+		for i < len(runes) && runes[i] != character {
 			i++
 		}
-		if i == len(rs) {
+		if i == len(runes) {
 			return false
 		}
 		i++
@@ -119,59 +119,59 @@ func subsequence(s, q string) bool {
 
 // Render draws the popup, sized to fit within width x height. It returns ""
 // when there is no room.
-func (m *Model) Render(width, height int) string {
-	w := min(64, width)
-	if w < 12 || height < 5 {
+func (model *Model) Render(width, height int) string {
+	paneWidth := min(64, width)
+	if paneWidth < 12 || height < 5 {
 		return ""
 	}
-	inner := w - 2
-	rows := min(max(len(m.matches), 1), min(height-4, 12))
+	inner := paneWidth - 2
+	rows := min(max(len(model.matches), 1), min(height-4, 12))
 
 	lines := make([]string, 0, rows+2)
-	q := string(m.query)
-	if over := ansi.StringWidth(q) - (inner - 3); over > 0 {
-		q = ansi.TruncateLeft(q, over+1, "…") // keep the tail of a long query visible
+	query := string(model.query)
+	if over := ansi.StringWidth(query) - (inner - 3); over > 0 {
+		query = ansi.TruncateLeft(query, over+1, "…") // keep the tail of a long query visible
 	}
-	lines = append(lines, m.th.Title.Render("> ")+m.th.Normal.Render(q)+m.th.Muted.Render("▏"))
-	if len(m.matches) == 0 {
-		lines = append(lines, m.th.Muted.Render("no matches"))
+	lines = append(lines, model.th.Title.Render("> ")+model.th.Normal.Render(query)+model.th.Muted.Render("▏"))
+	if len(model.matches) == 0 {
+		lines = append(lines, model.th.Muted.Render("no matches"))
 	}
-	m.win.SetSize(rows)
-	for i := m.win.Top(); i < len(m.matches) && i < m.win.Top()+rows; i++ {
-		label := m.items[m.matches[i]]
+	model.win.SetSize(rows)
+	for i := model.win.Top(); i < len(model.matches) && i < model.win.Top()+rows; i++ {
+		label := model.items[model.matches[i]]
 		if over := ansi.StringWidth(label) - (inner - 4); over > 0 {
 			label = ansi.TruncateLeft(label, over+1, "…") // keep the file name visible
 		}
-		if i == m.win.Cursor() {
-			lines = append(lines, m.th.OverlayItemFocus.Render(pad("> "+label, inner-2)))
+		if i == model.win.Cursor() {
+			lines = append(lines, model.th.OverlayItemFocus.Render(pad("> "+label, inner-2)))
 		} else {
-			lines = append(lines, m.th.OverlayItem.Render("  "+label))
+			lines = append(lines, model.th.OverlayItem.Render("  "+label))
 		}
 	}
-	box := m.th.OverlayBox.
-		Width(w).
+	box := model.th.OverlayBox.
+		Width(paneWidth).
 		Render(strings.Join(lines, "\n"))
-	return m.titled(box)
+	return model.titled(box)
 }
 
 // titled puts the title in the top edge of the box.
-func (m *Model) titled(box string) string {
-	if m.title == "" {
+func (model *Model) titled(box string) string {
+	if model.title == "" {
 		return box
 	}
 	lines := strings.Split(box, "\n")
-	t := " " + m.title + " "
-	w := ansi.StringWidth(lines[0])
-	if ansi.StringWidth(t)+4 > w {
+	text := " " + model.title + " "
+	width := ansi.StringWidth(lines[0])
+	if ansi.StringWidth(text)+4 > width {
 		return box
 	}
-	lines[0] = ansi.Cut(lines[0], 0, 2) + m.th.OverlayBorder.Render(t) + ansi.Cut(lines[0], 2+ansi.StringWidth(t), w)
+	lines[0] = ansi.Cut(lines[0], 0, 2) + model.th.OverlayBorder.Render(text) + ansi.Cut(lines[0], 2+ansi.StringWidth(text), width)
 	return strings.Join(lines, "\n")
 }
 
-func pad(s string, w int) string {
-	if n := w - ansi.StringWidth(s); n > 0 {
-		return s + strings.Repeat(" ", n)
+func pad(text string, width int) string {
+	if count := width - ansi.StringWidth(text); count > 0 {
+		return text + strings.Repeat(" ", count)
 	}
-	return s
+	return text
 }

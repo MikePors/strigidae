@@ -63,16 +63,16 @@ type LineRange struct {
 // Update reacts to, so multi-key sequences are recognised.
 type FilePane interface {
 	// SetTheme is called on construction and whenever the theme changes.
-	SetTheme(th theme.Theme)
+	SetTheme(activeTheme theme.Theme)
 	// SetDiff is called when a diff load starts and when it finishes.
-	SetDiff(d DiffState)
+	SetDiff(diffState DiffState)
 	// SetThreads is called when the pull request's review threads load or
 	// reload; the pane shows the ones on its file.
-	SetThreads(ts []github.ReviewThread)
+	SetThreads(threads []github.ReviewThread)
 	// SetFile is called when the selected file changes, and again when the
 	// same path comes back with different metadata (change type, counts)
 	// after a refresh. A repeat call for the same path keeps cursor and scroll.
-	SetFile(f github.ChangedFile)
+	SetFile(file github.ChangedFile)
 	// SetSize gives the pane's inner size; it is called whenever it changes.
 	SetSize(width, height int)
 	// FocusedThreads returns the review threads at the pane's cursor: the one
@@ -82,7 +82,7 @@ type FilePane interface {
 	// CommentRange returns the lines a new comment would go on: the visual
 	// selection, else the cursor line. ok is false when the cursor is not on a
 	// diff line. Panes without lines return false.
-	CommentRange() (r LineRange, ok bool)
+	CommentRange() (lineRange LineRange, ok bool)
 	// VisualStart begins a line selection at the cursor, reporting false when
 	// it cannot (no diff line under the cursor).
 	VisualStart() bool
@@ -94,7 +94,7 @@ type FilePane interface {
 	// VisualEnd leaves the line selection.
 	VisualEnd()
 	// Update handles a key while the right pane has focus.
-	Update(msg keys.Message) tea.Cmd
+	Update(message keys.Message) tea.Cmd
 	// Render draws the pane in exactly width columns and at most height rows.
 	Render(width, height int) string
 	// FullHelp lists the pane's bindings for the help overlay and sequence matching.

@@ -22,154 +22,154 @@ import (
 // punctuation character: plain text (the legacy encoding, which is what
 // Bubble Tea v2 gets by default) and the kitty encoding that reports the base
 // key plus Shift.
-func terminalKeys(s string, base rune) map[string]tea.KeyPressMsg {
+func terminalKeys(text string, base rune) map[string]tea.KeyPressMsg {
 	return map[string]tea.KeyPressMsg{
-		"text":  {Code: rune(s[0]), Text: s},
-		"kitty": {Code: base, ShiftedCode: rune(s[0]), Mod: tea.ModShift, Text: s},
+		"text":  {Code: rune(text[0]), Text: text},
+		"kitty": {Code: base, ShiftedCode: rune(text[0]), Mod: tea.ModShift, Text: text},
 	}
 }
 
 // rootFor wraps the harness's view in the real root and counts sequence
 // timers, so a test can prove a key never starts a pending prefix.
-func rootFor(h *harness) (m *userinterface.Model, timers *int) {
+func rootFor(harness *harness) (model *userinterface.Model, timers *int) {
 	timers = new(int)
 	tick := func(time.Duration, func(time.Time) tea.Msg) tea.Cmd { *timers++; return nil }
-	m = userinterface.New(h.v, theme.New(true), userinterface.Options{Tick: tick})
-	_, _ = m.Update(tea.WindowSizeMsg{Width: h.v.width, Height: h.v.height + 1})
-	return m, timers
+	model = userinterface.New(harness.v, theme.New(true), userinterface.Options{Tick: tick})
+	_, _ = model.Update(tea.WindowSizeMsg{Width: harness.v.width, Height: harness.v.height + 1})
+	return model, timers
 }
 
-func TestNavigationKeysAreReportedAsText(t *testing.T) {
+func TestNavigationKeysAreReportedAsText(test *testing.T) {
 	bases := map[string]rune{"}": ']', "{": '[', ")": '0', "(": '9'}
-	for s, base := range bases {
-		for name, k := range terminalKeys(s, base) {
-			if got := k.String(); got != s {
-				t.Errorf("%s %q stringifies as %q", name, s, got)
+	for text, base := range bases {
+		for name, k := range terminalKeys(text, base) {
+			if got := k.String(); got != text {
+				test.Errorf("%s %q stringifies as %q", name, text, got)
 			}
 		}
 	}
 }
 
-func TestNavigationKeysThroughRoot(t *testing.T) {
-	press := func(m *userinterface.Model, s string) {
-		t.Helper()
-		_, _ = m.Update(tea.KeyPressMsg{Code: rune(s[0]), Text: s})
+func TestNavigationKeysThroughRoot(test *testing.T) {
+	press := func(model *userinterface.Model, text string) {
+		test.Helper()
+		_, _ = model.Update(tea.KeyPressMsg{Code: rune(text[0]), Text: text})
 	}
 
-	t.Run("} and { move between files from Overview", func(t *testing.T) {
+	test.Run("} and { move between files from Overview", func(test *testing.T) {
 		for name, k := range terminalKeys("}", ']') {
-			h := loaded(t, 100, 24)
-			m, timers := rootFor(h)
-			_, _ = m.Update(k)
-			if h.v.sel() != 1 {
-				t.Errorf("%s: } sel = %d, want 1", name, h.v.sel())
+			harness := loaded(test, 100, 24)
+			model, timers := rootFor(harness)
+			_, _ = model.Update(k)
+			if harness.v.sel() != 1 {
+				test.Errorf("%s: } sel = %d, want 1", name, harness.v.sel())
 			}
-			_, _ = m.Update(terminalKeys("{", '[')[name])
-			if h.v.sel() != 1 {
-				t.Errorf("%s: { at the first file should stay, sel = %d", name, h.v.sel())
+			_, _ = model.Update(terminalKeys("{", '[')[name])
+			if harness.v.sel() != 1 {
+				test.Errorf("%s: { at the first file should stay, sel = %d", name, harness.v.sel())
 			}
 			if *timers != 0 {
-				t.Errorf("%s: %d sequence timers started", name, *timers)
+				test.Errorf("%s: %d sequence timers started", name, *timers)
 			}
 		}
 	})
 
-	t.Run("] and [ jump sections in Overview at once", func(t *testing.T) {
-		h := loaded(t, 100, 14)
-		m, timers := rootFor(h)
-		press(m, "l")
-		press(m, "]")
-		if h.v.ov.vp.YOffset() != h.v.ov.sections[1] {
-			t.Errorf("] did not act immediately: offset = %d", h.v.ov.vp.YOffset())
+	test.Run("] and [ jump sections in Overview at once", func(test *testing.T) {
+		harness := loaded(test, 100, 14)
+		model, timers := rootFor(harness)
+		press(model, "l")
+		press(model, "]")
+		if harness.v.ov.vp.YOffset() != harness.v.ov.sections[1] {
+			test.Errorf("] did not act immediately: offset = %d", harness.v.ov.vp.YOffset())
 		}
-		press(m, "[")
-		if h.v.ov.vp.YOffset() != 0 {
-			t.Errorf("[: offset = %d", h.v.ov.vp.YOffset())
+		press(model, "[")
+		if harness.v.ov.vp.YOffset() != 0 {
+			test.Errorf("[: offset = %d", harness.v.ov.vp.YOffset())
 		}
 		if *timers != 0 {
-			t.Errorf("] / [ started %d sequence timers", *timers)
+			test.Errorf("] / [ started %d sequence timers", *timers)
 		}
 	})
 
-	t.Run("] and [ move between hunks in the diff", func(t *testing.T) {
-		h := openClientDiff(t, 100, 24)
-		m, timers := rootFor(h)
-		press(m, "]")
-		press(m, "j")
-		if !strings.Contains(h.cursorText(), "c.conn.Ping") {
-			t.Errorf("]: cursor on %q", h.cursorText())
+	test.Run("] and [ move between hunks in the diff", func(test *testing.T) {
+		harness := openClientDiff(test, 100, 24)
+		model, timers := rootFor(harness)
+		press(model, "]")
+		press(model, "j")
+		if !strings.Contains(harness.cursorText(), "c.conn.Ping") {
+			test.Errorf("]: cursor on %q", harness.cursorText())
 		}
-		press(m, "[") // back to the header of the hunk we are in
-		press(m, "[")
-		press(m, "j")
-		if !strings.Contains(h.cursorText(), `"context"`) {
-			t.Errorf("[: cursor on %q", h.cursorText())
+		press(model, "[") // back to the header of the hunk we are in
+		press(model, "[")
+		press(model, "j")
+		if !strings.Contains(harness.cursorText(), `"context"`) {
+			test.Errorf("[: cursor on %q", harness.cursorText())
 		}
 		if *timers != 0 {
-			t.Errorf("] / [ started %d sequence timers", *timers)
+			test.Errorf("] / [ started %d sequence timers", *timers)
 		}
 	})
 
-	t.Run(") and ( move between threads in the diff", func(t *testing.T) {
+	test.Run(") and ( move between threads in the diff", func(test *testing.T) {
 		for name, k := range terminalKeys(")", '0') {
-			h := threadHarness(t, 110, 40)
-			h.selectFile()
-			m, timers := rootFor(h)
-			_, _ = m.Update(k)
-			if !strings.Contains(h.cursorRow(), "carol") {
-				t.Errorf("%s: ) landed on %q", name, h.cursorRow())
+			harness := threadHarness(test, 110, 40)
+			harness.selectFile()
+			model, timers := rootFor(harness)
+			_, _ = model.Update(k)
+			if !strings.Contains(harness.cursorRow(), "carol") {
+				test.Errorf("%s: ) landed on %q", name, harness.cursorRow())
 			}
-			_, _ = m.Update(terminalKeys("(", '9')[name])
-			if !strings.Contains(h.cursorRow(), "carol") {
-				t.Errorf("%s: ( at the first thread landed on %q", name, h.cursorRow())
+			_, _ = model.Update(terminalKeys("(", '9')[name])
+			if !strings.Contains(harness.cursorRow(), "carol") {
+				test.Errorf("%s: ( at the first thread landed on %q", name, harness.cursorRow())
 			}
 			if *timers != 0 {
-				t.Errorf("%s: %d sequence timers started", name, *timers)
+				test.Errorf("%s: %d sequence timers started", name, *timers)
 			}
 		}
 	})
 
-	t.Run("old sequences are just two keys", func(t *testing.T) {
-		h := loaded(t, 100, 14)
-		m, _ := rootFor(h)
-		press(m, "l")
-		press(m, "]") // jumps a section at once
-		if h.v.ov.vp.YOffset() != h.v.ov.sections[1] {
-			t.Errorf("]: offset = %d", h.v.ov.vp.YOffset())
+	test.Run("old sequences are just two keys", func(test *testing.T) {
+		harness := loaded(test, 100, 14)
+		model, _ := rootFor(harness)
+		press(model, "l")
+		press(model, "]") // jumps a section at once
+		if harness.v.ov.vp.YOffset() != harness.v.ov.sections[1] {
+			test.Errorf("]: offset = %d", harness.v.ov.vp.YOffset())
 		}
-		press(m, "f") // is the file picker, not "next file"
-		if !h.v.CapturesKeys() || h.v.sel() != 0 {
-			t.Errorf("f after ]: captures = %v, sel = %d", h.v.CapturesKeys(), h.v.sel())
+		press(model, "f") // is the file picker, not "next file"
+		if !harness.v.CapturesKeys() || harness.v.sel() != 0 {
+			test.Errorf("f after ]: captures = %v, sel = %d", harness.v.CapturesKeys(), harness.v.sel())
 		}
 	})
 
-	t.Run("hunk keys work from the Files pane", func(t *testing.T) {
-		h := openClientDiff(t, 100, 24)
-		m, _ := rootFor(h)
-		press(m, "h")
-		press(m, "]")
-		press(m, "l")
-		press(m, "j")
-		if !strings.Contains(h.cursorText(), "c.conn.Ping") {
-			t.Errorf("] from the Files pane: cursor on %q", h.cursorText())
+	test.Run("hunk keys work from the Files pane", func(test *testing.T) {
+		harness := openClientDiff(test, 100, 24)
+		model, _ := rootFor(harness)
+		press(model, "h")
+		press(model, "]")
+		press(model, "l")
+		press(model, "j")
+		if !strings.Contains(harness.cursorText(), "c.conn.Ping") {
+			test.Errorf("] from the Files pane: cursor on %q", harness.cursorText())
 		}
 	})
 }
 
 // TestHelpKeysMatchBindings keeps each help key equal to a real key.
-func TestHelpKeysMatchBindings(t *testing.T) {
-	h := openClientDiff(t, 100, 24)
-	for _, grp := range h.v.FullHelp() {
-		for _, b := range grp {
-			if b.Help().Key == "" {
+func TestHelpKeysMatchBindings(test *testing.T) {
+	harness := openClientDiff(test, 100, 24)
+	for _, bindings := range harness.v.FullHelp() {
+		for _, binding := range bindings {
+			if binding.Help().Key == "" {
 				continue
 			}
 			ok := false
-			for _, k := range b.Keys() {
-				ok = ok || strings.ReplaceAll(k, " ", "") == b.Help().Key || k == b.Help().Key
+			for _, k := range binding.Keys() {
+				ok = ok || strings.ReplaceAll(k, " ", "") == binding.Help().Key || k == binding.Help().Key
 			}
 			if !ok {
-				t.Errorf("help key %q is not one of %v", b.Help().Key, b.Keys())
+				test.Errorf("help key %q is not one of %v", binding.Help().Key, binding.Keys())
 			}
 		}
 	}
@@ -177,13 +177,13 @@ func TestHelpKeysMatchBindings(t *testing.T) {
 
 // TestNoBracketPrefixSequences proves no binding in the workspace starts a
 // bracket sequence, so a bare ] or [ never waits for a second key.
-func TestNoBracketPrefixSequences(t *testing.T) {
-	h := openClientDiff(t, 120, 30)
-	for _, grp := range h.v.FullHelp() {
-		for _, b := range grp {
-			for _, k := range b.Keys() {
+func TestNoBracketPrefixSequences(test *testing.T) {
+	harness := openClientDiff(test, 120, 30)
+	for _, bindings := range harness.v.FullHelp() {
+		for _, binding := range bindings {
+			for _, k := range binding.Keys() {
 				if strings.HasPrefix(k, "] ") || strings.HasPrefix(k, "[ ") {
-					t.Errorf("binding %q is a bracket sequence", k)
+					test.Errorf("binding %q is a bracket sequence", k)
 				}
 			}
 		}

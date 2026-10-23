@@ -20,62 +20,62 @@ const (
 // SetThreads gives the pull request's review threads; the pane shows the ones
 // on the file it displays. Which threads the user expanded or collapsed is
 // kept across calls, by thread ID.
-func (m *Model) SetThreads(ts []github.ReviewThread) {
-	k, had := m.cursorKey()
-	m.threads = ts
-	m.bcache = nil
-	m.placeThreads()
-	m.relayout(k, had)
+func (model *Model) SetThreads(threads []github.ReviewThread) {
+	k, found := model.cursorKey()
+	model.threads = threads
+	model.bcache = nil
+	model.placeThreads()
+	model.relayout(k, found)
 }
 
 // placeThreads picks the threads on the shown file and anchors each to a row
 // of the diff. A thread goes after the row whose line number on the thread's
 // side equals Line. One with no current line (outdated, or on the whole file)
 // or whose line is not part of the diff goes in the list after the last row.
-func (m *Model) placeThreads() {
-	m.fthreads, m.attach, m.orphans = nil, nil, nil
-	if m.file == nil {
+func (model *Model) placeThreads() {
+	model.fthreads, model.attach, model.orphans = nil, nil, nil
+	if model.file == nil {
 		return
 	}
 	byNew, byOld := map[int]int{}, map[int]int{}
-	for i, r := range m.base {
-		if !r.isLine() {
+	for i, row := range model.base {
+		if !row.isLine() {
 			continue
 		}
-		if r.line.New > 0 {
-			byNew[r.line.New] = i
+		if row.line.New > 0 {
+			byNew[row.line.New] = i
 		}
-		if r.line.Old > 0 {
-			byOld[r.line.Old] = i
+		if row.line.Old > 0 {
+			byOld[row.line.Old] = i
 		}
 	}
-	path := m.file.Path()
-	for _, t := range m.threads {
-		if t.Path != path {
+	path := model.file.Path()
+	for _, thread := range model.threads {
+		if thread.Path != path {
 			continue
 		}
-		ti := len(m.fthreads)
-		m.fthreads = append(m.fthreads, t)
+		threadIndex := len(model.fthreads)
+		model.fthreads = append(model.fthreads, thread)
 		lines := byNew
-		if t.DiffSide == github.SideLeft {
+		if thread.DiffSide == github.SideLeft {
 			lines = byOld
 		}
-		if bi, ok := lines[t.Line]; ok && t.Line > 0 {
-			if m.attach == nil {
-				m.attach = map[int][]int{}
+		if baseIndex, ok := lines[thread.Line]; ok && thread.Line > 0 {
+			if model.attach == nil {
+				model.attach = map[int][]int{}
 			}
-			m.attach[bi] = append(m.attach[bi], ti)
+			model.attach[baseIndex] = append(model.attach[baseIndex], threadIndex)
 			continue
 		}
-		m.orphans = append(m.orphans, ti)
+		model.orphans = append(model.orphans, threadIndex)
 	}
 }
 
-func (m *Model) expanded(t github.ReviewThread) bool {
-	if v, ok := m.open[t.Identifier]; ok {
-		return v
+func (model *Model) expanded(reviewThread github.ReviewThread) bool {
+	if value, ok := model.open[reviewThread.Identifier]; ok {
+		return value
 	}
-	return thread.DefaultExpanded(t)
+	return thread.DefaultExpanded(reviewThread)
 }
 
 // blockSig is what every cached block depends on besides its own key.
@@ -93,114 +93,114 @@ type blockKey struct {
 
 // renderBlock returns the lines of thread ti, from the cache when the thread,
 // its expanded state, the width and the theme are unchanged.
-func (m *Model) renderBlock(ti int) []string {
-	t := m.fthreads[ti]
-	now := m.now()
-	sig := blockSig{width: m.w - m.gutterWidth(), themeIdentifier: m.th.Identifier, minute: now.Truncate(time.Minute)}
-	if m.bcache == nil || sig != m.bsig {
-		m.bcache, m.bsig = map[blockKey][]string{}, sig
+func (model *Model) renderBlock(threadIndex int) []string {
+	reviewThread := model.fthreads[threadIndex]
+	now := model.now()
+	signature := blockSig{width: model.w - model.gutterWidth(), themeIdentifier: model.th.Identifier, minute: now.Truncate(time.Minute)}
+	if model.bcache == nil || signature != model.bsig {
+		model.bcache, model.bsig = map[blockKey][]string{}, signature
 	}
-	key := blockKey{identifier: t.Identifier, expanded: m.expanded(t), location: slices.Contains(m.orphans, ti)}
-	if lines, ok := m.bcache[key]; ok {
+	key := blockKey{identifier: reviewThread.Identifier, expanded: model.expanded(reviewThread), location: slices.Contains(model.orphans, threadIndex)}
+	if lines, ok := model.bcache[key]; ok {
 		return lines
 	}
-	m.renders++
-	env := thread.Environment{Theme: m.th, Markdown: m.md, Now: now}
-	lines := thread.Lines(env, t, sig.width, thread.Options{Expanded: key.expanded, Location: key.location})
-	m.bcache[key] = lines
+	model.renders++
+	environment := thread.Environment{Theme: model.th, Markdown: model.md, Now: now}
+	lines := thread.Lines(environment, reviewThread, signature.width, thread.Options{Expanded: key.expanded, Location: key.location})
+	model.bcache[key] = lines
 	return lines
 }
 
 // noticeRows are the rows for the notice of a file with no diff rows (binary,
 // rename only, ...), wrapped to the width, so its threads can follow it.
-func (m *Model) noticeRows() []row {
+func (model *Model) noticeRows() []row {
 	var out []row
-	for _, l := range m.messageLines() {
-		l, _ = displayText(l)
-		for _, w := range strings.Split(ansi.Wrap(l, max(m.w-1, 1), ""), "\n") {
-			out = append(out, row{message: true, text: w, bi: len(out)})
+	for _, line := range model.messageLines() {
+		line, _ = displayText(line)
+		for _, word := range strings.Split(ansi.Wrap(line, max(model.w-1, 1), ""), "\n") {
+			out = append(out, row{message: true, text: word, bi: len(out)})
 		}
 	}
 	return out
 }
 
-func (m *Model) renderNoticeRow(i int, r row) string {
+func (model *Model) renderNoticeRow(i int, row row) string {
 	lead := " "
-	if i == m.win.Cursor() {
+	if i == model.win.Cursor() {
 		lead = ">"
 	}
-	s := ansi.Truncate(lead+r.text, m.w, "")
-	return m.th.Muted.Render(s + spaces(m.w-ansi.StringWidth(s)))
+	text := ansi.Truncate(lead+row.text, model.w, "")
+	return model.th.Muted.Render(text + spaces(model.w-ansi.StringWidth(text)))
 }
 
 // threadsAtCursor returns the threads the cursor is on: the one whose rows it
 // is in, or those anchored to the diff line it is on.
-func (m *Model) threadsAtCursor() []int {
-	c := m.win.Cursor()
-	if c >= len(m.rows) {
+func (model *Model) threadsAtCursor() []int {
+	count := model.win.Cursor()
+	if count >= len(model.rows) {
 		return nil
 	}
-	if r := m.rows[c]; r.tr != nil {
-		return []int{r.tr.t}
+	if row := model.rows[count]; row.tr != nil {
+		return []int{row.tr.t}
 	}
-	return m.attach[m.rows[c].bi]
+	return model.attach[model.rows[count].bi]
 }
 
 // ThreadsAtCursor returns the threads the cursor is on: the one whose rows it
 // is in, or those anchored to the diff line it is on.
-func (m *Model) ThreadsAtCursor() []github.ReviewThread {
+func (model *Model) ThreadsAtCursor() []github.ReviewThread {
 	var out []github.ReviewThread
-	for _, ti := range m.threadsAtCursor() {
-		out = append(out, m.fthreads[ti])
+	for _, threadIndex := range model.threadsAtCursor() {
+		out = append(out, model.fthreads[threadIndex])
 	}
 	return out
 }
 
-func (m *Model) setExpanded(ts []int, v bool) {
-	if len(ts) == 0 {
+func (model *Model) setExpanded(timestamps []int, value bool) {
+	if len(timestamps) == 0 {
 		return
 	}
-	for _, ti := range ts {
-		m.open[m.fthreads[ti].Identifier] = v
+	for _, threadIndex := range timestamps {
+		model.open[model.fthreads[threadIndex].Identifier] = value
 	}
-	m.layout()
+	model.layout()
 }
 
 // OpenThread expands the thread under the cursor (every thread on the line
 // when the cursor is on a diff line).
-func (m *Model) OpenThread() { m.setExpanded(m.threadsAtCursor(), true) }
+func (model *Model) OpenThread() { model.setExpanded(model.threadsAtCursor(), true) }
 
 // CloseThread collapses the thread under the cursor. The cursor ends on its
 // header row.
-func (m *Model) CloseThread() { m.setExpanded(m.threadsAtCursor(), false) }
+func (model *Model) CloseThread() { model.setExpanded(model.threadsAtCursor(), false) }
 
 // ToggleThread collapses the thread under the cursor if every one there is
 // expanded, else expands them.
-func (m *Model) ToggleThread() {
-	ts := m.threadsAtCursor()
-	all := len(ts) > 0
-	for _, ti := range ts {
-		all = all && m.expanded(m.fthreads[ti])
+func (model *Model) ToggleThread() {
+	timestamps := model.threadsAtCursor()
+	all := len(timestamps) > 0
+	for _, threadIndex := range timestamps {
+		all = all && model.expanded(model.fthreads[threadIndex])
 	}
-	m.setExpanded(ts, !all)
+	model.setExpanded(timestamps, !all)
 }
 
 // NextThread moves the cursor to the header of the next thread below it (no-op
 // after the last one), putting it at the top of the view.
-func (m *Model) NextThread() {
-	for i := m.win.Cursor() + 1; i < len(m.rows); i++ {
-		if r := m.rows[i]; r.tr != nil && r.tr.i == 0 {
-			m.win.JumpTo(i)
+func (model *Model) NextThread() {
+	for i := model.win.Cursor() + 1; i < len(model.rows); i++ {
+		if row := model.rows[i]; row.tr != nil && row.tr.i == 0 {
+			model.win.JumpTo(i)
 			return
 		}
 	}
 }
 
 // PrevThread moves the cursor to the header of the closest thread above it.
-func (m *Model) PreviousThread() {
-	for i := min(m.win.Cursor(), len(m.rows)) - 1; i >= 0; i-- {
-		if r := m.rows[i]; r.tr != nil && r.tr.i == 0 {
-			m.win.JumpTo(i)
+func (model *Model) PreviousThread() {
+	for i := min(model.win.Cursor(), len(model.rows)) - 1; i >= 0; i-- {
+		if row := model.rows[i]; row.tr != nil && row.tr.i == 0 {
+			model.win.JumpTo(i)
 			return
 		}
 	}
@@ -208,29 +208,29 @@ func (m *Model) PreviousThread() {
 
 // ThreadCount is the number of threads shown for the current file, in place
 // or in the list after the diff.
-func (m *Model) ThreadCount() int { return len(m.fthreads) }
+func (model *Model) ThreadCount() int { return len(model.fthreads) }
 
 // threadGlyph returns the gutter marker for base row bi and whether it is the
 // "open" kind.
-func (m *Model) threadGlyph(bi int) (glyph string, open bool) {
-	ts := m.attach[bi]
-	if len(ts) == 0 {
+func (model *Model) threadGlyph(baseIndex int) (glyph string, open bool) {
+	timestamps := model.attach[baseIndex]
+	if len(timestamps) == 0 {
 		return " ", false
 	}
-	for _, ti := range ts {
-		if !thread.Quiet(m.fthreads[ti]) {
+	for _, threadIndex := range timestamps {
+		if !thread.Quiet(model.fthreads[threadIndex]) {
 			return markerOpen, true
 		}
 	}
 	return markerQuiet, false
 }
 
-func (m *Model) renderThreadRow(i int, r row) string {
+func (model *Model) renderThreadRow(i int, row row) string {
 	lead := " "
-	if i == m.win.Cursor() {
+	if i == model.win.Cursor() {
 		lead = ">"
 	}
-	lead += spaces(m.gutterWidth() - 1)
-	s := ansi.Truncate(lead+m.blocks[r.tr.t][r.tr.i], m.w, "")
-	return s + spaces(m.w-ansi.StringWidth(s))
+	lead += spaces(model.gutterWidth() - 1)
+	text := ansi.Truncate(lead+model.blocks[row.tr.t][row.tr.i], model.w, "")
+	return text + spaces(model.w-ansi.StringWidth(text))
 }

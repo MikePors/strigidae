@@ -27,25 +27,25 @@ const commentSavingText = "a comment is being saved; try again"
 const headMovedText = "Head moved since you loaded it; refresh first."
 
 // reviewQuestion is the confirmation text.
-func reviewQuestion(event github.ReviewEvent, repo github.Repository, number int, pending *github.PendingReview) string {
-	where := fmt.Sprintf("#%d in %s", number, terminaltext.Clean(repo.String()))
-	var q string
+func reviewQuestion(event github.ReviewEvent, repository github.Repository, number int, pending *github.PendingReview) string {
+	where := fmt.Sprintf("#%d in %s", number, terminaltext.Clean(repository.String()))
+	var query string
 	switch event {
 	case github.ReviewEventApprove:
-		q = "Approve " + where
+		query = "Approve " + where
 	case github.ReviewEventRequestChanges:
-		q = "Request changes on " + where
+		query = "Request changes on " + where
 	case github.ReviewEventComment:
-		q = "Comment on " + where
+		query = "Comment on " + where
 	}
 	if pending != nil && pending.CommentCount > 0 {
 		noun := "comments"
 		if pending.CommentCount == 1 {
 			noun = "comment"
 		}
-		q += fmt.Sprintf(" with %d pending %s", pending.CommentCount, noun)
+		query += fmt.Sprintf(" with %d pending %s", pending.CommentCount, noun)
 	}
-	return q + "?"
+	return query + "?"
 }
 
 var submittedFmt = map[github.ReviewEvent]string{

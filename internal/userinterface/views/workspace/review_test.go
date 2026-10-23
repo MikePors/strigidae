@@ -20,38 +20,38 @@ const (
 )
 
 // reviewer is a composer whose pull request has a head commit.
-func newReviewer(t *testing.T) *composer {
-	c := newComposer(t)
-	d := testDetail()
-	d.Identifier = pullRequestNodeIdentifier
-	c.client.SetPullRequest(d)
-	c.setHead(headSHA)
-	return c
+func newReviewer(test *testing.T) *composer {
+	composer := newComposer(test)
+	detail := testDetail()
+	detail.Identifier = pullRequestNodeIdentifier
+	composer.client.SetPullRequest(detail)
+	composer.setHead(headSHA)
+	return composer
 }
 
 // setHead moves the head on the server and, when load is true, refreshes the view.
-func (c *composer) setHead(sha string) {
-	c.client.SetHeadSHA(testRepository, 7, sha)
-	c.press("R")
+func (composer *composer) setHead(sha string) {
+	composer.client.SetHeadSHA(testRepository, 7, sha)
+	composer.press("R")
 }
 
-func (c *composer) command(name string) {
-	c.t.Helper()
-	cmd, ok := c.v.Command(name, "")
+func (composer *composer) command(name string) {
+	composer.t.Helper()
+	command, ok := composer.v.Command(name, "")
 	if !ok {
-		c.t.Fatalf("command %q not handled", name)
+		composer.t.Fatalf("command %q not handled", name)
 	}
-	c.run(cmd)
+	composer.run(command)
 }
 
-func (c *composer) lastError() string {
-	if err := c.lastErr(); err != nil {
+func (composer *composer) lastError() string {
+	if err := composer.lastErr(); err != nil {
 		return err.Error()
 	}
 	return ""
 }
 
-func TestReviewVerdicts(t *testing.T) {
+func TestReviewVerdicts(test *testing.T) {
 	tests := []struct {
 		name     string
 		command  string
@@ -79,314 +79,314 @@ func TestReviewVerdicts(t *testing.T) {
 			info:     "Requested changes on #7",
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			c := newReviewer(t)
-			c.body = tt.body
-			c.command(tt.command)
-			conf, ok := c.lastConfirm()
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			composer := newReviewer(test)
+			composer.body = testCase.body
+			composer.command(testCase.command)
+			configuration, ok := composer.lastConfirm()
 			if !ok {
-				t.Fatalf("no confirmation; error: %q", c.lastError())
+				test.Fatalf("no confirmation; error: %q", composer.lastError())
 			}
-			if conf.Text != tt.wantText || conf.Notice {
-				t.Errorf("confirm = %+v, want text %q", conf, tt.wantText)
+			if configuration.Text != testCase.wantText || configuration.Notice {
+				test.Errorf("confirm = %+v, want text %q", configuration, testCase.wantText)
 			}
-			if len(c.client.Submissions()) != 0 {
-				t.Fatal("submitted before the answer")
+			if len(composer.client.Submissions()) != 0 {
+				test.Fatal("submitted before the answer")
 			}
-			c.run(conf.OnYes)
-			if diff := cmp.Diff([]fake.Submission{tt.want}, c.client.Submissions()); diff != "" {
-				t.Errorf("submissions (-want +got):\n%s", diff)
+			composer.run(configuration.OnYes)
+			if diff := cmp.Diff([]fake.Submission{testCase.want}, composer.client.Submissions()); diff != "" {
+				test.Errorf("submissions (-want +got):\n%s", diff)
 			}
-			if diff := cmp.Diff([]string{"Submitting review…", tt.info}, c.infos()); diff != "" {
-				t.Errorf("info (-want +got):\n%s", diff)
+			if diff := cmp.Diff([]string{"Submitting review…", testCase.info}, composer.infos()); diff != "" {
+				test.Errorf("info (-want +got):\n%s", diff)
 			}
-			if c.v.review.draft != "" {
-				t.Errorf("draft kept after success: %q", c.v.review.draft)
+			if composer.v.review.draft != "" {
+				test.Errorf("draft kept after success: %q", composer.v.review.draft)
 			}
-			if rs := c.v.detail.Reviews; rs[len(rs)-1].Body != tt.want.Body || rs[len(rs)-1].SubmittedAt.IsZero() {
-				t.Errorf("workspace not refreshed after success: %+v", rs[len(rs)-1])
+			if reviews := composer.v.detail.Reviews; reviews[len(reviews)-1].Body != testCase.want.Body || reviews[len(reviews)-1].SubmittedAt.IsZero() {
+				test.Errorf("workspace not refreshed after success: %+v", reviews[len(reviews)-1])
 			}
 		})
 	}
 }
 
-func TestReviewCommentThroughChooser(t *testing.T) {
-	c := newReviewer(t)
-	c.body = "Some thoughts."
-	c.command("review")
-	if !c.v.CapturesKeys() {
-		t.Fatal("chooser does not capture keys")
+func TestReviewCommentThroughChooser(test *testing.T) {
+	composer := newReviewer(test)
+	composer.body = "Some thoughts."
+	composer.command("review")
+	if !composer.v.CapturesKeys() {
+		test.Fatal("chooser does not capture keys")
 	}
-	c.typ("com")
-	c.send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if c.v.CapturesKeys() {
-		t.Error("chooser still open after choosing")
+	composer.typ("com")
+	composer.send(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if composer.v.CapturesKeys() {
+		test.Error("chooser still open after choosing")
 	}
-	conf, ok := c.lastConfirm()
-	if !ok || conf.Text != "Comment on #7 in acme/widgets?" {
-		t.Fatalf("confirm = %+v, %v", conf, ok)
+	configuration, ok := composer.lastConfirm()
+	if !ok || configuration.Text != "Comment on #7 in acme/widgets?" {
+		test.Fatalf("confirm = %+v, %v", configuration, ok)
 	}
-	c.run(conf.OnYes)
-	subs := c.client.Submissions()
+	composer.run(configuration.OnYes)
+	subs := composer.client.Submissions()
 	if len(subs) != 1 || subs[0].Event != github.ReviewEventComment {
-		t.Errorf("submissions = %+v", subs)
+		test.Errorf("submissions = %+v", subs)
 	}
 }
 
-func TestReviewCommandReview(t *testing.T) {
-	c := newReviewer(t)
-	c.command("review")
-	if c.v.review.chooser == nil {
-		t.Fatal(":review did not open the chooser")
+func TestReviewCommandReview(test *testing.T) {
+	composer := newReviewer(test)
+	composer.command("review")
+	if composer.v.review.chooser == nil {
+		test.Fatal(":review did not open the chooser")
 	}
-	if !strings.Contains(c.render(), "Request changes") {
-		t.Error("chooser not drawn")
+	if !strings.Contains(composer.render(), "Request changes") {
+		test.Error("chooser not drawn")
 	}
 }
 
-func TestReviewChooserCancels(t *testing.T) {
-	c := newReviewer(t)
-	c.command("review")
-	c.send(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if c.v.CapturesKeys() || c.v.review.chooser != nil {
-		t.Error("esc did not close the chooser")
+func TestReviewChooserCancels(test *testing.T) {
+	composer := newReviewer(test)
+	composer.command("review")
+	composer.send(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if composer.v.CapturesKeys() || composer.v.review.chooser != nil {
+		test.Error("esc did not close the chooser")
 	}
-	if len(c.openedOn) != 0 || len(c.client.Submissions()) != 0 {
-		t.Error("cancelling did something")
+	if len(composer.openedOn) != 0 || len(composer.client.Submissions()) != 0 {
+		test.Error("cancelling did something")
 	}
 }
 
 // TestReviewChooserReleasesOnEsc drives the chooser through the real root, so
 // key routing is covered too.
-func TestReviewChooserReleasesOnEsc(t *testing.T) {
-	h := loaded(t, 100, 24)
-	m := userinterface.New(h.v, theme.New(true), userinterface.Options{})
-	step := func(msg tea.Msg) { _, _ = m.Update(msg) }
+func TestReviewChooserReleasesOnEsc(test *testing.T) {
+	harness := loaded(test, 100, 24)
+	model := userinterface.New(harness.v, theme.New(true), userinterface.Options{})
+	step := func(message tea.Msg) { _, _ = model.Update(message) }
 	step(tea.WindowSizeMsg{Width: 100, Height: 25})
 	step(tea.KeyPressMsg{Code: ':', Text: ":"})
-	for _, r := range "review" {
-		step(tea.KeyPressMsg{Code: r, Text: string(r)})
+	for _, character := range "review" {
+		step(tea.KeyPressMsg{Code: character, Text: string(character)})
 	}
-	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if cmd != nil {
-		step(cmd())
+	_, command := model.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if command != nil {
+		step(command())
 	}
-	if !h.v.CapturesKeys() {
-		t.Fatal(":review through the root should open the chooser")
+	if !harness.v.CapturesKeys() {
+		test.Fatal(":review through the root should open the chooser")
 	}
 	step(tea.KeyPressMsg{Code: 'j', Text: "j"})
-	if h.v.review.chooser.Query() != "j" {
-		t.Errorf("key did not reach the chooser raw: %q", h.v.review.chooser.Query())
+	if harness.v.review.chooser.Query() != "j" {
+		test.Errorf("key did not reach the chooser raw: %q", harness.v.review.chooser.Query())
 	}
 	step(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if h.v.CapturesKeys() {
-		t.Error("view still captures keys after esc")
+	if harness.v.CapturesKeys() {
+		test.Error("view still captures keys after esc")
 	}
 }
 
-func TestReviewEmptyBodyIsAnError(t *testing.T) {
+func TestReviewEmptyBodyIsAnError(test *testing.T) {
 	for _, name := range []string{"request-changes", "comment"} {
-		t.Run(name, func(t *testing.T) {
-			c := newReviewer(t)
-			c.body = "  \n"
+		test.Run(name, func(test *testing.T) {
+			composer := newReviewer(test)
+			composer.body = "  \n"
 			if name == "comment" {
-				c.v.review.chooser = nil
-				cmd := c.v.review.start(c.v.reviewEnvironment(), github.ReviewEventComment)
-				c.run(cmd)
+				composer.v.review.chooser = nil
+				command := composer.v.review.start(composer.v.reviewEnvironment(), github.ReviewEventComment)
+				composer.run(command)
 			} else {
-				c.command(name)
+				composer.command(name)
 			}
-			if _, ok := c.lastConfirm(); ok {
-				t.Error("asked for confirmation")
+			if _, ok := composer.lastConfirm(); ok {
+				test.Error("asked for confirmation")
 			}
-			if !strings.Contains(c.lastError(), "empty review") {
-				t.Errorf("error = %q", c.lastError())
+			if !strings.Contains(composer.lastError(), "empty review") {
+				test.Errorf("error = %q", composer.lastError())
 			}
-			if len(c.client.Submissions()) != 0 {
-				t.Error("something was sent")
+			if len(composer.client.Submissions()) != 0 {
+				test.Error("something was sent")
 			}
 		})
 	}
 }
 
-func TestReviewWithPendingReview(t *testing.T) {
-	c := newReviewer(t)
-	c.client.SetPendingReview(testRepository, 7, &github.PendingReview{Identifier: "PRR_1", Body: "draft on github", CommentCount: 3})
-	c.body = "" // an empty body is fine with inline comments
-	cmd := c.v.review.start(c.v.reviewEnvironment(), github.ReviewEventComment)
-	c.run(cmd)
-	if diff := cmp.Diff([]string{"draft on github"}, c.openedOn); diff != "" {
-		t.Errorf("editor opened on (-want +got):\n%s", diff)
+func TestReviewWithPendingReview(test *testing.T) {
+	composer := newReviewer(test)
+	composer.client.SetPendingReview(testRepository, 7, &github.PendingReview{Identifier: "PRR_1", Body: "draft on github", CommentCount: 3})
+	composer.body = "" // an empty body is fine with inline comments
+	command := composer.v.review.start(composer.v.reviewEnvironment(), github.ReviewEventComment)
+	composer.run(command)
+	if diff := cmp.Diff([]string{"draft on github"}, composer.openedOn); diff != "" {
+		test.Errorf("editor opened on (-want +got):\n%s", diff)
 	}
-	conf, ok := c.lastConfirm()
+	configuration, ok := composer.lastConfirm()
 	if !ok {
-		t.Fatalf("no confirmation; error: %q", c.lastError())
+		test.Fatalf("no confirmation; error: %q", composer.lastError())
 	}
-	if want := "Comment on #7 in acme/widgets with 3 pending comments?"; conf.Text != want {
-		t.Errorf("text = %q, want %q", conf.Text, want)
+	if want := "Comment on #7 in acme/widgets with 3 pending comments?"; configuration.Text != want {
+		test.Errorf("text = %q, want %q", configuration.Text, want)
 	}
-	c.run(conf.OnYes)
+	composer.run(configuration.OnYes)
 	want := []fake.Submission{{Repository: testRepository, Number: 7, PullRequestIdentifier: pullRequestNodeIdentifier, Event: github.ReviewEventComment, CommitObjectIdentifier: headSHA, PendingReviewIdentifier: "PRR_1"}}
-	if diff := cmp.Diff(want, c.client.Submissions()); diff != "" {
-		t.Errorf("submissions (-want +got):\n%s", diff)
+	if diff := cmp.Diff(want, composer.client.Submissions()); diff != "" {
+		test.Errorf("submissions (-want +got):\n%s", diff)
 	}
 }
 
-func TestReviewPendingGoneAtSubmit(t *testing.T) {
-	c := newReviewer(t)
-	c.client.SetPendingReview(testRepository, 7, &github.PendingReview{Identifier: "PRR_1", CommentCount: 1})
-	c.body = "my summary"
-	c.command("approve")
-	conf, ok := c.lastConfirm()
+func TestReviewPendingGoneAtSubmit(test *testing.T) {
+	composer := newReviewer(test)
+	composer.client.SetPendingReview(testRepository, 7, &github.PendingReview{Identifier: "PRR_1", CommentCount: 1})
+	composer.body = "my summary"
+	composer.command("approve")
+	configuration, ok := composer.lastConfirm()
 	if !ok {
-		t.Fatal("no confirmation")
+		test.Fatal("no confirmation")
 	}
-	c.client.SetPendingReview(testRepository, 7, nil) // submitted elsewhere meanwhile
-	before := len(c.client.Calls())
-	c.run(conf.OnYes)
-	if len(c.client.Submissions()) != 0 {
-		t.Error("submitted")
+	composer.client.SetPendingReview(testRepository, 7, nil) // submitted elsewhere meanwhile
+	before := len(composer.client.Calls())
+	composer.run(configuration.OnYes)
+	if len(composer.client.Submissions()) != 0 {
+		test.Error("submitted")
 	}
-	if got := c.lastError(); !strings.Contains(got, "submitted or deleted elsewhere") {
-		t.Errorf("error = %q", got)
+	if got := composer.lastError(); !strings.Contains(got, "submitted or deleted elsewhere") {
+		test.Errorf("error = %q", got)
 	}
-	if c.v.review.draft != "my summary" {
-		t.Errorf("draft = %q", c.v.review.draft)
+	if composer.v.review.draft != "my summary" {
+		test.Errorf("draft = %q", composer.v.review.draft)
 	}
 	var reloaded bool
-	for _, call := range c.client.Calls()[before:] {
+	for _, call := range composer.client.Calls()[before:] {
 		reloaded = reloaded || call.Method == fake.MethodGetPullRequest
 	}
 	if !reloaded {
-		t.Error("workspace did not refresh")
+		test.Error("workspace did not refresh")
 	}
 }
 
-func TestReviewHeadMoved(t *testing.T) {
-	c := newReviewer(t)
-	c.body = "ok"
-	c.client.SetHeadSHA(testRepository, 7, "bbbb2222") // pushed after the view loaded
-	c.command("approve")
-	conf, ok := c.lastConfirm()
+func TestReviewHeadMoved(test *testing.T) {
+	composer := newReviewer(test)
+	composer.body = "ok"
+	composer.client.SetHeadSHA(testRepository, 7, "bbbb2222") // pushed after the view loaded
+	composer.command("approve")
+	configuration, ok := composer.lastConfirm()
 	if !ok {
-		t.Fatal("no notice shown")
+		test.Fatal("no notice shown")
 	}
-	if !conf.Notice || !strings.Contains(conf.Text, "Head moved") || conf.OnYes != nil {
-		t.Errorf("confirm = %+v", conf)
+	if !configuration.Notice || !strings.Contains(configuration.Text, "Head moved") || configuration.OnYes != nil {
+		test.Errorf("confirm = %+v", configuration)
 	}
-	c.run(conf.OnDismiss) // any key
-	if len(c.client.Submissions()) != 0 {
-		t.Error("submitted although the head moved")
+	composer.run(configuration.OnDismiss) // any key
+	if len(composer.client.Submissions()) != 0 {
+		test.Error("submitted although the head moved")
 	}
-	if c.v.detail.HeadSHA != "bbbb2222" {
-		t.Errorf("workspace head = %q, want it refreshed", c.v.detail.HeadSHA)
+	if composer.v.detail.HeadSHA != "bbbb2222" {
+		test.Errorf("workspace head = %q, want it refreshed", composer.v.detail.HeadSHA)
 	}
 }
 
-func TestReviewServerErrorKeepsDraft(t *testing.T) {
-	c := newReviewer(t)
-	c.body = "needs work"
-	c.command("request-changes")
-	conf, _ := c.lastConfirm()
-	c.client.SetError(fake.MethodSubmitReview, errors.New("Can not request changes on your own pull request\x1b[31m"))
-	c.run(conf.OnYes)
-	got := c.lastError()
+func TestReviewServerErrorKeepsDraft(test *testing.T) {
+	composer := newReviewer(test)
+	composer.body = "needs work"
+	composer.command("request-changes")
+	configuration, _ := composer.lastConfirm()
+	composer.client.SetError(fake.MethodSubmitReview, errors.New("Can not request changes on your own pull request\x1b[31m"))
+	composer.run(configuration.OnYes)
+	got := composer.lastError()
 	if !strings.Contains(got, "Can not request changes on your own pull request") || !strings.Contains(got, "refreshed to show the current state") || strings.ContainsRune(got, 0x1b) {
-		t.Errorf("error = %q", got)
+		test.Errorf("error = %q", got)
 	}
-	if len(c.infos()) != 1 {
-		t.Errorf("success message after failure: %v", c.infos())
+	if len(composer.infos()) != 1 {
+		test.Errorf("success message after failure: %v", composer.infos())
 	}
 	// The next attempt starts from the draft.
-	c.client.SetError(fake.MethodSubmitReview, nil)
-	c.openedOn = nil
-	c.command("request-changes")
-	if diff := cmp.Diff([]string{"needs work"}, c.openedOn); diff != "" {
-		t.Errorf("editor opened on (-want +got):\n%s", diff)
+	composer.client.SetError(fake.MethodSubmitReview, nil)
+	composer.openedOn = nil
+	composer.command("request-changes")
+	if diff := cmp.Diff([]string{"needs work"}, composer.openedOn); diff != "" {
+		test.Errorf("editor opened on (-want +got):\n%s", diff)
 	}
 }
 
-func TestReviewDeclinedKeepsDraft(t *testing.T) {
-	c := newReviewer(t)
-	c.body = "maybe"
-	c.command("approve")
-	if _, ok := c.lastConfirm(); !ok {
-		t.Fatal("no confirmation")
+func TestReviewDeclinedKeepsDraft(test *testing.T) {
+	composer := newReviewer(test)
+	composer.body = "maybe"
+	composer.command("approve")
+	if _, ok := composer.lastConfirm(); !ok {
+		test.Fatal("no confirmation")
 	}
 	// Declining is the shell dropping OnYes.
-	c.openedOn = nil
-	c.command("approve")
-	if diff := cmp.Diff([]string{"maybe"}, c.openedOn); diff != "" {
-		t.Errorf("editor opened on (-want +got):\n%s", diff)
+	composer.openedOn = nil
+	composer.command("approve")
+	if diff := cmp.Diff([]string{"maybe"}, composer.openedOn); diff != "" {
+		test.Errorf("editor opened on (-want +got):\n%s", diff)
 	}
 }
 
-func TestReviewEditorFailureKeepsText(t *testing.T) {
-	c := newReviewer(t)
-	c.body, c.err = "typed before crash", errors.New("exit status 1")
-	c.command("approve")
-	if _, ok := c.lastConfirm(); ok {
-		t.Error("asked for confirmation after editor failure")
+func TestReviewEditorFailureKeepsText(test *testing.T) {
+	composer := newReviewer(test)
+	composer.body, composer.err = "typed before crash", errors.New("exit status 1")
+	composer.command("approve")
+	if _, ok := composer.lastConfirm(); ok {
+		test.Error("asked for confirmation after editor failure")
 	}
-	if !strings.Contains(c.lastError(), "edit review") || c.v.review.draft != "typed before crash" {
-		t.Errorf("error %q, draft %q", c.lastError(), c.v.review.draft)
-	}
-}
-
-func TestReviewStatusErrorIsShown(t *testing.T) {
-	c := newReviewer(t)
-	c.client.SetError(fake.MethodGetReviewStatus, errors.New("boom\x1b[31m"))
-	c.command("approve")
-	if got := c.lastError(); !strings.Contains(got, "boom") || strings.ContainsRune(got, 0x1b) {
-		t.Errorf("error = %q", got)
-	}
-	if len(c.openedOn) != 0 {
-		t.Error("editor opened")
+	if !strings.Contains(composer.lastError(), "edit review") || composer.v.review.draft != "typed before crash" {
+		test.Errorf("error %q, draft %q", composer.lastError(), composer.v.review.draft)
 	}
 }
 
-func TestReviewStaleResultsAreIgnored(t *testing.T) {
-	c := newReviewer(t)
-	c.body = "x"
-	old := c.v.review.start(c.v.reviewEnvironment(), github.ReviewEventApprove)
-	c.v.review.sequence++ // another review was started meanwhile
-	c.run(old)
-	if len(c.openedOn) != 0 {
-		t.Error("stale status opened the editor")
+func TestReviewStatusErrorIsShown(test *testing.T) {
+	composer := newReviewer(test)
+	composer.client.SetError(fake.MethodGetReviewStatus, errors.New("boom\x1b[31m"))
+	composer.command("approve")
+	if got := composer.lastError(); !strings.Contains(got, "boom") || strings.ContainsRune(got, 0x1b) {
+		test.Errorf("error = %q", got)
+	}
+	if len(composer.openedOn) != 0 {
+		test.Error("editor opened")
+	}
+}
+
+func TestReviewStaleResultsAreIgnored(test *testing.T) {
+	composer := newReviewer(test)
+	composer.body = "x"
+	old := composer.v.review.start(composer.v.reviewEnvironment(), github.ReviewEventApprove)
+	composer.v.review.sequence++ // another review was started meanwhile
+	composer.run(old)
+	if len(composer.openedOn) != 0 {
+		test.Error("stale status opened the editor")
 	}
 	// A result for another workspace is ignored too.
-	c.send(reviewSubmittedMessage{flow: nil, repository: testRepository, number: 7, event: github.ReviewEventApprove})
-	if len(c.infos()) != 0 {
-		t.Errorf("foreign result acted on: %v", c.infos())
+	composer.send(reviewSubmittedMessage{flow: nil, repository: testRepository, number: 7, event: github.ReviewEventApprove})
+	if len(composer.infos()) != 0 {
+		test.Errorf("foreign result acted on: %v", composer.infos())
 	}
 }
 
-func TestCommandsReachOnlyKnownNames(t *testing.T) {
-	v := newHarness(t, 80, 24).v
+func TestCommandsReachOnlyKnownNames(test *testing.T) {
+	view := newHarness(test, 80, 24).v
 	for _, name := range []string{"approve", "request-changes", "review"} {
-		if _, ok := v.Command(name, ""); !ok {
-			t.Errorf("%s not handled", name)
+		if _, ok := view.Command(name, ""); !ok {
+			test.Errorf("%s not handled", name)
 		}
 	}
-	if cmd, ok := v.Command("frobnicate", ""); ok || cmd != nil {
-		t.Error("unknown command handled")
+	if command, ok := view.Command("frobnicate", ""); ok || command != nil {
+		test.Error("unknown command handled")
 	}
 }
 
-func TestReviewBeforeLoad(t *testing.T) {
-	v := newHarness(t, 80, 24).v // Init not run: nothing loaded
-	msgs := messages(v.review.openChooser(v.reviewEnvironment()))
-	if len(msgs) != 1 {
-		t.Fatalf("msgs = %v", msgs)
+func TestReviewBeforeLoad(test *testing.T) {
+	view := newHarness(test, 80, 24).v // Init not run: nothing loaded
+	messageList := messages(view.review.openChooser(view.reviewEnvironment()))
+	if len(messageList) != 1 {
+		test.Fatalf("msgs = %v", messageList)
 	}
-	if i, ok := msgs[0].(userinterface.InfoMessage); !ok || i.Text != "pull request not loaded yet" {
-		t.Errorf("msg = %#v", msgs[0])
+	if i, ok := messageList[0].(userinterface.InfoMessage); !ok || i.Text != "pull request not loaded yet" {
+		test.Errorf("msg = %#v", messageList[0])
 	}
 }
 
-func TestReviewQuestion(t *testing.T) {
-	pending := func(n int) *github.PendingReview { return &github.PendingReview{CommentCount: n} }
+func TestReviewQuestion(test *testing.T) {
+	pending := func(count int) *github.PendingReview { return &github.PendingReview{CommentCount: count} }
 	tests := []struct {
 		event   github.ReviewEvent
 		pending *github.PendingReview
@@ -398,10 +398,10 @@ func TestReviewQuestion(t *testing.T) {
 		{github.ReviewEventRequestChanges, pending(3), "Request changes on #42 in o/r with 3 pending comments?"},
 		{github.ReviewEventComment, nil, "Comment on #42 in o/r?"},
 	}
-	for _, tt := range tests {
-		got := reviewQuestion(tt.event, github.Repository{Owner: "o", Name: "r"}, 42, tt.pending)
-		if got != tt.want {
-			t.Errorf("%s: got %q, want %q", tt.event, got, tt.want)
+	for _, testCase := range tests {
+		got := reviewQuestion(testCase.event, github.Repository{Owner: "o", Name: "r"}, 42, testCase.pending)
+		if got != testCase.want {
+			test.Errorf("%s: got %q, want %q", testCase.event, got, testCase.want)
 		}
 	}
 }

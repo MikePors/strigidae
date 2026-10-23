@@ -25,328 +25,328 @@ var (
 	testNow        = time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC)
 )
 
-func makePRs(n int) []github.PullRequest {
-	prs := make([]github.PullRequest, n)
-	for i := range prs {
-		prs[i] = github.PullRequest{
+func makePRs(count int) []github.PullRequest {
+	pullRequests := make([]github.PullRequest, count)
+	for i := range pullRequests {
+		pullRequests[i] = github.PullRequest{
 			Repository: testRepository,
-			Number:     n - i,
-			Title:      fmt.Sprintf("Change number %d", n-i),
+			Number:     count - i,
+			Title:      fmt.Sprintf("Change number %d", count-i),
 			Author:     "alice",
 			State:      github.PullRequestStateOpen,
-			URL:        fmt.Sprintf("https://github.com/acme/widgets/pull/%d", n-i),
+			URL:        fmt.Sprintf("https://github.com/acme/widgets/pull/%d", count-i),
 			UpdatedAt:  testNow.Add(-time.Duration(i) * time.Hour),
 		}
 	}
-	return prs
+	return pullRequests
 }
 
 func newView(client github.Client, open func(string) error) *View {
-	v := New(client, testRepository, theme.Default(), Options{Now: func() time.Time { return testNow }, Open: open})
-	v.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
-	return v
+	view := New(client, testRepository, theme.Default(), Options{Now: func() time.Time { return testNow }, Open: open})
+	view.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
+	return view
 }
 
 // deliver runs cmd and feeds the resulting message back into the view.
-func deliver(t *testing.T, v *View, cmd tea.Cmd) tea.Cmd {
-	t.Helper()
-	if cmd == nil {
-		t.Fatal("expected a command")
+func deliver(test *testing.T, view *View, command tea.Cmd) tea.Cmd {
+	test.Helper()
+	if command == nil {
+		test.Fatal("expected a command")
 	}
-	_, next := v.Update(cmd())
+	_, next := view.Update(command())
 	return next
 }
 
-func press(v *View, seq string) tea.Cmd {
-	_, cmd := v.Update(keys.Message{Sequence: seq})
-	return cmd
+func press(view *View, sequence string) tea.Cmd {
+	_, command := view.Update(keys.Message{Sequence: sequence})
+	return command
 }
 
-func loadedView(t *testing.T, client github.Client, open func(string) error) *View {
-	t.Helper()
-	v := newView(client, open)
-	deliver(t, v, v.Init())
-	return v
+func loadedView(test *testing.T, client github.Client, open func(string) error) *View {
+	test.Helper()
+	view := newView(client, open)
+	deliver(test, view, view.Init())
+	return view
 }
 
-func fakeWith(prs []github.PullRequest) *fake.Client {
-	c := fake.New()
-	c.SetPullRequests(testRepository, prs)
-	return c
+func fakeWith(pullRequests []github.PullRequest) *fake.Client {
+	client := fake.New()
+	client.SetPullRequests(testRepository, pullRequests)
+	return client
 }
 
-func TestFirstLoad(t *testing.T) {
-	c := fakeWith(makePRs(3))
-	v := newView(c, nil)
-	if !v.Loading() {
-		t.Fatal("new view should be loading")
+func TestFirstLoad(test *testing.T) {
+	client := fakeWith(makePRs(3))
+	view := newView(client, nil)
+	if !view.Loading() {
+		test.Fatal("new view should be loading")
 	}
-	if v.Title() != "acme/widgets" {
-		t.Errorf("title = %q", v.Title())
+	if view.Title() != "acme/widgets" {
+		test.Errorf("title = %q", view.Title())
 	}
-	if cmd := deliver(t, v, v.Init()); cmd != nil {
-		t.Errorf("single page should not trigger more loading")
+	if command := deliver(test, view, view.Init()); command != nil {
+		test.Errorf("single page should not trigger more loading")
 	}
-	if v.Loading() || len(v.pullRequests) != 3 {
-		t.Errorf("loading=%v prs=%d, want loaded with 3", v.Loading(), len(v.pullRequests))
+	if view.Loading() || len(view.pullRequests) != 3 {
+		test.Errorf("loading=%v prs=%d, want loaded with 3", view.Loading(), len(view.pullRequests))
 	}
 	want := []fake.Call{{Method: fake.MethodListPullRequests, Repository: testRepository}}
-	if diff := cmp.Diff(want, c.Calls()); diff != "" {
-		t.Errorf("calls (-want +got):\n%s", diff)
+	if diff := cmp.Diff(want, client.Calls()); diff != "" {
+		test.Errorf("calls (-want +got):\n%s", diff)
 	}
 }
 
-func TestPaginationTrigger(t *testing.T) {
-	c := fakeWith(makePRs(45))
-	v := loadedView(t, c, nil)
-	if len(v.pullRequests) != 30 || v.next == "" {
-		t.Fatalf("first page: prs=%d next=%q", len(v.pullRequests), v.next)
+func TestPaginationTrigger(test *testing.T) {
+	client := fakeWith(makePRs(45))
+	view := loadedView(test, client, nil)
+	if len(view.pullRequests) != 30 || view.next == "" {
+		test.Fatalf("first page: prs=%d next=%q", len(view.pullRequests), view.next)
 	}
 
 	// Far from the end: no request.
-	if cmd := press(v, "j"); cmd != nil {
-		t.Fatal("moving near the top should not load more")
+	if command := press(view, "j"); command != nil {
+		test.Fatal("moving near the top should not load more")
 	}
 	// Jump to the end: the next page is requested once.
-	cmd := press(v, "G")
-	if cmd == nil || !v.Loading() {
-		t.Fatal("reaching the end should load the next page")
+	command := press(view, "G")
+	if command == nil || !view.Loading() {
+		test.Fatal("reaching the end should load the next page")
 	}
-	if again := press(v, "k"); again != nil {
-		t.Error("a load is in flight; no second request")
+	if again := press(view, "k"); again != nil {
+		test.Error("a load is in flight; no second request")
 	}
-	deliver(t, v, cmd)
-	if len(v.pullRequests) != 45 || v.next != "" {
-		t.Errorf("after page 2: prs=%d next=%q", len(v.pullRequests), v.next)
+	deliver(test, view, command)
+	if len(view.pullRequests) != 45 || view.next != "" {
+		test.Errorf("after page 2: prs=%d next=%q", len(view.pullRequests), view.next)
 	}
-	calls := c.Calls()
+	calls := client.Calls()
 	if len(calls) != 2 || calls[1].Page.After != "30" {
-		t.Errorf("calls = %+v, want second call After=30", calls)
+		test.Errorf("calls = %+v, want second call After=30", calls)
 	}
-	if cmd := press(v, "G"); cmd != nil {
-		t.Error("no more pages; no request")
+	if command := press(view, "G"); command != nil {
+		test.Error("no more pages; no request")
 	}
 }
 
-func TestStaleResultsIgnored(t *testing.T) {
-	c := fakeWith(makePRs(3))
-	v := newView(c, nil)
-	first := v.Init()
+func TestStaleResultsIgnored(test *testing.T) {
+	client := fakeWith(makePRs(3))
+	view := newView(client, nil)
+	first := view.Init()
 
-	refresh := press(v, "R")
+	refresh := press(view, "R")
 	if refresh == nil {
-		t.Fatal("R should reload")
+		test.Fatal("R should reload")
 	}
 	// The first load finishes after the refresh was requested.
-	deliver(t, v, first)
-	if len(v.pullRequests) != 0 || !v.Loading() {
-		t.Errorf("stale result applied: prs=%d loading=%v", len(v.pullRequests), v.Loading())
+	deliver(test, view, first)
+	if len(view.pullRequests) != 0 || !view.Loading() {
+		test.Errorf("stale result applied: prs=%d loading=%v", len(view.pullRequests), view.Loading())
 	}
 	// A result for another repository is not ours either.
-	v.Update(pullRequestsLoadedMessage{repository: github.Repository{Owner: "x", Name: "y"}, sequence: v.sequence, page: github.Page[github.PullRequest]{Items: makePRs(1)}})
-	if len(v.pullRequests) != 0 {
-		t.Error("other repo's result applied")
+	view.Update(pullRequestsLoadedMessage{repository: github.Repository{Owner: "x", Name: "y"}, sequence: view.sequence, page: github.Page[github.PullRequest]{Items: makePRs(1)}})
+	if len(view.pullRequests) != 0 {
+		test.Error("other repo's result applied")
 	}
-	deliver(t, v, refresh)
-	if len(v.pullRequests) != 3 || v.Loading() {
-		t.Errorf("refresh result not applied: prs=%d", len(v.pullRequests))
-	}
-}
-
-func TestRefreshKeepsSelection(t *testing.T) {
-	c := fakeWith(makePRs(10))
-	v := loadedView(t, c, nil)
-	press(v, "j")
-	press(v, "j")
-	want := v.pullRequests[v.win.Cursor()].Number
-	deliver(t, v, press(v, "R"))
-	if got := v.pullRequests[v.win.Cursor()].Number; got != want {
-		t.Errorf("selected #%d after refresh, want #%d", got, want)
+	deliver(test, view, refresh)
+	if len(view.pullRequests) != 3 || view.Loading() {
+		test.Errorf("refresh result not applied: prs=%d", len(view.pullRequests))
 	}
 }
 
-func TestRefreshKeepsSelectionPastFirstPage(t *testing.T) {
-	c := fakeWith(makePRs(45))
-	v := loadedView(t, c, nil)
-	deliver(t, v, press(v, "G"))
-	press(v, "G")
-	if len(v.pullRequests) != 45 || v.win.Cursor() != 44 {
-		t.Fatalf("setup: prs=%d cursor=%d", len(v.pullRequests), v.win.Cursor())
+func TestRefreshKeepsSelection(test *testing.T) {
+	client := fakeWith(makePRs(10))
+	view := loadedView(test, client, nil)
+	press(view, "j")
+	press(view, "j")
+	want := view.pullRequests[view.win.Cursor()].Number
+	deliver(test, view, press(view, "R"))
+	if got := view.pullRequests[view.win.Cursor()].Number; got != want {
+		test.Errorf("selected #%d after refresh, want #%d", got, want)
 	}
-	want := v.pullRequests[v.win.Cursor()].Number
+}
 
-	deliver(t, v, press(v, "R"))
-	calls := c.Calls()
+func TestRefreshKeepsSelectionPastFirstPage(test *testing.T) {
+	client := fakeWith(makePRs(45))
+	view := loadedView(test, client, nil)
+	deliver(test, view, press(view, "G"))
+	press(view, "G")
+	if len(view.pullRequests) != 45 || view.win.Cursor() != 44 {
+		test.Fatalf("setup: prs=%d cursor=%d", len(view.pullRequests), view.win.Cursor())
+	}
+	want := view.pullRequests[view.win.Cursor()].Number
+
+	deliver(test, view, press(view, "R"))
+	calls := client.Calls()
 	if got := calls[len(calls)-1].Page.Limit; got != 45 {
-		t.Errorf("refresh limit = %d, want 45", got)
+		test.Errorf("refresh limit = %d, want 45", got)
 	}
-	if len(v.pullRequests) != 45 || v.pullRequests[v.win.Cursor()].Number != want {
-		t.Errorf("after refresh: prs=%d selected #%d, want 45 rows and #%d", len(v.pullRequests), v.pullRequests[v.win.Cursor()].Number, want)
+	if len(view.pullRequests) != 45 || view.pullRequests[view.win.Cursor()].Number != want {
+		test.Errorf("after refresh: prs=%d selected #%d, want 45 rows and #%d", len(view.pullRequests), view.pullRequests[view.win.Cursor()].Number, want)
 	}
 }
 
-func TestRefreshCapsAtMaxPageSize(t *testing.T) {
-	c := fakeWith(makePRs(250))
-	v := loadedView(t, c, nil)
-	for len(v.pullRequests) < 150 {
-		deliver(t, v, press(v, "G"))
+func TestRefreshCapsAtMaxPageSize(test *testing.T) {
+	client := fakeWith(makePRs(250))
+	view := loadedView(test, client, nil)
+	for len(view.pullRequests) < 150 {
+		deliver(test, view, press(view, "G"))
 	}
-	v.win.Restore(120, 0, 0)
-	deliver(t, v, press(v, "R"))
-	calls := c.Calls()
+	view.win.Restore(120, 0, 0)
+	deliver(test, view, press(view, "R"))
+	calls := client.Calls()
 	if got := calls[len(calls)-1].Page.Limit; got != github.MaxPageSize {
-		t.Errorf("refresh limit = %d, want %d", got, github.MaxPageSize)
+		test.Errorf("refresh limit = %d, want %d", got, github.MaxPageSize)
 	}
 	// Pinned: only the first 100 rows are reloaded and the cursor keeps its
 	// index (clamped), even though that may now be a different PR.
-	if len(v.pullRequests) != 100 || v.win.Cursor() != 99 {
-		t.Errorf("after refresh: prs=%d cursor=%d, want 100 and 99", len(v.pullRequests), v.win.Cursor())
+	if len(view.pullRequests) != 100 || view.win.Cursor() != 99 {
+		test.Errorf("after refresh: prs=%d cursor=%d, want 100 and 99", len(view.pullRequests), view.win.Cursor())
 	}
 }
 
-func TestUntrustedTextIsCleaned(t *testing.T) {
-	repo := github.Repository{Owner: "ev\x1b[2Jil", Name: "re\x07po"}
-	c := fake.New()
-	c.SetError(fake.MethodListPullRequests, errors.New("boom\x1b]52;c;aGk=\x07\u202e\u009b"))
-	v := New(c, repo, theme.Default(), Options{})
-	v.Update(tea.WindowSizeMsg{Width: 80, Height: 8})
+func TestUntrustedTextIsCleaned(test *testing.T) {
+	repository := github.Repository{Owner: "ev\x1b[2Jil", Name: "re\x07po"}
+	client := fake.New()
+	client.SetError(fake.MethodListPullRequests, errors.New("boom\x1b]52;c;aGk=\x07\u202e\u009b"))
+	view := New(client, repository, theme.Default(), Options{})
+	view.Update(tea.WindowSizeMsg{Width: 80, Height: 8})
 
-	if strings.ContainsAny(v.Title(), "\x1b\x07") {
-		t.Errorf("title contains control characters: %q", v.Title())
+	if strings.ContainsAny(view.Title(), "\x1b\x07") {
+		test.Errorf("title contains control characters: %q", view.Title())
 	}
-	if out := ansi.Strip(v.Render(80, 8)); strings.ContainsAny(out, "\x1b\x07") {
-		t.Errorf("loading text contains control characters: %q", out)
+	if out := ansi.Strip(view.Render(80, 8)); strings.ContainsAny(out, "\x1b\x07") {
+		test.Errorf("loading text contains control characters: %q", out)
 	}
 
-	cmd := deliver(t, v, v.Init())
-	status := cmd().(userinterface.ErrorMessage).Err.Error()
-	out := ansi.Strip(v.Render(80, 8))
-	for _, s := range []string{status, out} {
-		for _, r := range strings.ReplaceAll(s, "\n", "") {
-			if r < ' ' || (r >= 0x7f && r <= 0x9f) || r == '\u202e' {
-				t.Fatalf("control rune %q reached the screen: %q", r, s)
+	command := deliver(test, view, view.Init())
+	status := command().(userinterface.ErrorMessage).Err.Error()
+	out := ansi.Strip(view.Render(80, 8))
+	for _, text := range []string{status, out} {
+		for _, character := range strings.ReplaceAll(text, "\n", "") {
+			if character < ' ' || (character >= 0x7f && character <= 0x9f) || character == '\u202e' {
+				test.Fatalf("control rune %q reached the screen: %q", character, text)
 			}
 		}
 	}
 	if !strings.Contains(status, "boom") {
-		t.Errorf("status lost the message: %q", status)
+		test.Errorf("status lost the message: %q", status)
 	}
 }
 
-func TestRefreshSelectionGone(t *testing.T) {
-	c := fakeWith(makePRs(10))
-	v := loadedView(t, c, nil)
+func TestRefreshSelectionGone(test *testing.T) {
+	client := fakeWith(makePRs(10))
+	view := loadedView(test, client, nil)
 	for range 4 {
-		press(v, "j")
+		press(view, "j")
 	}
 	// The selected PR disappears from the list; the row index is kept.
-	c.SetPullRequests(testRepository, makePRs(10)[:3])
-	press(v, "R")
-	v.Update(pullRequestsLoadedMessage{repository: testRepository, sequence: v.sequence, page: github.Page[github.PullRequest]{Items: makePRs(3)}})
-	if v.win.Cursor() != 2 {
-		t.Errorf("cursor = %d, want 2 (clamped)", v.win.Cursor())
+	client.SetPullRequests(testRepository, makePRs(10)[:3])
+	press(view, "R")
+	view.Update(pullRequestsLoadedMessage{repository: testRepository, sequence: view.sequence, page: github.Page[github.PullRequest]{Items: makePRs(3)}})
+	if view.win.Cursor() != 2 {
+		test.Errorf("cursor = %d, want 2 (clamped)", view.win.Cursor())
 	}
 }
 
-func TestLoadError(t *testing.T) {
-	c := fakeWith(makePRs(3))
+func TestLoadError(test *testing.T) {
+	client := fakeWith(makePRs(3))
 	boom := errors.New("boom")
-	c.SetError(fake.MethodListPullRequests, boom)
-	v := newView(c, nil)
-	cmd := deliver(t, v, v.Init())
-	if v.Loading() {
-		t.Error("still loading after error")
+	client.SetError(fake.MethodListPullRequests, boom)
+	view := newView(client, nil)
+	command := deliver(test, view, view.Init())
+	if view.Loading() {
+		test.Error("still loading after error")
 	}
-	msg, ok := cmd().(userinterface.ErrorMessage)
-	if !ok || !errors.Is(msg.Err, boom) {
-		t.Fatalf("cmd produced %#v, want userinterface.ErrorMsg wrapping boom", msg)
+	message, ok := command().(userinterface.ErrorMessage)
+	if !ok || !errors.Is(message.Err, boom) {
+		test.Fatalf("cmd produced %#v, want userinterface.ErrorMsg wrapping boom", message)
 	}
-	if !strings.Contains(v.Render(80, 10), "boom") {
-		t.Error("error state should show the error")
+	if !strings.Contains(view.Render(80, 10), "boom") {
+		test.Error("error state should show the error")
 	}
 }
 
-func TestFailedNextPageIsNotRetried(t *testing.T) {
-	c := fakeWith(makePRs(45))
-	v := loadedView(t, c, nil)
-	cmd := press(v, "G")
-	c.SetError(fake.MethodListPullRequests, errors.New("rate limited"))
-	errCmd := deliver(t, v, cmd)
-	if _, ok := errCmd().(userinterface.ErrorMessage); !ok {
-		t.Fatal("failed page should report an error")
+func TestFailedNextPageIsNotRetried(test *testing.T) {
+	client := fakeWith(makePRs(45))
+	view := loadedView(test, client, nil)
+	command := press(view, "G")
+	client.SetError(fake.MethodListPullRequests, errors.New("rate limited"))
+	errCommand := deliver(test, view, command)
+	if _, ok := errCommand().(userinterface.ErrorMessage); !ok {
+		test.Fatal("failed page should report an error")
 	}
-	if v.Loading() {
-		t.Error("still loading after failure")
+	if view.Loading() {
+		test.Error("still loading after failure")
 	}
-	calls := len(c.Calls())
+	calls := len(client.Calls())
 	for _, k := range []string{"k", "j", "G", "j"} {
-		if cmd := press(v, k); cmd != nil {
-			t.Fatalf("key %q retried the failed page", k)
+		if command := press(view, k); command != nil {
+			test.Fatalf("key %q retried the failed page", k)
 		}
 	}
-	if len(c.Calls()) != calls {
-		t.Error("extra requests were made")
+	if len(client.Calls()) != calls {
+		test.Error("extra requests were made")
 	}
 
 	// R clears the flag; once it succeeds, paging resumes.
-	c.SetError(fake.MethodListPullRequests, nil)
+	client.SetError(fake.MethodListPullRequests, nil)
 	// The selection is still at the end, so the refresh result itself pages on.
-	if more := deliver(t, v, press(v, "R")); more == nil {
-		t.Error("paging should resume after a successful refresh")
+	if more := deliver(test, view, press(view, "R")); more == nil {
+		test.Error("paging should resume after a successful refresh")
 	}
 }
 
-func TestOpenInBrowser(t *testing.T) {
+func TestOpenInBrowser(test *testing.T) {
 	var opened []string
-	open := func(u string) error { opened = append(opened, u); return nil }
-	v := loadedView(t, fakeWith(makePRs(3)), open)
+	open := func(address string) error { opened = append(opened, address); return nil }
+	view := loadedView(test, fakeWith(makePRs(3)), open)
 
-	cmd := press(v, "o")
-	if cmd == nil {
-		t.Fatal("o should produce a command")
+	command := press(view, "o")
+	if command == nil {
+		test.Fatal("o should produce a command")
 	}
 	if len(opened) != 0 {
-		t.Fatal("browser launched during Update; it must run in the command")
+		test.Fatal("browser launched during Update; it must run in the command")
 	}
-	msg, ok := cmd().(userinterface.InfoMessage)
+	message, ok := command().(userinterface.InfoMessage)
 	if !ok || len(opened) != 1 || opened[0] != "https://github.com/acme/widgets/pull/3" {
-		t.Errorf("opened=%v msg=%#v", opened, msg)
+		test.Errorf("opened=%v msg=%#v", opened, message)
 	}
 
-	failing := loadedView(t, fakeWith(makePRs(1)), func(string) error { return errors.New("no browser") })
+	failing := loadedView(test, fakeWith(makePRs(1)), func(string) error { return errors.New("no browser") })
 	if _, ok := press(failing, "o")().(userinterface.ErrorMessage); !ok {
-		t.Error("launch failure should become userinterface.ErrorMsg")
+		test.Error("launch failure should become userinterface.ErrorMsg")
 	}
 
-	empty := loadedView(t, fakeWith(nil), open)
-	if cmd := press(empty, "o"); cmd != nil {
-		t.Error("o on an empty list should do nothing")
+	empty := loadedView(test, fakeWith(nil), open)
+	if command := press(empty, "o"); command != nil {
+		test.Error("o on an empty list should do nothing")
 	}
 }
 
-func TestEnterPushesWorkspace(t *testing.T) {
-	v := loadedView(t, fakeWith(makePRs(3)), nil)
-	press(v, "j") // second row is PR #2
-	cmd := press(v, "enter")
-	if cmd == nil {
-		t.Fatal("enter should produce a command")
+func TestEnterPushesWorkspace(test *testing.T) {
+	view := loadedView(test, fakeWith(makePRs(3)), nil)
+	press(view, "j") // second row is PR #2
+	command := press(view, "enter")
+	if command == nil {
+		test.Fatal("enter should produce a command")
 	}
-	push, ok := cmd().(userinterface.PushMessage)
+	push, ok := command().(userinterface.PushMessage)
 	if !ok {
-		t.Fatalf("enter produced %T, want userinterface.PushMsg", cmd())
+		test.Fatalf("enter produced %T, want userinterface.PushMsg", command())
 	}
 	if got := push.View.Title(); got != "#2" {
-		t.Errorf("pushed view title = %q, want #2", got)
+		test.Errorf("pushed view title = %q, want #2", got)
 	}
 
-	empty := loadedView(t, fakeWith(nil), nil)
-	if cmd := press(empty, "enter"); cmd != nil {
-		t.Error("enter on an empty list should do nothing")
+	empty := loadedView(test, fakeWith(nil), nil)
+	if command := press(empty, "enter"); command != nil {
+		test.Error("enter on an empty list should do nothing")
 	}
 }
 
-func TestNavigation(t *testing.T) {
-	v := loadedView(t, fakeWith(makePRs(25)), nil) // window shows 11 rows
+func TestNavigation(test *testing.T) {
+	view := loadedView(test, fakeWith(makePRs(25)), nil) // window shows 11 rows
 	tests := []struct {
 		keys []string
 		want int
@@ -361,31 +361,31 @@ func TestNavigation(t *testing.T) {
 		{[]string{"ctrl+f", "ctrl+b"}, 0},
 		{[]string{"G", "ctrl+u"}, 19},
 	}
-	for _, tt := range tests {
-		press(v, "g g")
-		for _, k := range tt.keys {
-			press(v, k)
+	for _, testCase := range tests {
+		press(view, "g g")
+		for _, k := range testCase.keys {
+			press(view, k)
 		}
-		if v.win.Cursor() != tt.want {
-			t.Errorf("keys %v: cursor = %d, want %d", tt.keys, v.win.Cursor(), tt.want)
-		}
-	}
-}
-
-func TestHostileTextIsNeutralised(t *testing.T) {
-	prs := makePRs(1)
-	prs[0].Title = "evil\x1b]52;c;aGk=\x07\x1b[2J title\u202e\u009b"
-	prs[0].Author = "a\x1b[31muthor"
-	v := loadedView(t, fakeWith(prs), nil)
-	out := ansi.Strip(v.Render(80, 6))
-	for _, r := range out {
-		if r != '\n' && (r < ' ' || (r >= 0x7f && r <= 0x9f) || r == '\u202e') {
-			t.Fatalf("control rune %q reached the screen: %q", r, out)
+		if view.win.Cursor() != testCase.want {
+			test.Errorf("keys %v: cursor = %d, want %d", testCase.keys, view.win.Cursor(), testCase.want)
 		}
 	}
 }
 
-func TestRelativeAge(t *testing.T) {
+func TestHostileTextIsNeutralised(test *testing.T) {
+	pullRequests := makePRs(1)
+	pullRequests[0].Title = "evil\x1b]52;c;aGk=\x07\x1b[2J title\u202e\u009b"
+	pullRequests[0].Author = "a\x1b[31muthor"
+	view := loadedView(test, fakeWith(pullRequests), nil)
+	out := ansi.Strip(view.Render(80, 6))
+	for _, character := range out {
+		if character != '\n' && (character < ' ' || (character >= 0x7f && character <= 0x9f) || character == '\u202e') {
+			test.Fatalf("control rune %q reached the screen: %q", character, out)
+		}
+	}
+}
+
+func TestRelativeAge(test *testing.T) {
 	tests := []struct {
 		ago  time.Duration
 		want string
@@ -398,99 +398,99 @@ func TestRelativeAge(t *testing.T) {
 		{45 * 24 * time.Hour, "1mo"},
 		{400 * 24 * time.Hour, "1y"},
 	}
-	for _, tt := range tests {
-		if got := relativeAge(testNow, testNow.Add(-tt.ago)); got != tt.want {
-			t.Errorf("age %v = %q, want %q", tt.ago, got, tt.want)
+	for _, testCase := range tests {
+		if got := relativeAge(testNow, testNow.Add(-testCase.ago)); got != testCase.want {
+			test.Errorf("age %v = %q, want %q", testCase.ago, got, testCase.want)
 		}
 	}
 }
 
 func goldenPRs() []github.PullRequest {
-	prs := makePRs(8)
-	prs[0].Title = "Add a really quite extraordinarily long title that cannot possibly fit in the available columns"
-	prs[0].Author = "someone-with-a-long-name"
-	prs[0].ReviewDecision = github.ReviewDecisionApproved
-	prs[0].CommentCount = 4
-	prs[0].Checks = github.ChecksPassing
-	prs[1].Checks = github.ChecksRunning
-	prs[2].Checks = github.ChecksFailing
-	prs[1].Draft = true
-	prs[1].Title = "WIP: rework the parser"
-	prs[1].CommentCount = 0
-	prs[2].ReviewDecision = github.ReviewDecisionChangesRequested
-	prs[2].CommentCount = 120
-	prs[3].ReviewDecision = github.ReviewDecisionReviewRequired
-	prs[3].Draft = true
-	prs[3].Title = "Draft with a very long title that gets truncated after the marker is shown"
-	prs[4].UpdatedAt = testNow.Add(-50 * time.Hour)
-	prs[5].UpdatedAt = testNow.Add(-100 * 24 * time.Hour)
-	return prs
+	pullRequests := makePRs(8)
+	pullRequests[0].Title = "Add a really quite extraordinarily long title that cannot possibly fit in the available columns"
+	pullRequests[0].Author = "someone-with-a-long-name"
+	pullRequests[0].ReviewDecision = github.ReviewDecisionApproved
+	pullRequests[0].CommentCount = 4
+	pullRequests[0].Checks = github.ChecksPassing
+	pullRequests[1].Checks = github.ChecksRunning
+	pullRequests[2].Checks = github.ChecksFailing
+	pullRequests[1].Draft = true
+	pullRequests[1].Title = "WIP: rework the parser"
+	pullRequests[1].CommentCount = 0
+	pullRequests[2].ReviewDecision = github.ReviewDecisionChangesRequested
+	pullRequests[2].CommentCount = 120
+	pullRequests[3].ReviewDecision = github.ReviewDecisionReviewRequired
+	pullRequests[3].Draft = true
+	pullRequests[3].Title = "Draft with a very long title that gets truncated after the marker is shown"
+	pullRequests[4].UpdatedAt = testNow.Add(-50 * time.Hour)
+	pullRequests[5].UpdatedAt = testNow.Add(-100 * 24 * time.Hour)
+	return pullRequests
 }
 
-func TestGolden(t *testing.T) {
+func TestGolden(test *testing.T) {
 	tests := []struct {
 		name          string
-		setup         func(t *testing.T) *View
+		setup         func(test *testing.T) *View
 		width, height int
 	}{
-		{"populated", func(t *testing.T) *View {
-			v := loadedView(t, fakeWith(goldenPRs()), nil)
-			press(v, "j")
-			press(v, "j")
-			return v
+		{"populated", func(test *testing.T) *View {
+			view := loadedView(test, fakeWith(goldenPRs()), nil)
+			press(view, "j")
+			press(view, "j")
+			return view
 		}, 80, 12},
-		{"scrolled", func(t *testing.T) *View {
-			v := loadedView(t, fakeWith(makePRs(20)), nil)
-			press(v, "G")
-			return v
+		{"scrolled", func(test *testing.T) *View {
+			view := loadedView(test, fakeWith(makePRs(20)), nil)
+			press(view, "G")
+			return view
 		}, 80, 8},
-		{"medium", func(t *testing.T) *View {
-			return loadedView(t, fakeWith(goldenPRs()), nil)
+		{"medium", func(test *testing.T) *View {
+			return loadedView(test, fakeWith(goldenPRs()), nil)
 		}, 56, 10},
-		{"narrow", func(t *testing.T) *View {
-			return loadedView(t, fakeWith(goldenPRs()), nil)
+		{"narrow", func(test *testing.T) *View {
+			return loadedView(test, fakeWith(goldenPRs()), nil)
 		}, 36, 10},
 		{"loading", func(*testing.T) *View { return newView(fakeWith(nil), nil) }, 80, 6},
-		{"empty", func(t *testing.T) *View { return loadedView(t, fakeWith(nil), nil) }, 80, 6},
-		{"error", func(t *testing.T) *View {
-			c := fakeWith(nil)
-			c.SetError(fake.MethodListPullRequests, fmt.Errorf("list pull requests: %w", github.ErrNotFound))
-			v := newView(c, nil)
-			deliver(t, v, v.Init())
-			return v
+		{"empty", func(test *testing.T) *View { return loadedView(test, fakeWith(nil), nil) }, 80, 6},
+		{"error", func(test *testing.T) *View {
+			client := fakeWith(nil)
+			client.SetError(fake.MethodListPullRequests, fmt.Errorf("list pull requests: %w", github.ErrNotFound))
+			view := newView(client, nil)
+			deliver(test, view, view.Init())
+			return view
 		}, 40, 8},
-		{"tiny", func(t *testing.T) *View {
-			return loadedView(t, fakeWith(goldenPRs()), nil)
+		{"tiny", func(test *testing.T) *View {
+			return loadedView(test, fakeWith(goldenPRs()), nil)
 		}, 12, 3},
-		{"error_tiny", func(t *testing.T) *View {
-			c := fakeWith(nil)
-			c.SetError(fake.MethodListPullRequests, fmt.Errorf("list pull requests: %w", github.ErrNotFound))
-			v := newView(c, nil)
-			deliver(t, v, v.Init())
-			return v
+		{"error_tiny", func(test *testing.T) *View {
+			client := fakeWith(nil)
+			client.SetError(fake.MethodListPullRequests, fmt.Errorf("list pull requests: %w", github.ErrNotFound))
+			view := newView(client, nil)
+			deliver(test, view, view.Init())
+			return view
 		}, 20, 2},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			v := tt.setup(t)
-			out := v.Render(tt.width, tt.height)
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			view := testCase.setup(test)
+			out := view.Render(testCase.width, testCase.height)
 			lines := strings.Split(out, "\n")
-			if len(lines) > tt.height {
-				t.Errorf("%d lines, max %d", len(lines), tt.height)
+			if len(lines) > testCase.height {
+				test.Errorf("%d lines, max %d", len(lines), testCase.height)
 			}
 			for i, line := range lines {
-				if w := ansi.StringWidth(line); w > tt.width {
-					t.Errorf("line %d is %d columns wide, max %d: %q", i, w, tt.width, line)
+				if width := ansi.StringWidth(line); width > testCase.width {
+					test.Errorf("line %d is %d columns wide, max %d: %q", i, width, testCase.width, line)
 				}
 			}
-			golden.Assert(t, tt.name, out, false)
+			golden.Assert(test, testCase.name, out, false)
 		})
 	}
 }
 
-func TestPagingKeysAtTheEnds(t *testing.T) {
-	j8 := []string{"j", "j", "j", "j", "j", "j", "j", "j"}
-	up4 := []string{"G", "k", "k", "k", "k"}
+func TestPagingKeysAtTheEnds(test *testing.T) {
+	downKeys := []string{"j", "j", "j", "j", "j", "j", "j", "j"}
+	upKeys := []string{"G", "k", "k", "k", "k"}
 	tests := []struct {
 		name    string
 		start   []string
@@ -505,84 +505,84 @@ func TestPagingKeysAtTheEnds(t *testing.T) {
 		{"ctrl+d from top", []string{"g g"}, "ctrl+d", 5, 5},
 		{"ctrl+b from bottom", []string{"G"}, "ctrl+b", 13, 3},
 		{"ctrl+u from bottom", []string{"G"}, "ctrl+u", 19, 9},
-		{"ctrl+d mid-list", j8, "ctrl+d", 13, 5},
-		{"ctrl+f mid-list", j8, "ctrl+f", 19, 11},
-		{"ctrl+u mid-list", up4, "ctrl+u", 15, 9},
-		{"ctrl+b mid-list", up4, "ctrl+b", 9, 3},
+		{"ctrl+d mid-list", downKeys, "ctrl+d", 13, 5},
+		{"ctrl+f mid-list", downKeys, "ctrl+f", 19, 11},
+		{"ctrl+u mid-list", upKeys, "ctrl+u", 15, 9},
+		{"ctrl+b mid-list", upKeys, "ctrl+b", 9, 3},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			v := loadedView(t, fakeWith(makePRs(25)), nil) // window shows 11 rows
-			for _, k := range tt.start {
-				press(v, k)
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			view := loadedView(test, fakeWith(makePRs(25)), nil) // window shows 11 rows
+			for _, k := range testCase.start {
+				press(view, k)
 			}
-			press(v, tt.key)
-			if got := v.win.Cursor(); got != tt.want {
-				t.Errorf("cursor = %d, want %d", got, tt.want)
+			press(view, testCase.key)
+			if got := view.win.Cursor(); got != testCase.want {
+				test.Errorf("cursor = %d, want %d", got, testCase.want)
 			}
-			if got := v.win.Top(); got != tt.wantTop {
-				t.Errorf("top = %d, want %d", got, tt.wantTop)
+			if got := view.win.Top(); got != testCase.wantTop {
+				test.Errorf("top = %d, want %d", got, testCase.wantTop)
 			}
 		})
 	}
 }
 
-func TestPagingNearTheEndLoadsMore(t *testing.T) {
+func TestPagingNearTheEndLoadsMore(test *testing.T) {
 	for _, k := range []string{"ctrl+d", "ctrl+f"} {
-		t.Run(k, func(t *testing.T) {
-			c := fakeWith(makePRs(45))
-			v := loadedView(t, c, nil) // 30 loaded, 11 visible
-			var cmd tea.Cmd
-			for i := 0; i < 10 && cmd == nil; i++ {
-				cmd = press(v, k)
-				if cmd == nil && v.win.Cursor() >= len(v.pullRequests)-1-loadMoreMargin {
-					t.Fatalf("%s reached cursor %d inside the margin without loading", k, v.win.Cursor())
+		test.Run(k, func(test *testing.T) {
+			client := fakeWith(makePRs(45))
+			view := loadedView(test, client, nil) // 30 loaded, 11 visible
+			var command tea.Cmd
+			for i := 0; i < 10 && command == nil; i++ {
+				command = press(view, k)
+				if command == nil && view.win.Cursor() >= len(view.pullRequests)-1-loadMoreMargin {
+					test.Fatalf("%s reached cursor %d inside the margin without loading", k, view.win.Cursor())
 				}
 			}
-			if cmd == nil || !v.Loading() {
-				t.Fatalf("%s into the margin should load the next page", k)
+			if command == nil || !view.Loading() {
+				test.Fatalf("%s into the margin should load the next page", k)
 			}
-			cursor, top := v.win.Cursor(), v.win.Top()
-			deliver(t, v, cmd)
-			if len(v.pullRequests) != 45 {
-				t.Fatalf("rows after next page = %d, want 45", len(v.pullRequests))
+			cursor, top := view.win.Cursor(), view.win.Top()
+			deliver(test, view, command)
+			if len(view.pullRequests) != 45 {
+				test.Fatalf("rows after next page = %d, want 45", len(view.pullRequests))
 			}
-			calls := c.Calls()
+			calls := client.Calls()
 			if calls[len(calls)-1].Page.After == "" {
-				t.Errorf("last call = %+v, want a next-page fetch", calls[len(calls)-1])
+				test.Errorf("last call = %+v, want a next-page fetch", calls[len(calls)-1])
 			}
-			if v.win.Cursor() != cursor || v.win.Top() != top {
-				t.Errorf("append moved the window: cursor %d->%d top %d->%d", cursor, v.win.Cursor(), top, v.win.Top())
+			if view.win.Cursor() != cursor || view.win.Top() != top {
+				test.Errorf("append moved the window: cursor %d->%d top %d->%d", cursor, view.win.Cursor(), top, view.win.Top())
 			}
-			press(v, "G")
-			if got := v.win.Cursor(); got != 44 {
-				t.Errorf("G after append: cursor = %d, want 44 (window must know the new row count)", got)
+			press(view, "G")
+			if got := view.win.Cursor(); got != 44 {
+				test.Errorf("G after append: cursor = %d, want 44 (window must know the new row count)", got)
 			}
 		})
 	}
 }
 
-func TestChecksMark(t *testing.T) {
-	th := theme.Default()
-	v := newView(fakeWith(nil), nil)
+func TestChecksMark(test *testing.T) {
+	activeTheme := theme.Default()
+	view := newView(fakeWith(nil), nil)
 	tests := []struct {
 		state github.CheckState
 		glyph string
 		style lipgloss.Style
 	}{
-		{github.ChecksPassing, "✓", th.PullRequestList.ChecksPassing},
-		{github.ChecksFailing, "✗", th.PullRequestList.ChecksFailing},
-		{github.ChecksRunning, "●", th.PullRequestList.ChecksRunning},
-		{github.ChecksNone, "", th.PullRequestList.Comments},
+		{github.ChecksPassing, "✓", activeTheme.PullRequestList.ChecksPassing},
+		{github.ChecksFailing, "✗", activeTheme.PullRequestList.ChecksFailing},
+		{github.ChecksRunning, "●", activeTheme.PullRequestList.ChecksRunning},
+		{github.ChecksNone, "", activeTheme.PullRequestList.Comments},
 	}
-	for _, tt := range tests {
-		t.Run(string(tt.state), func(t *testing.T) {
-			glyph, style := v.checksMark(tt.state)
-			if glyph != tt.glyph {
-				t.Errorf("glyph = %q, want %q", glyph, tt.glyph)
+	for _, testCase := range tests {
+		test.Run(string(testCase.state), func(test *testing.T) {
+			glyph, style := view.checksMark(testCase.state)
+			if glyph != testCase.glyph {
+				test.Errorf("glyph = %q, want %q", glyph, testCase.glyph)
 			}
-			if got, want := style.Render("x"), tt.style.Render("x"); got != want {
-				t.Errorf("style renders %q, want %q", got, want)
+			if got, want := style.Render("x"), testCase.style.Render("x"); got != want {
+				test.Errorf("style renders %q, want %q", got, want)
 			}
 		})
 	}

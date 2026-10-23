@@ -23,22 +23,22 @@ type PullRequestListStyles struct {
 	Comments         lipgloss.Style
 }
 
-func newPullRequestListStyles(r Roles) PullRequestListStyles {
-	fg := func(c color.Color) lipgloss.Style { return lipgloss.NewStyle().Foreground(c) }
-	muted := fg(r.Muted)
+func newPullRequestListStyles(roles Roles) PullRequestListStyles {
+	foreground := func(color color.Color) lipgloss.Style { return lipgloss.NewStyle().Foreground(color) }
+	muted := foreground(roles.Muted)
 	return PullRequestListStyles{
 		Header:           muted.Bold(true),
-		Selected:         lipgloss.NewStyle().Bold(true).Foreground(r.OnAccent).Background(r.Accent),
-		Number:           fg(r.Warning),
+		Selected:         lipgloss.NewStyle().Bold(true).Foreground(roles.OnAccent).Background(roles.Accent),
+		Number:           foreground(roles.Warning),
 		Author:           muted,
 		Age:              muted,
 		Draft:            muted.Italic(true),
-		Approved:         fg(r.Success),
-		ChangesRequested: fg(r.Error),
-		ReviewRequired:   fg(r.Warning),
-		ChecksPassing:    fg(r.Added),
-		ChecksFailing:    fg(r.Removed),
-		ChecksRunning:    fg(r.Warning),
+		Approved:         foreground(roles.Success),
+		ChangesRequested: foreground(roles.Error),
+		ReviewRequired:   foreground(roles.Warning),
+		ChecksPassing:    foreground(roles.Added),
+		ChecksFailing:    foreground(roles.Removed),
+		ChecksRunning:    foreground(roles.Warning),
 		Comments:         muted,
 	}
 }

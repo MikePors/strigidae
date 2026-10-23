@@ -37,103 +37,103 @@ type Options struct {
 }
 
 // DefaultExpanded is whether a thread starts expanded: resolved ones do not.
-func DefaultExpanded(t github.ReviewThread) bool { return !t.IsResolved }
+func DefaultExpanded(thread github.ReviewThread) bool { return !thread.IsResolved }
 
 // Quiet reports whether a thread is de-emphasised: resolved or outdated.
-func Quiet(t github.ReviewThread) bool { return t.IsResolved || t.IsOutdated }
+func Quiet(thread github.ReviewThread) bool { return thread.IsResolved || thread.IsOutdated }
 
 // Lines renders t in at most width columns per line. The first line is the
 // header; its first cell is the fold glyph. Lines are not padded.
-func Lines(e Environment, t github.ReviewThread, width int, o Options) []string {
+func Lines(environment Environment, thread github.ReviewThread, width int, options Options) []string {
 	width = max(width, 8)
-	out := []string{header(e, t, width, o)}
-	if !o.Expanded {
+	out := []string{header(environment, thread, width, options)}
+	if !options.Expanded {
 		return out
 	}
-	th := e.Theme
-	bar := th.ThreadBar.Render("│ ")
-	bodyW := width - lipgloss.Width(bar)
-	for i, c := range t.Comments {
-		cc := comment.Comment{
-			Author: c.Author, At: c.CreatedAt, Body: c.Body, Pending: c.Pending,
-			Reactions: c.Reactions, Muted: t.IsOutdated,
+	theme := environment.Theme
+	bar := theme.ThreadBar.Render("│ ")
+	bodyWidth := width - lipgloss.Width(bar)
+	for i, reviewComment := range thread.Comments {
+		reviewComment := comment.Comment{
+			Author: reviewComment.Author, At: reviewComment.CreatedAt, Body: reviewComment.Body, Pending: reviewComment.Pending,
+			Reactions: reviewComment.Reactions, Muted: thread.IsOutdated,
 		}
-		out = append(out, ansi.Truncate(bar+comment.Header(th, e.Now, cc), width, "…"))
-		body := comment.Body(th, e.Markdown, cc, bodyW)
+		out = append(out, ansi.Truncate(bar+comment.Header(theme, environment.Now, reviewComment), width, "…"))
+		body := comment.Body(theme, environment.Markdown, reviewComment, bodyWidth)
 		if body == "" {
 			continue
 		}
-		for l := range strings.SplitSeq(body, "\n") {
-			out = append(out, bar+l)
+		for line := range strings.SplitSeq(body, "\n") {
+			out = append(out, bar+line)
 		}
-		if i < len(t.Comments)-1 {
+		if i < len(thread.Comments)-1 {
 			out = append(out, strings.TrimRight(bar, " "))
 		}
 	}
 	return out
 }
 
-func header(e Environment, t github.ReviewThread, width int, o Options) string {
-	th := e.Theme
+func header(environment Environment, thread github.ReviewThread, width int, options Options) string {
+	theme := environment.Theme
 	glyph := "▸"
-	if o.Expanded {
+	if options.Expanded {
 		glyph = "▾"
 	}
-	style := th.ThreadMarker
-	if Quiet(t) {
-		style = th.Muted
+	style := theme.ThreadMarker
+	if Quiet(thread) {
+		style = theme.Muted
 	}
 	parts := []string{style.Render(glyph)}
-	if o.Location {
-		parts = append(parts, th.Normal.Render(location(t)))
+	if options.Location {
+		parts = append(parts, theme.Normal.Render(location(thread)))
 	}
-	n := len(t.Comments)
-	if n > 0 {
-		parts = append(parts, th.Author.Render(comment.Author(t.Comments[0].Author)))
+	count := len(thread.Comments)
+	if count > 0 {
+		parts = append(parts, theme.Author.Render(comment.Author(thread.Comments[0].Author)))
 	}
-	meta := fmt.Sprintf("%d comment", n)
-	if n != 1 {
+	meta := fmt.Sprintf("%d comment", count)
+	if count != 1 {
 		meta += "s"
 	}
-	if n > 0 {
-		meta += " · " + comment.RelativeTime(e.Now, t.Comments[n-1].CreatedAt)
+	if count > 0 {
+		meta += " · " + comment.RelativeTime(environment.Now, thread.Comments[count-1].CreatedAt)
 	}
-	parts = append(parts, th.Muted.Render(meta))
-	if t.IsResolved {
-		parts = append(parts, th.Muted.Render("[resolved]"))
+	parts = append(parts, theme.Muted.Render(meta))
+	if thread.IsResolved {
+		parts = append(parts, theme.Muted.Render("[resolved]"))
 	}
-	if t.IsOutdated {
-		parts = append(parts, th.Muted.Render("[outdated]"))
+	if thread.IsOutdated {
+		parts = append(parts, theme.Muted.Render("[outdated]"))
 	}
-	if t.SubjectType == github.SubjectFile {
-		parts = append(parts, th.Muted.Render("[file]"))
+	if thread.SubjectType == github.SubjectFile {
+		parts = append(parts, theme.Muted.Render("[file]"))
 	}
 	line := strings.Join(parts, " ")
-	if !o.Expanded && n > 0 {
-		if p := preview(t.Comments[0].Body); p != "" {
-			line += th.Muted.Render(" — " + p)
+	if !options.Expanded && count > 0 {
+		if path := preview(thread.Comments[0].Body); path != "" {
+			line += theme.Muted.Render(" — " + path)
 		}
 	}
 	return ansi.Truncate(line, width, "…")
 }
 
-func location(t github.ReviewThread) string {
-	loc := terminaltext.Clean(t.Path)
-	line := t.Line
+func location(thread github.ReviewThread) string {
+	locationText := terminaltext.Clean(thread.Path)
+	line := thread.Line
 	if line == 0 {
-		line = t.OriginalLine
+		line = thread.OriginalLine
 	}
 	if line > 0 {
-		loc += ":" + strconv.Itoa(line)
+		locationText += ":" + strconv.Itoa(line)
 	}
-	return loc
+	return locationText
 }
 
 // preview is the first non-empty line of a body, cleaned, for collapsed threads.
 func preview(body string) string {
-	for l := range strings.SplitSeq(terminaltext.CleanBlock(body), "\n") {
-		if l = strings.TrimSpace(l); l != "" {
-			return l
+	for line := range strings.SplitSeq(terminaltext.CleanBlock(body), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			return line
 		}
 	}
 	return ""

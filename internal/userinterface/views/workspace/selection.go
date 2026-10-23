@@ -5,50 +5,50 @@ import (
 )
 
 // files returns the changed files, or nil before the pull request loads.
-func (v *View) files() []github.ChangedFile {
-	if v.detail == nil {
+func (view *View) files() []github.ChangedFile {
+	if view.detail == nil {
 		return nil
 	}
-	return v.detail.Files
+	return view.detail.Files
 }
 
 // entries is the number of rows in the Files pane: Overview plus the files.
-func (v *View) entries() int { return 1 + len(v.files()) }
+func (view *View) entries() int { return 1 + len(view.files()) }
 
 // sel is the selected Files row: 0 is Overview, i is Files[i-1].
-func (v *View) sel() int { return v.fw.Cursor() }
+func (view *View) sel() int { return view.fw.Cursor() }
 
 // setSel moves the selection to row i, scrolling the Files list to show it.
-func (v *View) setSel(i int) { v.fw.Restore(i, v.fw.Top(), 0) }
+func (view *View) setSel(i int) { view.fw.Restore(i, view.fw.Top(), 0) }
 
-func (v *View) selectedPath() string {
-	if s := v.sel(); s > 0 && s <= len(v.files()) {
-		return v.files()[s-1].Path
+func (view *View) selectedPath() string {
+	if size := view.sel(); size > 0 && size <= len(view.files()) {
+		return view.files()[size-1].Path
 	}
 	return ""
 }
 
-func (v *View) selectionChanged() {
-	s := v.sel()
-	if s == 0 || s > len(v.files()) {
+func (view *View) selectionChanged() {
+	size := view.sel()
+	if size == 0 || size > len(view.files()) {
 		// The one place a line selection ends when the file leaves the screen,
 		// including when a reload drops the file. (Another file or a reloaded
 		// diff ends it in the diff component.)
-		v.filePane.VisualEnd()
+		view.filePane.VisualEnd()
 		return
 	}
-	f := v.files()[s-1]
-	if f != v.paneFile {
-		v.paneFile = f
-		v.filePane.SetFile(f)
+	file := view.files()[size-1]
+	if file != view.paneFile {
+		view.paneFile = file
+		view.filePane.SetFile(file)
 	}
 }
 
-func (v *View) selectEntry(i int) {
-	prev := v.sel()
-	v.setSel(i)
-	if v.sel() != prev {
-		v.selectionChanged()
+func (view *View) selectEntry(i int) {
+	previous := view.sel()
+	view.setSel(i)
+	if view.sel() != previous {
+		view.selectionChanged()
 	}
-	v.layout()
+	view.layout()
 }

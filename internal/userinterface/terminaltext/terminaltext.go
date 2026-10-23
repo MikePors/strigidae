@@ -11,32 +11,32 @@ import (
 // Clean prepares single-line text such as titles, authors, labels, branch
 // names and paths. Every control rune (C0, DEL, C1, including newline and tab)
 // and every bidi control rune becomes a space, so the text stays on one line.
-func Clean(s string) string {
-	return strings.Map(func(r rune) rune {
-		if unsafeRune(r) {
+func Clean(text string) string {
+	return strings.Map(func(character rune) rune {
+		if unsafeRune(character) {
 			return ' '
 		}
-		return r
-	}, s)
+		return character
+	}, text)
 }
 
 // CleanBlock prepares multi-line text such as PR descriptions and comment
 // bodies before markdown rendering. It behaves like Clean but keeps newlines
 // and tabs, and turns "\r\n" and lone "\r" into "\n".
-func CleanBlock(s string) string {
-	s = strings.ReplaceAll(s, "\r\n", "\n")
-	s = strings.ReplaceAll(s, "\r", "\n")
-	return strings.Map(func(r rune) rune {
-		if r == '\n' || r == '\t' {
-			return r
+func CleanBlock(text string) string {
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	text = strings.ReplaceAll(text, "\r", "\n")
+	return strings.Map(func(character rune) rune {
+		if character == '\n' || character == '\t' {
+			return character
 		}
-		if unsafeRune(r) {
+		if unsafeRune(character) {
 			return ' '
 		}
-		return r
-	}, s)
+		return character
+	}, text)
 }
 
-func unsafeRune(r rune) bool {
-	return unicode.IsControl(r) || unicode.Is(unicode.Bidi_Control, r)
+func unsafeRune(character rune) bool {
+	return unicode.IsControl(character) || unicode.Is(unicode.Bidi_Control, character)
 }

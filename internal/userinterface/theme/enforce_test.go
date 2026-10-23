@@ -53,89 +53,89 @@ var (
 
 // violations returns what is wrong with the Go file src at rel, a slash path
 // relative to internal/ui (such as "theme/roles.go").
-func violations(rel, src string) ([]string, error) {
+func violations(relative, source string) ([]string, error) {
 	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, rel, src, 0)
+	file, err := parser.ParseFile(fset, relative, source, 0)
 	if err != nil {
 		return nil, err
 	}
 	paths := map[string]string{} // local name -> import path
-	for _, im := range f.Imports {
-		p, _ := strconv.Unquote(im.Path.Value)
-		name := filepath.Base(p)
-		if p == lipglossPath {
+	for _, importSpec := range file.Imports {
+		path, _ := strconv.Unquote(importSpec.Path.Value)
+		name := filepath.Base(path)
+		if path == lipglossPath {
 			name = "lipgloss"
 		}
-		if im.Name != nil {
-			name = im.Name.Name
+		if importSpec.Name != nil {
+			name = importSpec.Name.Name
 		}
-		paths[name] = p
+		paths[name] = path
 	}
-	inTheme := strings.HasPrefix(rel, "theme/")
-	palettesFile := rel == "theme/palettes.go"
-	colourFile := palettesFile || rel == "theme/color.go"
-	slotFile := palettesFile || rel == "theme/palette.go" || rel == "theme/roles.go"
+	inTheme := strings.HasPrefix(relative, "theme/")
+	palettesFile := relative == "theme/palettes.go"
+	colourFile := palettesFile || relative == "theme/color.go"
+	slotFile := palettesFile || relative == "theme/palette.go" || relative == "theme/roles.go"
 
 	var out []string
-	bad := func(n ast.Node, format string, args ...any) {
-		out = append(out, fmt.Sprintf("%s: %s", fset.Position(n.Pos()), fmt.Sprintf(format, args...)))
+	bad := func(node ast.Node, format string, arguments ...any) {
+		out = append(out, fmt.Sprintf("%s: %s", fset.Position(node.Pos()), fmt.Sprintf(format, arguments...)))
 	}
-	pkgSel := func(e ast.Expr) (pkg, sel string, ok bool) {
-		s, isSel := e.(*ast.SelectorExpr)
+	pkgSel := func(expression ast.Expr) (packageName, selection string, ok bool) {
+		selector, isSel := expression.(*ast.SelectorExpr)
 		if !isSel {
 			return "", "", false
 		}
-		x, isIdent := s.X.(*ast.Ident)
+		column, isIdent := selector.X.(*ast.Ident)
 		if !isIdent {
 			return "", "", false
 		}
-		return paths[x.Name], s.Sel.Name, paths[x.Name] != ""
+		return paths[column.Name], selector.Sel.Name, paths[column.Name] != ""
 	}
 
-	checkString := func(n ast.Node, s string) {
-		if !palettesFile && hexLiteral.MatchString(s) {
-			bad(n, "hex colour %q outside theme/palettes.go", s)
+	checkString := func(node ast.Node, text string) {
+		if !palettesFile && hexLiteral.MatchString(text) {
+			bad(node, "hex colour %q outside theme/palettes.go", text)
 		}
 	}
-	ast.Inspect(f, func(n ast.Node) bool {
-		switch n := n.(type) {
+	ast.Inspect(file, func(node ast.Node) bool {
+		switch node := node.(type) {
 		case *ast.BasicLit:
-			if n.Kind == token.STRING {
-				if s, err := strconv.Unquote(n.Value); err == nil {
-					checkString(n, s)
+			if node.Kind == token.STRING {
+				if text, err := strconv.Unquote(node.Value); err == nil {
+					checkString(node, text)
 				}
 			}
 		case *ast.BinaryExpr:
 			// "#" + "ff8787" and similar constant folding.
-			if s, ok := foldStrings(n); ok {
-				checkString(n, s)
+			if text, ok := foldStrings(node); ok {
+				checkString(node, text)
 			}
 		case *ast.CallExpr:
-			if pkg, sel, ok := pkgSel(n.Fun); ok && colourCtors[pkg][sel] && !colourFile {
-				bad(n, "colour constructor %s.%s outside the palette files", filepath.Base(pkg), sel)
+			if packageName, selection, ok := pkgSel(node.Fun); ok && colourCtors[packageName][selection] && !colourFile {
+				bad(node, "colour constructor %s.%s outside the palette files", filepath.Base(packageName), selection)
 			}
 		case *ast.CompositeLit:
-			if pkg, sel, ok := pkgSel(n.Type); ok && pkg == colorPath && colourTypes[sel] && rel != "theme/color.go" {
-				bad(n, "color.%s literal outside theme/color.go", sel)
+			if packageName, selection, ok := pkgSel(node.Type); ok && packageName == colorPath && colourTypes[selection] && relative != "theme/color.go" {
+				bad(node, "color.%s literal outside theme/color.go", selection)
 			}
 		case *ast.SelectorExpr:
-			if pkg, sel, ok := pkgSel(n); ok {
-				if (pkg == lipglossPath || pkg == ansiPath) && namedColours[sel] {
-					bad(n, "named colour %s.%s; use a role", filepath.Base(pkg), sel)
+			if packageName, selection, ok := pkgSel(node); ok {
+				if (packageName == lipglossPath || packageName == ansiPath) && namedColours[selection] {
+					bad(node, "named colour %s.%s; use a role", filepath.Base(packageName), selection)
 				}
-				if pkg == colorPath && colourConsts[sel] && !inTheme {
-					bad(n, "color.%s outside the theme package", sel)
+				if packageName == colorPath && colourConsts[selection] && !inTheme {
+					bad(node, "color.%s outside the theme package", selection)
 				}
 			}
-			if n.Sel.Name == "colors" && !palettesFile && rel != "theme/palette.go" {
-				bad(n, "direct palette slot access (.colors)")
+			if node.Sel.Name == "colors" && !palettesFile && relative != "theme/palette.go" {
+				bad(node, "direct palette slot access (.colors)")
 			}
-			if n.Sel.Name == "Slot" && !slotFile {
-				bad(n, "palette slot read via .Slot; only roles.go may")
+			if node.Sel.Name == "Slot" && !slotFile {
+				bad(node, "palette slot read via .Slot; only roles.go may")
 			}
 		case *ast.Ident:
-			if slotName.MatchString(n.Name) && !slotFile {
-				bad(n, "palette slot %s used outside roles.go", n.Name)
+			if slotName.MatchString(node.Name) && !slotFile {
+				bad(node, "palette slot %s used outside roles.go", node.Name)
 			}
 		}
 		return true
@@ -144,30 +144,30 @@ func violations(rel, src string) ([]string, error) {
 }
 
 // foldStrings evaluates a tree of "+" over string literals.
-func foldStrings(e ast.Expr) (string, bool) {
-	switch e := e.(type) {
+func foldStrings(expression ast.Expr) (string, bool) {
+	switch expression := expression.(type) {
 	case *ast.BasicLit:
-		if e.Kind != token.STRING {
+		if expression.Kind != token.STRING {
 			return "", false
 		}
-		s, err := strconv.Unquote(e.Value)
-		return s, err == nil
+		text, err := strconv.Unquote(expression.Value)
+		return text, err == nil
 	case *ast.BinaryExpr:
-		if e.Op != token.ADD {
+		if expression.Op != token.ADD {
 			return "", false
 		}
-		l, ok1 := foldStrings(e.X)
-		r, ok2 := foldStrings(e.Y)
-		return l + r, ok1 && ok2
+		line, firstOk := foldStrings(expression.X)
+		text, secondOk := foldStrings(expression.Y)
+		return line + text, firstOk && secondOk
 	case *ast.ParenExpr:
-		return foldStrings(e.X)
+		return foldStrings(expression.X)
 	}
 	return "", false
 }
 
 // TestEnforcementRules proves each rule fires on a small source snippet, and
 // that the allowed places stay allowed.
-func TestEnforcementRules(t *testing.T) {
+func TestEnforcementRules(test *testing.T) {
 	const imports = `import ("charm.land/lipgloss/v2"; "image/color"; "github.com/charmbracelet/x/ansi")` + "\n"
 	tests := []struct {
 		name, relative, body, want string // want is a substring of a violation; "" means clean
@@ -205,49 +205,49 @@ func TestEnforcementRules(t *testing.T) {
 		{"slot index in palette.go", "theme/palette.go", `var c = p.colors[14]`, ""},
 		{"clean view", "views/x/x.go", `var s = theme.Default().Muted`, ""},
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := violations(tc.relative, "package p\n"+imports+tc.body+"\n")
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			got, err := violations(testCase.relative, "package p\n"+imports+testCase.body+"\n")
 			if err != nil {
-				t.Fatal(err)
+				test.Fatal(err)
 			}
-			if tc.want == "" {
+			if testCase.want == "" {
 				if len(got) != 0 {
-					t.Errorf("unexpected violations: %v", got)
+					test.Errorf("unexpected violations: %v", got)
 				}
 				return
 			}
-			if !strings.Contains(strings.Join(got, "\n"), tc.want) {
-				t.Errorf("violations = %v, want one containing %q", got, tc.want)
+			if !strings.Contains(strings.Join(got, "\n"), testCase.want) {
+				test.Errorf("violations = %v, want one containing %q", got, testCase.want)
 			}
 		})
 	}
 }
 
 // TestNoColourOutsideThePalette runs the rules over the real tree.
-func TestNoColourOutsideThePalette(t *testing.T) {
-	err := filepath.WalkDir("..", func(path string, d fs.DirEntry, err error) error {
+func TestNoColourOutsideThePalette(test *testing.T) {
+	err := filepath.WalkDir("..", func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+		if entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
-		b, err := os.ReadFile(path)
+		bytes, err := os.ReadFile(path)
 		if err != nil {
 			return err
 		}
-		rel, _ := filepath.Rel("..", path)
-		got, err := violations(filepath.ToSlash(rel), string(b))
+		relative, _ := filepath.Rel("..", path)
+		got, err := violations(filepath.ToSlash(relative), string(bytes))
 		if err != nil {
 			return err
 		}
-		for _, v := range got {
-			t.Error(v)
+		for _, value := range got {
+			test.Error(value)
 		}
 		return nil
 	})
 	if err != nil {
-		t.Fatal(err)
+		test.Fatal(err)
 	}
 }

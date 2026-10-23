@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-func TestDisplayText(t *testing.T) {
+func TestDisplayText(test *testing.T) {
 	tests := []struct {
 		in    string
 		want  string
@@ -21,22 +21,22 @@ func TestDisplayText(t *testing.T) {
 		{"a\x1b[31mb", "a·[31mb", 7}, // escape sequences cannot reach the terminal
 		{"", "", 0},
 	}
-	for _, tt := range tests {
-		got, w := displayText(tt.in)
-		if got != tt.want || w != tt.width {
-			t.Errorf("displayText(%q) = %q, %d; want %q, %d", tt.in, got, w, tt.want, tt.width)
+	for _, testCase := range tests {
+		got, width := displayText(testCase.in)
+		if got != testCase.want || width != testCase.width {
+			test.Errorf("displayText(%q) = %q, %d; want %q, %d", testCase.in, got, width, testCase.want, testCase.width)
 		}
 	}
 }
 
-func TestWindow(t *testing.T) {
+func TestWindow(test *testing.T) {
 	spans := []Span{{"ab", ClassKeyword}, {"日本語", ClassString}, {"cd", ClassPlain}}
-	join := func(s []Span) string {
-		var b strings.Builder
-		for _, sp := range s {
-			b.WriteString(sp.Text)
+	join := func(span []Span) string {
+		var builder strings.Builder
+		for _, piece := range span {
+			builder.WriteString(piece.Text)
 		}
-		return b.String()
+		return builder.String()
 	}
 	tests := []struct {
 		off, width int
@@ -53,7 +53,7 @@ func TestWindow(t *testing.T) {
 		{8, 5, "cd"},
 	}
 	emoji := []Span{{"❤️❤️a", ClassPlain}}
-	for _, tt := range []struct {
+	for _, testCase := range []struct {
 		off, width int
 		want       string
 	}{
@@ -63,47 +63,47 @@ func TestWindow(t *testing.T) {
 		{2, 3, "❤️a"},
 		{3, 2, " a"},
 	} {
-		got, used := window(emoji, tt.off, tt.width)
-		if j := join(got); j != tt.want || used != ansi.StringWidth(j) {
-			t.Errorf("emoji window(%d,%d) = %q (used %d), want %q", tt.off, tt.width, j, used, tt.want)
+		got, used := window(emoji, testCase.off, testCase.width)
+		if j := join(got); j != testCase.want || used != ansi.StringWidth(j) {
+			test.Errorf("emoji window(%d,%d) = %q (used %d), want %q", testCase.off, testCase.width, j, used, testCase.want)
 		}
 	}
-	for _, tt := range tests {
-		got, used := window(spans, tt.off, tt.width)
-		if j := join(got); j != tt.want {
-			t.Errorf("window(%d,%d) = %q, want %q", tt.off, tt.width, j, tt.want)
+	for _, testCase := range tests {
+		got, used := window(spans, testCase.off, testCase.width)
+		if j := join(got); j != testCase.want {
+			test.Errorf("window(%d,%d) = %q, want %q", testCase.off, testCase.width, j, testCase.want)
 		}
-		if w := ansi.StringWidth(join(got)); w != used || used > tt.width {
-			t.Errorf("window(%d,%d): used %d, text width %d", tt.off, tt.width, used, w)
+		if width := ansi.StringWidth(join(got)); width != used || used > testCase.width {
+			test.Errorf("window(%d,%d): used %d, text width %d", testCase.off, testCase.width, used, width)
 		}
 	}
 }
 
-func TestClassifyAndChroma(t *testing.T) {
-	h := ChromaHighlighter()
-	spans := h("x.go", "func main() { return 42 } // hi")
+func TestClassifyAndChroma(test *testing.T) {
+	highlighter := ChromaHighlighter()
+	spans := highlighter("x.go", "func main() { return 42 } // hi")
 	if joined(spans) != "func main() { return 42 } // hi" {
-		t.Fatalf("text altered: %v", spans)
+		test.Fatalf("text altered: %v", spans)
 	}
-	has := func(c Class) bool {
-		for _, s := range spans {
-			if s.Class == c {
+	has := func(class Class) bool {
+		for _, span := range spans {
+			if span.Class == class {
 				return true
 			}
 		}
 		return false
 	}
 	if !has(ClassKeyword) || !has(ClassNumber) || !has(ClassComment) {
-		t.Errorf("expected keyword, number and comment spans, got %+v", spans)
+		test.Errorf("expected keyword, number and comment spans, got %+v", spans)
 	}
-	if got := h("notes.unknownext", "just text"); len(got) != 1 || got[0].Class != ClassPlain {
-		t.Errorf("unknown extension should be plain: %+v", got)
+	if got := highlighter("notes.unknownext", "just text"); len(got) != 1 || got[0].Class != ClassPlain {
+		test.Errorf("unknown extension should be plain: %+v", got)
 	}
-	if got := h("x.go", ""); got != nil {
-		t.Errorf("empty line: %+v", got)
+	if got := highlighter("x.go", ""); got != nil {
+		test.Errorf("empty line: %+v", got)
 	}
 	long := strings.Repeat("x", maxHighlightLen+1)
-	if got := h("x.go", long); len(got) != 1 || got[0].Class != ClassPlain {
-		t.Error("very long lines should skip lexing")
+	if got := highlighter("x.go", long); len(got) != 1 || got[0].Class != ClassPlain {
+		test.Error("very long lines should skip lexing")
 	}
 }

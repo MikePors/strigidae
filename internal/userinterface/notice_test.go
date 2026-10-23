@@ -12,33 +12,33 @@ type wrong struct{}
 
 // TestConfirmReplacesOpenPrompt pins the documented behaviour: the newest
 // question wins, and the replaced one's action can no longer run.
-func TestConfirmReplacesOpenPrompt(t *testing.T) {
-	m := newModel(newFake("v"))
-	run(m, messageCommand(ConfirmMessage{Text: "first?", OnYes: func() tea.Msg { return wrong{} }}))
-	run(m, messageCommand(ConfirmMessage{Text: "second?", OnYes: func() tea.Msg { return answered{} }}))
-	if row := ansi.Strip(m.bottomRow()); !strings.Contains(row, "second?") {
-		t.Errorf("row = %q", row)
+func TestConfirmReplacesOpenPrompt(test *testing.T) {
+	model := newModel(newFake("v"))
+	run(model, messageCommand(ConfirmMessage{Text: "first?", OnYes: func() tea.Msg { return wrong{} }}))
+	run(model, messageCommand(ConfirmMessage{Text: "second?", OnYes: func() tea.Msg { return answered{} }}))
+	if row := ansi.Strip(model.bottomRow()); !strings.Contains(row, "second?") {
+		test.Errorf("row = %q", row)
 	}
-	if cmd := press(m, "y"); cmd == nil || !isAnswered(cmd) {
-		t.Error("the replacing prompt's action did not run")
+	if command := press(model, "y"); command == nil || !isAnswered(command) {
+		test.Error("the replacing prompt's action did not run")
 	}
 }
 
-func TestNoticeAnyKeyDismissesAndRuns(t *testing.T) {
+func TestNoticeAnyKeyDismissesAndRuns(test *testing.T) {
 	for _, k := range []string{"y", "n", "esc", "enter", "j"} {
-		t.Run(k, func(t *testing.T) {
-			m := newModel(newFake("v"))
-			run(m, messageCommand(ConfirmMessage{Text: "Head moved.", OnDismiss: func() tea.Msg { return answered{} }, OnYes: func() tea.Msg { return wrong{} }, Notice: true}))
-			row := ansi.Strip(m.bottomRow())
+		test.Run(k, func(test *testing.T) {
+			model := newModel(newFake("v"))
+			run(model, messageCommand(ConfirmMessage{Text: "Head moved.", OnDismiss: func() tea.Msg { return answered{} }, OnYes: func() tea.Msg { return wrong{} }, Notice: true}))
+			row := ansi.Strip(model.bottomRow())
 			if strings.Contains(row, "y/N") || !strings.Contains(row, "any key") {
-				t.Errorf("row = %q", row)
+				test.Errorf("row = %q", row)
 			}
-			cmd := press(m, k)
-			if m.confirm.CapturesKeys() {
-				t.Error("notice still captures")
+			command := press(model, k)
+			if model.confirm.CapturesKeys() {
+				test.Error("notice still captures")
 			}
-			if cmd == nil || !isAnswered(cmd) {
-				t.Error("OnDismiss did not run")
+			if command == nil || !isAnswered(command) {
+				test.Error("OnDismiss did not run")
 			}
 		})
 	}

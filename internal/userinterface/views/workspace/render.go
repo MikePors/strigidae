@@ -19,254 +19,254 @@ const (
 )
 
 // panesHeight is the height available to the panes below the header.
-func (v *View) panesHeight() int { return max(0, v.height-headerRows) }
+func (view *View) panesHeight() int { return max(0, view.height-headerRows) }
 
 // paneWidths returns the outer widths of the Files and right panes. In a
 // narrow terminal the unfocused pane gets zero width.
-func (v *View) paneWidths() (files, right int) {
-	if v.width < narrowBelow {
-		if v.focus == paneFiles {
-			return v.width, 0
+func (view *View) paneWidths() (files, right int) {
+	if view.width < narrowBelow {
+		if view.focus == paneFiles {
+			return view.width, 0
 		}
-		return 0, v.width
+		return 0, view.width
 	}
-	files = min(max(v.width*30/100, filesMin), filesMax)
-	return files, v.width - files
+	files = min(max(view.width*30/100, filesMin), filesMax)
+	return files, view.width - files
 }
 
 // layout sizes the overview viewport and keeps the Files selection in view.
 // It runs on resize, selection change and render.
-func (v *View) layout() {
-	filesW, rightW := v.paneWidths()
-	h := max(0, v.panesHeight()-2)
-	v.sizeFilePane(filesW, rightW, h)
-	if rightW > 0 {
-		v.ov.ensure(v.th, v.md, v.detail, threadsView{v.threads, v.thrLoaded, v.thrPending, v.thrErr}, v.now(), max(1, rightW-4), h)
+func (view *View) layout() {
+	filesWidth, rightWidth := view.paneWidths()
+	height := max(0, view.panesHeight()-2)
+	view.sizeFilePane(filesWidth, rightWidth, height)
+	if rightWidth > 0 {
+		view.ov.ensure(view.th, view.md, view.detail, threadsView{view.threads, view.thrLoaded, view.thrPending, view.thrErr}, view.now(), max(1, rightWidth-4), height)
 	}
-	v.fw.SetRows(v.entries())
-	v.fw.SetSize(h)
+	view.fw.SetRows(view.entries())
+	view.fw.SetSize(height)
 }
 
 // sizeFilePane tells the file pane its inner size, also while it is hidden in
 // a narrow terminal, whenever that size changes.
-func (v *View) sizeFilePane(filesW, rightW, h int) {
-	if rightW == 0 {
-		rightW = v.width // the pane would get the whole width once shown
-		if filesW > 0 && v.width >= narrowBelow {
-			rightW = v.width - filesW
+func (view *View) sizeFilePane(filesWidth, rightWidth, height int) {
+	if rightWidth == 0 {
+		rightWidth = view.width // the pane would get the whole width once shown
+		if filesWidth > 0 && view.width >= narrowBelow {
+			rightWidth = view.width - filesWidth
 		}
 	}
-	w := max(0, rightW-2)
-	if w != v.paneWidth || h != v.paneHeight {
-		v.paneWidth, v.paneHeight = w, h
-		v.filePane.SetSize(w, h)
+	width := max(0, rightWidth-2)
+	if width != view.paneWidth || height != view.paneHeight {
+		view.paneWidth, view.paneHeight = width, height
+		view.filePane.SetSize(width, height)
 	}
 }
 
 // Render implements userinterface.View.
-func (v *View) Render(width, height int) string {
-	v.width, v.height = width, height
+func (view *View) Render(width, height int) string {
+	view.width, view.height = width, height
 	if width < 4 || height < headerRows+3 {
 		return ""
 	}
-	v.layout()
+	view.layout()
 	switch {
-	case v.detail == nil && v.err != nil:
-		return v.renderFailure()
-	case v.detail == nil:
-		return v.th.Title.Render(v.Title()) + "\n" +
-			v.th.Muted.Render(terminaltext.Clean(fmt.Sprintf("Loading %s#%d…", v.repository, v.number)))
+	case view.detail == nil && view.err != nil:
+		return view.renderFailure()
+	case view.detail == nil:
+		return view.th.Title.Render(view.Title()) + "\n" +
+			view.th.Muted.Render(terminaltext.Clean(fmt.Sprintf("Loading %s#%d…", view.repository, view.number)))
 	}
 
-	filesW, rightW := v.paneWidths()
-	h := v.panesHeight()
+	filesWidth, rightWidth := view.paneWidths()
+	lineHeight := view.panesHeight()
 	var left, right []string
-	if filesW > 0 {
-		left = drawPane(v, v.filesTitle(), v.fileRows(filesW-2, h-2), filesW, h, v.focus == paneFiles)
+	if filesWidth > 0 {
+		left = drawPane(view, view.filesTitle(), view.fileRows(filesWidth-2, lineHeight-2), filesWidth, lineHeight, view.focus == paneFiles)
 	}
-	if rightW > 0 {
-		right = drawPane(v, v.rightTitle(), v.rightRows(rightW-2, h-2), rightW, h, v.focus == paneRight)
+	if rightWidth > 0 {
+		right = drawPane(view, view.rightTitle(), view.rightRows(rightWidth-2, lineHeight-2), rightWidth, lineHeight, view.focus == paneRight)
 	}
 	rows := make([]string, 0, height)
-	rows = append(rows, v.renderHeader(width)...)
-	for i := range h {
-		var l, r string
+	rows = append(rows, view.renderHeader(width)...)
+	for i := range lineHeight {
+		var line, text string
 		if left != nil {
-			l = left[i]
+			line = left[i]
 		}
 		if right != nil {
-			r = right[i]
+			text = right[i]
 		}
-		rows = append(rows, l+r)
+		rows = append(rows, line+text)
 	}
-	if v.picker != nil {
-		overlay(rows, v.picker.Render(width, height-headerRows), width, headerRows)
+	if view.picker != nil {
+		overlay(rows, view.picker.Render(width, height-headerRows), width, headerRows)
 	}
-	if v.review.chooser != nil {
-		overlay(rows, v.review.chooser.Render(width, height-headerRows), width, headerRows)
+	if view.review.chooser != nil {
+		overlay(rows, view.review.chooser.Render(width, height-headerRows), width, headerRows)
 	}
 	return strings.Join(rows, "\n")
 }
 
-func (v *View) renderFailure() string {
-	head := v.th.Title.Render(v.Title())
-	if v.notFound {
+func (view *View) renderFailure() string {
+	head := view.th.Title.Render(view.Title())
+	if view.notFound {
 		return head + "\n" +
-			v.th.ErrorText.Render(terminaltext.Clean(fmt.Sprintf("Pull request %s#%d was not found.", v.repository, v.number))) + "\n" +
-			v.th.Muted.Render("It may not exist, or you may lack access. Press R to retry.")
+			view.th.ErrorText.Render(terminaltext.Clean(fmt.Sprintf("Pull request %s#%d was not found.", view.repository, view.number))) + "\n" +
+			view.th.Muted.Render("It may not exist, or you may lack access. Press R to retry.")
 	}
 	return head + "\n" +
-		v.th.ErrorText.Render("Could not load the pull request.") + "\n" +
-		v.th.Normal.Render(ansi.Wrap(terminaltext.SafeError(v.err).Error(), max(1, v.width), "")) + "\n" +
-		v.th.Muted.Render("Press R to retry.")
+		view.th.ErrorText.Render("Could not load the pull request.") + "\n" +
+		view.th.Normal.Render(ansi.Wrap(terminaltext.SafeError(view.err).Error(), max(1, view.width), "")) + "\n" +
+		view.th.Muted.Render("Press R to retry.")
 }
 
-func (v *View) renderHeader(width int) []string {
-	d := v.detail
-	badge := v.stateBadge()
-	line1 := badge + " " + v.th.Title.Render(fmt.Sprintf("#%d", d.Number)) + " " + v.th.StrongText.Render(terminaltext.Clean(d.Title))
+func (view *View) renderHeader(width int) []string {
+	detail := view.detail
+	badge := view.stateBadge()
+	line1 := badge + " " + view.th.Title.Render(fmt.Sprintf("#%d", detail.Number)) + " " + view.th.StrongText.Render(terminaltext.Clean(detail.Title))
 
-	sep := v.th.Muted.Render(" · ")
+	separator := view.th.Muted.Render(" · ")
 	parts := []string{
-		v.th.Author.Render(terminaltext.Clean(d.Author)),
+		view.th.Author.Render(terminaltext.Clean(detail.Author)),
 	}
-	switch d.Checks {
+	switch detail.Checks {
 	case github.ChecksPassing:
-		parts = append(parts, v.th.PullRequestList.ChecksPassing.Render("✓ checks passing"))
+		parts = append(parts, view.th.PullRequestList.ChecksPassing.Render("✓ checks passing"))
 	case github.ChecksFailing:
-		parts = append(parts, v.th.PullRequestList.ChecksFailing.Render("✗ checks failing"))
+		parts = append(parts, view.th.PullRequestList.ChecksFailing.Render("✗ checks failing"))
 	case github.ChecksRunning:
-		parts = append(parts, v.th.PullRequestList.ChecksRunning.Render("● checks running"))
+		parts = append(parts, view.th.PullRequestList.ChecksRunning.Render("● checks running"))
 	case github.ChecksNone:
 	}
-	switch d.ReviewDecision {
+	switch detail.ReviewDecision {
 	case github.ReviewDecisionApproved:
-		parts = append(parts, v.th.FileAdded.Render("approved"))
+		parts = append(parts, view.th.FileAdded.Render("approved"))
 	case github.ReviewDecisionChangesRequested:
-		parts = append(parts, v.th.FileDeleted.Render("changes requested"))
+		parts = append(parts, view.th.FileDeleted.Render("changes requested"))
 	case github.ReviewDecisionReviewRequired:
-		parts = append(parts, v.th.FileModified.Render("review required"))
+		parts = append(parts, view.th.FileModified.Render("review required"))
 	case github.ReviewDecisionNone:
 	}
 	// Branches are the least glanceable part, so they come after the states
 	// and are what truncation eats first.
-	parts = append(parts, v.th.Muted.Render(terminaltext.Clean(d.BaseBranch)+" ← "+terminaltext.Clean(d.HeadBranch)))
-	if len(d.Labels) > 0 {
-		names := make([]string, len(d.Labels))
-		for i, l := range d.Labels {
-			names[i] = "[" + terminaltext.Clean(l.Name) + "]"
+	parts = append(parts, view.th.Muted.Render(terminaltext.Clean(detail.BaseBranch)+" ← "+terminaltext.Clean(detail.HeadBranch)))
+	if len(detail.Labels) > 0 {
+		names := make([]string, len(detail.Labels))
+		for i, label := range detail.Labels {
+			names[i] = "[" + terminaltext.Clean(label.Name) + "]"
 		}
-		parts = append(parts, v.th.Normal.Render(strings.Join(names, " ")))
+		parts = append(parts, view.th.Normal.Render(strings.Join(names, " ")))
 	}
-	if len(d.ReviewRequests) > 0 {
-		names := make([]string, len(d.ReviewRequests))
-		for i, r := range d.ReviewRequests {
-			names[i] = terminaltext.Clean(r.Name)
-			if r.IsTeam {
+	if len(detail.ReviewRequests) > 0 {
+		names := make([]string, len(detail.ReviewRequests))
+		for i, review := range detail.ReviewRequests {
+			names[i] = terminaltext.Clean(review.Name)
+			if review.IsTeam {
 				names[i] = "team " + names[i]
 			}
 		}
-		parts = append(parts, v.th.Muted.Render("reviewers: "+strings.Join(names, ", ")))
+		parts = append(parts, view.th.Muted.Render("reviewers: "+strings.Join(names, ", ")))
 	}
-	line2 := strings.Join(parts, sep)
+	line2 := strings.Join(parts, separator)
 	return []string{ansi.Truncate(line1, width, "…"), ansi.Truncate(line2, width, "…")}
 }
 
-func (v *View) stateBadge() string {
-	d := v.detail
+func (view *View) stateBadge() string {
+	detail := view.detail
 	switch {
-	case d.State == github.PullRequestStateMerged:
-		return v.th.StateMerged.Render("merged")
-	case d.State == github.PullRequestStateClosed:
-		return v.th.StateClosed.Render("closed")
-	case d.Draft:
-		return v.th.StateDraft.Render("draft")
+	case detail.State == github.PullRequestStateMerged:
+		return view.th.StateMerged.Render("merged")
+	case detail.State == github.PullRequestStateClosed:
+		return view.th.StateClosed.Render("closed")
+	case detail.Draft:
+		return view.th.StateDraft.Render("draft")
 	default:
-		return v.th.StateOpen.Render("open")
+		return view.th.StateOpen.Render("open")
 	}
 }
 
-func (v *View) rightTitle() string {
-	if p := v.selectedPath(); p != "" {
-		return terminaltext.Clean(p)
+func (view *View) rightTitle() string {
+	if path := view.selectedPath(); path != "" {
+		return terminaltext.Clean(path)
 	}
 	return "Overview"
 }
 
 // fileRows renders the Files list window of height rows.
-func (v *View) fileRows(width, height int) []string {
-	files := v.files()
+func (view *View) fileRows(width, height int) []string {
+	files := view.files()
 	var rows []string
-	v.fw.SetSize(height)
-	for i := v.fw.Top(); i < v.entries() && len(rows) < height; i++ {
-		selected := i == v.sel()
+	view.fw.SetSize(height)
+	for i := view.fw.Top(); i < view.entries() && len(rows) < height; i++ {
+		selected := i == view.sel()
 		if i == 0 {
-			rows = append(rows, v.overviewRow(selected))
+			rows = append(rows, view.overviewRow(selected))
 			continue
 		}
-		rows = append(rows, v.fileRow(files[i-1], width, selected))
+		rows = append(rows, view.fileRow(files[i-1], width, selected))
 	}
 	return rows
 }
 
-func (v *View) overviewRow(selected bool) string {
+func (view *View) overviewRow(selected bool) string {
 	if selected {
-		return v.th.Selected.Render("> Overview")
+		return view.th.Selected.Render("> Overview")
 	}
-	return v.th.Normal.Render("  Overview")
+	return view.th.Normal.Render("  Overview")
 }
 
-func (v *View) fileRow(f github.ChangedFile, width int, selected bool) string {
+func (view *View) fileRow(file github.ChangedFile, width int, selected bool) string {
 	counts := ""
-	if f.Additions > 0 {
-		counts += fmt.Sprintf("+%d", f.Additions)
+	if file.Additions > 0 {
+		counts += fmt.Sprintf("+%d", file.Additions)
 	}
-	if f.Deletions > 0 {
-		counts += fmt.Sprintf(" -%d", f.Deletions)
+	if file.Deletions > 0 {
+		counts += fmt.Sprintf(" -%d", file.Deletions)
 	}
 	counts = strings.TrimSpace(counts)
-	pathW := max(4, width-2-2-2-1-ansi.StringWidth(counts))
-	path := terminaltext.Clean(f.Path)
-	if over := ansi.StringWidth(path) - pathW; over > 0 {
+	pathWidth := max(4, width-2-2-2-1-ansi.StringWidth(counts))
+	path := terminaltext.Clean(file.Path)
+	if over := ansi.StringWidth(path) - pathWidth; over > 0 {
 		path = ansi.TruncateLeft(path, over+1, "…") // +1: the ellipsis takes a cell
 	}
-	path = padRight(path, pathW)
-	marker := changeMarker(f.Change)
+	path = padRight(path, pathWidth)
+	marker := changeMarker(file.Change)
 
 	if selected {
-		return v.th.Selected.Render("> " + viewedGlyph(f.Viewed) + " " + marker + " " + path + " " + counts)
+		return view.th.Selected.Render("> " + viewedGlyph(file.Viewed) + " " + marker + " " + path + " " + counts)
 	}
-	mStyle := v.th.FileModified
-	switch f.Change {
+	mStyle := view.th.FileModified
+	switch file.Change {
 	case github.FileAdded:
-		mStyle = v.th.FileAdded
+		mStyle = view.th.FileAdded
 	case github.FileDeleted:
-		mStyle = v.th.FileDeleted
+		mStyle = view.th.FileDeleted
 	case github.FileModified, github.FileRenamed, github.FileCopied, github.FileChanged:
 	}
-	var cs []string
-	if f.Additions > 0 {
-		cs = append(cs, v.th.FileAdded.Render(fmt.Sprintf("+%d", f.Additions)))
+	var names []string
+	if file.Additions > 0 {
+		names = append(names, view.th.FileAdded.Render(fmt.Sprintf("+%d", file.Additions)))
 	}
-	if f.Deletions > 0 {
-		cs = append(cs, v.th.FileDeleted.Render(fmt.Sprintf("-%d", f.Deletions)))
+	if file.Deletions > 0 {
+		names = append(names, view.th.FileDeleted.Render(fmt.Sprintf("-%d", file.Deletions)))
 	}
-	pathStyle, glyph := v.th.Normal, " "
-	switch f.Viewed {
+	pathStyle, glyph := view.th.Normal, " "
+	switch file.Viewed {
 	case github.FileViewed:
 		// Viewed files recede; the check is the only bright part of the row.
-		pathStyle, glyph = v.th.Muted, v.th.FileAdded.Render(viewedGlyph(f.Viewed))
+		pathStyle, glyph = view.th.Muted, view.th.FileAdded.Render(viewedGlyph(file.Viewed))
 	case github.FileDismissed:
 		// Changed since viewed: needs another look, so the row stays normal.
-		glyph = v.th.FileModified.Render(viewedGlyph(f.Viewed))
+		glyph = view.th.FileModified.Render(viewedGlyph(file.Viewed))
 	case github.FileUnviewed:
 	}
-	return "  " + glyph + " " + mStyle.Render(marker) + " " + pathStyle.Render(path) + " " + strings.Join(cs, " ")
+	return "  " + glyph + " " + mStyle.Render(marker) + " " + pathStyle.Render(path) + " " + strings.Join(names, " ")
 }
 
 // viewedGlyph is the one-cell mark of a file's viewed state.
-func viewedGlyph(s github.ViewedState) string {
-	switch s {
+func viewedGlyph(state github.ViewedState) string {
+	switch state {
 	case github.FileViewed:
 		return "✓"
 	case github.FileDismissed:
@@ -276,8 +276,8 @@ func viewedGlyph(s github.ViewedState) string {
 	return " "
 }
 
-func changeMarker(c github.FileChangeType) string {
-	switch c {
+func changeMarker(change github.FileChangeType) string {
+	switch change {
 	case github.FileAdded:
 		return "A"
 	case github.FileDeleted:
@@ -296,45 +296,45 @@ func changeMarker(c github.FileChangeType) string {
 }
 
 // rightRows renders the right pane's content.
-func (v *View) rightRows(width, height int) []string {
-	if v.sel() > 0 {
-		return strings.Split(v.filePane.Render(width, height), "\n")
+func (view *View) rightRows(width, height int) []string {
+	if view.sel() > 0 {
+		return strings.Split(view.filePane.Render(width, height), "\n")
 	}
-	lines := strings.Split(v.ov.vp.View(), "\n")
-	for i, l := range lines {
-		lines[i] = " " + l
+	lines := strings.Split(view.ov.vp.View(), "\n")
+	for i, line := range lines {
+		lines[i] = " " + line
 	}
 	return lines
 }
 
-func padRight(s string, w int) string {
-	if n := w - ansi.StringWidth(s); n > 0 {
-		return s + strings.Repeat(" ", n)
+func padRight(text string, width int) string {
+	if count := width - ansi.StringWidth(text); count > 0 {
+		return text + strings.Repeat(" ", count)
 	}
-	return s
+	return text
 }
 
 // drawPane frames lines in a titled rounded box of exactly w x h cells.
-func drawPane(v *View, title string, lines []string, w, h int, focused bool) []string {
-	border, titleStyle := v.th.PaneBorder, v.th.PaneTitle
+func drawPane(view *View, title string, lines []string, width, height int, focused bool) []string {
+	border, titleStyle := view.th.PaneBorder, view.th.PaneTitle
 	if focused {
-		border, titleStyle = v.th.PaneBorderFocus, v.th.PaneTitleFocus
+		border, titleStyle = view.th.PaneBorderFocus, view.th.PaneTitleFocus
 	}
-	inner := w - 2
+	inner := width - 2
 	title = ansi.Truncate(title, max(0, inner-3), "…")
-	t := " " + title + " "
-	top := border.Render("╭─") + titleStyle.Render(t) +
-		border.Render(strings.Repeat("─", max(0, inner-1-ansi.StringWidth(t)))+"╮")
-	out := make([]string, 0, h)
+	text := " " + title + " "
+	top := border.Render("╭─") + titleStyle.Render(text) +
+		border.Render(strings.Repeat("─", max(0, inner-1-ansi.StringWidth(text)))+"╮")
+	out := make([]string, 0, height)
 	out = append(out, top)
 	side := border.Render("│")
-	for i := range h - 2 {
-		var l string
+	for i := range height - 2 {
+		var line string
 		if i < len(lines) {
-			l = lines[i]
+			line = lines[i]
 		}
-		l = padRight(ansi.Truncate(l, inner, ""), inner)
-		out = append(out, side+l+side)
+		line = padRight(ansi.Truncate(line, inner, ""), inner)
+		out = append(out, side+line+side)
 	}
 	out = append(out, border.Render("╰"+strings.Repeat("─", inner)+"╯"))
 	return out
@@ -345,15 +345,15 @@ func overlay(rows []string, box string, width, top int) {
 	if box == "" {
 		return
 	}
-	bl := strings.Split(box, "\n")
-	bw := ansi.StringWidth(bl[0])
-	x := max(0, (width-bw)/2)
-	for i, l := range bl {
-		r := top + 1 + i
-		if r >= len(rows) {
+	boxLines := strings.Split(box, "\n")
+	boxWidth := ansi.StringWidth(boxLines[0])
+	column := max(0, (width-boxWidth)/2)
+	for i, line := range boxLines {
+		row := top + 1 + i
+		if row >= len(rows) {
 			return
 		}
-		base := padRight(rows[r], width)
-		rows[r] = ansi.Cut(base, 0, x) + l + ansi.Cut(base, x+bw, width)
+		base := padRight(rows[row], width)
+		rows[row] = ansi.Cut(base, 0, column) + line + ansi.Cut(base, column+boxWidth, width)
 	}
 }

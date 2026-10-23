@@ -30,29 +30,29 @@ var methodPlurals = map[github.MergeMethod]string{
 }
 
 // parseMergeArgs returns the requested method, or "" for the default.
-func parseMergeArguments(args string) (github.MergeMethod, error) {
-	args = strings.TrimSpace(args)
-	if args == "" {
+func parseMergeArguments(arguments string) (github.MergeMethod, error) {
+	arguments = strings.TrimSpace(arguments)
+	if arguments == "" {
 		return "", nil
 	}
-	if m, ok := methodArguments[args]; ok {
-		return m, nil
+	if method, ok := methodArguments[arguments]; ok {
+		return method, nil
 	}
-	return "", fmt.Errorf("unknown merge method %q (use merge, squash or rebase)", terminaltext.Clean(args))
+	return "", fmt.Errorf("unknown merge method %q (use merge, squash or rebase)", terminaltext.Clean(arguments))
 }
 
 // resolveMethod picks the method to merge with: the requested one if the repo
 // allows it, otherwise (when none was requested) the first allowed one.
-func resolveMethod(requested github.MergeMethod, st github.MergeStatus) (github.MergeMethod, error) {
+func resolveMethod(requested github.MergeMethod, status github.MergeStatus) (github.MergeMethod, error) {
 	if requested != "" {
-		if !st.Allows(requested) {
+		if !status.Allows(requested) {
 			return "", fmt.Errorf("%s are not allowed in this repo", methodPlurals[requested])
 		}
 		return requested, nil
 	}
-	for _, m := range github.MergeMethods {
-		if st.Allows(m) {
-			return m, nil
+	for _, method := range github.MergeMethods {
+		if status.Allows(method) {
+			return method, nil
 		}
 	}
 	return "", fmt.Errorf("no merge method is allowed in this repo")
@@ -60,12 +60,12 @@ func resolveMethod(requested github.MergeMethod, st github.MergeStatus) (github.
 
 // mergeQuestion is the confirmation text; it always names the method and
 // says what happens to the head branch.
-func mergeQuestion(number int, method github.MergeMethod, st github.MergeStatus) string {
+func mergeQuestion(number int, method github.MergeMethod, status github.MergeStatus) string {
 	branch := "Branch will be kept."
-	if st.DeleteBranchOnMerge {
+	if status.DeleteBranchOnMerge {
 		branch = "Branch will be deleted."
 	}
-	return fmt.Sprintf("Merge #%d into %s (%s)? %s", number, terminaltext.Clean(st.BaseBranch), methodNames[method], branch)
+	return fmt.Sprintf("Merge #%d into %s (%s)? %s", number, terminaltext.Clean(status.BaseBranch), methodNames[method], branch)
 }
 
 // mergedText is the success message.

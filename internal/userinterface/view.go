@@ -47,7 +47,7 @@ type View interface {
 	// Init returns the command to run when the view is pushed, or nil.
 	Init() tea.Cmd
 	// Update handles a message and returns the updated view. It must not do I/O.
-	Update(msg tea.Msg) (View, tea.Cmd)
+	Update(message tea.Msg) (View, tea.Cmd)
 	// Render draws the view in at most width columns and height rows. The
 	// root clips anything beyond that.
 	Render(width, height int) string
@@ -82,7 +82,7 @@ type Loader interface {
 // command to run and true when it recognizes name; false means "not available
 // here" and the status bar says so. args is the rest of the line, trimmed.
 type Commander interface {
-	Command(name, args string) (cmd tea.Cmd, handled bool)
+	Command(name, arguments string) (command tea.Cmd, handled bool)
 }
 
 // Resumer is optionally implemented by views that want to know they are

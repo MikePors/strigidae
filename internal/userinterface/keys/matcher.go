@@ -43,20 +43,20 @@ type Matcher struct {
 // Pending, even if they also match a shorter binding exactly (Expire delivers
 // the shorter one). If a pending prefix turns out not to lead anywhere it is
 // discarded and the new key is tried on its own.
-func (m *Matcher) Feed(k string, bindings []key.Binding) Result {
-	had := len(m.pending) > 0
-	seq := strings.Join(append(m.pending[:len(m.pending):len(m.pending)], k), " ")
-	exact, longer := lookup(seq, bindings)
+func (matcher *Matcher) Feed(k string, bindings []key.Binding) Result {
+	found := len(matcher.pending) > 0
+	sequence := strings.Join(append(matcher.pending[:len(matcher.pending):len(matcher.pending)], k), " ")
+	exact, longer := lookup(sequence, bindings)
 	switch {
 	case longer:
-		m.pending = append(m.pending, k)
-		return Result{Kind: Pending, Sequence: seq}
+		matcher.pending = append(matcher.pending, k)
+		return Result{Kind: Pending, Sequence: sequence}
 	case exact:
-		m.Reset()
-		return Result{Kind: Matched, Sequence: seq}
-	case had:
-		m.Reset()
-		return m.Feed(k, bindings)
+		matcher.Reset()
+		return Result{Kind: Matched, Sequence: sequence}
+	case found:
+		matcher.Reset()
+		return matcher.Feed(k, bindings)
 	default:
 		return Result{Kind: NoMatch, Sequence: k}
 	}
@@ -65,35 +65,35 @@ func (m *Matcher) Feed(k string, bindings []key.Binding) Result {
 // Expire is called when the sequence timeout fires. If the pending keys are a
 // complete binding it returns Matched; otherwise NoMatch. Either way the
 // pending state is cleared.
-func (m *Matcher) Expire(bindings []key.Binding) Result {
-	seq := strings.Join(m.pending, " ")
-	m.Reset()
-	if seq == "" {
+func (matcher *Matcher) Expire(bindings []key.Binding) Result {
+	sequence := strings.Join(matcher.pending, " ")
+	matcher.Reset()
+	if sequence == "" {
 		return Result{Kind: NoMatch}
 	}
-	if exact, _ := lookup(seq, bindings); exact {
-		return Result{Kind: Matched, Sequence: seq}
+	if exact, _ := lookup(sequence, bindings); exact {
+		return Result{Kind: Matched, Sequence: sequence}
 	}
-	return Result{Kind: NoMatch, Sequence: seq}
+	return Result{Kind: NoMatch, Sequence: sequence}
 }
 
 // Pending reports whether a sequence is in progress.
-func (m *Matcher) Pending() bool { return len(m.pending) > 0 }
+func (matcher *Matcher) Pending() bool { return len(matcher.pending) > 0 }
 
 // Display returns the pending keys as typed, for the status bar ("g", "]").
-func (m *Matcher) Display() string { return strings.Join(m.pending, "") }
+func (matcher *Matcher) Display() string { return strings.Join(matcher.pending, "") }
 
 // Reset discards any pending keys.
-func (m *Matcher) Reset() { m.pending = nil }
+func (matcher *Matcher) Reset() { matcher.pending = nil }
 
-func lookup(seq string, bindings []key.Binding) (exact, longer bool) {
-	prefix := seq + " "
-	for _, b := range bindings {
-		if !b.Enabled() {
+func lookup(sequence string, bindings []key.Binding) (exact, longer bool) {
+	prefix := sequence + " "
+	for _, binding := range bindings {
+		if !binding.Enabled() {
 			continue
 		}
-		for _, k := range b.Keys() {
-			if k == seq {
+		for _, k := range binding.Keys() {
+			if k == sequence {
 				exact = true
 			} else if strings.HasPrefix(k, prefix) {
 				longer = true

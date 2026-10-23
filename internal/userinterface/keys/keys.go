@@ -22,7 +22,7 @@ import "charm.land/bubbles/v2/key"
 type Message struct{ Sequence string }
 
 // String returns the matched key or sequence.
-func (m Message) String() string { return m.Sequence }
+func (message Message) String() string { return message.Sequence }
 
 // Global holds the bindings reserved across the whole app. Views use them
 // through the Msg they receive; the root model itself handles Help and Command.
@@ -44,44 +44,44 @@ type Global struct {
 
 // DefaultGlobal returns the default vim-style global bindings.
 func DefaultGlobal() Global {
-	b := func(keys, helpKey, desc string) key.Binding {
-		return key.NewBinding(key.WithKeys(keys), key.WithHelp(helpKey, desc))
+	bind := func(keys, helpKey, description string) key.Binding {
+		return key.NewBinding(key.WithKeys(keys), key.WithHelp(helpKey, description))
 	}
 	return Global{
-		Down:          b("j", "j", "down"),
-		Up:            b("k", "k", "up"),
-		Top:           b("g g", "gg", "top"),
-		Bottom:        b("G", "G", "bottom"),
-		HalfDown:      b("ctrl+d", "ctrl+d", "half page down"),
-		HalfUp:        b("ctrl+u", "ctrl+u", "half page up"),
-		PageDown:      b("ctrl+f", "ctrl+f", "page down"),
-		PageUp:        b("ctrl+b", "ctrl+b", "page up"),
-		Select:        b("enter", "enter", "open / select"),
-		Open:          b("o", "o", "open in browser"),
-		Refresh:       b("R", "R", "refresh"),
-		Search:        b("/", "/", "filter / search"),
-		NextMatch:     b("n", "n", "next match"),
-		PreviousMatch: b("N", "N", "previous match"),
-		Cancel:        b("esc", "esc", "cancel / clear"),
-		Help:          b("?", "?", "toggle help"),
-		Command:       b(":", ":", "command line (:q close, :qa quit)"),
+		Down:          bind("j", "j", "down"),
+		Up:            bind("k", "k", "up"),
+		Top:           bind("g g", "gg", "top"),
+		Bottom:        bind("G", "G", "bottom"),
+		HalfDown:      bind("ctrl+d", "ctrl+d", "half page down"),
+		HalfUp:        bind("ctrl+u", "ctrl+u", "half page up"),
+		PageDown:      bind("ctrl+f", "ctrl+f", "page down"),
+		PageUp:        bind("ctrl+b", "ctrl+b", "page up"),
+		Select:        bind("enter", "enter", "open / select"),
+		Open:          bind("o", "o", "open in browser"),
+		Refresh:       bind("R", "R", "refresh"),
+		Search:        bind("/", "/", "filter / search"),
+		NextMatch:     bind("n", "n", "next match"),
+		PreviousMatch: bind("N", "N", "previous match"),
+		Cancel:        bind("esc", "esc", "cancel / clear"),
+		Help:          bind("?", "?", "toggle help"),
+		Command:       bind(":", ":", "command line (:q close, :qa quit)"),
 	}
 }
 
 // Bindings returns every global binding as a flat list, for sequence matching.
-func (g Global) Bindings() []key.Binding {
+func (global Global) Bindings() []key.Binding {
 	var out []key.Binding
-	for _, grp := range g.FullHelp() {
-		out = append(out, grp...)
+	for _, bindings := range global.FullHelp() {
+		out = append(out, bindings...)
 	}
 	return out
 }
 
 // FullHelp groups the global bindings for the help overlay.
-func (g Global) FullHelp() [][]key.Binding {
+func (global Global) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{g.Down, g.Up, g.Top, g.Bottom, g.HalfDown, g.HalfUp, g.PageDown, g.PageUp},
-		{g.Select, g.Open, g.Refresh, g.Search, g.NextMatch, g.PreviousMatch},
-		{g.Cancel, g.Help, g.Command},
+		{global.Down, global.Up, global.Top, global.Bottom, global.HalfDown, global.HalfUp, global.PageDown, global.PageUp},
+		{global.Select, global.Open, global.Refresh, global.Search, global.NextMatch, global.PreviousMatch},
+		{global.Cancel, global.Help, global.Command},
 	}
 }

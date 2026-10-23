@@ -50,7 +50,7 @@ const (
 )
 
 // String returns the slot's Base24 name, such as "base0B".
-func (s Slot) String() string { return fmt.Sprintf("base%02X", int(s)) }
+func (slot Slot) String() string { return fmt.Sprintf("base%02X", int(slot)) }
 
 // Palette is a Base24 colour scheme: the only place colour values enter the
 // theme. Roles (roles.go) are derived from it; styles never read it. The slots
@@ -63,13 +63,13 @@ type Palette struct {
 
 // Slot returns the colour in slot s. Only roles.go and the palette
 // constructors may call it.
-func (p Palette) Slot(s Slot) color.Color { return p.colors[s] }
+func (palette Palette) Slot(slot Slot) color.Color { return palette.colors[slot] }
 
 // check reports the first unset slot.
-func (p Palette) check() error {
-	for s, c := range p.colors {
-		if c == nil {
-			return fmt.Errorf("palette %q: missing slot %s", p.Name, Slot(s))
+func (palette Palette) check() error {
+	for size, color := range palette.colors {
+		if color == nil {
+			return fmt.Errorf("palette %q: missing slot %s", palette.Name, Slot(size))
 		}
 	}
 	return nil
@@ -80,23 +80,23 @@ func (p Palette) check() error {
 // accents base12 to base17 to the matching normal accents, as tinted-theming
 // documents for Base16 schemes. It returns an error naming the first missing
 // (nil) slot.
-func FromBase16(name string, v Variant, base16 [16]color.Color) (Palette, error) {
-	p := Palette{Name: name, Variant: v}
-	copy(p.colors[:], base16[:])
-	p.colors[Base10] = base16[Base00]
-	p.colors[Base11] = base16[Base00]
-	p.colors[Base12] = base16[Base08] // red
-	p.colors[Base13] = base16[Base0A] // yellow
-	p.colors[Base14] = base16[Base0B] // green
-	p.colors[Base15] = base16[Base0C] // cyan
-	p.colors[Base16] = base16[Base0D] // blue
-	p.colors[Base17] = base16[Base0E] // magenta
-	for s := range base16 {
-		if base16[s] == nil {
-			return Palette{}, fmt.Errorf("palette %q: missing slot %s", name, Slot(s))
+func FromBase16(name string, view Variant, base16 [16]color.Color) (Palette, error) {
+	palette := Palette{Name: name, Variant: view}
+	copy(palette.colors[:], base16[:])
+	palette.colors[Base10] = base16[Base00]
+	palette.colors[Base11] = base16[Base00]
+	palette.colors[Base12] = base16[Base08] // red
+	palette.colors[Base13] = base16[Base0A] // yellow
+	palette.colors[Base14] = base16[Base0B] // green
+	palette.colors[Base15] = base16[Base0C] // cyan
+	palette.colors[Base16] = base16[Base0D] // blue
+	palette.colors[Base17] = base16[Base0E] // magenta
+	for size := range base16 {
+		if base16[size] == nil {
+			return Palette{}, fmt.Errorf("palette %q: missing slot %s", name, Slot(size))
 		}
 	}
-	return p, nil
+	return palette, nil
 }
 
 // minDistinctContrast is how far a colour must be from the background and the
@@ -113,54 +113,54 @@ const minDistinctContrast = 1.1
 // the background toward the foreground and orange blends red with yellow. The variant follows whether black or
 // white reads better on the background. It returns an error naming a missing
 // (nil) input.
-func FromANSI(name string, bg, fg color.Color, ansi [16]color.Color) (Palette, error) {
-	if bg == nil || fg == nil {
+func FromANSI(name string, background, foreground color.Color, ansi [16]color.Color) (Palette, error) {
+	if background == nil || foreground == nil {
 		return Palette{}, fmt.Errorf("palette %q: missing background or foreground", name)
 	}
-	for i, c := range ansi {
-		if c == nil {
+	for i, color := range ansi {
+		if color == nil {
 			return Palette{}, fmt.Errorf("palette %q: missing ANSI colour %d", name, i)
 		}
 	}
-	v := Dark
-	if extreme(bg) == color.Color(color.Black) {
-		v = Light
+	view := Dark
+	if extreme(background) == color.Color(color.Black) {
+		view = Light
 	}
 	// The ANSI black or white furthest from the background supplies the
 	// brightest foreground (base07).
-	far := ansi[15]
-	if contrast(ansi[0], bg) > contrast(ansi[15], bg) {
-		far = ansi[0]
+	colour := ansi[15]
+	if contrast(ansi[0], background) > contrast(ansi[15], background) {
+		colour = ansi[0]
 	}
 	orange := blend(ansi[1], ansi[3], 0.5)
 
-	p := Palette{Name: name, Variant: v}
-	p.colors[Base00] = bg
-	p.colors[Base01] = blend(bg, fg, 0.12)
-	p.colors[Base02] = blend(bg, fg, 0.25)
-	p.colors[Base03] = blend(bg, fg, 0.45)
-	if contrast(ansi[8], bg) >= minDistinctContrast && contrast(ansi[8], fg) >= minDistinctContrast {
-		p.colors[Base03] = ansi[8]
+	palette := Palette{Name: name, Variant: view}
+	palette.colors[Base00] = background
+	palette.colors[Base01] = blend(background, foreground, 0.12)
+	palette.colors[Base02] = blend(background, foreground, 0.25)
+	palette.colors[Base03] = blend(background, foreground, 0.45)
+	if contrast(ansi[8], background) >= minDistinctContrast && contrast(ansi[8], foreground) >= minDistinctContrast {
+		palette.colors[Base03] = ansi[8]
 	}
-	p.colors[Base04] = blend(bg, fg, 0.7)
-	p.colors[Base05] = fg
-	p.colors[Base06] = blend(fg, far, 0.5)
-	p.colors[Base07] = far
-	p.colors[Base08] = ansi[1]
-	p.colors[Base09] = orange
-	p.colors[Base0A] = ansi[3]
-	p.colors[Base0B] = ansi[2]
-	p.colors[Base0C] = ansi[6]
-	p.colors[Base0D] = ansi[4]
-	p.colors[Base0E] = ansi[5]
-	p.colors[Base0F] = blend(orange, bg, 0.4)
-	p.colors[Base10] = blend(bg, color.Black, 0.2)
-	p.colors[Base11] = blend(bg, color.Black, 0.4)
-	p.colors[Base12] = ansi[9]
-	p.colors[Base13] = ansi[11]
-	p.colors[Base14] = ansi[10]
-	p.colors[Base15] = ansi[14]
-	p.colors[Base16] = ansi[12]
-	p.colors[Base17] = ansi[13]
-	return p, nil
+	palette.colors[Base04] = blend(background, foreground, 0.7)
+	palette.colors[Base05] = foreground
+	palette.colors[Base06] = blend(foreground, colour, 0.5)
+	palette.colors[Base07] = colour
+	palette.colors[Base08] = ansi[1]
+	palette.colors[Base09] = orange
+	palette.colors[Base0A] = ansi[3]
+	palette.colors[Base0B] = ansi[2]
+	palette.colors[Base0C] = ansi[6]
+	palette.colors[Base0D] = ansi[4]
+	palette.colors[Base0E] = ansi[5]
+	palette.colors[Base0F] = blend(orange, background, 0.4)
+	palette.colors[Base10] = blend(background, color.Black, 0.2)
+	palette.colors[Base11] = blend(background, color.Black, 0.4)
+	palette.colors[Base12] = ansi[9]
+	palette.colors[Base13] = ansi[11]
+	palette.colors[Base14] = ansi[10]
+	palette.colors[Base15] = ansi[14]
+	palette.colors[Base16] = ansi[12]
+	palette.colors[Base17] = ansi[13]
+	return palette, nil
 }

@@ -32,20 +32,20 @@ const (
 type Option func(*View)
 
 // WithClock injects the clock used for relative times.
-func WithClock(now func() time.Time) Option { return func(v *View) { v.now = now } }
+func WithClock(now func() time.Time) Option { return func(view *View) { view.now = now } }
 
 // WithTheme sets the initial theme. Without it the default dark theme is used
 // until the root sends a userinterface.ThemeMsg; a view that pushes a workspace should
 // pass its own current theme.
-func WithTheme(th theme.Theme) Option { return func(v *View) { v.th = th } }
+func WithTheme(theme theme.Theme) Option { return func(view *View) { view.th = theme } }
 
 // WithOpener replaces how `o` opens the pull request URL, which by default is
 // the user's browser.
-func WithOpener(open func(url string) error) Option { return func(v *View) { v.open = open } }
+func WithOpener(open func(url string) error) Option { return func(view *View) { view.open = open } }
 
 // WithFilePane replaces the right pane's content for a selected file; this is
 // the hook for the diff component.
-func WithFilePane(p FilePane) Option { return func(v *View) { v.filePane = p } }
+func WithFilePane(pane FilePane) Option { return func(view *View) { view.filePane = pane } }
 
 // View is the PR workspace screen.
 type View struct {
@@ -110,10 +110,10 @@ var (
 )
 
 // New returns the workspace for pull request number in repo.
-func New(client github.Client, repo github.Repository, number int, opts ...Option) *View {
-	v := &View{
+func New(client github.Client, repository github.Repository, number int, options ...Option) *View {
+	view := &View{
 		client:      client,
-		repository:  repo,
+		repository:  repository,
 		number:      number,
 		now:         time.Now,
 		open:        openInBrowser,
@@ -125,144 +125,144 @@ func New(client github.Client, repo github.Repository, number int, opts ...Optio
 		drafts:      map[string]string{},
 		viewedState: map[string]*viewedToggle{},
 	}
-	for _, o := range opts {
-		o(v)
+	for _, option := range options {
+		option(view)
 	}
-	v.md = markdown.New(v.th)
-	v.ov = newOverview()
-	if v.filePane == nil {
-		v.filePane = newDiffPane(v.th, func() time.Time { return v.now() })
+	view.md = markdown.New(view.th)
+	view.ov = newOverview()
+	if view.filePane == nil {
+		view.filePane = newDiffPane(view.th, func() time.Time { return view.now() })
 	}
-	v.filePane.SetTheme(v.th)
-	return v
+	view.filePane.SetTheme(view.th)
+	return view
 }
 
 // Title implements userinterface.View.
-func (v *View) Title() string { return fmt.Sprintf("#%d", v.number) }
+func (view *View) Title() string { return fmt.Sprintf("#%d", view.number) }
 
 // Loading implements userinterface.Loader.
-func (v *View) Loading() bool {
-	return v.pullRequestPending || v.diffPending || v.thrPending || v.review.submitting || v.merge.merging
+func (view *View) Loading() bool {
+	return view.pullRequestPending || view.diffPending || view.thrPending || view.review.submitting || view.merge.merging
 }
 
 // CapturesKeys implements userinterface.KeyCapturer: the file picker, the verdict
 // chooser and a visual-line selection own the keyboard while they are open.
-func (v *View) CapturesKeys() bool {
-	return v.picker != nil || v.review.chooser != nil || v.visualActive()
+func (view *View) CapturesKeys() bool {
+	return view.picker != nil || view.review.chooser != nil || view.visualActive()
 }
 
 // visualActive reports whether a line selection is open.
-func (v *View) visualActive() bool { return v.filePane.VisualActive() }
+func (view *View) visualActive() bool { return view.filePane.VisualActive() }
 
 // Init implements userinterface.View.
-func (v *View) Init() tea.Cmd { return v.load() }
+func (view *View) Init() tea.Cmd { return view.load() }
 
 // Resumed implements userinterface.Resumer. Nothing to do yet: the workspace refreshes
 // only on R.
-func (v *View) Resumed() tea.Cmd { return nil }
+func (view *View) Resumed() tea.Cmd { return nil }
 
 // ShortHelp implements userinterface.View.
-func (v *View) ShortHelp() []key.Binding {
-	return []key.Binding{v.bind.PaneLeft, v.bind.PaneRight, v.bind.FilePicker, v.km.Open}
+func (view *View) ShortHelp() []key.Binding {
+	return []key.Binding{view.bind.PaneLeft, view.bind.PaneRight, view.bind.FilePicker, view.km.Open}
 }
 
 // FullHelp implements userinterface.View. It also registers every multi-key sequence the
 // workspace and its file pane react to.
-func (v *View) FullHelp() [][]key.Binding {
+func (view *View) FullHelp() [][]key.Binding {
 	out := [][]key.Binding{
-		{v.bind.PaneLeft, v.bind.PaneRight, v.bind.NextFile, v.bind.PreviousFile, v.bind.FilePicker},
-		{v.bind.NextSection, v.bind.PreviousSection, v.bind.Comment, v.bind.Reply, v.bind.Viewed},
-		{v.bind.Visual, v.bind.EditComment, v.bind.DeleteComment},
+		{view.bind.PaneLeft, view.bind.PaneRight, view.bind.NextFile, view.bind.PreviousFile, view.bind.FilePicker},
+		{view.bind.NextSection, view.bind.PreviousSection, view.bind.Comment, view.bind.Reply, view.bind.Viewed},
+		{view.bind.Visual, view.bind.EditComment, view.bind.DeleteComment},
 	}
-	return append(out, v.filePane.FullHelp()...)
+	return append(out, view.filePane.FullHelp()...)
 }
 
 // Update implements userinterface.View.
-func (v *View) Update(msg tea.Msg) (userinterface.View, tea.Cmd) {
-	if cmd, ok := v.review.update(msg, v.reviewEnvironment()); ok {
-		return v, cmd
+func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
+	if command, ok := view.review.update(message, view.reviewEnvironment()); ok {
+		return view, command
 	}
-	if cmd, ok := v.merge.update(msg, v.reviewEnvironment()); ok {
-		return v, cmd
+	if command, ok := view.merge.update(message, view.reviewEnvironment()); ok {
+		return view, command
 	}
-	switch msg := msg.(type) {
+	switch message := message.(type) {
 	case tea.WindowSizeMsg:
-		v.width, v.height = msg.Width, msg.Height
-		v.layout()
+		view.width, view.height = message.Width, message.Height
+		view.layout()
 	case userinterface.ThemeMessage:
-		v.th = msg.Theme
-		v.md = markdown.New(v.th)
-		v.ov.invalidate()
-		v.filePane.SetTheme(v.th)
-		v.layout()
+		view.th = message.Theme
+		view.md = markdown.New(view.th)
+		view.ov.invalidate()
+		view.filePane.SetTheme(view.th)
+		view.layout()
 	case pullRequestLoadedMessage:
-		if !v.mine(msg.owner, msg.repository, msg.number, msg.sequence) {
-			return v, nil
+		if !view.mine(message.owner, message.repository, message.number, message.sequence) {
+			return view, nil
 		}
-		cmd := v.pullRequestLoaded(msg)
-		if msg.thenDiff {
-			cmd = tea.Batch(cmd, v.fetchDiff(msg))
+		command := view.pullRequestLoaded(message)
+		if message.thenDiff {
+			command = tea.Batch(command, view.fetchDiff(message))
 		}
-		return v, cmd
+		return view, command
 	case diffLoadedMessage:
-		if !v.mine(msg.owner, msg.repository, msg.number, msg.sequence) {
-			return v, nil
+		if !view.mine(message.owner, message.repository, message.number, message.sequence) {
+			return view, nil
 		}
-		return v, v.diffLoaded(msg)
+		return view, view.diffLoaded(message)
 	case threadsLoadedMessage:
-		if !v.mine(msg.owner, msg.repository, msg.number, msg.sequence) {
-			return v, nil
+		if !view.mine(message.owner, message.repository, message.number, message.sequence) {
+			return view, nil
 		}
-		return v, v.threadsLoaded(msg)
+		return view, view.threadsLoaded(message)
 	case viewedMessage:
-		if v.viewedMine(msg) {
-			return v, v.viewedDone(msg)
+		if view.viewedMine(message) {
+			return view, view.viewedDone(message)
 		}
 	case editedMessage:
-		if !v.composeMine(origin{msg.owner, msg.repository, msg.number}, msg.sequence) {
-			return v, nil
+		if !view.composeMine(origin{message.owner, message.repository, message.number}, message.sequence) {
+			return view, nil
 		}
-		return v, v.edited(msg)
+		return view, view.edited(message)
 	case postedMessage:
 		// A post is never superseded by a later compose, so it is identified
 		// by owner, repo and number only.
-		if !v.owns(msg.origin) {
-			return v, nil
+		if !view.owns(message.origin) {
+			return view, nil
 		}
-		return v, v.posted(msg)
+		return view, view.posted(message)
 	case commentDeletedMessage:
-		if !v.owns(msg.origin) {
-			return v, nil
+		if !view.owns(message.origin) {
+			return view, nil
 		}
-		return v, v.commentDeleted(msg)
+		return view, view.commentDeleted(message)
 	case commentCheckedMessage:
-		if !v.owns(msg.origin) {
-			return v, nil
+		if !view.owns(message.origin) {
+			return view, nil
 		}
-		v.writeDone() // the write waits for the answer
-		return v, userinterface.Confirm(msg.question, msg.onYes)
+		view.writeDone() // the write waits for the answer
+		return view, userinterface.Confirm(message.question, message.onYes)
 	case commentAgreedMessage:
-		if !v.owns(msg.origin) {
-			return v, nil
+		if !view.owns(message.origin) {
+			return view, nil
 		}
-		return v, v.commentAgreed(msg)
+		return view, view.commentAgreed(message)
 	case commentReadMessage:
-		if !v.owns(msg.origin) || msg.sequence != v.cseq { // another editor started meanwhile
-			return v, nil
+		if !view.owns(message.origin) || message.sequence != view.cseq { // another editor started meanwhile
+			return view, nil
 		}
-		return v, v.commentRead(msg)
+		return view, view.commentRead(message)
 	case keys.Message:
-		return v, v.handleKey(msg)
+		return view, view.handleKey(message)
 	case tea.KeyPressMsg:
-		if v.visualActive() {
-			return v, v.visualKey(msg)
+		if view.visualActive() {
+			return view, view.visualKey(message)
 		}
-		if v.review.chooser != nil {
-			return v, v.review.chooserKey(msg, v.reviewEnvironment())
+		if view.review.chooser != nil {
+			return view, view.review.chooserKey(message, view.reviewEnvironment())
 		}
-		if v.picker != nil {
-			v.pickerKey(msg)
+		if view.picker != nil {
+			view.pickerKey(message)
 		}
 	}
-	return v, nil
+	return view, nil
 }

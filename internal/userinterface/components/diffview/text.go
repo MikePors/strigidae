@@ -14,15 +14,15 @@ const tabWidth = 4
 
 // clusterWidth returns the display width of one grapheme cluster, measured the
 // way lipgloss and the terminal renderer measure it.
-func clusterWidth(c string) int {
-	if len(c) == 1 && c[0] >= 0x20 && c[0] < 0x7f {
+func clusterWidth(text string) int {
+	if len(text) == 1 && text[0] >= 0x20 && text[0] < 0x7f {
 		return 1
 	}
-	return ansi.StringWidth(c)
+	return ansi.StringWidth(text)
 }
 
-func isUnsafe(r rune) bool {
-	return unicode.IsControl(r) || unicode.Is(unicode.Bidi_Control, r)
+func isUnsafe(character rune) bool {
+	return unicode.IsControl(character) || unicode.Is(unicode.Bidi_Control, character)
 }
 
 // displayText makes untrusted text safe and measurable for the terminal: tabs
@@ -31,71 +31,71 @@ func isUnsafe(r rune) bool {
 // the text and its width in cells. Every string from a diff that reaches the
 // screen must pass through it. It applies the same unsafe-rune rule as
 // internal/ui/termtext, but also expands tabs and measures grapheme widths.
-func displayText(s string) (string, int) {
-	if isPlainASCII(s) {
-		return s, len(s)
+func displayText(text string) (string, int) {
+	if isPlainASCII(text) {
+		return text, len(text)
 	}
-	if !utf8.ValidString(s) {
-		s = replaceInvalid(s)
+	if !utf8.ValidString(text) {
+		text = replaceInvalid(text)
 	}
-	var b strings.Builder
-	b.Grow(len(s) + 8)
-	col := 0
-	for rest := s; rest != ""; {
-		var c string
-		c, rest, _, _ = uniseg.FirstGraphemeClusterInString(rest, -1)
-		if c == "\t" {
-			n := tabWidth - col%tabWidth
-			b.WriteString(spaces(n))
-			col += n
+	var builder strings.Builder
+	builder.Grow(len(text) + 8)
+	column := 0
+	for rest := text; rest != ""; {
+		var text string
+		text, rest, _, _ = uniseg.FirstGraphemeClusterInString(rest, -1)
+		if text == "\t" {
+			count := tabWidth - column%tabWidth
+			builder.WriteString(spaces(count))
+			column += count
 			continue
 		}
-		if strings.IndexFunc(c, isUnsafe) >= 0 {
-			for _, r := range c {
-				if isUnsafe(r) {
-					b.WriteRune('·')
-					col++
+		if strings.IndexFunc(text, isUnsafe) >= 0 {
+			for _, character := range text {
+				if isUnsafe(character) {
+					builder.WriteRune('·')
+					column++
 				}
 			}
 			continue
 		}
-		b.WriteString(c)
-		col += clusterWidth(c)
+		builder.WriteString(text)
+		column += clusterWidth(text)
 	}
-	return b.String(), col
+	return builder.String(), column
 }
 
 // replaceInvalid turns every invalid UTF-8 byte into a visible dot. Without
 // this a stray byte such as 0x9B (an 8-bit CSI) would reach the terminal.
-func replaceInvalid(s string) string {
-	var b strings.Builder
-	b.Grow(len(s))
-	for i := 0; i < len(s); {
-		r, size := utf8.DecodeRuneInString(s[i:])
-		if r == utf8.RuneError && size == 1 {
-			b.WriteRune('·')
+func replaceInvalid(text string) string {
+	var builder strings.Builder
+	builder.Grow(len(text))
+	for i := 0; i < len(text); {
+		character, size := utf8.DecodeRuneInString(text[i:])
+		if character == utf8.RuneError && size == 1 {
+			builder.WriteRune('·')
 		} else {
-			b.WriteString(s[i : i+size])
+			builder.WriteString(text[i : i+size])
 		}
 		i += size
 	}
-	return b.String()
+	return builder.String()
 }
 
-func isPlainASCII(s string) bool {
-	for i := 0; i < len(s); i++ {
-		if s[i] < 0x20 || s[i] >= 0x7f {
+func isPlainASCII(text string) bool {
+	for i := 0; i < len(text); i++ {
+		if text[i] < 0x20 || text[i] >= 0x7f {
 			return false
 		}
 	}
 	return true
 }
 
-func spaces(n int) string {
-	if n <= 0 {
+func spaces(count int) string {
+	if count <= 0 {
 		return ""
 	}
-	return strings.Repeat(" ", n)
+	return strings.Repeat(" ", count)
 }
 
 // window returns the part of spans that falls in display columns
@@ -103,61 +103,61 @@ func spaces(n int) string {
 // either edge is replaced by spaces so everything keeps its column.
 func window(spans []Span, off, width int) ([]Span, int) {
 	end := off + width
-	col := 0
+	column := 0
 	var out []Span
-	for _, sp := range spans {
+	for _, span := range spans {
 		var text string
 		done := false
-		if isPlainASCII(sp.Text) {
-			n := len(sp.Text)
-			if col+n <= off {
-				col += n
+		if isPlainASCII(span.Text) {
+			count := len(span.Text)
+			if column+count <= off {
+				column += count
 				continue
 			}
-			lo, hi := max(off-col, 0), min(n, end-col)
-			text = sp.Text[lo:hi]
-			if hi < n {
-				col, done = end, true
+			low, high := max(off-column, 0), min(count, end-column)
+			text = span.Text[low:high]
+			if high < count {
+				column, done = end, true
 			} else {
-				col += n
+				column += count
 			}
 		} else {
-			text, col, done = windowSlow(sp.Text, col, off, end)
+			text, column, done = windowSlow(span.Text, column, off, end)
 		}
 		if text != "" {
-			out = append(out, Span{Text: text, Class: sp.Class})
+			out = append(out, Span{Text: text, Class: span.Class})
 		}
-		if done || col >= end {
+		if done || column >= end {
 			break
 		}
 	}
-	used := min(max(col-off, 0), width)
+	used := min(max(column-off, 0), width)
 	return out, used
 }
 
-func windowSlow(s string, col, off, end int) (string, int, bool) {
-	var b strings.Builder
-	for rest := s; rest != ""; {
-		var c string
-		c, rest, _, _ = uniseg.FirstGraphemeClusterInString(rest, -1)
-		w := clusterWidth(c)
+func windowSlow(text string, column, off, end int) (string, int, bool) {
+	var builder strings.Builder
+	for rest := text; rest != ""; {
+		var text string
+		text, rest, _, _ = uniseg.FirstGraphemeClusterInString(rest, -1)
+		width := clusterWidth(text)
 		switch {
-		case w == 0:
-			if col > off { // zero-width cluster: keep only after a visible one
-				b.WriteString(c)
+		case width == 0:
+			if column > off { // zero-width cluster: keep only after a visible one
+				builder.WriteString(text)
 			}
-		case col+w <= off:
-			col += w
-		case col < off: // straddles the left edge
-			b.WriteString(spaces(col + w - off))
-			col += w
-		case col+w > end: // does not fit on the right
-			b.WriteString(spaces(end - col))
-			return b.String(), end, true
+		case column+width <= off:
+			column += width
+		case column < off: // straddles the left edge
+			builder.WriteString(spaces(column + width - off))
+			column += width
+		case column+width > end: // does not fit on the right
+			builder.WriteString(spaces(end - column))
+			return builder.String(), end, true
 		default:
-			b.WriteString(c)
-			col += w
+			builder.WriteString(text)
+			column += width
 		}
 	}
-	return b.String(), col, false
+	return builder.String(), column, false
 }

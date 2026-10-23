@@ -9,39 +9,39 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
-func TestRenderCachesAndTrims(t *testing.T) {
-	r := New(theme.New(true))
-	out := r.Render("# Title\n\nsome **bold** text", 40)
+func TestRenderCachesAndTrims(test *testing.T) {
+	renderer := New(theme.New(true))
+	out := renderer.Render("# Title\n\nsome **bold** text", 40)
 	plain := ansi.Strip(out)
 	if !strings.Contains(plain, "Title") || !strings.Contains(plain, "bold") {
-		t.Errorf("unexpected output %q", plain)
+		test.Errorf("unexpected output %q", plain)
 	}
 	if strings.HasPrefix(out, "\n") || strings.HasSuffix(out, "\n") {
-		t.Error("surrounding blank lines should be trimmed")
+		test.Error("surrounding blank lines should be trimmed")
 	}
-	if len(r.cache) != 1 {
-		t.Fatalf("cache size = %d", len(r.cache))
+	if len(renderer.cache) != 1 {
+		test.Fatalf("cache size = %d", len(renderer.cache))
 	}
-	if again := r.Render("# Title\n\nsome **bold** text", 40); again != out {
-		t.Error("cached render differs")
+	if again := renderer.Render("# Title\n\nsome **bold** text", 40); again != out {
+		test.Error("cached render differs")
 	}
-	r.Render("# Title\n\nsome **bold** text", 60)
-	if len(r.cache) != 1 {
-		t.Errorf("width should be part of the cache key, size = %d", len(r.cache))
+	renderer.Render("# Title\n\nsome **bold** text", 60)
+	if len(renderer.cache) != 1 {
+		test.Errorf("width should be part of the cache key, size = %d", len(renderer.cache))
 	}
 }
 
-func TestStyleIsFixed(t *testing.T) {
+func TestStyleIsFixed(test *testing.T) {
 	if New(theme.New(true)).Render("**x**", 20) == New(theme.New(false)).Render("**x**", 20) {
-		t.Error("dark and light styles should differ")
+		test.Error("dark and light styles should differ")
 	}
 }
 
-func TestWraps(t *testing.T) {
+func TestWraps(test *testing.T) {
 	out := ansi.Strip(New(theme.New(true)).Render(strings.Repeat("word ", 40), 30))
-	for _, l := range strings.Split(out, "\n") {
-		if ansi.StringWidth(l) > 30 {
-			t.Errorf("line %q wider than 30", l)
+	for _, line := range strings.Split(out, "\n") {
+		if ansi.StringWidth(line) > 30 {
+			test.Errorf("line %q wider than 30", line)
 		}
 	}
 }

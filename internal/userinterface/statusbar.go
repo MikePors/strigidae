@@ -32,47 +32,47 @@ type statusBar struct {
 // transient message; the breadcrumbs shrink last-first from the left (so the
 // current view stays visible) down to a third of the free space. The idle
 // hint is expendable.
-func (s statusBar) render(th theme.Theme, width int) string {
+func (statusBar statusBar) render(theme theme.Theme, width int) string {
 	if width <= 0 {
 		return ""
 	}
-	right := s.renderRight(th)
+	right := statusBar.renderRight(theme)
 	if lipgloss.Width(right) >= width {
 		right = ""
 	}
 	avail := width - lipgloss.Width(right)
 
-	text := " " + strings.ReplaceAll(s.text, "\n", " ")
-	textW := ansi.StringWidth(text)
-	crumbW := ansi.StringWidth(s.crumbs) + 2
-	budget := min(crumbW, avail)
-	if s.kind != statusNone && crumbW+textW > avail {
-		budget = min(crumbW, max(avail/3, avail-textW))
+	text := " " + strings.ReplaceAll(statusBar.text, "\n", " ")
+	textWidth := ansi.StringWidth(text)
+	crumbWidth := ansi.StringWidth(statusBar.crumbs) + 2
+	budget := min(crumbWidth, avail)
+	if statusBar.kind != statusNone && crumbWidth+textWidth > avail {
+		budget = min(crumbWidth, max(avail/3, avail-textWidth))
 	}
-	left := th.StatusContext.Render(fitLeft(s.crumbs, budget))
+	left := theme.StatusContext.Render(fitLeft(statusBar.crumbs, budget))
 
-	midW := avail - lipgloss.Width(left)
-	style := th.StatusHint
-	switch s.kind {
+	midWidth := avail - lipgloss.Width(left)
+	style := theme.StatusHint
+	switch statusBar.kind {
 	case statusInfo:
-		style = th.StatusInfo
+		style = theme.StatusInfo
 	case statusError:
-		style = th.StatusError
+		style = theme.StatusError
 	}
-	text = ansi.Truncate(text, midW, "…")
-	pad := strings.Repeat(" ", max(0, midW-ansi.StringWidth(text)))
-	return left + style.Render(text) + th.StatusBar.Render(pad) + right
+	text = ansi.Truncate(text, midWidth, "…")
+	pad := strings.Repeat(" ", max(0, midWidth-ansi.StringWidth(text)))
+	return left + style.Render(text) + theme.StatusBar.Render(pad) + right
 }
 
-func (s statusBar) renderRight(th theme.Theme) string {
+func (statusBar statusBar) renderRight(theme theme.Theme) string {
 	var right string
-	if s.pending != "" {
-		right += th.StatusPending.Render(" " + s.pending)
+	if statusBar.pending != "" {
+		right += theme.StatusPending.Render(" " + statusBar.pending)
 	}
-	if s.spinner != "" {
-		right += th.StatusBar.Render(" ") + s.spinner
+	if statusBar.spinner != "" {
+		right += theme.StatusBar.Render(" ") + statusBar.spinner
 	}
-	return right + th.StatusBar.Render(" ")
+	return right + theme.StatusBar.Render(" ")
 }
 
 // fitLeft pads crumbs with a space each side and, if the result would exceed
@@ -85,8 +85,8 @@ func fitLeft(crumbs string, width int) string {
 		return strings.Repeat(" ", width)
 	}
 	inner := width - 2
-	if w := ansi.StringWidth(crumbs); w > inner {
-		crumbs = ansi.TruncateLeft(crumbs, w-(inner-1), "…")
+	if width := ansi.StringWidth(crumbs); width > inner {
+		crumbs = ansi.TruncateLeft(crumbs, width-(inner-1), "…")
 	}
 	return " " + crumbs + " "
 }

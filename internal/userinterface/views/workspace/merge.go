@@ -54,109 +54,111 @@ type (
 	}
 )
 
-func (f *mergeFlow) same(env reviewEnvironment, flow *mergeFlow, repo github.Repository, number int) bool {
-	return flow == f && repo == env.repository && number == env.number
+func (currentFlow *mergeFlow) same(environment reviewEnvironment, flow *mergeFlow, repository github.Repository, number int) bool {
+	return flow == currentFlow && repository == environment.repository && number == environment.number
 }
 
 // command handles :merge.
-func (f *mergeFlow) command(args string, env reviewEnvironment) tea.Cmd {
-	requested, err := parseMergeArguments(args)
+func (currentFlow *mergeFlow) command(arguments string, environment reviewEnvironment) tea.Cmd {
+	requested, err := parseMergeArguments(arguments)
 	if err != nil {
 		return userinterface.Error(err)
 	}
 	switch {
-	case f.merging:
+	case currentFlow.merging:
 		return userinterface.Info("a merge is in progress")
-	case env.commentWriting:
+	case environment.commentWriting:
 		return userinterface.Info(commentSavingText)
-	case !env.loaded:
+	case !environment.loaded:
 		return userinterface.Info("pull request not loaded yet")
-	case !env.diffReady:
+	case !environment.diffReady:
 		return userinterface.Info("diff not loaded")
 	}
-	f.sequence++
-	flow, seq := f, f.sequence
+	currentFlow.sequence++
+	flow, sequence := currentFlow, currentFlow.sequence
 	return func() tea.Msg {
-		st, err := env.client.GetMergeStatus(context.Background(), env.repository, env.number)
-		return mergeFreshMessage{flow: flow, repository: env.repository, number: env.number, sequence: seq, requested: requested, status: st, err: err}
+		status, err := environment.client.GetMergeStatus(context.Background(), environment.repository, environment.number)
+		return mergeFreshMessage{flow: flow, repository: environment.repository, number: environment.number, sequence: sequence, requested: requested, status: status, err: err}
 	}
 }
 
 // update handles the flow's messages. handled is false for any other message.
-func (f *mergeFlow) update(msg tea.Msg, env reviewEnvironment) (cmd tea.Cmd, handled bool) {
-	switch msg := msg.(type) {
+func (flow *mergeFlow) update(message tea.Msg, environment reviewEnvironment) (command tea.Cmd, handled bool) {
+	switch message := message.(type) {
 	case mergeFreshMessage:
-		if !f.same(env, msg.flow, msg.repository, msg.number) || msg.sequence != f.sequence {
+		if !flow.same(environment, message.flow, message.repository, message.number) || message.sequence != flow.sequence {
 			return nil, true
 		}
-		return f.confirm(msg, env), true
+		return flow.confirm(message, environment), true
 	case mergeSendMessage:
-		if !f.same(env, msg.flow, msg.repository, msg.number) {
+		if !flow.same(environment, message.flow, message.repository, message.number) {
 			return nil, true
 		}
-		if env.commentWriting { // a comment write started since the merge did
+		if environment.commentWriting { // a comment write started since the merge did
 			return userinterface.Info(commentSavingText), true
 		}
-		f.merging = true
-		return tea.Batch(userinterface.Info("Merging…"), f.merge(env, msg.method, msg.status)), true
+		flow.merging = true
+		return tea.Batch(userinterface.Info("Merging…"), flow.merge(environment, message.method, message.status)), true
 	case mergedMessage:
-		if !f.same(env, msg.flow, msg.repository, msg.number) {
+		if !flow.same(environment, message.flow, message.repository, message.number) {
 			return nil, true
 		}
-		f.merging = false
-		if msg.err != nil {
+		flow.merging = false
+		if message.err != nil {
 			// Whatever went wrong, the merge may or may not have landed.
-			return env.reload(), true
+			return environment.reload(), true
 		}
-		return tea.Batch(userinterface.Info(mergedText(env.number, msg.method)), env.reload()), true
+		return tea.Batch(userinterface.Info(mergedText(environment.number, message.method)), environment.reload()), true
 	case mergeRefreshMessage:
-		if !f.same(env, msg.flow, msg.repository, msg.number) {
+		if !flow.same(environment, message.flow, message.repository, message.number) {
 			return nil, true
 		}
-		return env.reload(), true
+		return environment.reload(), true
 	}
 	return nil, false
 }
 
 // confirm applies the checks that need fresh state, then asks.
-func (f *mergeFlow) confirm(msg mergeFreshMessage, env reviewEnvironment) tea.Cmd {
-	if msg.err != nil {
-		return userinterface.Error(terminaltext.SafeError(fmt.Errorf("check merge state: %w", msg.err)))
+func (currentFlow *mergeFlow) confirm(message mergeFreshMessage, environment reviewEnvironment) tea.Cmd {
+	if message.err != nil {
+		return userinterface.Error(terminaltext.SafeError(fmt.Errorf("check merge state: %w", message.err)))
 	}
-	st := msg.status
+	status := message.status
 	// Merge exactly what was reviewed: the commit whose diff is on screen.
-	flow := f
-	if env.diffPending || st.HeadSHA != env.diffHead {
-		refresh := func() tea.Msg { return mergeRefreshMessage{flow: flow, repository: env.repository, number: env.number} }
+	flow := currentFlow
+	if environment.diffPending || status.HeadSHA != environment.diffHead {
+		refresh := func() tea.Msg {
+			return mergeRefreshMessage{flow: flow, repository: environment.repository, number: environment.number}
+		}
 		return func() tea.Msg {
 			return userinterface.ConfirmMessage{Text: headMovedText, Notice: true, OnDismiss: refresh}
 		}
 	}
-	method, err := resolveMethod(msg.requested, st)
+	method, err := resolveMethod(message.requested, status)
 	if err != nil {
 		return userinterface.Error(err)
 	}
 	send := func() tea.Msg {
-		return mergeSendMessage{flow: flow, repository: env.repository, number: env.number, method: method, status: st}
+		return mergeSendMessage{flow: flow, repository: environment.repository, number: environment.number, method: method, status: status}
 	}
-	return userinterface.Confirm(mergeQuestion(env.number, method, st), send)
+	return userinterface.Confirm(mergeQuestion(environment.number, method, status), send)
 }
 
 // merge is the command that runs when the user confirms. On failure it also
 // returns the error itself, so it shows even if the view was left meanwhile.
-func (f *mergeFlow) merge(env reviewEnvironment, method github.MergeMethod, st github.MergeStatus) tea.Cmd {
-	flow := f
+func (currentFlow *mergeFlow) merge(environment reviewEnvironment, method github.MergeMethod, status github.MergeStatus) tea.Cmd {
+	flow := currentFlow
 	in := github.MergeInput{
-		Repository: env.repository, Number: env.number, PullRequestIdentifier: st.PullRequestIdentifier,
-		Method: method, ExpectedHeadObjectIdentifier: st.HeadSHA,
+		Repository: environment.repository, Number: environment.number, PullRequestIdentifier: status.PullRequestIdentifier,
+		Method: method, ExpectedHeadObjectIdentifier: status.HeadSHA,
 	}
 	return func() tea.Msg {
-		err := env.client.MergePullRequest(context.Background(), in)
-		res := mergedMessage{flow: flow, repository: env.repository, number: env.number, method: method, err: err}
+		err := environment.client.MergePullRequest(context.Background(), in)
+		result := mergedMessage{flow: flow, repository: environment.repository, number: environment.number, method: method, err: err}
 		if err == nil {
-			return res
+			return result
 		}
 		shown := userinterface.ErrorMessage{Err: terminaltext.SafeError(fmt.Errorf("%w; refreshed to show the current state", err))}
-		return tea.BatchMsg{func() tea.Msg { return res }, func() tea.Msg { return shown }}
+		return tea.BatchMsg{func() tea.Msg { return result }, func() tea.Msg { return shown }}
 	}
 }

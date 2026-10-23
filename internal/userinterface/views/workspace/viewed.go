@@ -36,20 +36,20 @@ type viewedMessage struct {
 
 // viewedCount returns how many files are marked viewed. Dismissed files
 // (changed since they were viewed) do not count.
-func (v *View) viewedCount() int {
-	n := 0
-	for _, f := range v.files() {
-		if f.Viewed == github.FileViewed {
-			n++
+func (view *View) viewedCount() int {
+	count := 0
+	for _, file := range view.files() {
+		if file.Viewed == github.FileViewed {
+			count++
 		}
 	}
-	return n
+	return count
 }
 
 // filesTitle is the Files pane title, with review progress once files exist.
-func (v *View) filesTitle() string {
-	if n := len(v.files()); n > 0 {
-		return fmt.Sprintf("Files %d/%d viewed", v.viewedCount(), n)
+func (view *View) filesTitle() string {
+	if count := len(view.files()); count > 0 {
+		return fmt.Sprintf("Files %d/%d viewed", view.viewedCount(), count)
 	}
 	return "Files"
 }
@@ -58,82 +58,82 @@ func (v *View) filesTitle() string {
 // file becomes unviewed; an unviewed or dismissed one becomes viewed. The
 // mutation is sent now if none is in flight for the file, else when the
 // running one finishes.
-func (v *View) toggleViewed() tea.Cmd {
-	s := v.sel()
-	if s == 0 || s > len(v.files()) {
+func (view *View) toggleViewed() tea.Cmd {
+	size := view.sel()
+	if size == 0 || size > len(view.files()) {
 		return nil
 	}
-	if v.detail.Identifier == "" {
+	if view.detail.Identifier == "" {
 		return userinterface.Error(errors.New("mark file as viewed: pull request ID unknown"))
 	}
-	f := &v.detail.Files[s-1]
-	t := v.viewedState[f.Path]
-	if t == nil {
-		t = &viewedToggle{confirmed: f.Viewed}
-		v.viewedState[f.Path] = t
+	file := &view.detail.Files[size-1]
+	toggle := view.viewedState[file.Path]
+	if toggle == nil {
+		toggle = &viewedToggle{confirmed: file.Viewed}
+		view.viewedState[file.Path] = toggle
 	}
-	t.want = github.FileViewed
-	if f.Viewed == github.FileViewed {
-		t.want = github.FileUnviewed
+	toggle.want = github.FileViewed
+	if file.Viewed == github.FileViewed {
+		toggle.want = github.FileUnviewed
 	}
-	f.Viewed = t.want
-	if t.inflight {
+	file.Viewed = toggle.want
+	if toggle.inflight {
 		return nil
 	}
-	t.inflight = true
-	return v.sendViewed(f.Path, t.want)
+	toggle.inflight = true
+	return view.sendViewed(file.Path, toggle.want)
 }
 
 // sendViewed is the command that runs one mutation. On failure it also
 // returns the error itself, so it shows even if the view was left meanwhile.
-func (v *View) sendViewed(path string, state github.ViewedState) tea.Cmd {
-	client, repo, number, owner, prID := v.client, v.repository, v.number, v, v.detail.Identifier
+func (view *View) sendViewed(path string, state github.ViewedState) tea.Cmd {
+	client, repository, number, owner, pullRequestIdentifier := view.client, view.repository, view.number, view, view.detail.Identifier
 	return func() tea.Msg {
-		err := client.SetFileViewed(context.Background(), prID, path, state == github.FileViewed)
-		res := viewedMessage{owner: owner, repository: repo, number: number, path: path, sent: state, err: err}
+		err := client.SetFileViewed(context.Background(), pullRequestIdentifier, path, state == github.FileViewed)
+		result := viewedMessage{owner: owner, repository: repository, number: number, path: path, sent: state, err: err}
 		if err == nil {
-			return res
+			return result
 		}
 		verb := "mark"
 		if state != github.FileViewed {
 			verb = "unmark"
 		}
 		shown := userinterface.ErrorMessage{Err: terminaltext.SafeError(fmt.Errorf("%s %s as viewed: %w", verb, terminaltext.Clean(path), err))}
-		return tea.BatchMsg{func() tea.Msg { return res }, func() tea.Msg { return shown }}
+		return tea.BatchMsg{func() tea.Msg { return result }, func() tea.Msg { return shown }}
 	}
 }
 
-func (v *View) viewedMine(msg viewedMessage) bool {
-	return msg.owner == v && msg.repository == v.repository && msg.number == v.number
+func (view *View) viewedMine(message viewedMessage) bool {
+	return message.owner == view && message.repository == view.repository && message.number == view.number
 }
 
 // viewedDone records a mutation's outcome and sends the next wanted state, if
 // the user toggled again meanwhile.
-func (v *View) viewedDone(msg viewedMessage) tea.Cmd {
-	t := v.viewedState[msg.path]
-	if t == nil {
+func (view *View) viewedDone(message viewedMessage) tea.Cmd {
+	toggle := view.viewedState[message.path]
+	if toggle == nil {
 		return nil
 	}
-	if msg.err == nil {
-		t.confirmed = msg.sent
+	if message.err == nil {
+		toggle.confirmed = message.sent
 	} else {
-		t.want = t.confirmed
-		v.setViewed(msg.path, t.want)
+		toggle.want = toggle.confirmed
+		view.setViewed(message.path, toggle.want)
 	}
-	if t.want != msg.sent && t.want != t.confirmed {
-		return v.sendViewed(msg.path, t.want)
+	if toggle.want != message.sent && toggle.want != toggle.confirmed {
+		return view.sendViewed(message.path, toggle.want)
 	}
-	t.inflight, t.settledAt = false, v.sequence
+	toggle.inflight, toggle.settledAt = false, view.sequence
 	return nil
 }
 
-func (v *View) setViewed(path string, state github.ViewedState) {
-	if v.detail == nil {
+func (view *View) setViewed(path string, state github.ViewedState) {
+	if view.detail == nil {
 		return
 	}
-	for i := range v.detail.Files {
-		if v.detail.Files[i].Path == path {
-			v.detail.Files[i].Viewed = state
+	for i := range view.detail.Files {
+		if view.detail.Files[i].Path == path {
+			view.detail.Files[i].Viewed = state
 		}
 	}
 }
@@ -143,20 +143,20 @@ func (v *View) setViewed(path string, state github.ViewedState) {
 // may have read before the mutation landed; settled entries are dropped so
 // the server's state shows (once the reload started after they settled), and so
 // are entries for files that vanished.
-func (v *View) reapplyViewed(seq int) {
+func (view *View) reapplyViewed(sequence int) {
 	present := map[string]bool{}
-	for _, f := range v.files() {
-		present[f.Path] = true
+	for _, file := range view.files() {
+		present[file.Path] = true
 	}
-	for path, t := range v.viewedState {
-		settled := !t.inflight && t.want == t.confirmed
+	for path, toggle := range view.viewedState {
+		settled := !toggle.inflight && toggle.want == toggle.confirmed
 		switch {
-		case !present[path], settled && seq > t.settledAt:
-			delete(v.viewedState, path)
+		case !present[path], settled && sequence > toggle.settledAt:
+			delete(view.viewedState, path)
 		default:
 			// A settled entry whose reload began before it settled may hold
 			// older server data; t.want equals t.confirmed then.
-			v.setViewed(path, t.want)
+			view.setViewed(path, toggle.want)
 		}
 	}
 }

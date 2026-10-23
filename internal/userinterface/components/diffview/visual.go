@@ -30,35 +30,35 @@ var (
 )
 
 // VisualActive reports whether a line selection is in progress.
-func (m *Model) VisualActive() bool { return m.vis }
+func (model *Model) VisualActive() bool { return model.vis }
 
 // VisualStart begins a line selection at the cursor line. It reports false
 // (and starts nothing) when the cursor is not on a diff line.
-func (m *Model) VisualStart() bool {
-	if _, ok := m.Cursor(); !ok {
+func (model *Model) VisualStart() bool {
+	if _, ok := model.Cursor(); !ok {
 		return false
 	}
-	m.vis, m.vbi = true, m.rows[m.win.Cursor()].bi
+	model.vis, model.vbi = true, model.rows[model.win.Cursor()].bi
 	return true
 }
 
 // VisualEnd leaves the line selection.
-func (m *Model) VisualEnd() { m.vis = false }
+func (model *Model) VisualEnd() { model.vis = false }
 
 // VisualMove moves the selection's free end by delta diff lines (negative is
 // up), skipping thread rows. It stops before a line that would leave the hunk
 // or mix added and deleted lines. When it cannot move at all, it returns why;
 // a move that got part of the way is not an error.
-func (m *Model) VisualMove(delta int) error {
-	if !m.vis {
+func (model *Model) VisualMove(delta int) error {
+	if !model.vis {
 		return nil
 	}
-	from := m.win.Cursor()
-	row, err := m.furthest(from, delta)
+	from := model.win.Cursor()
+	row, err := model.furthest(from, delta)
 	if row == from {
 		return err
 	}
-	m.win.GotoRow(row)
+	model.win.GotoRow(row)
 	return nil
 }
 
@@ -66,18 +66,18 @@ func (m *Model) VisualMove(delta int) error {
 // returns the last row whose selection from the anchor is valid, with the
 // error that stopped the walk (nil when it ran out of lines or got all the
 // way).
-func (m *Model) furthest(from, delta int) (row int, err error) {
+func (model *Model) furthest(from, delta int) (row int, err error) {
 	step := 1
 	if delta < 0 {
 		step = -1
 	}
 	row = from
 	for range abs(delta) {
-		next := m.nextLineRow(row, step)
+		next := model.nextLineRow(row, step)
 		if next < 0 {
 			return row, nil
 		}
-		if _, err := m.rangeOf(m.vbi, m.rows[next].bi); err != nil {
+		if _, err := model.rangeOf(model.vbi, model.rows[next].bi); err != nil {
 			return row, err
 		}
 		row = next
@@ -87,9 +87,9 @@ func (m *Model) furthest(from, delta int) (row int, err error) {
 
 // nextLineRow returns the closest row after (step 1) or before (step -1) row
 // i that is a diff line, or -1.
-func (m *Model) nextLineRow(i, step int) int {
-	for j := i + step; j >= 0 && j < len(m.rows); j += step {
-		if m.rows[j].isLine() {
+func (model *Model) nextLineRow(i, step int) int {
+	for j := i + step; j >= 0 && j < len(model.rows); j += step {
+		if model.rows[j].isLine() {
 			return j
 		}
 	}
@@ -99,59 +99,59 @@ func (m *Model) nextLineRow(i, step int) int {
 // Anchor returns the range a comment would be written on: the selection while
 // one is in progress, else the cursor line. ok is false when the cursor is not
 // on a diff line.
-func (m *Model) Anchor() (r Range, ok bool) {
-	if m.vis {
-		return m.selection()
+func (model *Model) Anchor() (lineRange Range, ok bool) {
+	if model.vis {
+		return model.selection()
 	}
-	c, ok := m.Cursor()
+	cursorLine, ok := model.Cursor()
 	if !ok {
 		return Range{}, false
 	}
-	n := c.Number()
-	return Range{Path: c.Path, Side: c.Side, Start: n, End: n}, true
+	count := cursorLine.Number()
+	return Range{Path: cursorLine.Path, Side: cursorLine.Side, Start: count, End: count}, true
 }
 
 // selection is the range between the selection's anchor and the cursor.
-func (m *Model) selection() (Range, bool) {
-	bi, ok := m.cursorBase()
+func (model *Model) selection() (Range, bool) {
+	baseIndex, ok := model.cursorBase()
 	if !ok {
 		return Range{}, false
 	}
-	r, err := m.rangeOf(m.vbi, bi)
-	return r, err == nil
+	lineRange, err := model.rangeOf(model.vbi, baseIndex)
+	return lineRange, err == nil
 }
 
 // cursorBase returns the base row the cursor is on, or the one it follows when
 // it is on a thread row. ok is false when there are no rows.
-func (m *Model) cursorBase() (bi int, ok bool) {
-	c := m.win.Cursor()
-	if c >= len(m.rows) {
+func (model *Model) cursorBase() (baseIndex int, ok bool) {
+	count := model.win.Cursor()
+	if count >= len(model.rows) {
 		return 0, false
 	}
-	return m.rows[c].bi, true
+	return model.rows[count].bi, true
 }
 
 // rangeOf is the range between two base rows, or why there is none.
-func (m *Model) rangeOf(a, b int) (Range, error) {
-	lo, hi := min(a, b), max(a, b)
-	lines, err := m.linesIn(lo, hi)
+func (model *Model) rangeOf(first, count int) (Range, error) {
+	low, high := min(first, count), max(first, count)
+	lines, err := model.linesIn(low, high)
 	if err != nil {
 		return Range{}, err
 	}
-	return rangeFor(m.file.Path(), lines)
+	return rangeFor(model.file.Path(), lines)
 }
 
 // linesIn collects the diff lines of base rows lo to hi, which must all be in
 // one hunk.
-func (m *Model) linesIn(lo, hi int) ([]*diff.Line, error) {
-	hunk := m.base[lo].hunk
+func (model *Model) linesIn(low, high int) ([]*diff.Line, error) {
+	hunk := model.base[low].hunk
 	var lines []*diff.Line
-	for _, r := range m.base[lo : hi+1] {
-		if r.hunk != hunk {
+	for _, row := range model.base[low : high+1] {
+		if row.hunk != hunk {
 			return nil, ErrCrossesHunk
 		}
-		if r.isLine() {
-			lines = append(lines, r.line)
+		if row.isLine() {
+			lines = append(lines, row.line)
 		}
 	}
 	return lines, nil
@@ -164,10 +164,10 @@ func rangeFor(path string, lines []*diff.Line) (Range, error) {
 	if len(lines) == 0 {
 		return Range{}, errNoLines
 	}
-	is := func(k diff.LineKind) func(*diff.Line) bool {
-		return func(l *diff.Line) bool { return l.Kind == k }
+	isKind := func(k diff.LineKind) func(*diff.Line) bool {
+		return func(line *diff.Line) bool { return line.Kind == k }
 	}
-	hasDel, hasAdd := slices.ContainsFunc(lines, is(diff.Delete)), slices.ContainsFunc(lines, is(diff.Add))
+	hasDel, hasAdd := slices.ContainsFunc(lines, isKind(diff.Delete)), slices.ContainsFunc(lines, isKind(diff.Add))
 	if hasDel && hasAdd {
 		return Range{}, ErrMixesSides
 	}
@@ -179,7 +179,7 @@ func rangeFor(path string, lines []*diff.Line) (Range, error) {
 }
 
 // selected reports whether base row bi is inside the selection.
-func (m *Model) selected(bi int) bool {
-	c, ok := m.cursorBase()
-	return m.vis && ok && bi >= min(m.vbi, c) && bi <= max(m.vbi, c)
+func (model *Model) selected(baseIndex int) bool {
+	count, ok := model.cursorBase()
+	return model.vis && ok && baseIndex >= min(model.vbi, count) && baseIndex <= max(model.vbi, count)
 }

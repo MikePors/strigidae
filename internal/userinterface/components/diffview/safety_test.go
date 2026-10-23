@@ -39,74 +39,74 @@ const hostileDiff = "diff --git \"a/x\\033[2J\" \"b/y\\033]0;t\\007\"\n" +
 	"copy to \"bin2\\033[2J\"\n" +
 	"Binary files a/bin and b/bin2 differ\n"
 
-func assertSafe(t *testing.T, label, out string) {
-	t.Helper()
+func assertSafe(test *testing.T, label, out string) {
+	test.Helper()
 	if !utf8.ValidString(out) {
-		t.Errorf("%s: output is not valid UTF-8: %q", label, out)
+		test.Errorf("%s: output is not valid UTF-8: %q", label, out)
 	}
-	for _, r := range out {
-		if r == '\n' {
+	for _, character := range out {
+		if character == '\n' {
 			continue
 		}
-		if unicode.IsControl(r) || unicode.Is(unicode.Bidi_Control, r) {
-			t.Errorf("%s: unsafe rune %U in %q", label, r, out)
+		if unicode.IsControl(character) || unicode.Is(unicode.Bidi_Control, character) {
+			test.Errorf("%s: unsafe rune %U in %q", label, character, out)
 			return
 		}
 	}
 }
 
-func TestHostileContentIsSanitised(t *testing.T) {
-	d, _ := diff.Parse(hostileDiff)
-	if len(d.Files) != 3 {
-		t.Fatalf("parsed %d files", len(d.Files))
+func TestHostileContentIsSanitised(test *testing.T) {
+	parsedDiff, _ := diff.Parse(hostileDiff)
+	if len(parsedDiff.Files) != 3 {
+		test.Fatalf("parsed %d files", len(parsedDiff.Files))
 	}
 	// An unstyled theme means no ANSI of our own, so any ESC is the attacker's.
-	for _, w := range []int{200, 40, 12} {
-		for fi, f := range d.Files {
-			m := New(theme.Theme{})
-			m.SetFile(f)
+	for _, width := range []int{200, 40, 12} {
+		for fileIndex, file := range parsedDiff.Files {
+			model := New(theme.Theme{})
+			model.SetFile(file)
 			for step := 0; step < 12; step++ {
-				assertSafe(t, "file render", m.Render(w, 6))
-				m.CursorDown(1)
-				m.ScrollRight(3)
+				assertSafe(test, "file render", model.Render(width, 6))
+				model.CursorDown(1)
+				model.ScrollRight(3)
 			}
-			m.GotoBottom()
-			assertSafe(t, "bottom", m.Render(w, 6))
-			_ = fi
+			model.GotoBottom()
+			assertSafe(test, "bottom", model.Render(width, 6))
+			_ = fileIndex
 		}
 	}
-	m := New(theme.Theme{})
-	m.SetDiffError(errors.New("bad \x1b[2J \u009b and \x07"))
-	assertSafe(t, "error message", m.Render(80, 4))
-	m.SetMessage("hello\x1b]0;x\x07")
-	assertSafe(t, "message", m.Render(80, 4))
-	if out := m.Render(80, 4); !strings.Contains(out, "hello") {
-		t.Errorf("message lost: %q", out)
+	model := New(theme.Theme{})
+	model.SetDiffError(errors.New("bad \x1b[2J \u009b and \x07"))
+	assertSafe(test, "error message", model.Render(80, 4))
+	model.SetMessage("hello\x1b]0;x\x07")
+	assertSafe(test, "message", model.Render(80, 4))
+	if out := model.Render(80, 4); !strings.Contains(out, "hello") {
+		test.Errorf("message lost: %q", out)
 	}
 }
 
-func TestInvalidUTF8(t *testing.T) {
-	got, w := displayText("caf\xe9 \x9b[2J")
-	if got != "caf· ·[2J" || w != 9 {
-		t.Errorf("displayText = %q, %d", got, w)
+func TestInvalidUTF8(test *testing.T) {
+	got, width := displayText("caf\xe9 \x9b[2J")
+	if got != "caf· ·[2J" || width != 9 {
+		test.Errorf("displayText = %q, %d", got, width)
 	}
-	h := diff.Hunk{OldStart: 1, NewStart: 1, NewLines: 2, Lines: []diff.Line{
+	hunk := diff.Hunk{OldStart: 1, NewStart: 1, NewLines: 2, Lines: []diff.Line{
 		{Kind: diff.Add, New: 1, Text: "caf\xe9"},
 		{Kind: diff.Add, New: 2, Text: "\x9b[2J\xff\xfe end"},
 	}}
-	f := &diff.File{NewPath: "bad.txt", Status: diff.Added, Hunks: []diff.Hunk{h}}
-	m := New(theme.New(true))
-	m.SetFile(f)
-	out := m.Render(40, 5)
-	assertSafe(t, "styled", ansi.Strip(out))
-	for i, r := range strings.Split(out, "\n") {
-		if w := ansi.StringWidth(r); w != 40 {
-			t.Errorf("row %d is %d cells wide, want 40", i, w)
+	file := &diff.File{NewPath: "bad.txt", Status: diff.Added, Hunks: []diff.Hunk{hunk}}
+	model := New(theme.New(true))
+	model.SetFile(file)
+	out := model.Render(40, 5)
+	assertSafe(test, "styled", ansi.Strip(out))
+	for i, text := range strings.Split(out, "\n") {
+		if width := ansi.StringWidth(text); width != 40 {
+			test.Errorf("row %d is %d cells wide, want 40", i, width)
 		}
 	}
 }
 
-func TestEmojiRowsAreExactlyPaneWidth(t *testing.T) {
+func TestEmojiRowsAreExactlyPaneWidth(test *testing.T) {
 	lines := []string{
 		strings.Repeat("❤️", 30) + "x",
 		"⚠️ warning ✔️ done " + strings.Repeat("⚠️", 5),
@@ -114,66 +114,66 @@ func TestEmojiRowsAreExactlyPaneWidth(t *testing.T) {
 		"日本語 mixed ❤️ with ascii and \ttab",
 		"é combining",
 	}
-	h := diff.Hunk{OldStart: 1, NewStart: 1}
+	hunk := diff.Hunk{OldStart: 1, NewStart: 1}
 	for i, text := range lines {
-		h.Lines = append(h.Lines, diff.Line{Kind: diff.Add, New: i + 1, Text: text})
+		hunk.Lines = append(hunk.Lines, diff.Line{Kind: diff.Add, New: i + 1, Text: text})
 	}
-	h.NewLines = len(lines)
-	f := &diff.File{NewPath: "e.txt", Status: diff.Added, Hunks: []diff.Hunk{h}}
+	hunk.NewLines = len(lines)
+	file := &diff.File{NewPath: "e.txt", Status: diff.Added, Hunks: []diff.Hunk{hunk}}
 
-	const w = 40
-	m := New(theme.New(true))
-	m.SetFile(f)
+	const width = 40
+	model := New(theme.New(true))
+	model.SetFile(file)
 	for off := 0; off <= 120; off++ {
-		m.SetSize(w, 8)
-		m.ScrollLeft(1000)
-		m.ScrollRight(off)
-		rows := strings.Split(m.Render(w, 8), "\n")
+		model.SetSize(width, 8)
+		model.ScrollLeft(1000)
+		model.ScrollRight(off)
+		rows := strings.Split(model.Render(width, 8), "\n")
 		if len(rows) != len(lines)+1 {
-			t.Fatalf("rows = %d", len(rows))
+			test.Fatalf("rows = %d", len(rows))
 		}
-		for i, r := range rows {
-			if got := ansi.StringWidth(r); got != w {
-				t.Fatalf("xoff %d row %d is %d cells wide, want %d: %q", m.HorizontalOffset(), i, got, w, ansi.Strip(r))
+		for i, text := range rows {
+			if got := ansi.StringWidth(text); got != width {
+				test.Fatalf("xoff %d row %d is %d cells wide, want %d: %q", model.HorizontalOffset(), i, got, width, ansi.Strip(text))
 			}
 		}
 	}
 }
 
-func TestSetFileKeepsPositionAcrossReparse(t *testing.T) {
-	b, err := os.ReadFile(filepath.Join("testdata", "sample.diff"))
+func TestSetFileKeepsPositionAcrossReparse(test *testing.T) {
+	bytes, err := os.ReadFile(filepath.Join("testdata", "sample.diff"))
 	if err != nil {
-		t.Fatal(err)
+		test.Fatal(err)
 	}
-	d1, _ := diff.Parse(string(b))
-	d2, _ := diff.Parse(string(b)) // a refresh: same content, new pointers
-	m := New(theme.New(true))
-	m.SetFile(d1.File("server.go"))
-	m.SetSize(60, 6)
-	m.CursorDown(15)
-	m.ScrollRight(5)
-	cursor, top, xoff := m.win.Cursor(), m.win.Top(), m.win.HorizontalOffset()
+	firstDiff, _ := diff.Parse(string(bytes))
+	secondDiff, _ := diff.Parse(string(bytes)) // a refresh: same content, new pointers
+	model := New(theme.New(true))
+	model.SetFile(firstDiff.File("server.go"))
+	model.SetSize(60, 6)
+	model.CursorDown(15)
+	model.ScrollRight(5)
+	cursor, top, xoff := model.win.Cursor(), model.win.Top(), model.win.HorizontalOffset()
 
-	m.SetFile(d2.File("server.go"))
-	if m.win.Cursor() != cursor || m.win.Top() != top || m.win.HorizontalOffset() != xoff {
-		t.Errorf("position after reparse = %d/%d/%d, want %d/%d/%d", m.win.Cursor(), m.win.Top(), m.win.HorizontalOffset(), cursor, top, xoff)
+	model.SetFile(secondDiff.File("server.go"))
+	if model.win.Cursor() != cursor || model.win.Top() != top || model.win.HorizontalOffset() != xoff {
+		test.Errorf("position after reparse = %d/%d/%d, want %d/%d/%d", model.win.Cursor(), model.win.Top(), model.win.HorizontalOffset(), cursor, top, xoff)
 	}
-	if got, ok := m.Cursor(); !ok || got.Old != 32 {
-		t.Errorf("cursor line after reparse: %+v %v", got, ok)
+	if got, ok := model.Cursor(); !ok || got.Old != 32 {
+		test.Errorf("cursor line after reparse: %+v %v", got, ok)
 	}
 
 	// The refreshed file shrank: position clamps to the new bounds.
-	small := *d2.File("server.go")
+	small := *secondDiff.File("server.go")
 	small.Hunks = small.Hunks[:1]
-	m.SetFile(&small)
-	if m.win.Cursor() >= len(m.rows) || m.win.Top() > m.win.MaxTop() || m.win.Cursor() < m.win.Top() || m.win.Cursor() >= m.win.Top()+6 {
-		t.Errorf("not clamped: cursor %d top %d rows %d", m.win.Cursor(), m.win.Top(), len(m.rows))
+	model.SetFile(&small)
+	if model.win.Cursor() >= len(model.rows) || model.win.Top() > model.win.MaxTop() || model.win.Cursor() < model.win.Top() || model.win.Cursor() >= model.win.Top()+6 {
+		test.Errorf("not clamped: cursor %d top %d rows %d", model.win.Cursor(), model.win.Top(), len(model.rows))
 	}
 
 	// A different path resets.
-	m.SetFile(d2.File("pkg/new.go"))
-	m.SetFile(d1.File("server.go"))
-	if m.win.Cursor() != 0 || m.win.Top() != 0 || m.win.HorizontalOffset() != 0 {
-		t.Errorf("different path should reset, got %d/%d/%d", m.win.Cursor(), m.win.Top(), m.win.HorizontalOffset())
+	model.SetFile(secondDiff.File("pkg/new.go"))
+	model.SetFile(firstDiff.File("server.go"))
+	if model.win.Cursor() != 0 || model.win.Top() != 0 || model.win.HorizontalOffset() != 0 {
+		test.Errorf("different path should reset, got %d/%d/%d", model.win.Cursor(), model.win.Top(), model.win.HorizontalOffset())
 	}
 }

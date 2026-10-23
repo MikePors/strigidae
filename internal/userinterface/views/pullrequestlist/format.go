@@ -12,76 +12,76 @@ import (
 )
 
 // pad right-pads s with spaces to width w (display columns).
-func pad(s string, w int) string {
-	if n := w - ansi.StringWidth(s); n > 0 {
-		return s + strings.Repeat(" ", n)
+func pad(text string, width int) string {
+	if count := width - ansi.StringWidth(text); count > 0 {
+		return text + strings.Repeat(" ", count)
 	}
-	return s
+	return text
 }
 
 // padLeft left-pads s with spaces to width w (display columns).
-func padLeft(s string, w int) string {
-	if n := w - ansi.StringWidth(s); n > 0 {
-		return strings.Repeat(" ", n) + s
+func padLeft(text string, width int) string {
+	if count := width - ansi.StringWidth(text); count > 0 {
+		return strings.Repeat(" ", count) + text
 	}
-	return s
+	return text
 }
 
 // relativeAge formats how long ago t was: "now", "5m", "3h", "2d", "4mo", "2y".
-func relativeAge(now, t time.Time) string {
-	d := now.Sub(t)
+func relativeAge(now, timestamp time.Time) string {
+	duration := now.Sub(timestamp)
 	switch {
-	case t.IsZero():
+	case timestamp.IsZero():
 		return ""
-	case d < time.Minute:
+	case duration < time.Minute:
 		return "now"
-	case d < time.Hour:
-		return fmt.Sprintf("%dm", int(d/time.Minute))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh", int(d/time.Hour))
-	case d < 30*24*time.Hour:
-		return fmt.Sprintf("%dd", int(d/(24*time.Hour)))
-	case d < 365*24*time.Hour:
-		return fmt.Sprintf("%dmo", int(d/(30*24*time.Hour)))
+	case duration < time.Hour:
+		return fmt.Sprintf("%dm", int(duration/time.Minute))
+	case duration < 24*time.Hour:
+		return fmt.Sprintf("%dh", int(duration/time.Hour))
+	case duration < 30*24*time.Hour:
+		return fmt.Sprintf("%dd", int(duration/(24*time.Hour)))
+	case duration < 365*24*time.Hour:
+		return fmt.Sprintf("%dmo", int(duration/(30*24*time.Hour)))
 	default:
-		return fmt.Sprintf("%dy", int(d/(365*24*time.Hour)))
+		return fmt.Sprintf("%dy", int(duration/(365*24*time.Hour)))
 	}
 }
 
-func commentText(n int) string {
-	if n > 99 {
+func commentText(count int) string {
+	if count > 99 {
 		return "99+"
 	}
-	return fmt.Sprint(n)
+	return fmt.Sprint(count)
 }
 
 // reviewMark returns the one-column glyph and style for a review decision.
-func (v *View) reviewMark(d github.ReviewDecision) (string, lipgloss.Style) {
-	st := v.th.PullRequestList
-	switch d {
+func (view *View) reviewMark(decision github.ReviewDecision) (string, lipgloss.Style) {
+	styles := view.th.PullRequestList
+	switch decision {
 	case github.ReviewDecisionApproved:
-		return "✓", st.Approved
+		return "✓", styles.Approved
 	case github.ReviewDecisionChangesRequested:
-		return "✗", st.ChangesRequested
+		return "✗", styles.ChangesRequested
 	case github.ReviewDecisionReviewRequired:
-		return "?", st.ReviewRequired
+		return "?", styles.ReviewRequired
 	default:
-		return "", st.Comments
+		return "", styles.Comments
 	}
 }
 
 // checksMark returns the one-column glyph and style for the head commit's
 // check state; no checks gives a blank.
-func (v *View) checksMark(c github.CheckState) (string, lipgloss.Style) {
-	st := v.th.PullRequestList
-	switch c {
+func (view *View) checksMark(state github.CheckState) (string, lipgloss.Style) {
+	styles := view.th.PullRequestList
+	switch state {
 	case github.ChecksPassing:
-		return "✓", st.ChecksPassing
+		return "✓", styles.ChecksPassing
 	case github.ChecksFailing:
-		return "✗", st.ChecksFailing
+		return "✗", styles.ChecksFailing
 	case github.ChecksRunning:
-		return "●", st.ChecksRunning
+		return "●", styles.ChecksRunning
 	default:
-		return "", st.Comments
+		return "", styles.Comments
 	}
 }

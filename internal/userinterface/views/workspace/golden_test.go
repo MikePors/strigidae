@@ -14,91 +14,91 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
-func TestThemeMessageRebuilds(t *testing.T) {
-	h := loaded(t, 100, 24)
-	dark := h.render()
-	h.send(userinterface.ThemeMessage{Theme: theme.New(false)})
-	if h.render() == dark {
-		t.Error("light theme should change the rendering")
+func TestThemeMessageRebuilds(test *testing.T) {
+	harness := loaded(test, 100, 24)
+	dark := harness.render()
+	harness.send(userinterface.ThemeMessage{Theme: theme.New(false)})
+	if harness.render() == dark {
+		test.Error("light theme should change the rendering")
 	}
 }
 
-func TestRendersWithoutPanicAtTinySizes(t *testing.T) {
-	for _, sz := range [][2]int{{0, 0}, {3, 3}, {10, 4}, {20, 6}, {79, 5}, {80, 5}} {
-		h := loaded(t, sz[0], sz[1])
-		h.press("f", "j")
-		_ = h.render()
-		h.press("l")
-		_ = h.render()
+func TestRendersWithoutPanicAtTinySizes(test *testing.T) {
+	for _, size := range [][2]int{{0, 0}, {3, 3}, {10, 4}, {20, 6}, {79, 5}, {80, 5}} {
+		harness := loaded(test, size[0], size[1])
+		harness.press("f", "j")
+		_ = harness.render()
+		harness.press("l")
+		_ = harness.render()
 	}
 }
 
 // fixtures for the golden tests.
 
-func TestGolden(t *testing.T) {
-	t.Run("overview", func(t *testing.T) {
-		h := loaded(t, 100, 40)
-		golden.Assert(t, "overview", h.render(), false)
+func TestGolden(test *testing.T) {
+	test.Run("overview", func(test *testing.T) {
+		harness := loaded(test, 100, 40)
+		golden.Assert(test, "overview", harness.render(), false)
 	})
-	t.Run("overview_scrolled_to_conversation", func(t *testing.T) {
-		h := loaded(t, 100, 24)
-		h.press("l", "]")
-		golden.Assert(t, "overview_conversation", h.render(), false)
+	test.Run("overview_scrolled_to_conversation", func(test *testing.T) {
+		harness := loaded(test, 100, 24)
+		harness.press("l", "]")
+		golden.Assert(test, "overview_conversation", harness.render(), false)
 	})
-	t.Run("file_selected", func(t *testing.T) {
-		h := loaded(t, 100, 24)
-		h.press("}", "}", "l")
-		golden.Assert(t, "file_selected", h.render(), false)
+	test.Run("file_selected", func(test *testing.T) {
+		harness := loaded(test, 100, 24)
+		harness.press("}", "}", "l")
+		golden.Assert(test, "file_selected", harness.render(), false)
 	})
-	t.Run("picker", func(t *testing.T) {
-		h := loaded(t, 100, 24)
-		h.press("f")
-		h.typ("retry")
-		golden.Assert(t, "picker", h.render(), false)
+	test.Run("picker", func(test *testing.T) {
+		harness := loaded(test, 100, 24)
+		harness.press("f")
+		harness.typ("retry")
+		golden.Assert(test, "picker", harness.render(), false)
 	})
-	t.Run("narrow_files", func(t *testing.T) {
-		h := loaded(t, 60, 20)
-		h.press("j")
-		golden.Assert(t, "narrow_files", h.render(), false)
+	test.Run("narrow_files", func(test *testing.T) {
+		harness := loaded(test, 60, 20)
+		harness.press("j")
+		golden.Assert(test, "narrow_files", harness.render(), false)
 	})
-	t.Run("narrow_right", func(t *testing.T) {
-		h := loaded(t, 60, 20)
-		h.press("enter")
-		golden.Assert(t, "narrow_right", h.render(), false)
+	test.Run("narrow_right", func(test *testing.T) {
+		harness := loaded(test, 60, 20)
+		harness.press("enter")
+		golden.Assert(test, "narrow_right", harness.render(), false)
 	})
-	t.Run("loading", func(t *testing.T) {
-		h := newHarness(t, 80, 10)
-		golden.Assert(t, "loading", h.render(), false)
+	test.Run("loading", func(test *testing.T) {
+		harness := newHarness(test, 80, 10)
+		golden.Assert(test, "loading", harness.render(), false)
 	})
-	t.Run("error", func(t *testing.T) {
-		h := newHarness(t, 80, 10)
-		h.client.SetError(fake.MethodGetPullRequest, errors.New("load pull request: connection refused"))
-		h.run(h.v.Init())
-		golden.Assert(t, "error", h.render(), false)
+	test.Run("error", func(test *testing.T) {
+		harness := newHarness(test, 80, 10)
+		harness.client.SetError(fake.MethodGetPullRequest, errors.New("load pull request: connection refused"))
+		harness.run(harness.v.Init())
+		golden.Assert(test, "error", harness.render(), false)
 	})
-	t.Run("not_found", func(t *testing.T) {
-		h := newHarness(t, 80, 10)
-		h.v.number = 99
-		h.run(h.v.Init())
-		golden.Assert(t, "not_found", h.render(), false)
+	test.Run("not_found", func(test *testing.T) {
+		harness := newHarness(test, 80, 10)
+		harness.v.number = 99
+		harness.run(harness.v.Init())
+		golden.Assert(test, "not_found", harness.render(), false)
 	})
-	t.Run("no_files_no_description", func(t *testing.T) {
-		d := testDetail()
-		d.Body, d.Files, d.Comments, d.Reviews = "", nil, nil, nil
-		c := fake.New()
-		c.SetPullRequest(d)
-		c.SetDiff(testRepository, 7, readDiff(t))
-		v := New(c, testRepository, 7, WithClock(func() time.Time { return testNow }), WithTheme(theme.New(true)))
-		h := &harness{t: t, v: v, client: c}
-		h.send(tea.WindowSizeMsg{Width: 80, Height: 12})
-		h.run(v.Init())
-		h.press("}", "f")
-		golden.Assert(t, "empty", h.render(), false)
+	test.Run("no_files_no_description", func(test *testing.T) {
+		detail := testDetail()
+		detail.Body, detail.Files, detail.Comments, detail.Reviews = "", nil, nil, nil
+		client := fake.New()
+		client.SetPullRequest(detail)
+		client.SetDiff(testRepository, 7, readDiff(test))
+		view := New(client, testRepository, 7, WithClock(func() time.Time { return testNow }), WithTheme(theme.New(true)))
+		testHarness := &harness{t: test, v: view, client: client}
+		testHarness.send(tea.WindowSizeMsg{Width: 80, Height: 12})
+		testHarness.run(view.Init())
+		testHarness.press("}", "f")
+		golden.Assert(test, "empty", testHarness.render(), false)
 	})
 }
 
-func TestLoadingLineCleansRepository(t *testing.T) {
-	v := New(fake.New(), github.Repository{Owner: "o\x1b[2J\x1b]52;c;aGk=\x07", Name: "n\u202e"}, 7, WithTheme(theme.New(true)))
-	v.Update(tea.WindowSizeMsg{Width: 80, Height: 10})
-	assertTame(t, "loading line", v.Render(80, 10))
+func TestLoadingLineCleansRepository(test *testing.T) {
+	view := New(fake.New(), github.Repository{Owner: "o\x1b[2J\x1b]52;c;aGk=\x07", Name: "n\u202e"}, 7, WithTheme(theme.New(true)))
+	view.Update(tea.WindowSizeMsg{Width: 80, Height: 10})
+	assertTame(test, "loading line", view.Render(80, 10))
 }

@@ -75,20 +75,20 @@ var (
 )
 
 // New returns the PR list for repo. It starts loading when pushed (Init).
-func New(client github.Client, repo github.Repository, th theme.Theme, opts Options) *View {
-	if opts.Now == nil {
-		opts.Now = time.Now
+func New(client github.Client, repository github.Repository, theme theme.Theme, options Options) *View {
+	if options.Now == nil {
+		options.Now = time.Now
 	}
-	if opts.Open == nil {
-		opts.Open = openInBrowser
+	if options.Open == nil {
+		options.Open = openInBrowser
 	}
 	return &View{
 		client:     client,
-		repository: repo,
-		th:         th,
+		repository: repository,
+		th:         theme,
 		km:         keys.DefaultGlobal(),
-		now:        opts.Now,
-		open:       opts.Open,
+		now:        options.Now,
+		open:       options.Open,
 		sequence:   1,
 		loading:    true,
 	}
@@ -102,190 +102,190 @@ func openInBrowser(url string) error {
 }
 
 // Loading implements userinterface.Loader.
-func (v *View) Loading() bool { return v.loading || v.loadingMore }
+func (view *View) Loading() bool { return view.loading || view.loadingMore }
 
 // Title implements userinterface.View.
-func (v *View) Title() string { return v.repositoryName() }
+func (view *View) Title() string { return view.repositoryName() }
 
 // repoName is the repository name made safe to draw (it can come from -R).
-func (v *View) repositoryName() string { return terminaltext.Clean(v.repository.String()) }
+func (view *View) repositoryName() string { return terminaltext.Clean(view.repository.String()) }
 
 // ShortHelp implements userinterface.View.
-func (v *View) ShortHelp() []key.Binding {
-	return []key.Binding{v.km.Select, v.km.Open, v.km.Refresh}
+func (view *View) ShortHelp() []key.Binding {
+	return []key.Binding{view.km.Select, view.km.Open, view.km.Refresh}
 }
 
 // FullHelp implements userinterface.View. Every binding here is a global one the root
 // already lists.
-func (v *View) FullHelp() [][]key.Binding { return nil }
+func (view *View) FullHelp() [][]key.Binding { return nil }
 
 // Init implements userinterface.View.
-func (v *View) Init() tea.Cmd { return v.fetch(github.PageRequest{}, false) }
+func (view *View) Init() tea.Cmd { return view.fetch(github.PageRequest{}, false) }
 
 // fetch loads one page. The closure captures copies, so it shares no state
 // with the view.
-func (v *View) fetch(req github.PageRequest, more bool) tea.Cmd {
-	client, repo, seq := v.client, v.repository, v.sequence
+func (view *View) fetch(request github.PageRequest, more bool) tea.Cmd {
+	client, repository, sequence := view.client, view.repository, view.sequence
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 		defer cancel()
-		page, err := client.ListPullRequests(ctx, repo, req)
-		return pullRequestsLoadedMessage{repository: repo, sequence: seq, more: more, page: page, err: err}
+		page, err := client.ListPullRequests(ctx, repository, request)
+		return pullRequestsLoadedMessage{repository: repository, sequence: sequence, more: more, page: page, err: err}
 	}
 }
 
 // Update implements userinterface.View.
-func (v *View) Update(msg tea.Msg) (userinterface.View, tea.Cmd) {
-	switch msg := msg.(type) {
+func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
+	switch message := message.(type) {
 	case tea.WindowSizeMsg:
-		v.width, v.height = msg.Width, msg.Height
-		v.win.SetSize(v.listHeight())
-		return v, nil
+		view.width, view.height = message.Width, message.Height
+		view.win.SetSize(view.listHeight())
+		return view, nil
 	case userinterface.ThemeMessage:
-		v.th = msg.Theme
+		view.th = message.Theme
 	case pullRequestsLoadedMessage:
-		return v, v.loaded(msg)
+		return view, view.loaded(message)
 	case keys.Message:
-		return v, v.handleKey(msg)
+		return view, view.handleKey(message)
 	}
-	return v, nil
+	return view, nil
 }
 
-func (v *View) loaded(msg pullRequestsLoadedMessage) tea.Cmd {
-	if msg.repository != v.repository || msg.sequence != v.sequence {
+func (view *View) loaded(message pullRequestsLoadedMessage) tea.Cmd {
+	if message.repository != view.repository || message.sequence != view.sequence {
 		return nil // meant for another view, or superseded by a refresh
 	}
-	if msg.more {
-		v.loadingMore = false
+	if message.more {
+		view.loadingMore = false
 	} else {
-		v.loading = false
+		view.loading = false
 	}
-	if msg.err != nil {
-		v.err = msg.err
-		v.moreFailed = msg.more // stop auto-paging until R
+	if message.err != nil {
+		view.err = message.err
+		view.moreFailed = message.more // stop auto-paging until R
 
-		return userinterface.Error(terminaltext.SafeError(fmt.Errorf("load pull requests in %s: %w", v.repository, msg.err)))
+		return userinterface.Error(terminaltext.SafeError(fmt.Errorf("load pull requests in %s: %w", view.repository, message.err)))
 	}
-	v.err = nil
-	v.next = msg.page.Next
-	if msg.more {
-		v.pullRequests = append(v.pullRequests, msg.page.Items...)
+	view.err = nil
+	view.next = message.page.Next
+	if message.more {
+		view.pullRequests = append(view.pullRequests, message.page.Items...)
 	} else {
-		v.replace(msg.page.Items)
+		view.replace(message.page.Items)
 	}
-	v.win.SetRows(len(v.pullRequests))
-	return v.maybeLoadMore()
+	view.win.SetRows(len(view.pullRequests))
+	return view.maybeLoadMore()
 }
 
 // replace swaps in a fresh first page, keeping the selection on the same pull
 // request when it is still listed.
-func (v *View) replace(items []github.PullRequest) {
+func (view *View) replace(items []github.PullRequest) {
 	var selected int
-	if pr, ok := v.selected(); ok {
-		selected = pr.Number
+	if pullRequest, ok := view.selected(); ok {
+		selected = pullRequest.Number
 	}
-	v.pullRequests = items
+	view.pullRequests = items
 	// If the selected PR is gone, stay on the same row (the window clamps it).
-	v.win.SetRows(len(items))
-	for i, pr := range items {
-		if selected != 0 && pr.Number == selected {
-			v.win.Restore(i, v.win.Top(), 0)
+	view.win.SetRows(len(items))
+	for i, pullRequest := range items {
+		if selected != 0 && pullRequest.Number == selected {
+			view.win.Restore(i, view.win.Top(), 0)
 			break
 		}
 	}
 }
 
-func (v *View) selected() (github.PullRequest, bool) {
-	if v.win.Cursor() >= len(v.pullRequests) {
+func (view *View) selected() (github.PullRequest, bool) {
+	if view.win.Cursor() >= len(view.pullRequests) {
 		return github.PullRequest{}, false
 	}
-	return v.pullRequests[v.win.Cursor()], true
+	return view.pullRequests[view.win.Cursor()], true
 }
 
-func (v *View) handleKey(msg keys.Message) tea.Cmd {
+func (view *View) handleKey(message keys.Message) tea.Cmd {
 	switch {
-	case key.Matches(msg, v.km.Down):
-		v.win.Down(1)
-	case key.Matches(msg, v.km.Up):
-		v.win.Up(1)
-	case key.Matches(msg, v.km.Top):
-		v.win.GotoTop()
-	case key.Matches(msg, v.km.Bottom):
-		v.win.GotoBottom()
-	case key.Matches(msg, v.km.HalfDown):
-		v.win.HalfPageDown()
-	case key.Matches(msg, v.km.HalfUp):
-		v.win.HalfPageUp()
-	case key.Matches(msg, v.km.PageDown):
-		v.win.PageDown()
-	case key.Matches(msg, v.km.PageUp):
-		v.win.PageUp()
-	case key.Matches(msg, v.km.Select):
-		return v.openSelected()
-	case key.Matches(msg, v.km.Open):
-		return v.browseSelected()
-	case key.Matches(msg, v.km.Refresh):
-		return v.refresh()
+	case key.Matches(message, view.km.Down):
+		view.win.Down(1)
+	case key.Matches(message, view.km.Up):
+		view.win.Up(1)
+	case key.Matches(message, view.km.Top):
+		view.win.GotoTop()
+	case key.Matches(message, view.km.Bottom):
+		view.win.GotoBottom()
+	case key.Matches(message, view.km.HalfDown):
+		view.win.HalfPageDown()
+	case key.Matches(message, view.km.HalfUp):
+		view.win.HalfPageUp()
+	case key.Matches(message, view.km.PageDown):
+		view.win.PageDown()
+	case key.Matches(message, view.km.PageUp):
+		view.win.PageUp()
+	case key.Matches(message, view.km.Select):
+		return view.openSelected()
+	case key.Matches(message, view.km.Open):
+		return view.browseSelected()
+	case key.Matches(message, view.km.Refresh):
+		return view.refresh()
 	default:
 		return nil
 	}
-	return v.maybeLoadMore()
+	return view.maybeLoadMore()
 }
 
 // refresh reloads from the first page. The old rows stay visible until the
 // new ones arrive.
-func (v *View) refresh() tea.Cmd {
-	v.sequence++
-	v.loading, v.loadingMore, v.moreFailed = true, false, false
+func (view *View) refresh() tea.Cmd {
+	view.sequence++
+	view.loading, view.loadingMore, view.moreFailed = true, false, false
 	// Intentional limit: the API caps a page at 100 rows, so past row 100 the
 	// refreshed list is shorter than the old one and the selection falls back
 	// to the same row index, which may be a different PR. The rest pages in
 	// lazily as before.
 	// Ask for as many rows as are loaded (up to the API maximum) so the rows
 	// the user has paged through survive; zero means the default size.
-	return v.fetch(github.PageRequest{Limit: min(len(v.pullRequests), github.MaxPageSize)}, false)
+	return view.fetch(github.PageRequest{Limit: min(len(view.pullRequests), github.MaxPageSize)}, false)
 }
 
 // maybeLoadMore requests the next page when the selection is near the end of
 // what is loaded.
-func (v *View) maybeLoadMore() tea.Cmd {
-	if v.next == "" || v.loading || v.moreFailed || v.loadingMore || v.win.Cursor() < len(v.pullRequests)-1-loadMoreMargin {
+func (view *View) maybeLoadMore() tea.Cmd {
+	if view.next == "" || view.loading || view.moreFailed || view.loadingMore || view.win.Cursor() < len(view.pullRequests)-1-loadMoreMargin {
 		return nil
 	}
-	v.loadingMore = true
-	return v.fetch(github.PageRequest{After: v.next}, true)
+	view.loadingMore = true
+	return view.fetch(github.PageRequest{After: view.next}, true)
 }
 
 // openSelected pushes the PR workspace for the selected pull request. It
 // hands over the list's theme, clock and browser opener so the workspace looks
 // and behaves like its parent (and tests stay deterministic).
-func (v *View) openSelected() tea.Cmd {
-	pr, ok := v.selected()
+func (view *View) openSelected() tea.Cmd {
+	pullRequest, ok := view.selected()
 	if !ok {
 		return nil
 	}
-	return userinterface.Push(workspace.New(v.client, v.repository, pr.Number,
-		workspace.WithTheme(v.th),
-		workspace.WithClock(v.now),
-		workspace.WithOpener(v.open),
+	return userinterface.Push(workspace.New(view.client, view.repository, pullRequest.Number,
+		workspace.WithTheme(view.th),
+		workspace.WithClock(view.now),
+		workspace.WithOpener(view.open),
 	))
 }
 
-func (v *View) browseSelected() tea.Cmd {
-	pr, ok := v.selected()
+func (view *View) browseSelected() tea.Cmd {
+	pullRequest, ok := view.selected()
 	if !ok {
 		return nil
 	}
-	open, url := v.open, pr.URL
+	open, url := view.open, pullRequest.URL
 	return func() tea.Msg {
 		if url == "" {
-			return userinterface.ErrorMessage{Err: fmt.Errorf("pull request #%d has no URL", pr.Number)}
+			return userinterface.ErrorMessage{Err: fmt.Errorf("pull request #%d has no URL", pullRequest.Number)}
 		}
 		if err := open(url); err != nil {
-			return userinterface.ErrorMessage{Err: terminaltext.SafeError(fmt.Errorf("open #%d in browser: %w", pr.Number, err))}
+			return userinterface.ErrorMessage{Err: terminaltext.SafeError(fmt.Errorf("open #%d in browser: %w", pullRequest.Number, err))}
 		}
-		return userinterface.InfoMessage{Text: fmt.Sprintf("opened #%d in browser", pr.Number)}
+		return userinterface.InfoMessage{Text: fmt.Sprintf("opened #%d in browser", pullRequest.Number)}
 	}
 }
 
-func (v *View) listHeight() int { return max(0, v.height-1) } // minus the header row
+func (view *View) listHeight() int { return max(0, view.height-1) } // minus the header row

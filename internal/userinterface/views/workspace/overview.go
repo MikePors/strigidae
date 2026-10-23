@@ -32,88 +32,88 @@ func newOverview() overview {
 }
 
 // invalidate forces a rebuild before the next render.
-func (o *overview) invalidate() { o.dirty = true }
+func (overview *overview) invalidate() { overview.dirty = true }
 
 // ensure sizes the viewport and rebuilds the content when the data, theme or
 // width changed. Markdown rendering is cached by the renderer.
-func (o *overview) ensure(th theme.Theme, md *markdown.Renderer, d *github.PullRequestDetail, threads threadsView, now time.Time, width, height int) {
-	o.vp.SetWidth(width)
-	o.vp.SetHeight(height)
+func (overview *overview) ensure(theme theme.Theme, markdownSource *markdown.Renderer, detail *github.PullRequestDetail, threads threadsView, now time.Time, width, height int) {
+	overview.vp.SetWidth(width)
+	overview.vp.SetHeight(height)
 	minute := now.Truncate(time.Minute)
-	if d == nil || (!o.dirty && o.width == width && minute.Equal(o.builtAt)) {
+	if detail == nil || (!overview.dirty && overview.width == width && minute.Equal(overview.builtAt)) {
 		return
 	}
-	var b strings.Builder
-	o.sections = o.sections[:0]
+	var builder strings.Builder
+	overview.sections = overview.sections[:0]
 	line := 0
-	add := func(s string) {
-		b.WriteString(s)
-		b.WriteString("\n")
-		line += strings.Count(s, "\n") + 1
+	add := func(text string) {
+		builder.WriteString(text)
+		builder.WriteString("\n")
+		line += strings.Count(text, "\n") + 1
 	}
 
-	o.sections = append(o.sections, line)
-	add(th.SectionHeading.Render("Description"))
-	if strings.TrimSpace(d.Body) == "" {
-		add(th.Muted.Render("No description provided."))
+	overview.sections = append(overview.sections, line)
+	add(theme.SectionHeading.Render("Description"))
+	if strings.TrimSpace(detail.Body) == "" {
+		add(theme.Muted.Render("No description provided."))
 	} else {
-		add(md.Render(terminaltext.CleanBlock(d.Body), width))
+		add(markdownSource.Render(terminaltext.CleanBlock(detail.Body), width))
 	}
 	add("")
 
-	o.sections = append(o.sections, line)
-	items := conversation(d)
-	add(th.SectionHeading.Render(fmt.Sprintf("Conversation (%d)", len(items))))
+	overview.sections = append(overview.sections, line)
+	items := conversation(detail)
+	add(theme.SectionHeading.Render(fmt.Sprintf("Conversation (%d)", len(items))))
 	if len(items) == 0 {
-		add(th.Muted.Render("No comments yet."))
+		add(theme.Muted.Render("No comments yet."))
 	}
-	for _, it := range items {
-		add(comment.Header(th, now, it.comment))
-		if body := comment.Body(th, md, it.comment, width); body != "" {
+	for _, item := range items {
+		add(comment.Header(theme, now, item.comment))
+		if body := comment.Body(theme, markdownSource, item.comment, width); body != "" {
 			add(body)
 		}
 		add("")
 	}
 
-	o.sections = append(o.sections, line)
+	overview.sections = append(overview.sections, line)
 	switch {
 	case !threads.loaded && threads.pending:
-		add(th.SectionHeading.Render("Review threads"))
-		add(th.Muted.Render("Loading review threads…"))
+		add(theme.SectionHeading.Render("Review threads"))
+		add(theme.Muted.Render("Loading review threads…"))
 	case !threads.loaded && threads.err != nil:
-		add(th.SectionHeading.Render("Review threads"))
-		add(th.ErrorText.Render(ansi.Wrap("Could not load review threads: "+terminaltext.SafeError(threads.err).Error(), width, "")))
+		add(theme.SectionHeading.Render("Review threads"))
+		add(theme.ErrorText.Render(ansi.Wrap("Could not load review threads: "+terminaltext.SafeError(threads.err).Error(), width, "")))
 	default:
-		add(th.SectionHeading.Render(fmt.Sprintf("Review threads (%d)", len(threads.list))))
+		add(theme.SectionHeading.Render(fmt.Sprintf("Review threads (%d)", len(threads.list))))
 		if len(threads.list) == 0 {
-			add(th.Muted.Render("No review threads."))
+			add(theme.Muted.Render("No review threads."))
 		}
 	}
-	env := thread.Environment{Theme: th, Markdown: md, Now: now}
-	for _, t := range threads.list {
-		add(strings.Join(thread.Lines(env, t, width, thread.Options{Expanded: true, Location: true}), "\n"))
+	environment := thread.Environment{Theme: theme, Markdown: markdownSource, Now: now}
+	for _, reviewThread := range threads.list {
+		add(strings.Join(thread.Lines(environment, reviewThread, width, thread.Options{Expanded: true, Location: true}), "\n"))
 		add("")
 	}
 
-	o.vp.SetContent(strings.TrimRight(b.String(), "\n"))
-	o.width, o.builtAt, o.dirty = width, minute, false
+	overview.vp.SetContent(strings.TrimRight(builder.String(), "\n"))
+	overview.width, overview.builtAt, overview.dirty = width, minute, false
 }
 
 // jump scrolls to the next (delta > 0) or previous section start.
-func (o *overview) jump(delta int) {
-	y := o.vp.YOffset()
+func (overview *overview) jump(delta int) {
+	row := overview.vp.YOffset()
 	if delta > 0 {
-		for _, s := range o.sections {
-			if s > y {
-				o.vp.SetYOffset(s)
+		for _, size := range overview.sections {
+			if size > row {
+				overview.vp.SetYOffset(size)
 				return
 			}
 		}
 		return
 	}
-	for _, s := range slices.Backward(o.sections) {
-		if s < y {
-			o.vp.SetYOffset(s)
+	for _, size := range slices.Backward(overview.sections) {
+		if size < row {
+			overview.vp.SetYOffset(size)
 			return
 		}
 	}
@@ -137,35 +137,35 @@ type entry struct {
 // conversation merges comments and review summaries chronologically. Pending
 // reviews have no submission time and come last. Reviews without a body that
 // only wrap inline comments ("commented") are left out; verdicts are kept.
-func conversation(d *github.PullRequestDetail) []entry {
+func conversation(detail *github.PullRequestDetail) []entry {
 	var out []entry
-	for _, c := range d.Comments {
-		out = append(out, entry{at: c.CreatedAt, comment: comment.Comment{Author: c.Author, Action: "commented", At: c.CreatedAt, Body: c.Body, Reactions: c.Reactions}})
+	for _, reviewComment := range detail.Comments {
+		out = append(out, entry{at: reviewComment.CreatedAt, comment: comment.Comment{Author: reviewComment.Author, Action: "commented", At: reviewComment.CreatedAt, Body: reviewComment.Body, Reactions: reviewComment.Reactions}})
 	}
-	for _, r := range d.Reviews {
-		e := entry{at: r.SubmittedAt, comment: comment.Comment{Author: r.Author, Action: reviewAction(r.State), At: r.SubmittedAt, Body: r.Body}}
+	for _, review := range detail.Reviews {
+		listEntry := entry{at: review.SubmittedAt, comment: comment.Comment{Author: review.Author, Action: reviewAction(review.State), At: review.SubmittedAt, Body: review.Body}}
 		switch {
-		case r.State == github.ReviewPending || r.SubmittedAt.IsZero():
-			e.comment.Pending, e.comment.Action, e.comment.At = true, "review", time.Time{}
-		case r.State == github.ReviewCommented && strings.TrimSpace(r.Body) == "":
+		case review.State == github.ReviewPending || review.SubmittedAt.IsZero():
+			listEntry.comment.Pending, listEntry.comment.Action, listEntry.comment.At = true, "review", time.Time{}
+		case review.State == github.ReviewCommented && strings.TrimSpace(review.Body) == "":
 			continue
 		}
-		out = append(out, e)
+		out = append(out, listEntry)
 	}
-	slices.SortStableFunc(out, func(a, b entry) int {
-		if a.comment.Pending != b.comment.Pending {
-			if a.comment.Pending {
+	slices.SortStableFunc(out, func(first, entry entry) int {
+		if first.comment.Pending != entry.comment.Pending {
+			if first.comment.Pending {
 				return 1
 			}
 			return -1
 		}
-		return a.at.Compare(b.at)
+		return first.at.Compare(entry.at)
 	})
 	return out
 }
 
-func reviewAction(s github.ReviewState) string {
-	switch s {
+func reviewAction(state github.ReviewState) string {
+	switch state {
 	case github.ReviewApproved:
 		return "approved"
 	case github.ReviewChangesRequested:
@@ -179,19 +179,19 @@ func reviewAction(s github.ReviewState) string {
 
 // sortThreads orders threads by file, then line, keeping the server's order
 // for threads on the same line. It returns a copy.
-func sortThreads(ts []github.ReviewThread) []github.ReviewThread {
-	out := slices.Clone(ts)
-	line := func(t github.ReviewThread) int {
-		if t.Line > 0 {
-			return t.Line
+func sortThreads(threads []github.ReviewThread) []github.ReviewThread {
+	out := slices.Clone(threads)
+	line := func(thread github.ReviewThread) int {
+		if thread.Line > 0 {
+			return thread.Line
 		}
-		return t.OriginalLine
+		return thread.OriginalLine
 	}
-	slices.SortStableFunc(out, func(a, b github.ReviewThread) int {
-		if c := strings.Compare(a.Path, b.Path); c != 0 {
-			return c
+	slices.SortStableFunc(out, func(first, thread github.ReviewThread) int {
+		if count := strings.Compare(first.Path, thread.Path); count != 0 {
+			return count
 		}
-		return line(a) - line(b)
+		return line(first) - line(thread)
 	})
 	return out
 }

@@ -25,55 +25,55 @@ type position struct {
 	toff   int
 }
 
-func (m *Model) capture() position {
-	p := position{path: m.file.Path(), xoff: m.win.HorizontalOffset()}
-	if len(m.rows) == 0 {
-		return p
+func (model *Model) capture() position {
+	currentPosition := position{path: model.file.Path(), xoff: model.win.HorizontalOffset()}
+	if len(model.rows) == 0 {
+		return currentPosition
 	}
-	i := m.win.Cursor()
-	p.off = m.win.Cursor() - m.win.Top()
-	if r := m.rows[i]; r.tr != nil {
-		p.thread, p.toff = m.fthreads[r.tr.t].Identifier, r.tr.i
+	i := model.win.Cursor()
+	currentPosition.off = model.win.Cursor() - model.win.Top()
+	if row := model.rows[i]; row.tr != nil {
+		currentPosition.thread, currentPosition.toff = model.fthreads[row.tr.t].Identifier, row.tr.i
 	}
-	for i > 0 && m.rows[i].tr != nil {
+	for i > 0 && model.rows[i].tr != nil {
 		i-- // a thread row: anchor to the diff row it follows
 	}
-	if r := m.rows[i]; r.line != nil && r.line.Kind == diff.NoNewline && i > 0 {
+	if row := model.rows[i]; row.line != nil && row.line.Kind == diff.NoNewline && i > 0 {
 		i-- // markers have no numbers; anchor to the line they belong to
 	}
-	if r := m.rows[i]; r.tr != nil || r.message {
-		return p // no diff row to anchor to
+	if row := model.rows[i]; row.tr != nil || row.message {
+		return currentPosition // no diff row to anchor to
 	}
-	p.a = m.anchorAt(i)
-	p.ok = true
-	return p
+	currentPosition.a = model.anchorAt(i)
+	currentPosition.ok = true
+	return currentPosition
 }
 
-func (m *Model) anchorAt(i int) anchor {
-	r := m.rows[i]
-	if r.line == nil {
-		h := m.file.Hunks[r.hunk]
-		return anchor{header: true, hunkOld: h.OldStart, hunkNew: h.NewStart}
+func (model *Model) anchorAt(i int) anchor {
+	row := model.rows[i]
+	if row.line == nil {
+		hunk := model.file.Hunks[row.hunk]
+		return anchor{header: true, hunkOld: hunk.OldStart, hunkNew: hunk.NewStart}
 	}
-	return anchor{kind: r.line.Kind, old: r.line.Old, new: r.line.New}
+	return anchor{kind: row.line.Kind, old: row.line.Old, new: row.line.New}
 }
 
 // restore puts the cursor back on the row matching p, or on the nearest one.
-func (m *Model) restore(p position) {
-	if len(m.rows) == 0 {
+func (model *Model) restore(position position) {
+	if len(model.rows) == 0 {
 		return
 	}
 	row := -1
-	if p.thread != "" {
-		row = m.threadRowFor(p.thread, p.toff)
+	if position.thread != "" {
+		row = model.threadRowFor(position.thread, position.toff)
 	}
 	if row < 0 {
-		if !p.ok {
+		if !position.ok {
 			return
 		}
-		row = m.find(p.a)
+		row = model.find(position.a)
 	}
-	m.win.Restore(row, row-p.off, p.xoff)
+	model.win.Restore(row, row-position.off, position.xoff)
 }
 
 func lineKey(oldNo, newNo int) int {
@@ -83,37 +83,37 @@ func lineKey(oldNo, newNo int) int {
 	return oldNo
 }
 
-func abs(n int) int {
-	if n < 0 {
-		return -n
+func abs(count int) int {
+	if count < 0 {
+		return -count
 	}
-	return n
+	return count
 }
 
 // find returns the row for a: an exact match on kind and line numbers, else
 // the row of the same sort whose line number is closest.
-func (m *Model) find(a anchor) int {
+func (model *Model) find(anchor anchor) int {
 	best, bestDist := 0, -1
-	for i, r := range m.rows {
+	for i, row := range model.rows {
 		var dist int
 		switch {
-		case a.header:
-			if r.line != nil || r.tr != nil || r.message {
+		case anchor.header:
+			if row.line != nil || row.tr != nil || row.message {
 				continue
 			}
-			h := m.file.Hunks[r.hunk]
-			if h.OldStart == a.hunkOld && h.NewStart == a.hunkNew {
+			hunk := model.file.Hunks[row.hunk]
+			if hunk.OldStart == anchor.hunkOld && hunk.NewStart == anchor.hunkNew {
 				return i
 			}
-			dist = abs(lineKey(h.OldStart, h.NewStart) - lineKey(a.hunkOld, a.hunkNew))
+			dist = abs(lineKey(hunk.OldStart, hunk.NewStart) - lineKey(anchor.hunkOld, anchor.hunkNew))
 		default:
-			if !r.isLine() { // also skips thread rows
+			if !row.isLine() { // also skips thread rows
 				continue
 			}
-			if r.line.Kind == a.kind && r.line.Old == a.old && r.line.New == a.new {
+			if row.line.Kind == anchor.kind && row.line.Old == anchor.old && row.line.New == anchor.new {
 				return i
 			}
-			dist = abs(lineKey(r.line.Old, r.line.New) - lineKey(a.old, a.new))
+			dist = abs(lineKey(row.line.Old, row.line.New) - lineKey(anchor.old, anchor.new))
 		}
 		if bestDist < 0 || dist < bestDist {
 			best, bestDist = i, dist

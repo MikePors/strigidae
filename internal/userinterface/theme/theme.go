@@ -117,86 +117,86 @@ func New(isDark bool) Theme {
 }
 
 // FromPalette builds a theme from a palette with default roles.
-func FromPalette(p Palette) Theme { return FromPaletteWithOverrides(p, Roles{}) }
+func FromPalette(palette Palette) Theme { return FromPaletteWithOverrides(palette, Roles{}) }
 
 // FromPaletteWithOverrides builds a theme from a palette, replacing every
 // role that ov sets (non-nil fields) with its exact colour.
-func FromPaletteWithOverrides(p Palette, ov Roles) Theme {
-	return newTheme(p, deriveRoles(p, ov))
+func FromPaletteWithOverrides(palette Palette, overrides Roles) Theme {
+	return newTheme(palette, deriveRoles(palette, overrides))
 }
 
-func newTheme(p Palette, r Roles) Theme {
-	bar := lipgloss.NewStyle().Background(r.Surface).Foreground(r.Text)
-	fg := func(c color.Color) lipgloss.Style { return lipgloss.NewStyle().Foreground(c) }
-	bold := func(c color.Color) lipgloss.Style { return fg(c).Bold(true) }
+func newTheme(palette Palette, roles Roles) Theme {
+	bar := lipgloss.NewStyle().Background(roles.Surface).Foreground(roles.Text)
+	foreground := func(color color.Color) lipgloss.Style { return lipgloss.NewStyle().Foreground(color) }
+	bold := func(color color.Color) lipgloss.Style { return foreground(color).Bold(true) }
 
 	return Theme{
 		StatusBar:     bar,
-		StatusContext: bar.Bold(true).Foreground(r.OnAccent).Background(r.Accent),
-		StatusPending: bar.Bold(true).Foreground(r.Warning),
-		StatusInfo:    bar.Foreground(r.Success),
-		StatusError:   bar.Bold(true).Foreground(r.Error),
-		StatusHint:    bar.Foreground(r.Muted),
+		StatusContext: bar.Bold(true).Foreground(roles.OnAccent).Background(roles.Accent),
+		StatusPending: bar.Bold(true).Foreground(roles.Warning),
+		StatusInfo:    bar.Foreground(roles.Success),
+		StatusError:   bar.Bold(true).Foreground(roles.Error),
+		StatusHint:    bar.Foreground(roles.Muted),
 		StatusCommand: bar.Bold(true),
-		CommandPrompt: bar.Bold(true).Foreground(r.Accent),
-		CommandText:   bar.Foreground(r.Text),
-		CommandHint:   bar.Foreground(r.Muted),
-		Spinner:       bar.Foreground(r.Accent),
+		CommandPrompt: bar.Bold(true).Foreground(roles.Accent),
+		CommandText:   bar.Foreground(roles.Text),
+		CommandHint:   bar.Foreground(roles.Muted),
+		Spinner:       bar.Foreground(roles.Accent),
 
-		HeadingMarker: fg(r.Muted),
+		HeadingMarker: foreground(roles.Muted),
 
-		HelpTitle:       bold(r.Accent),
+		HelpTitle:       bold(roles.Accent),
 		HelpSection:     lipgloss.NewStyle().Bold(true).Underline(true),
-		HelpKey:         fg(r.Warning),
+		HelpKey:         foreground(roles.Warning),
 		HelpDescription: lipgloss.NewStyle(),
 
-		Title:      bold(r.Accent),
+		Title:      bold(roles.Accent),
 		Normal:     lipgloss.NewStyle(),
-		Muted:      fg(r.Muted),
-		Selected:   bold(r.AccentStrong),
-		IsDark:     p.Variant == Dark,
-		Identifier: r.fingerprint(p.Variant, ""),
-		Roles:      r,
+		Muted:      foreground(roles.Muted),
+		Selected:   bold(roles.AccentStrong),
+		IsDark:     palette.Variant == Dark,
+		Identifier: roles.fingerprint(palette.Variant, ""),
+		Roles:      roles,
 
 		// --- PR workspace ---
-		PaneBorder:       fg(r.Muted),
-		PaneBorderFocus:  fg(r.Accent),
-		PaneTitle:        fg(r.Muted),
-		PaneTitleFocus:   bold(r.OnAccent).Background(r.Accent),
-		FileAdded:        fg(r.Added),
-		FileDeleted:      fg(r.Removed),
-		FileModified:     fg(r.Warning),
-		StateOpen:        bold(r.Success),
-		StateDraft:       bold(r.Muted),
-		StateMerged:      bold(r.Accent),
-		StateClosed:      bold(r.Error),
+		PaneBorder:       foreground(roles.Muted),
+		PaneBorderFocus:  foreground(roles.Accent),
+		PaneTitle:        foreground(roles.Muted),
+		PaneTitleFocus:   bold(roles.OnAccent).Background(roles.Accent),
+		FileAdded:        foreground(roles.Added),
+		FileDeleted:      foreground(roles.Removed),
+		FileModified:     foreground(roles.Warning),
+		StateOpen:        bold(roles.Success),
+		StateDraft:       bold(roles.Muted),
+		StateMerged:      bold(roles.Accent),
+		StateClosed:      bold(roles.Error),
 		Author:           lipgloss.NewStyle().Bold(true),
-		Pending:          bold(r.Warning),
-		ErrorText:        bold(r.Error),
-		SectionHeading:   bold(r.Accent),
-		OverlayBorder:    fg(r.Accent),
-		OverlayBox:       lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(r.Accent),
+		Pending:          bold(roles.Warning),
+		ErrorText:        bold(roles.Error),
+		SectionHeading:   bold(roles.Accent),
+		OverlayBorder:    foreground(roles.Accent),
+		OverlayBox:       lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(roles.Accent),
 		StrongText:       lipgloss.NewStyle().Bold(true),
 		OverlayItem:      lipgloss.NewStyle(),
-		OverlayItemFocus: bold(r.AccentStrong).Reverse(true),
+		OverlayItemFocus: bold(roles.AccentStrong).Reverse(true),
 		// --- end PR workspace ---
 
 		// --- Diff pane ---
 		DiffContext:      lipgloss.NewStyle(),
-		DiffAdd:          lipgloss.NewStyle().Background(r.AddedTint),
-		DiffDelete:       lipgloss.NewStyle().Background(r.RemovedTint),
-		DiffCursor:       lipgloss.NewStyle().Background(r.Selection),
-		DiffGutter:       fg(r.Muted),
-		DiffGutterAdd:    fg(r.Added).Background(r.AddedGutterTint),
-		DiffGutterDelete: fg(r.Removed).Background(r.RemovedGutterTint),
-		DiffHunk:         fg(r.Info).Background(r.HunkTint),
-		DiffHunkCursor:   bold(r.Info).Background(r.HunkCursorTint),
-		DiffNoNewline:    fg(r.Muted).Italic(true),
-		Syntax:           newSyntax(r),
-		ThreadMarker:     bold(r.Warning),
-		ThreadBar:        fg(r.Info),
+		DiffAdd:          lipgloss.NewStyle().Background(roles.AddedTint),
+		DiffDelete:       lipgloss.NewStyle().Background(roles.RemovedTint),
+		DiffCursor:       lipgloss.NewStyle().Background(roles.Selection),
+		DiffGutter:       foreground(roles.Muted),
+		DiffGutterAdd:    foreground(roles.Added).Background(roles.AddedGutterTint),
+		DiffGutterDelete: foreground(roles.Removed).Background(roles.RemovedGutterTint),
+		DiffHunk:         foreground(roles.Info).Background(roles.HunkTint),
+		DiffHunkCursor:   bold(roles.Info).Background(roles.HunkCursorTint),
+		DiffNoNewline:    foreground(roles.Muted).Italic(true),
+		Syntax:           newSyntax(roles),
+		ThreadMarker:     bold(roles.Warning),
+		ThreadBar:        foreground(roles.Info),
 		// --- end diff pane ---
 
-		PullRequestList: newPullRequestListStyles(r),
+		PullRequestList: newPullRequestListStyles(roles),
 	}
 }

@@ -56,27 +56,27 @@ func ChromaHighlighter() Highlighter {
 		if text == "" || len(text) > maxHighlightLen {
 			return plain(text)
 		}
-		lx, seen := lexerFor[path]
+		lexer, seen := lexerFor[path]
 		if !seen {
-			if lx = lexers.Match(path); lx != nil {
-				lx = chroma.Coalesce(lx)
+			if lexer = lexers.Match(path); lexer != nil {
+				lexer = chroma.Coalesce(lexer)
 			}
-			lexerFor[path] = lx
+			lexerFor[path] = lexer
 		}
-		if lx == nil {
+		if lexer == nil {
 			return plain(text)
 		}
-		it, err := lx.Tokenise(nil, text)
+		item, err := lexer.Tokenise(nil, text)
 		if err != nil {
 			return plain(text)
 		}
 		var spans []Span
-		for _, tok := range it.Tokens() {
-			v := strings.TrimRight(tok.Value, "\n") // lexers may append a newline
-			if v == "" {
+		for _, token := range item.Tokens() {
+			value := strings.TrimRight(token.Value, "\n") // lexers may append a newline
+			if value == "" {
 				continue
 			}
-			spans = append(spans, Span{Text: v, Class: classify(tok.Type)})
+			spans = append(spans, Span{Text: value, Class: classify(token.Type)})
 		}
 		if joined(spans) != text {
 			return plain(text) // lexer altered the text; never show wrong code
@@ -86,11 +86,11 @@ func ChromaHighlighter() Highlighter {
 }
 
 func joined(spans []Span) string {
-	var b strings.Builder
-	for _, s := range spans {
-		b.WriteString(s.Text)
+	var builder strings.Builder
+	for _, span := range spans {
+		builder.WriteString(span.Text)
 	}
-	return b.String()
+	return builder.String()
 }
 
 func plain(text string) []Span {
@@ -102,4 +102,4 @@ func plain(text string) []Span {
 
 // classify maps a token type to a class through the theme's mapping, the same
 // one Markdown code blocks use, so both panes colour code identically.
-func classify(t chroma.TokenType) Class { return theme.ClassOf(t) }
+func classify(tokenType chroma.TokenType) Class { return theme.ClassOf(tokenType) }

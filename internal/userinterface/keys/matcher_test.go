@@ -9,7 +9,7 @@ import (
 
 func bind(keys ...string) key.Binding { return key.NewBinding(key.WithKeys(keys...)) }
 
-func TestMatcherFeed(t *testing.T) {
+func TestMatcherFeed(test *testing.T) {
 	disabled := bind("x y")
 	disabled.SetEnabled(false)
 
@@ -100,21 +100,21 @@ func TestMatcherFeed(t *testing.T) {
 			want:     []Result{{Matched, "down"}},
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var m Matcher
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			var matcher Matcher
 			var got []Result
-			for _, k := range tt.keys {
-				got = append(got, m.Feed(k, tt.bindings))
+			for _, k := range testCase.keys {
+				got = append(got, matcher.Feed(k, testCase.bindings))
 			}
-			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Errorf("results mismatch (-want +got):\n%s", diff)
+			if diff := cmp.Diff(testCase.want, got); diff != "" {
+				test.Errorf("results mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
 }
 
-func TestMatcherExpire(t *testing.T) {
+func TestMatcherExpire(test *testing.T) {
 	tests := []struct {
 		name     string
 		bindings []key.Binding
@@ -125,59 +125,59 @@ func TestMatcherExpire(t *testing.T) {
 		{"incomplete prefix is dropped", []key.Binding{bind("g g")}, []string{"g"}, Result{NoMatch, "g"}},
 		{"ambiguous prefix resolves to shorter", []key.Binding{bind("g"), bind("g g")}, []string{"g"}, Result{Matched, "g"}},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var m Matcher
-			for _, k := range tt.keys {
-				m.Feed(k, tt.bindings)
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			var matcher Matcher
+			for _, k := range testCase.keys {
+				matcher.Feed(k, testCase.bindings)
 			}
-			if got := m.Expire(tt.bindings); got != tt.want {
-				t.Errorf("Expire() = %+v, want %+v", got, tt.want)
+			if got := matcher.Expire(testCase.bindings); got != testCase.want {
+				test.Errorf("Expire() = %+v, want %+v", got, testCase.want)
 			}
-			if m.Pending() {
-				t.Error("still pending after Expire")
+			if matcher.Pending() {
+				test.Error("still pending after Expire")
 			}
 		})
 	}
 }
 
-func TestMatcherDisplayAndReset(t *testing.T) {
-	var m Matcher
-	bs := []key.Binding{bind("z a b")}
-	m.Feed("z", bs)
-	m.Feed("a", bs)
-	if got := m.Display(); got != "za" {
-		t.Errorf("Display() = %q, want %q", got, "za")
+func TestMatcherDisplayAndReset(test *testing.T) {
+	var matcher Matcher
+	bindings := []key.Binding{bind("z a b")}
+	matcher.Feed("z", bindings)
+	matcher.Feed("a", bindings)
+	if got := matcher.Display(); got != "za" {
+		test.Errorf("Display() = %q, want %q", got, "za")
 	}
-	m.Reset()
-	if m.Pending() || m.Display() != "" {
-		t.Error("Reset did not clear pending keys")
+	matcher.Reset()
+	if matcher.Pending() || matcher.Display() != "" {
+		test.Error("Reset did not clear pending keys")
 	}
 }
 
-func TestGlobalBindings(t *testing.T) {
-	g := DefaultGlobal()
-	if !key.Matches(Message{Sequence: "g g"}, g.Top) {
-		t.Error("g g should match Top")
+func TestGlobalBindings(test *testing.T) {
+	global := DefaultGlobal()
+	if !key.Matches(Message{Sequence: "g g"}, global.Top) {
+		test.Error("g g should match Top")
 	}
-	if !key.Matches(Message{Sequence: "R"}, g.Refresh) || key.Matches(Message{Sequence: "r"}, g.Refresh) {
-		t.Error("refresh must be R, not r")
+	if !key.Matches(Message{Sequence: "R"}, global.Refresh) || key.Matches(Message{Sequence: "r"}, global.Refresh) {
+		test.Error("refresh must be R, not r")
 	}
-	if !key.Matches(Message{Sequence: ":"}, g.Command) {
-		t.Error(": should open the command line")
+	if !key.Matches(Message{Sequence: ":"}, global.Command) {
+		test.Error(": should open the command line")
 	}
 	seen := map[string]bool{}
-	for _, b := range g.Bindings() {
-		for _, k := range b.Keys() {
+	for _, binding := range global.Bindings() {
+		for _, k := range binding.Keys() {
 			if seen[k] {
-				t.Errorf("duplicate global key %q", k)
+				test.Errorf("duplicate global key %q", k)
 			}
 			seen[k] = true
 		}
 	}
 	for _, k := range []string{"r", "c", "q", "ctrl+c", "tab", "ctrl+o", "ctrl+i"} {
 		if seen[k] {
-			t.Errorf("%q is reserved and must not be bound globally", k)
+			test.Errorf("%q is reserved and must not be bound globally", k)
 		}
 	}
 }

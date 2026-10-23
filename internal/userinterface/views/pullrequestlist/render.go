@@ -24,43 +24,43 @@ const (
 )
 
 // Render implements userinterface.View.
-func (v *View) Render(width, height int) string {
+func (view *View) Render(width, height int) string {
 	if width < 1 || height < 1 {
 		return ""
 	}
-	v.width, v.height = width, height
-	v.win.SetRows(len(v.pullRequests))
-	v.win.SetSize(v.listHeight())
+	view.width, view.height = width, height
+	view.win.SetRows(len(view.pullRequests))
+	view.win.SetSize(view.listHeight())
 
 	var out string
 	switch {
-	case len(v.pullRequests) == 0 && v.loading:
-		out = v.th.Muted.Render(fmt.Sprintf("Loading pull requests in %s...", v.repositoryName()))
-	case len(v.pullRequests) == 0 && v.err != nil:
-		out = v.errorState(width)
-	case len(v.pullRequests) == 0:
-		out = v.th.Muted.Render(fmt.Sprintf("no open pull requests in %s", v.repositoryName()))
+	case len(view.pullRequests) == 0 && view.loading:
+		out = view.th.Muted.Render(fmt.Sprintf("Loading pull requests in %s...", view.repositoryName()))
+	case len(view.pullRequests) == 0 && view.err != nil:
+		out = view.errorState(width)
+	case len(view.pullRequests) == 0:
+		out = view.th.Muted.Render(fmt.Sprintf("no open pull requests in %s", view.repositoryName()))
 	default:
-		out = v.table(width, height)
+		out = view.table(width, height)
 	}
 	return fit(out, width, height)
 }
 
 // fit clips s to at most height lines of width columns, however narrow the
 // terminal: layouts have minimum widths that can exceed what we are given.
-func fit(s string, width, height int) string {
-	lines := strings.Split(s, "\n")
+func fit(text string, width, height int) string {
+	lines := strings.Split(text, "\n")
 	lines = lines[:min(len(lines), height)]
-	for i, l := range lines {
-		lines[i] = ansi.Truncate(l, width, "")
+	for i, line := range lines {
+		lines[i] = ansi.Truncate(line, width, "")
 	}
 	return strings.Join(lines, "\n")
 }
 
-func (v *View) errorState(width int) string {
-	head := v.th.PullRequestList.ChangesRequested.Render("Could not load pull requests")
-	body := ansi.Wrap(terminaltext.SafeError(v.err).Error(), width, "")
-	return head + "\n" + body + "\n\n" + v.th.Muted.Render("Press R to retry.")
+func (view *View) errorState(width int) string {
+	head := view.th.PullRequestList.ChangesRequested.Render("Could not load pull requests")
+	body := ansi.Wrap(terminaltext.SafeError(view.err).Error(), width, "")
+	return head + "\n" + body + "\n\n" + view.th.Muted.Render("Press R to retry.")
 }
 
 // layout holds the column widths for one render. A zero width hides a column.
@@ -68,105 +68,105 @@ type layout struct {
 	number, title, author, age, checks, review, comments int
 }
 
-func (v *View) layout(width int) layout {
-	l := layout{age: ageCols, checks: checksCols, review: reviewCols, comments: commentCols, number: len("#")}
-	for _, pr := range v.pullRequests {
-		l.number = max(l.number, len(fmt.Sprintf("#%d", pr.Number)))
-		l.author = min(maxAuthor, max(l.author, ansi.StringWidth(pr.Author)))
+func (view *View) layout(width int) layout {
+	rowLayout := layout{age: ageCols, checks: checksCols, review: reviewCols, comments: commentCols, number: len("#")}
+	for _, pullRequest := range view.pullRequests {
+		rowLayout.number = max(rowLayout.number, len(fmt.Sprintf("#%d", pullRequest.Number)))
+		rowLayout.author = min(maxAuthor, max(rowLayout.author, ansi.StringWidth(pullRequest.Author)))
 	}
-	l.author = max(l.author, len("AUTHOR"))
-	fit := func() bool { return l.fixed() <= width-minTitleCols }
+	rowLayout.author = max(rowLayout.author, len("AUTHOR"))
+	fits := func() bool { return rowLayout.fixed() <= width-minTitleCols }
 	// Drop the least important columns first on narrow terminals.
-	for _, drop := range []*int{&l.author, &l.comments, &l.checks, &l.review} {
-		if fit() {
+	for _, drop := range []*int{&rowLayout.author, &rowLayout.comments, &rowLayout.checks, &rowLayout.review} {
+		if fits() {
 			break
 		}
 		*drop = 0
 	}
-	l.title = max(1, width-l.fixed())
-	return l
+	rowLayout.title = max(1, width-rowLayout.fixed())
+	return rowLayout
 }
 
 // fixed is the width of every column but the title, including the gaps.
-func (l layout) fixed() int {
-	w := l.number + len(gap) // number, then the gap before the title
-	for _, c := range []int{l.author, l.age, l.checks, l.review, l.comments} {
-		if c > 0 {
-			w += c + len(gap)
+func (layout layout) fixed() int {
+	width := layout.number + len(gap) // number, then the gap before the title
+	for _, count := range []int{layout.author, layout.age, layout.checks, layout.review, layout.comments} {
+		if count > 0 {
+			width += count + len(gap)
 		}
 	}
-	return w
+	return width
 }
 
-func (v *View) table(width, height int) string {
-	l := v.layout(width - len(marker))
+func (view *View) table(width, height int) string {
+	layout := view.layout(width - len(marker))
 	lines := make([]string, 0, height)
-	lines = append(lines, v.th.PullRequestList.Header.Render(pad(noMarker+l.row("#", "TITLE", "AUTHOR", "UPD", "CI", "RV", "CMT"), width)))
+	lines = append(lines, view.th.PullRequestList.Header.Render(pad(noMarker+layout.row("#", "TITLE", "AUTHOR", "UPD", "CI", "RV", "CMT"), width)))
 
-	end := min(len(v.pullRequests), v.win.Top()+v.listHeight())
-	for i := v.win.Top(); i < end; i++ {
-		lines = append(lines, v.row(l, v.pullRequests[i], i == v.win.Cursor(), width))
+	end := min(len(view.pullRequests), view.win.Top()+view.listHeight())
+	for i := view.win.Top(); i < end; i++ {
+		lines = append(lines, view.row(layout, view.pullRequests[i], i == view.win.Cursor(), width))
 	}
 	return strings.Join(lines, "\n")
 }
 
 // row pads each cell to its column and joins them. Right-aligned columns are
 // numbers; the rest are left-aligned.
-func (l layout) row(num, title, author, age, checks, review, comments string) string {
-	cells := []string{padLeft(num, l.number), pad(title, l.title)}
-	add := func(s string, w int, right bool) {
+func (layout layout) row(number, title, author, age, checks, review, comments string) string {
+	cells := []string{padLeft(number, layout.number), pad(title, layout.title)}
+	add := func(text string, width int, right bool) {
 		switch {
-		case w == 0:
+		case width == 0:
 		case right:
-			cells = append(cells, padLeft(s, w))
+			cells = append(cells, padLeft(text, width))
 		default:
-			cells = append(cells, pad(s, w))
+			cells = append(cells, pad(text, width))
 		}
 	}
-	add(author, l.author, false)
-	add(age, l.age, true)
-	add(checks, l.checks, false)
-	add(review, l.review, false)
-	add(comments, l.comments, true)
+	add(author, layout.author, false)
+	add(age, layout.age, true)
+	add(checks, layout.checks, false)
+	add(review, layout.review, false)
+	add(comments, layout.comments, true)
 	return strings.Join(cells, gap)
 }
 
-func (v *View) row(l layout, pr github.PullRequest, selected bool, width int) string {
-	title := terminaltext.Clean(pr.Title)
-	if pr.Draft {
+func (view *View) row(layout layout, pullRequest github.PullRequest, selected bool, width int) string {
+	title := terminaltext.Clean(pullRequest.Title)
+	if pullRequest.Draft {
 		title = draftPrefix + title
 	}
-	title = ansi.Truncate(title, l.title, "…")
-	author := ansi.Truncate(terminaltext.Clean(pr.Author), l.author, "…")
-	num := fmt.Sprintf("#%d", pr.Number)
-	age := relativeAge(v.now(), pr.UpdatedAt)
-	ck, ckStyle := v.checksMark(pr.Checks)
-	rv, rvStyle := v.reviewMark(pr.ReviewDecision)
-	cmt := commentText(pr.CommentCount)
+	title = ansi.Truncate(title, layout.title, "…")
+	author := ansi.Truncate(terminaltext.Clean(pullRequest.Author), layout.author, "…")
+	number := fmt.Sprintf("#%d", pullRequest.Number)
+	age := relativeAge(view.now(), pullRequest.UpdatedAt)
+	checksMark, checksStyle := view.checksMark(pullRequest.Checks)
+	reviewMark, reviewStyle := view.reviewMark(pullRequest.ReviewDecision)
+	comments := commentText(pullRequest.CommentCount)
 
 	if selected {
-		return v.th.PullRequestList.Selected.Render(pad(marker+l.row(num, title, author, age, ck, rv, cmt), width))
+		return view.th.PullRequestList.Selected.Render(pad(marker+layout.row(number, title, author, age, checksMark, reviewMark, comments), width))
 	}
 
-	st := v.th.PullRequestList
-	styledTitle := v.th.Normal.Render(title)
-	if pr.Draft && strings.HasPrefix(title, draftPrefix) {
-		styledTitle = st.Draft.Render(draftPrefix) + v.th.Normal.Render(strings.TrimPrefix(title, draftPrefix))
+	styles := view.th.PullRequestList
+	styledTitle := view.th.Normal.Render(title)
+	if pullRequest.Draft && strings.HasPrefix(title, draftPrefix) {
+		styledTitle = styles.Draft.Render(draftPrefix) + view.th.Normal.Render(strings.TrimPrefix(title, draftPrefix))
 	}
 	// Style after padding so the escape codes don't skew the widths.
-	out := []string{st.Number.Render(padLeft(num, l.number)), styledTitle + strings.Repeat(" ", max(0, l.title-ansi.StringWidth(title)))}
-	if l.author > 0 {
-		out = append(out, st.Author.Render(pad(author, l.author)))
+	out := []string{styles.Number.Render(padLeft(number, layout.number)), styledTitle + strings.Repeat(" ", max(0, layout.title-ansi.StringWidth(title)))}
+	if layout.author > 0 {
+		out = append(out, styles.Author.Render(pad(author, layout.author)))
 	}
-	out = append(out, st.Age.Render(padLeft(age, l.age)))
-	if l.checks > 0 {
-		out = append(out, ckStyle.Render(pad(ck, l.checks)))
+	out = append(out, styles.Age.Render(padLeft(age, layout.age)))
+	if layout.checks > 0 {
+		out = append(out, checksStyle.Render(pad(checksMark, layout.checks)))
 	}
-	if l.review > 0 {
-		out = append(out, rvStyle.Render(pad(rv, l.review)))
+	if layout.review > 0 {
+		out = append(out, reviewStyle.Render(pad(reviewMark, layout.review)))
 	}
-	if l.comments > 0 {
-		out = append(out, st.Comments.Render(padLeft(cmt, l.comments)))
+	if layout.comments > 0 {
+		out = append(out, styles.Comments.Render(padLeft(comments, layout.comments)))
 	}
 	return noMarker + strings.Join(out, gap)
 }

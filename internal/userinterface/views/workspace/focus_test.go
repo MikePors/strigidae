@@ -11,11 +11,11 @@ import (
 // the theme's focused styles and the other pane the unfocused ones. It
 // compares against what the theme's own styles produce, so a palette change
 // cannot break it, only a change to which style a pane gets.
-func TestFocusedPaneStyling(t *testing.T) {
-	th := theme.New(true)
-	if th.PaneBorderFocus.Render("│") == th.PaneBorder.Render("│") ||
-		th.PaneTitleFocus.Render("x") == th.PaneTitle.Render("x") {
-		t.Fatal("setup: the theme's focused and unfocused pane styles must render differently")
+func TestFocusedPaneStyling(test *testing.T) {
+	activeTheme := theme.New(true)
+	if activeTheme.PaneBorderFocus.Render("│") == activeTheme.PaneBorder.Render("│") ||
+		activeTheme.PaneTitleFocus.Render("x") == activeTheme.PaneTitle.Render("x") {
+		test.Fatal("setup: the theme's focused and unfocused pane styles must render differently")
 	}
 
 	// The top edge is "╭─", the title, dashes, "╮"; the sides are "│".
@@ -23,20 +23,20 @@ func TestFocusedPaneStyling(t *testing.T) {
 		return border("╭─") + title(" "+name+" ")
 	}
 	focusedEdge := func(name string) string {
-		return edge(th.PaneBorderFocus.Render, th.PaneTitleFocus.Render, name)
+		return edge(activeTheme.PaneBorderFocus.Render, activeTheme.PaneTitleFocus.Render, name)
 	}
 	plainEdge := func(name string) string {
-		return edge(th.PaneBorder.Render, th.PaneTitle.Render, name)
+		return edge(activeTheme.PaneBorder.Render, activeTheme.PaneTitle.Render, name)
 	}
 	side := func(focused bool) string {
 		if focused {
-			return th.PaneBorderFocus.Render("│")
+			return activeTheme.PaneBorderFocus.Render("│")
 		}
-		return th.PaneBorder.Render("│")
+		return activeTheme.PaneBorder.Render("│")
 	}
 
-	check := func(t *testing.T, out string, filesFocused bool) {
-		t.Helper()
+	check := func(test *testing.T, out string, filesFocused bool) {
+		test.Helper()
 		lines := strings.Split(out, "\n")
 		top, row := lines[headerRows], lines[headerRows+1]
 		files, right := plainEdge("Files 0/5 viewed"), focusedEdge("Overview")
@@ -44,24 +44,24 @@ func TestFocusedPaneStyling(t *testing.T) {
 			files, right = focusedEdge("Files 0/5 viewed"), plainEdge("Overview")
 		}
 		if !strings.Contains(top, files) {
-			t.Errorf("Files pane top edge lacks the expected styles:\n got %q\nwant %q inside", top, files)
+			test.Errorf("Files pane top edge lacks the expected styles:\n got %q\nwant %q inside", top, files)
 		}
 		if !strings.Contains(top, right) {
-			t.Errorf("right pane top edge lacks the expected styles:\n got %q\nwant %q inside", top, right)
+			test.Errorf("right pane top edge lacks the expected styles:\n got %q\nwant %q inside", top, right)
 		}
 		// Each body row starts with the Files pane's left side and has the
 		// right pane's left side where the Files pane ends.
 		if !strings.HasPrefix(row, side(filesFocused)) {
-			t.Errorf("Files pane side has the wrong style: %q", row)
+			test.Errorf("Files pane side has the wrong style: %q", row)
 		}
 		if !strings.Contains(row, side(!filesFocused)) {
-			t.Errorf("right pane side has the wrong style: %q", row)
+			test.Errorf("right pane side has the wrong style: %q", row)
 		}
 	}
 
-	h := loaded(t, 100, 24)
-	h.press("l")
-	check(t, h.render(), false)
-	h.press("h")
-	check(t, h.render(), true)
+	harness := loaded(test, 100, 24)
+	harness.press("l")
+	check(test, harness.render(), false)
+	harness.press("h")
+	check(test, harness.render(), true)
 }

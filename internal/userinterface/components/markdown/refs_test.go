@@ -19,7 +19,7 @@ var (
 // TestCharacterReferencesCannotInjectControls checks the property the
 // renderer promises: Glamour decodes HTML character references, so the output
 // is cleaned and holds no escape sequence beyond SGR and OSC 8.
-func TestCharacterReferencesCannotInjectControls(t *testing.T) {
+func TestCharacterReferencesCannotInjectControls(test *testing.T) {
 	payloads := map[string]string{
 		"text":        "hi &#x1b;]52;c;aGk=&#x07; &#x202e;gnp.exe &rlm; &lrm; &#27;[2J",
 		"inline html": "<span>&#x1b;[2J &#x1b;]0;pwned&#7;</span>",
@@ -29,16 +29,16 @@ func TestCharacterReferencesCannotInjectControls(t *testing.T) {
 		"heading":     "# &#x1b;]0;t&#x07;",
 		"table":       "| a |\n|---|\n| &#x1b;[2J |",
 	}
-	for name, md := range payloads {
-		t.Run(name, func(t *testing.T) {
-			out := New(theme.New(true)).Render(md, 60)
+	for name, markdownSource := range payloads {
+		test.Run(name, func(test *testing.T) {
+			out := New(theme.New(true)).Render(markdownSource, 60)
 			rest := sgr.ReplaceAllString(osc8.ReplaceAllString(out, ""), "")
 			if strings.ContainsRune(rest, 0x1b) {
-				t.Errorf("non-SGR escape in output: %q", rest)
+				test.Errorf("non-SGR escape in output: %q", rest)
 			}
-			for _, r := range ansi.Strip(out) {
-				if (unicode.IsControl(r) && r != '\n') || unicode.Is(unicode.Bidi_Control, r) {
-					t.Errorf("control or bidi rune U+%04X in output %q", r, out)
+			for _, character := range ansi.Strip(out) {
+				if (unicode.IsControl(character) && character != '\n') || unicode.Is(unicode.Bidi_Control, character) {
+					test.Errorf("control or bidi rune U+%04X in output %q", character, out)
 				}
 			}
 		})

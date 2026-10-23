@@ -2,7 +2,7 @@ package terminaltext
 
 import "testing"
 
-func TestClean(t *testing.T) {
+func TestClean(test *testing.T) {
 	tests := []struct{ name, in, want string }{
 		{"plain", "plain title", "plain title"},
 		{"newline and tab", "tab\there\nnewline", "tab here newline"},
@@ -16,16 +16,16 @@ func TestClean(t *testing.T) {
 		{"bidi isolates", "iso\u2066late\u2069d", "iso late d"},
 		{"unicode kept", "unicode ✓ ok", "unicode ✓ ok"},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := Clean(tt.in); got != tt.want {
-				t.Errorf("Clean(%q) = %q, want %q", tt.in, got, tt.want)
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			if got := Clean(testCase.in); got != testCase.want {
+				test.Errorf("Clean(%q) = %q, want %q", testCase.in, got, testCase.want)
 			}
 		})
 	}
 }
 
-func TestCleanBlock(t *testing.T) {
+func TestCleanBlock(test *testing.T) {
 	tests := []struct{ name, in, want string }{
 		{"keeps newline and tab", "a\n\tb", "a\n\tb"},
 		{"crlf", "a\r\nb", "a\nb"},
@@ -40,10 +40,10 @@ func TestCleanBlock(t *testing.T) {
 		{"bidi isolates", "iso\u2066late\u2069d", "iso late d"},
 		{"markdown kept", "# Title\n\n- `code` **bold**", "# Title\n\n- `code` **bold**"},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := CleanBlock(tt.in); got != tt.want {
-				t.Errorf("CleanBlock(%q) = %q, want %q", tt.in, got, tt.want)
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			if got := CleanBlock(testCase.in); got != testCase.want {
+				test.Errorf("CleanBlock(%q) = %q, want %q", testCase.in, got, testCase.want)
 			}
 		})
 	}

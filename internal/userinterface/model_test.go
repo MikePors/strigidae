@@ -36,33 +36,33 @@ func newFake(title string) *fakeView {
 	}
 }
 
-func (f *fakeView) Init() tea.Cmd { return nil }
-func (f *fakeView) Loading() bool { return f.loading }
-func (f *fakeView) Resumed() tea.Cmd {
-	f.resumed++
+func (view *fakeView) Init() tea.Cmd { return nil }
+func (view *fakeView) Loading() bool { return view.loading }
+func (view *fakeView) Resumed() tea.Cmd {
+	view.resumed++
 	return nil
 }
 
-func (f *fakeView) Update(msg tea.Msg) (View, tea.Cmd) {
-	f.got = append(f.got, msg)
-	if k, ok := msg.(tea.KeyPressMsg); ok && k.String() == "esc" {
-		f.capture = false
+func (view *fakeView) Update(message tea.Msg) (View, tea.Cmd) {
+	view.got = append(view.got, message)
+	if k, ok := message.(tea.KeyPressMsg); ok && k.String() == "esc" {
+		view.capture = false
 	}
-	if _, ok := msg.(resultMessage); ok {
-		f.results++
-		f.loading = false
+	if _, ok := message.(resultMessage); ok {
+		view.results++
+		view.loading = false
 	}
-	return f, nil
+	return view, nil
 }
-func (f *fakeView) Render(_, _ int) string    { return f.title + " body" }
-func (f *fakeView) Title() string             { return f.title }
-func (f *fakeView) ShortHelp() []key.Binding  { return []key.Binding{f.next} }
-func (f *fakeView) FullHelp() [][]key.Binding { return [][]key.Binding{{f.next}} }
-func (f *fakeView) CapturesKeys() bool        { return f.capture }
-func (f *fakeView) last() tea.Msg             { return f.got[len(f.got)-1] }
-func (f *fakeView) keyMessages() (out []keys.Message) {
-	for _, m := range f.got {
-		if k, ok := m.(keys.Message); ok {
+func (view *fakeView) Render(_, _ int) string    { return view.title + " body" }
+func (view *fakeView) Title() string             { return view.title }
+func (view *fakeView) ShortHelp() []key.Binding  { return []key.Binding{view.next} }
+func (view *fakeView) FullHelp() [][]key.Binding { return [][]key.Binding{{view.next}} }
+func (view *fakeView) CapturesKeys() bool        { return view.capture }
+func (view *fakeView) last() tea.Msg             { return view.got[len(view.got)-1] }
+func (view *fakeView) keyMessages() (out []keys.Message) {
+	for _, message := range view.got {
+		if k, ok := message.(keys.Message); ok {
 			out = append(out, k)
 		}
 	}
@@ -71,52 +71,52 @@ func (f *fakeView) keyMessages() (out []keys.Message) {
 
 // instantTick makes timers return their message immediately when the command
 // is run, so tests need no clock or sleeping.
-func instantTick(_ time.Duration, fn func(time.Time) tea.Msg) tea.Cmd {
-	return func() tea.Msg { return fn(time.Time{}) }
+func instantTick(_ time.Duration, function func(time.Time) tea.Msg) tea.Cmd {
+	return func() tea.Msg { return function(time.Time{}) }
 }
 
 func newModel(root View) *Model {
-	m := New(root, theme.Default(), Options{Tick: instantTick})
-	m.Update(tea.WindowSizeMsg{Width: 60, Height: 12})
-	return m
+	model := New(root, theme.Default(), Options{Tick: instantTick})
+	model.Update(tea.WindowSizeMsg{Width: 60, Height: 12})
+	return model
 }
 
-func press(m *Model, s string) tea.Cmd {
-	_, cmd := m.Update(keyFor(s))
-	return cmd
+func press(model *Model, text string) tea.Cmd {
+	_, command := model.Update(keyFor(text))
+	return command
 }
 
-func isQuit(cmd tea.Cmd) bool {
-	if cmd == nil {
+func isQuit(command tea.Cmd) bool {
+	if command == nil {
 		return false
 	}
-	_, ok := cmd().(tea.QuitMsg)
+	_, ok := command().(tea.QuitMsg)
 	return ok
 }
 
-func run(m *Model, cmd tea.Cmd) {
-	if cmd == nil {
+func run(model *Model, command tea.Cmd) {
+	if command == nil {
 		return
 	}
-	msg := cmd()
-	if _, ok := msg.(tea.BatchMsg); ok {
+	message := command()
+	if _, ok := message.(tea.BatchMsg); ok {
 		return
 	}
-	m.Update(msg)
+	model.Update(message)
 }
 
-func TestKeyEncoding(t *testing.T) {
+func TestKeyEncoding(test *testing.T) {
 	// Guards the assumption press() relies on: key names match binding names.
-	for _, s := range []string{"j", "G", "?", ":", "ctrl+c", "esc", "enter", "tab", "ctrl+o"} {
-		k := keyFor(s)
-		if k.String() != s {
-			t.Errorf("key for %q stringifies as %q", s, k.String())
+	for _, text := range []string{"j", "G", "?", ":", "ctrl+c", "esc", "enter", "tab", "ctrl+o"} {
+		k := keyFor(text)
+		if k.String() != text {
+			test.Errorf("key for %q stringifies as %q", text, k.String())
 		}
 	}
 }
 
-func keyFor(s string) tea.KeyPressMsg {
-	switch s {
+func keyFor(text string) tea.KeyPressMsg {
+	switch text {
 	case "ctrl+c":
 		return tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
 	case "esc":
@@ -128,104 +128,104 @@ func keyFor(s string) tea.KeyPressMsg {
 	case "ctrl+o":
 		return tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl}
 	}
-	return tea.KeyPressMsg{Code: []rune(s)[0], Text: s}
+	return tea.KeyPressMsg{Code: []rune(text)[0], Text: text}
 }
 
-func TestCommandLine(t *testing.T) {
-	typeLine := func(m *Model, line string) tea.Cmd {
-		press(m, ":")
-		for _, r := range line {
-			press(m, string(r))
+func TestCommandLine(test *testing.T) {
+	typeLine := func(model *Model, line string) tea.Cmd {
+		press(model, ":")
+		for _, character := range line {
+			press(model, string(character))
 		}
-		return press(m, "enter")
+		return press(model, "enter")
 	}
-	t.Run(": opens and captures keys", func(t *testing.T) {
-		v := newFake("v")
-		m := newModel(v)
-		press(m, ":")
-		if !m.cmdline.active {
-			t.Fatal(": should open the command line")
+	test.Run(": opens and captures keys", func(test *testing.T) {
+		view := newFake("v")
+		model := newModel(view)
+		press(model, ":")
+		if !model.cmdline.active {
+			test.Fatal(": should open the command line")
 		}
-		press(m, "j")
-		if len(v.keyMessages()) != 0 || m.cmdline.input.Value() != "j" {
-			t.Errorf("keys leaked to view or were not captured; value = %q", m.cmdline.input.Value())
-		}
-	})
-	t.Run(":q on root quits", func(t *testing.T) {
-		m := newModel(newFake("root"))
-		_, cmd := m.Update(typeLine(m, "q")())
-		if !isQuit(cmd) {
-			t.Error(":q on the root view should quit")
+		press(model, "j")
+		if len(view.keyMessages()) != 0 || model.cmdline.input.Value() != "j" {
+			test.Errorf("keys leaked to view or were not captured; value = %q", model.cmdline.input.Value())
 		}
 	})
-	t.Run(":q pops a pushed view", func(t *testing.T) {
-		m := newModel(newFake("root"))
-		run(m, Push(newFake("child")))
-		run(m, typeLine(m, "quit"))
-		if len(m.stack) != 1 {
-			t.Errorf("depth = %d, want 1", len(m.stack))
+	test.Run(":q on root quits", func(test *testing.T) {
+		model := newModel(newFake("root"))
+		_, command := model.Update(typeLine(model, "q")())
+		if !isQuit(command) {
+			test.Error(":q on the root view should quit")
 		}
 	})
-	t.Run(":qa quits from anywhere", func(t *testing.T) {
-		m := newModel(newFake("root"))
-		run(m, Push(newFake("child")))
-		cmd := typeLine(m, "qa")
-		if cmd == nil {
-			t.Fatal("expected a command")
-		}
-		if _, ok := cmd().(QuitMessage); !ok {
-			t.Error(":qa should produce QuitMsg")
+	test.Run(":q pops a pushed view", func(test *testing.T) {
+		model := newModel(newFake("root"))
+		run(model, Push(newFake("child")))
+		run(model, typeLine(model, "quit"))
+		if len(model.stack) != 1 {
+			test.Errorf("depth = %d, want 1", len(model.stack))
 		}
 	})
-	t.Run("unknown command shows an error", func(t *testing.T) {
-		m := newModel(newFake("root"))
-		run(m, typeLine(m, "frobnicate now"))
-		if m.status.text != "not a command: frobnicate" || m.status.kind != statusError {
-			t.Errorf("status = %+v", m.status)
+	test.Run(":qa quits from anywhere", func(test *testing.T) {
+		model := newModel(newFake("root"))
+		run(model, Push(newFake("child")))
+		command := typeLine(model, "qa")
+		if command == nil {
+			test.Fatal("expected a command")
+		}
+		if _, ok := command().(QuitMessage); !ok {
+			test.Error(":qa should produce QuitMsg")
 		}
 	})
-	t.Run("esc cancels", func(t *testing.T) {
-		m := newModel(newFake("root"))
-		press(m, ":")
-		press(m, "q")
-		press(m, "esc")
-		if m.cmdline.active || len(m.stack) != 1 {
-			t.Error("esc should cancel the command line without running it")
+	test.Run("unknown command shows an error", func(test *testing.T) {
+		model := newModel(newFake("root"))
+		run(model, typeLine(model, "frobnicate now"))
+		if model.status.text != "not a command: frobnicate" || model.status.kind != statusError {
+			test.Errorf("status = %+v", model.status)
 		}
 	})
-	t.Run("backspace on empty line cancels, otherwise deletes", func(t *testing.T) {
-		m := newModel(newFake("root"))
-		press(m, ":")
-		press(m, "q")
-		m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
-		if !m.cmdline.active || m.cmdline.input.Value() != "" {
-			t.Fatal("first backspace should delete the character")
-		}
-		m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
-		if m.cmdline.active {
-			t.Error("backspace on an empty line should cancel")
+	test.Run("esc cancels", func(test *testing.T) {
+		model := newModel(newFake("root"))
+		press(model, ":")
+		press(model, "q")
+		press(model, "esc")
+		if model.cmdline.active || len(model.stack) != 1 {
+			test.Error("esc should cancel the command line without running it")
 		}
 	})
-	t.Run("ctrl-c and q do nothing special", func(t *testing.T) {
-		m := newModel(newFake("root"))
-		if cmd := press(m, "ctrl+c"); isQuit(cmd) {
-			t.Error("ctrl+c must not quit")
+	test.Run("backspace on empty line cancels, otherwise deletes", func(test *testing.T) {
+		model := newModel(newFake("root"))
+		press(model, ":")
+		press(model, "q")
+		model.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+		if !model.cmdline.active || model.cmdline.input.Value() != "" {
+			test.Fatal("first backspace should delete the character")
 		}
-		if cmd := press(m, "q"); isQuit(cmd) || len(m.stack) != 1 {
-			t.Error("bare q must not quit or pop")
+		model.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+		if model.cmdline.active {
+			test.Error("backspace on an empty line should cancel")
 		}
 	})
-	t.Run("tab and ctrl+o are not intercepted", func(t *testing.T) {
-		m := newModel(newFake("root"))
-		press(m, "tab")
-		press(m, "ctrl+o")
-		if m.cmdline.active || m.showHelp || len(m.stack) != 1 {
-			t.Error("reserved keys must not navigate")
+	test.Run("ctrl-c and q do nothing special", func(test *testing.T) {
+		model := newModel(newFake("root"))
+		if command := press(model, "ctrl+c"); isQuit(command) {
+			test.Error("ctrl+c must not quit")
+		}
+		if command := press(model, "q"); isQuit(command) || len(model.stack) != 1 {
+			test.Error("bare q must not quit or pop")
+		}
+	})
+	test.Run("tab and ctrl+o are not intercepted", func(test *testing.T) {
+		model := newModel(newFake("root"))
+		press(model, "tab")
+		press(model, "ctrl+o")
+		if model.cmdline.active || model.showHelp || len(model.stack) != 1 {
+			test.Error("reserved keys must not navigate")
 		}
 	})
 }
 
-func TestParseCommand(t *testing.T) {
+func TestParseCommand(test *testing.T) {
 	tests := []struct {
 		line string
 		want tea.Msg // nil: expect a "not a command" error for wantName
@@ -240,29 +240,29 @@ func TestParseCommand(t *testing.T) {
 		{line: "zzz arg", name: "zzz"},
 		{line: "Q", name: "Q"},
 	}
-	for _, tt := range tests {
-		t.Run(tt.line, func(t *testing.T) {
-			got := parseCommand(tt.line, nil)()
-			if tt.want == nil {
-				em, ok := got.(ErrorMessage)
-				if !ok || em.Err.Error() != "not a command: "+tt.name {
-					t.Errorf("got %#v, want not-a-command error for %q", got, tt.name)
+	for _, testCase := range tests {
+		test.Run(testCase.line, func(test *testing.T) {
+			got := parseCommand(testCase.line, nil)()
+			if testCase.want == nil {
+				errorMessage, ok := got.(ErrorMessage)
+				if !ok || errorMessage.Err.Error() != "not a command: "+testCase.name {
+					test.Errorf("got %#v, want not-a-command error for %q", got, testCase.name)
 				}
 				return
 			}
-			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Errorf("mismatch (-want +got):\n%s", diff)
+			if diff := cmp.Diff(testCase.want, got); diff != "" {
+				test.Errorf("mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
 	if parseCommand("   ", nil) != nil {
-		t.Error("blank line should do nothing")
+		test.Error("blank line should do nothing")
 	}
 }
 
 // TestCapturersReleaseOnEsc is the safety net for having no ctrl+c: every
 // component that captures keys must release capture on esc.
-func TestCapturersReleaseOnEsc(t *testing.T) {
+func TestCapturersReleaseOnEsc(test *testing.T) {
 	tests := []struct {
 		name string
 		// setup returns a root with the capturer engaged, and a func reporting
@@ -270,315 +270,315 @@ func TestCapturersReleaseOnEsc(t *testing.T) {
 		setup func() (*Model, func() bool)
 	}{
 		{"command line", func() (*Model, func() bool) {
-			m := newModel(newFake("v"))
-			press(m, ":")
-			press(m, "x")
-			return m, m.cmdline.CapturesKeys
+			model := newModel(newFake("v"))
+			press(model, ":")
+			press(model, "x")
+			return model, model.cmdline.CapturesKeys
 		}},
 		{"confirm prompt", func() (*Model, func() bool) {
-			m := newModel(newFake("v"))
-			run(m, Confirm("sure?", nil))
-			return m, func() bool { return m.confirm.CapturesKeys() }
+			model := newModel(newFake("v"))
+			run(model, Confirm("sure?", nil))
+			return model, func() bool { return model.confirm.CapturesKeys() }
 		}},
 		{"view implementing KeyCapturer", func() (*Model, func() bool) {
-			v := newFake("v")
-			v.capture = true
-			return newModel(v), v.CapturesKeys
+			view := newFake("v")
+			view.capture = true
+			return newModel(view), view.CapturesKeys
 		}},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			m, captures := tt.setup()
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			model, captures := testCase.setup()
 			if !captures() {
-				t.Fatal("setup did not engage capture")
+				test.Fatal("setup did not engage capture")
 			}
-			press(m, "esc")
+			press(model, "esc")
 			if captures() {
-				t.Error("capturer still holds keys after esc")
+				test.Error("capturer still holds keys after esc")
 			}
 		})
 	}
 }
 
-func TestPushPop(t *testing.T) {
+func TestPushPop(test *testing.T) {
 	root, child := newFake("root"), newFake("child")
-	m := newModel(root)
+	model := newModel(root)
 
-	run(m, Push(child))
-	if m.top() != View(child) || len(m.stack) != 2 {
-		t.Fatalf("push failed: depth %d", len(m.stack))
+	run(model, Push(child))
+	if model.top() != View(child) || len(model.stack) != 2 {
+		test.Fatalf("push failed: depth %d", len(model.stack))
 	}
 	if diff := cmp.Diff(tea.WindowSizeMsg{Width: 60, Height: 11}, child.got[0]); diff != "" {
-		t.Errorf("pushed view should get content size (-want +got):\n%s", diff)
+		test.Errorf("pushed view should get content size (-want +got):\n%s", diff)
 	}
-	if got := m.bar().crumbs; got != "root › child" {
-		t.Errorf("crumbs = %q", got)
-	}
-
-	run(m, Pop())
-	if m.top() != View(root) || len(m.stack) != 1 {
-		t.Errorf("pop failed: depth %d", len(m.stack))
+	if got := model.bar().crumbs; got != "root › child" {
+		test.Errorf("crumbs = %q", got)
 	}
 
-	run(m, Push(nil))
-	if len(m.stack) != 1 {
-		t.Error("pushing nil should be ignored")
+	run(model, Pop())
+	if model.top() != View(root) || len(model.stack) != 1 {
+		test.Errorf("pop failed: depth %d", len(model.stack))
 	}
-	_, cmd := m.Update(PopMessage{})
-	if !isQuit(cmd) {
-		t.Error("PopMsg on root should quit")
+
+	run(model, Push(nil))
+	if len(model.stack) != 1 {
+		test.Error("pushing nil should be ignored")
+	}
+	_, command := model.Update(PopMessage{})
+	if !isQuit(command) {
+		test.Error("PopMsg on root should quit")
 	}
 }
 
-func TestSequences(t *testing.T) {
-	t.Run("global gg delivered once complete", func(t *testing.T) {
-		v := newFake("v")
-		m := newModel(v)
-		if cmd := press(m, "g"); cmd == nil {
-			t.Fatal("first g should schedule a timeout")
+func TestSequences(test *testing.T) {
+	test.Run("global gg delivered once complete", func(test *testing.T) {
+		view := newFake("v")
+		model := newModel(view)
+		if command := press(model, "g"); command == nil {
+			test.Fatal("first g should schedule a timeout")
 		}
-		if m.matcher.Display() != "g" || m.bar().pending != "g" {
-			t.Errorf("pending prefix = %q, want g", m.bar().pending)
+		if model.matcher.Display() != "g" || model.bar().pending != "g" {
+			test.Errorf("pending prefix = %q, want g", model.bar().pending)
 		}
-		if len(v.keyMessages()) != 0 {
-			t.Error("view received keys before sequence completed")
+		if len(view.keyMessages()) != 0 {
+			test.Error("view received keys before sequence completed")
 		}
-		press(m, "g")
-		if diff := cmp.Diff([]keys.Message{{Sequence: "g g"}}, v.keyMessages()); diff != "" {
-			t.Errorf("mismatch (-want +got):\n%s", diff)
+		press(model, "g")
+		if diff := cmp.Diff([]keys.Message{{Sequence: "g g"}}, view.keyMessages()); diff != "" {
+			test.Errorf("mismatch (-want +got):\n%s", diff)
 		}
-		if m.bar().pending != "" {
-			t.Error("pending prefix should clear after match")
-		}
-	})
-	t.Run("view-declared sequence", func(t *testing.T) {
-		v := newFake("v")
-		m := newModel(v)
-		press(m, "z")
-		press(m, "q")
-		if diff := cmp.Diff([]keys.Message{{Sequence: "z q"}}, v.keyMessages()); diff != "" {
-			t.Errorf("mismatch (-want +got):\n%s", diff)
+		if model.bar().pending != "" {
+			test.Error("pending prefix should clear after match")
 		}
 	})
-	t.Run("timeout clears pending prefix", func(t *testing.T) {
-		v := newFake("v")
-		m := newModel(v)
-		cmd := press(m, "g")
-		run(m, cmd) // fires seqTimeoutMsg
-		if m.matcher.Pending() {
-			t.Error("timeout should clear the pending prefix")
-		}
-		if len(v.keyMessages()) != 0 {
-			t.Error("incomplete sequence must not reach the view")
+	test.Run("view-declared sequence", func(test *testing.T) {
+		view := newFake("v")
+		model := newModel(view)
+		press(model, "z")
+		press(model, "q")
+		if diff := cmp.Diff([]keys.Message{{Sequence: "z q"}}, view.keyMessages()); diff != "" {
+			test.Errorf("mismatch (-want +got):\n%s", diff)
 		}
 	})
-	t.Run("stale timeout is ignored", func(t *testing.T) {
-		m := newModel(newFake("v"))
-		stale := press(m, "g")
-		press(m, "g")
-		press(m, "z") // new pending prefix
-		run(m, stale)
-		if !m.matcher.Pending() {
-			t.Error("stale timeout cleared a newer prefix")
+	test.Run("timeout clears pending prefix", func(test *testing.T) {
+		view := newFake("v")
+		model := newModel(view)
+		command := press(model, "g")
+		run(model, command) // fires seqTimeoutMsg
+		if model.matcher.Pending() {
+			test.Error("timeout should clear the pending prefix")
+		}
+		if len(view.keyMessages()) != 0 {
+			test.Error("incomplete sequence must not reach the view")
 		}
 	})
-	t.Run("unbound key goes to view raw", func(t *testing.T) {
-		v := newFake("v")
-		m := newModel(v)
-		press(m, "x")
-		if _, ok := v.last().(tea.KeyPressMsg); !ok {
-			t.Errorf("last msg = %T, want tea.KeyPressMsg", v.last())
+	test.Run("stale timeout is ignored", func(test *testing.T) {
+		model := newModel(newFake("v"))
+		stale := press(model, "g")
+		press(model, "g")
+		press(model, "z") // new pending prefix
+		run(model, stale)
+		if !model.matcher.Pending() {
+			test.Error("stale timeout cleared a newer prefix")
+		}
+	})
+	test.Run("unbound key goes to view raw", func(test *testing.T) {
+		view := newFake("v")
+		model := newModel(view)
+		press(model, "x")
+		if _, ok := view.last().(tea.KeyPressMsg); !ok {
+			test.Errorf("last msg = %T, want tea.KeyPressMsg", view.last())
 		}
 	})
 }
 
-func TestKeyCapture(t *testing.T) {
-	v := newFake("v")
-	v.capture = true
-	m := newModel(v)
-	press(m, ":")
-	press(m, "?")
-	if m.cmdline.active || m.showHelp {
-		t.Error("captured keys must not open the command line or help")
+func TestKeyCapture(test *testing.T) {
+	view := newFake("v")
+	view.capture = true
+	model := newModel(view)
+	press(model, ":")
+	press(model, "?")
+	if model.cmdline.active || model.showHelp {
+		test.Error("captured keys must not open the command line or help")
 	}
-	if len(v.got) != 3 { // size + : + ?
-		t.Errorf("view got %d msgs, want 3", len(v.got))
+	if len(view.got) != 3 { // size + : + ?
+		test.Errorf("view got %d msgs, want 3", len(view.got))
 	}
 }
 
-func TestHelpToggle(t *testing.T) {
-	v := newFake("v")
-	m := newModel(v)
+func TestHelpToggle(test *testing.T) {
+	view := newFake("v")
+	model := newModel(view)
 
-	press(m, "?")
-	if !m.showHelp {
-		t.Fatal("? should open help")
+	press(model, "?")
+	if !model.showHelp {
+		test.Fatal("? should open help")
 	}
-	press(m, "j")
-	if len(v.keyMessages()) != 0 {
-		t.Error("keys must not reach the view while help is open")
+	press(model, "j")
+	if len(view.keyMessages()) != 0 {
+		test.Error("keys must not reach the view while help is open")
 	}
 	for _, closer := range []string{"?", "esc"} {
-		m.showHelp = true
-		press(m, closer)
-		if m.showHelp {
-			t.Errorf("%s should close help", closer)
+		model.showHelp = true
+		press(model, closer)
+		if model.showHelp {
+			test.Errorf("%s should close help", closer)
 		}
 	}
-	if len(m.stack) != 1 {
-		t.Error("closing help must not pop")
+	if len(model.stack) != 1 {
+		test.Error("closing help must not pop")
 	}
 }
 
-func TestStatusMessages(t *testing.T) {
-	m := newModel(newFake("v"))
+func TestStatusMessages(test *testing.T) {
+	model := newModel(newFake("v"))
 
-	_, cmd := m.Update(InfoMessage{Text: "hello"})
-	if m.status.text != "hello" || m.status.kind != statusInfo {
-		t.Errorf("status = %+v", m.status)
+	_, command := model.Update(InfoMessage{Text: "hello"})
+	if model.status.text != "hello" || model.status.kind != statusInfo {
+		test.Errorf("status = %+v", model.status)
 	}
-	stale := cmd()
+	stale := command()
 
-	_, cmd = m.Update(ErrorMessage{Err: errors.New("boom")})
-	if m.status.text != "boom" || m.status.kind != statusError {
-		t.Errorf("status = %+v", m.status)
+	_, command = model.Update(ErrorMessage{Err: errors.New("boom")})
+	if model.status.text != "boom" || model.status.kind != statusError {
+		test.Errorf("status = %+v", model.status)
 	}
-	m.Update(stale) // the older info timer must not clear the newer error
-	if m.status.text != "boom" {
-		t.Error("stale clear removed a newer message")
+	model.Update(stale) // the older info timer must not clear the newer error
+	if model.status.text != "boom" {
+		test.Error("stale clear removed a newer message")
 	}
-	m.Update(cmd())
-	if m.status.text != "" || m.status.kind != statusNone {
-		t.Errorf("message should auto-clear, got %+v", m.status)
+	model.Update(command())
+	if model.status.text != "" || model.status.kind != statusNone {
+		test.Errorf("message should auto-clear, got %+v", model.status)
 	}
 }
 
 // resultMsg stands in for a command result addressed to a view.
 type resultMessage struct{}
 
-func TestSpinnerFollowsTopView(t *testing.T) {
+func TestSpinnerFollowsTopView(test *testing.T) {
 	root, child := newFake("root"), newFake("child")
 	root.loading = true
-	m := newModel(root)
+	model := newModel(root)
 
-	if !m.spinning || m.bar().spinner == "" {
-		t.Fatal("a loading top view should start the spinner")
+	if !model.spinning || model.bar().spinner == "" {
+		test.Fatal("a loading top view should start the spinner")
 	}
-	run(m, Push(child))
-	if m.bar().spinner != "" {
-		t.Error("spinner must follow the top view, which is not loading")
+	run(model, Push(child))
+	if model.bar().spinner != "" {
+		test.Error("spinner must follow the top view, which is not loading")
 	}
-	run(m, Pop())
-	if m.bar().spinner == "" {
-		t.Error("spinner should return when the loading view is revealed again")
+	run(model, Pop())
+	if model.bar().spinner == "" {
+		test.Error("spinner should return when the loading view is revealed again")
 	}
 	root.loading = false
-	m.Update(resultMessage{})
-	if m.bar().spinner != "" {
-		t.Error("spinner should stop when the view stops loading")
+	model.Update(resultMessage{})
+	if model.bar().spinner != "" {
+		test.Error("spinner should stop when the view stops loading")
 	}
 }
 
-func TestPoppedViewEndsItsSpinner(t *testing.T) {
+func TestPoppedViewEndsItsSpinner(test *testing.T) {
 	root, child := newFake("root"), newFake("child")
-	m := newModel(root)
-	run(m, Push(child))
+	model := newModel(root)
+	run(model, Push(child))
 	child.loading = true
-	m.Update(struct{}{}) // any message makes the root re-check
-	if m.bar().spinner == "" {
-		t.Fatal("child is loading; spinner expected")
+	model.Update(struct{}{}) // any message makes the root re-check
+	if model.bar().spinner == "" {
+		test.Fatal("child is loading; spinner expected")
 	}
-	run(m, Pop())
-	if m.bar().spinner != "" {
-		t.Error("popping the loading view must end its spinner")
+	run(model, Pop())
+	if model.bar().spinner != "" {
+		test.Error("popping the loading view must end its spinner")
 	}
 }
 
-func TestResultReachesCoveredView(t *testing.T) {
+func TestResultReachesCoveredView(test *testing.T) {
 	root, child := newFake("root"), newFake("child")
 	root.loading = true
-	m := newModel(root)
-	run(m, Push(child)) // pushed while root's load is in flight
+	model := newModel(root)
+	run(model, Push(child)) // pushed while root's load is in flight
 
-	m.Update(resultMessage{}) // the load finishes while child is on top
+	model.Update(resultMessage{}) // the load finishes while child is on top
 	if root.results != 1 || child.results != 1 {
-		t.Fatalf("result delivery: root %d, child %d; want both 1 (broadcast)", root.results, child.results)
+		test.Fatalf("result delivery: root %d, child %d; want both 1 (broadcast)", root.results, child.results)
 	}
-	run(m, Pop())
-	if root.loading || m.bar().spinner != "" {
-		t.Error("after :q the lower view should show its result with no stuck spinner")
+	run(model, Pop())
+	if root.loading || model.bar().spinner != "" {
+		test.Error("after :q the lower view should show its result with no stuck spinner")
 	}
 }
 
-func TestResumed(t *testing.T) {
+func TestResumed(test *testing.T) {
 	root, child := newFake("root"), newFake("child")
-	m := newModel(root)
-	run(m, Push(child))
+	model := newModel(root)
+	run(model, Push(child))
 	if root.resumed != 0 {
-		t.Fatal("push must not resume")
+		test.Fatal("push must not resume")
 	}
-	run(m, Pop())
+	run(model, Pop())
 	if root.resumed != 1 || child.resumed != 0 {
-		t.Errorf("resumed: root %d, child %d; want 1, 0", root.resumed, child.resumed)
+		test.Errorf("resumed: root %d, child %d; want 1, 0", root.resumed, child.resumed)
 	}
 }
 
-func TestSpinnerTicks(t *testing.T) {
-	v := newFake("v")
-	m := newModel(v)
+func TestSpinnerTicks(test *testing.T) {
+	view := newFake("v")
+	model := newModel(view)
 
-	own := spinner.New().Tick() // a tick from a spinner the view owns
-	before := len(v.got)
-	m.Update(own)
-	if len(v.got) != before+1 {
-		t.Error("a view's own spinner tick must reach the view")
+	message := spinner.New().Tick() // a tick from a spinner the view owns
+	before := len(view.got)
+	model.Update(message)
+	if len(view.got) != before+1 {
+		test.Error("a view's own spinner tick must reach the view")
 	}
 
-	rootTick := m.spin.Tick()
-	before = len(v.got)
-	m.Update(rootTick)
-	if len(v.got) != before {
-		t.Error("the root spinner's tick must be consumed, not forwarded")
+	rootTick := model.spin.Tick()
+	before = len(view.got)
+	model.Update(rootTick)
+	if len(view.got) != before {
+		test.Error("the root spinner's tick must be consumed, not forwarded")
 	}
 }
 
-func TestResizeAndTheme(t *testing.T) {
+func TestResizeAndTheme(test *testing.T) {
 	root, child := newFake("root"), newFake("child")
-	m := newModel(root)
-	run(m, Push(child))
+	model := newModel(root)
+	run(model, Push(child))
 
-	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	model.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	want := tea.WindowSizeMsg{Width: 100, Height: 29}
-	for name, v := range map[string]*fakeView{"root": root, "child": child} {
-		if diff := cmp.Diff(want, v.last()); diff != "" {
-			t.Errorf("%s resize mismatch (-want +got):\n%s", name, diff)
+	for name, view := range map[string]*fakeView{"root": root, "child": child} {
+		if diff := cmp.Diff(want, view.last()); diff != "" {
+			test.Errorf("%s resize mismatch (-want +got):\n%s", name, diff)
 		}
 	}
 
-	m.Update(tea.BackgroundColorMsg{})
+	model.Update(tea.BackgroundColorMsg{})
 	if _, ok := child.last().(ThemeMessage); !ok {
-		t.Errorf("child last msg = %T, want ThemeMsg", child.last())
+		test.Errorf("child last msg = %T, want ThemeMsg", child.last())
 	}
 }
 
-func TestViewDimensions(t *testing.T) {
-	m := newModel(newFake("v"))
-	got := m.View()
+func TestViewDimensions(test *testing.T) {
+	model := newModel(newFake("v"))
+	got := model.View()
 	if !got.AltScreen {
-		t.Error("view should use the alt screen")
+		test.Error("view should use the alt screen")
 	}
-	golden.Assert(t, "model_view", got.Content, false)
+	golden.Assert(test, "model_view", got.Content, false)
 }
 
-func TestHelpGolden(t *testing.T) {
-	m := newModel(newFake("v"))
-	m.Update(tea.WindowSizeMsg{Width: 70, Height: 30})
-	press(m, "?")
-	golden.Assert(t, "help_overlay", m.View().Content, false)
+func TestHelpGolden(test *testing.T) {
+	model := newModel(newFake("v"))
+	model.Update(tea.WindowSizeMsg{Width: 70, Height: 30})
+	press(model, "?")
+	golden.Assert(test, "help_overlay", model.View().Content, false)
 }
 
-func TestStatusBarGolden(t *testing.T) {
-	th := theme.Default()
+func TestStatusBarGolden(test *testing.T) {
+	activeTheme := theme.Default()
 	tests := []struct {
 		name string
 		bar  statusBar
@@ -597,48 +597,48 @@ func TestStatusBarGolden(t *testing.T) {
 			spinner: "\u28fe",
 		}, 40},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := tt.bar.render(th, tt.w)
-			if w := lipgloss.Width(got); w != tt.w {
-				t.Errorf("width = %d, want %d", w, tt.w)
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			got := testCase.bar.render(activeTheme, testCase.w)
+			if width := lipgloss.Width(got); width != testCase.w {
+				test.Errorf("width = %d, want %d", width, testCase.w)
 			}
-			golden.Assert(t, "statusbar_"+tt.name, got, false)
+			golden.Assert(test, "statusbar_"+testCase.name, got, false)
 		})
 	}
 }
 
-func TestStatusBarStyled(t *testing.T) {
-	th := theme.Default()
-	got := statusBar{crumbs: "x", text: "oops", kind: statusError}.render(th, 20)
+func TestStatusBarStyled(test *testing.T) {
+	activeTheme := theme.Default()
+	got := statusBar{crumbs: "x", text: "oops", kind: statusError}.render(activeTheme, 20)
 	if got == ansi.Strip(got) {
-		t.Error("expected ANSI styling in the rendered bar")
+		test.Error("expected ANSI styling in the rendered bar")
 	}
 }
 
-func TestCommandLineGolden(t *testing.T) {
-	m := newModel(newFake("v"))
-	press(m, ":")
-	press(m, "q")
-	press(m, "a")
-	golden.Assert(t, "command_line", m.View().Content, false)
+func TestCommandLineGolden(test *testing.T) {
+	model := newModel(newFake("v"))
+	press(model, ":")
+	press(model, "q")
+	press(model, "a")
+	golden.Assert(test, "command_line", model.View().Content, false)
 }
 
-func TestCommandLineStaysOneRow(t *testing.T) {
-	m := newModel(newFake("v"))
-	m.Update(tea.WindowSizeMsg{Width: 20, Height: 6})
-	press(m, ":")
+func TestCommandLineStaysOneRow(test *testing.T) {
+	model := newModel(newFake("v"))
+	model.Update(tea.WindowSizeMsg{Width: 20, Height: 6})
+	press(model, ":")
 	for range 60 {
-		press(m, "x")
+		press(model, "x")
 	}
-	got := m.View().Content
-	if n := lipgloss.Height(got); n != 6 {
-		t.Errorf("frame height = %d, want 6", n)
+	got := model.View().Content
+	if count := lipgloss.Height(got); count != 6 {
+		test.Errorf("frame height = %d, want 6", count)
 	}
 	for i, line := range strings.Split(got, "\n") {
-		if w := lipgloss.Width(line); w > 20 {
-			t.Errorf("line %d is %d columns wide, want <= 20", i, w)
+		if width := lipgloss.Width(line); width > 20 {
+			test.Errorf("line %d is %d columns wide, want <= 20", i, width)
 		}
 	}
-	golden.Assert(t, "command_line_overflow", got, false)
+	golden.Assert(test, "command_line_overflow", got, false)
 }

@@ -14,77 +14,77 @@ import (
 
 // flowEnv is a ready environment for a flow working against the fake, with
 // no workspace involved.
-func flowEnvironment(c github.Client) reviewEnvironment {
+func flowEnvironment(client github.Client) reviewEnvironment {
 	return reviewEnvironment{
-		client: c, repository: testRepository, number: 7, theme: theme.Default(),
+		client: client, repository: testRepository, number: 7, theme: theme.Default(),
 		edit:   func(string, func(string, error) tea.Msg) tea.Cmd { return nil },
 		reload: func() tea.Cmd { return nil },
 		loaded: true, diffReady: true, diffHead: "h1",
 	}
 }
 
-func TestReviewFlowBlocked(t *testing.T) {
+func TestReviewFlowBlocked(test *testing.T) {
 	tests := []struct {
 		name   string
 		mutate func(*reviewFlow, *reviewEnvironment)
 		want   string // "" means not blocked
 	}{
 		{"ready", func(*reviewFlow, *reviewEnvironment) {}, ""},
-		{"submitting", func(f *reviewFlow, _ *reviewEnvironment) { f.submitting = true }, "a review is being submitted"},
-		{"not loaded", func(_ *reviewFlow, e *reviewEnvironment) { e.loaded = false }, "pull request not loaded yet"},
-		{"diff not ready", func(_ *reviewFlow, e *reviewEnvironment) { e.diffReady = false }, "diff not loaded"},
+		{"submitting", func(flow *reviewFlow, _ *reviewEnvironment) { flow.submitting = true }, "a review is being submitted"},
+		{"not loaded", func(_ *reviewFlow, environment *reviewEnvironment) { environment.loaded = false }, "pull request not loaded yet"},
+		{"diff not ready", func(_ *reviewFlow, environment *reviewEnvironment) { environment.diffReady = false }, "diff not loaded"},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var f reviewFlow
-			env := flowEnvironment(fake.New())
-			tt.mutate(&f, &env)
-			cmd := f.blocked(env)
-			if tt.want == "" {
-				if cmd != nil {
-					t.Fatalf("blocked: %#v", cmd())
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			var flow reviewFlow
+			environment := flowEnvironment(fake.New())
+			testCase.mutate(&flow, &environment)
+			command := flow.blocked(environment)
+			if testCase.want == "" {
+				if command != nil {
+					test.Fatalf("blocked: %#v", command())
 				}
 				return
 			}
-			if diff := cmp.Diff(tea.Msg(userinterface.InfoMessage{Text: tt.want}), cmd()); diff != "" {
-				t.Errorf("(-want +got):\n%s", diff)
+			if diff := cmp.Diff(tea.Msg(userinterface.InfoMessage{Text: testCase.want}), command()); diff != "" {
+				test.Errorf("(-want +got):\n%s", diff)
 			}
 		})
 	}
 }
 
-func TestReviewFlowIgnoresOtherMessagesAndFlows(t *testing.T) {
-	var f, other reviewFlow
-	env := flowEnvironment(fake.New())
-	if _, handled := f.update(tea.WindowSizeMsg{}, env); handled {
-		t.Error("an unrelated message was claimed")
+func TestReviewFlowIgnoresOtherMessagesAndFlows(test *testing.T) {
+	var flow, other reviewFlow
+	environment := flowEnvironment(fake.New())
+	if _, handled := flow.update(tea.WindowSizeMsg{}, environment); handled {
+		test.Error("an unrelated message was claimed")
 	}
 	// A result of another flow is consumed and does nothing.
-	cmd, handled := f.update(reviewSubmittedMessage{flow: &other, repository: testRepository, number: 7, event: github.ReviewEventApprove}, env)
-	if !handled || cmd != nil {
-		t.Errorf("foreign result: handled=%v cmd=%v", handled, cmd != nil)
+	command, handled := flow.update(reviewSubmittedMessage{flow: &other, repository: testRepository, number: 7, event: github.ReviewEventApprove}, environment)
+	if !handled || command != nil {
+		test.Errorf("foreign result: handled=%v cmd=%v", handled, command != nil)
 	}
 	// So does a result of an older attempt.
-	f.sequence = 2
-	cmd, handled = f.update(reviewPendingMessage{flow: &f, repository: testRepository, number: 7, sequence: 1}, env)
-	if !handled || cmd != nil {
-		t.Errorf("stale result: handled=%v cmd=%v", handled, cmd != nil)
+	flow.sequence = 2
+	command, handled = flow.update(reviewPendingMessage{flow: &flow, repository: testRepository, number: 7, sequence: 1}, environment)
+	if !handled || command != nil {
+		test.Errorf("stale result: handled=%v cmd=%v", handled, command != nil)
 	}
 }
 
-func TestReviewFlowDraftSurvivesEmptyEdit(t *testing.T) {
-	c := fake.New()
-	f := reviewFlow{draft: "keep me", sequence: 1}
-	env := flowEnvironment(c)
-	cmd, handled := f.update(reviewEditedMessage{flow: &f, repository: testRepository, number: 7, sequence: 1, event: github.ReviewEventApprove, body: " \n"}, env)
-	if !handled || cmd == nil || f.draft != "keep me" {
-		t.Fatalf("handled=%v cmd=%v draft=%q", handled, cmd != nil, f.draft)
+func TestReviewFlowDraftSurvivesEmptyEdit(test *testing.T) {
+	client := fake.New()
+	flow := reviewFlow{draft: "keep me", sequence: 1}
+	environment := flowEnvironment(client)
+	command, handled := flow.update(reviewEditedMessage{flow: &flow, repository: testRepository, number: 7, sequence: 1, event: github.ReviewEventApprove, body: " \n"}, environment)
+	if !handled || command == nil || flow.draft != "keep me" {
+		test.Fatalf("handled=%v cmd=%v draft=%q", handled, command != nil, flow.draft)
 	}
 	// The next step is the fresh status query, and nothing was sent.
-	if _, ok := cmd().(reviewFreshMessage); !ok {
-		t.Error("the edit did not lead to the fresh status query")
+	if _, ok := command().(reviewFreshMessage); !ok {
+		test.Error("the edit did not lead to the fresh status query")
 	}
-	if len(c.Submissions()) != 0 {
-		t.Error("something was sent")
+	if len(client.Submissions()) != 0 {
+		test.Error("something was sent")
 	}
 }

@@ -60,38 +60,38 @@ var tokenClasses = map[chroma.TokenType]SyntaxClass{
 }
 
 // ClassOf returns the syntax class of a Chroma token type.
-func ClassOf(t chroma.TokenType) SyntaxClass {
-	for _, k := range []chroma.TokenType{t, t.SubCategory(), t.Category()} {
-		if c, ok := tokenClasses[k]; ok {
-			return c
+func ClassOf(tokenType chroma.TokenType) SyntaxClass {
+	for _, k := range []chroma.TokenType{tokenType, tokenType.SubCategory(), tokenType.Category()} {
+		if class, ok := tokenClasses[k]; ok {
+			return class
 		}
 	}
 	return ClassPlain
 }
 
 // colour returns the colour of a class's syntax role.
-func (r Roles) syntaxColour(c SyntaxClass) color.Color {
-	switch c {
+func (roles Roles) syntaxColour(class SyntaxClass) color.Color {
+	switch class {
 	case ClassKeyword:
-		return r.SyntaxKeyword
+		return roles.SyntaxKeyword
 	case ClassString:
-		return r.SyntaxString
+		return roles.SyntaxString
 	case ClassComment:
-		return r.SyntaxComment
+		return roles.SyntaxComment
 	case ClassNumber:
-		return r.SyntaxNumber
+		return roles.SyntaxNumber
 	case ClassFunction:
-		return r.SyntaxFunction
+		return roles.SyntaxFunction
 	case ClassType:
-		return r.SyntaxType
+		return roles.SyntaxType
 	case ClassOperator:
-		return r.SyntaxOperator
+		return roles.SyntaxOperator
 	case ClassVariable:
-		return r.SyntaxVariable
+		return roles.SyntaxVariable
 	case ClassEscape:
-		return r.SyntaxEscape
+		return roles.SyntaxEscape
 	}
-	return r.Text
+	return roles.Text
 }
 
 // Syntax holds the foreground-only styles for highlighted code tokens, one
@@ -100,32 +100,32 @@ type Syntax struct {
 	byClass [NumberSyntaxClasses]lipgloss.Style
 }
 
-func newSyntax(r Roles) Syntax {
-	var s Syntax
-	for c := range NumberSyntaxClasses {
-		if c == ClassPlain {
+func newSyntax(roles Roles) Syntax {
+	var syntax Syntax
+	for class := range NumberSyntaxClasses {
+		if class == ClassPlain {
 			continue // plain code keeps the pane's own text colour
 		}
-		s.byClass[c] = lipgloss.NewStyle().Foreground(r.syntaxColour(c)).Italic(c == ClassComment)
+		syntax.byClass[class] = lipgloss.NewStyle().Foreground(roles.syntaxColour(class)).Italic(class == ClassComment)
 	}
-	return s
+	return syntax
 }
 
 // For returns the style for class c.
-func (s Syntax) For(c SyntaxClass) lipgloss.Style { return s.byClass[c] }
+func (syntax Syntax) For(class SyntaxClass) lipgloss.Style { return syntax.byClass[class] }
 
 // chromaMarkup holds the entries that do not follow the class mapping: errors
 // and diff markup, which only Chroma (code blocks) knows about.
-func chromaMarkup(r Roles) map[chroma.TokenType]string {
-	c := HexString
+func chromaMarkup(roles Roles) map[chroma.TokenType]string {
+	colorToString := HexString
 	return map[chroma.TokenType]string{
-		chroma.Error:             c(r.Error),
-		chroma.GenericError:      c(r.Error),
-		chroma.GenericDeleted:    c(r.Removed),
-		chroma.GenericInserted:   c(r.Added),
+		chroma.Error:             colorToString(roles.Error),
+		chroma.GenericError:      colorToString(roles.Error),
+		chroma.GenericDeleted:    colorToString(roles.Removed),
+		chroma.GenericInserted:   colorToString(roles.Added),
 		chroma.GenericEmph:       "italic",
 		chroma.GenericStrong:     "bold",
-		chroma.GenericSubheading: c(r.Accent),
+		chroma.GenericSubheading: colorToString(roles.Accent),
 	}
 }
 
@@ -135,23 +135,23 @@ func chromaMarkup(r Roles) map[chroma.TokenType]string {
 // decides a colour and the result matches the diff pane. It sets foregrounds
 // only: no token gets a background, and there is no Background entry, which
 // Chroma would otherwise apply to every token.
-func newChromaStyle(name string, r Roles) *chroma.Style {
-	markup := chromaMarkup(r)
+func newChromaStyle(name string, roles Roles) *chroma.Style {
+	markup := chromaMarkup(roles)
 	entries := chroma.StyleEntries{}
-	for tok := range chroma.StandardTypes {
-		if tok == chroma.Background {
+	for token := range chroma.StandardTypes {
+		if token == chroma.Background {
 			continue
 		}
-		if e, ok := markup[tok]; ok {
-			entries[tok] = e
+		if text, ok := markup[token]; ok {
+			entries[token] = text
 			continue
 		}
-		class := ClassOf(tok)
-		entry := HexString(r.syntaxColour(class))
+		class := ClassOf(token)
+		entry := HexString(roles.syntaxColour(class))
 		if class == ClassComment {
 			entry += " italic"
 		}
-		entries[tok] = entry
+		entries[token] = entry
 	}
 	return chroma.MustNewStyle(name, entries)
 }
@@ -170,12 +170,12 @@ var (
 // that Glamour reads without a lock on every code block it renders, so it is
 // not what makes this safe. The rule is that this method and every Glamour
 // render run on the UI goroutine (never in a tea.Cmd).
-func (t Theme) ChromaStyleName() string {
-	name := "strig-" + t.Identifier
+func (theme Theme) ChromaStyleName() string {
+	name := "strig-" + theme.Identifier
 	chromaMu.Lock()
 	defer chromaMu.Unlock()
 	if !chromaRegistered[name] {
-		chromastyles.Register(newChromaStyle(name, t.Roles))
+		chromastyles.Register(newChromaStyle(name, theme.Roles))
 		chromaRegistered[name] = true
 	}
 	return name

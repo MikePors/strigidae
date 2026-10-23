@@ -51,40 +51,40 @@ func hostileDiff() string {
 }
 
 func hostileDetail() github.PullRequestDetail {
-	d := testDetail()
-	d.Title = "title " + hostile
-	d.Author = "author" + hostile
-	d.HeadBranch = "head" + hostile
-	d.BaseBranch = "base" + hostile
-	d.Body = "# body " + hostile + "\n\n[click](http://x)\x1b[31m red\r\n" + hostile + refsBody
-	d.Labels = []github.Label{{Name: "label" + hostile}}
-	d.ReviewRequests = []github.Reviewer{{Name: "rev" + hostile}, {Name: "team" + hostile, IsTeam: true}}
-	d.Files = append(d.Files,
+	detail := testDetail()
+	detail.Title = "title " + hostile
+	detail.Author = "author" + hostile
+	detail.HeadBranch = "head" + hostile
+	detail.BaseBranch = "base" + hostile
+	detail.Body = "# body " + hostile + "\n\n[click](http://x)\x1b[31m red\r\n" + hostile + refsBody
+	detail.Labels = []github.Label{{Name: "label" + hostile}}
+	detail.ReviewRequests = []github.Reviewer{{Name: "rev" + hostile}, {Name: "team" + hostile, IsTeam: true}}
+	detail.Files = append(detail.Files,
 		github.ChangedFile{Path: hostileGoPath, Additions: 1, Deletions: 1, Change: github.FileModified},
 		github.ChangedFile{Path: hostileNewPath, Change: github.FileRenamed})
-	d.Comments = []github.IssueComment{{Author: "c" + hostile, CreatedAt: testNow.Add(-time.Hour), Body: hostile + refsBody}}
-	d.Reviews = []github.Review{
+	detail.Comments = []github.IssueComment{{Author: "c" + hostile, CreatedAt: testNow.Add(-time.Hour), Body: hostile + refsBody}}
+	detail.Reviews = []github.Review{
 		{Author: "r" + hostile, State: github.ReviewApproved, SubmittedAt: testNow.Add(-time.Hour), Body: hostile + refsBody},
 		{Author: "p" + hostile, State: github.ReviewPending, Body: hostile + refsBody},
 	}
-	return d
+	return detail
 }
 
 // hostileThreads are review threads whose path, authors and bodies carry
 // hostile text, character references included: one on the hostile file's new
 // line 1, one outdated, one resolved on the deleted line, and one on another file.
 func hostileThreads() []github.ReviewThread {
-	cmt := func(who string) github.ReviewComment {
+	comment := func(who string) github.ReviewComment {
 		return github.ReviewComment{
 			Identifier: who, Author: who + hostile, Body: hostile + refsBody, CreatedAt: testNow.Add(-time.Hour),
 			Reactions: []github.ReactionSummary{{Content: "X" + github.ReactionContent(hostile), Count: 2}},
 		}
 	}
 	return []github.ReviewThread{
-		{Identifier: "h1", Path: hostileGoPath, Line: 1, DiffSide: github.SideRight, Comments: []github.ReviewComment{cmt("a"), cmt("b")}},
-		{Identifier: "h2", Path: hostileGoPath, OriginalLine: 1, IsOutdated: true, Comments: []github.ReviewComment{cmt("c")}},
-		{Identifier: "h3", Path: hostileGoPath, Line: 1, DiffSide: github.SideLeft, IsResolved: true, Comments: []github.ReviewComment{cmt("d")}},
-		{Identifier: "h4", Path: "elsewhere/" + hostile, Line: 3, Comments: []github.ReviewComment{cmt("e")}},
+		{Identifier: "h1", Path: hostileGoPath, Line: 1, DiffSide: github.SideRight, Comments: []github.ReviewComment{comment("a"), comment("b")}},
+		{Identifier: "h2", Path: hostileGoPath, OriginalLine: 1, IsOutdated: true, Comments: []github.ReviewComment{comment("c")}},
+		{Identifier: "h3", Path: hostileGoPath, Line: 1, DiffSide: github.SideLeft, IsResolved: true, Comments: []github.ReviewComment{comment("d")}},
+		{Identifier: "h4", Path: "elsewhere/" + hostile, Line: 3, Comments: []github.ReviewComment{comment("e")}},
 	}
 }
 
@@ -97,141 +97,141 @@ var styleOnly = regexp.MustCompile(`\x1b\[[0-9;:]*m`)
 var osc8 = regexp.MustCompile(`\x1b\]8;[^;\x07\x1b]*;([^\x07\x1b]*)\x07`)
 
 // assertTame fails if out contains anything but plain text and SGR styling.
-func assertTame(t *testing.T, what, out string) {
-	t.Helper()
-	for _, m := range osc8.FindAllStringSubmatch(out, -1) {
-		if strings.Contains(m[1], "evil") {
-			t.Errorf("%s: hostile text became a hyperlink target: %q", what, m[1])
+func assertTame(test *testing.T, what, out string) {
+	test.Helper()
+	for _, messages := range osc8.FindAllStringSubmatch(out, -1) {
+		if strings.Contains(messages[1], "evil") {
+			test.Errorf("%s: hostile text became a hyperlink target: %q", what, messages[1])
 		}
 	}
 	out = osc8.ReplaceAllString(out, "")
 	if rest := styleOnly.ReplaceAllString(out, ""); strings.ContainsRune(rest, 0x1b) {
-		t.Errorf("%s: output holds a non-SGR escape: %q", what, rest)
+		test.Errorf("%s: output holds a non-SGR escape: %q", what, rest)
 	}
-	for _, r := range ansi.Strip(out) {
-		bad := r == '\r' || r == 0x7f || (unicode.IsControl(r) && r != '\n' && r != '\t') ||
-			(r >= 0x200b && r <= 0x200f) || (r >= 0x202a && r <= 0x202e) || (r >= 0x2066 && r <= 0x2069)
+	for _, character := range ansi.Strip(out) {
+		bad := character == '\r' || character == 0x7f || (unicode.IsControl(character) && character != '\n' && character != '\t') ||
+			(character >= 0x200b && character <= 0x200f) || (character >= 0x202a && character <= 0x202e) || (character >= 0x2066 && character <= 0x2069)
 		if bad {
-			t.Errorf("%s: output holds control or bidi rune U+%04X", what, r)
+			test.Errorf("%s: output holds control or bidi rune U+%04X", what, character)
 		}
 	}
 }
 
-func TestHostileTextNeverReachesTheScreen(t *testing.T) {
-	c := fake.New()
-	d := hostileDetail()
-	c.SetPullRequest(d)
-	c.SetDiff(testRepository, 7, hostileDiff())
-	c.SetReviewThreads(testRepository, 7, hostileThreads())
+func TestHostileTextNeverReachesTheScreen(test *testing.T) {
+	client := fake.New()
+	detail := hostileDetail()
+	client.SetPullRequest(detail)
+	client.SetDiff(testRepository, 7, hostileDiff())
+	client.SetReviewThreads(testRepository, 7, hostileThreads())
 	if parsed, err := diff.Parse(hostileDiff()); err != nil || parsed.File(hostileGoPath) == nil || parsed.File(hostileNewPath) == nil {
-		t.Fatalf("setup: the hostile diff must parse so its content reaches the pane (err=%v)", err)
+		test.Fatalf("setup: the hostile diff must parse so its content reaches the pane (err=%v)", err)
 	}
-	h := newHarness(t, 140, 40)
-	h.client = c
-	h.v.client = c
-	h.run(h.v.Init())
+	harness := newHarness(test, 140, 40)
+	harness.client = client
+	harness.v.client = client
+	harness.run(harness.v.Init())
 
-	assertTame(t, "overview", h.render())
-	h.press("l", "G")
-	assertTame(t, "overview conversation", h.render())
+	assertTame(test, "overview", harness.render())
+	harness.press("l", "G")
+	assertTame(test, "overview conversation", harness.render())
 
-	h.press("h", "G") // the renamed hostile file is last
-	assertTame(t, "renamed file selected", h.render())
-	if out := ansi.Strip(h.render()); !strings.Contains(out, "Renamed:") {
-		t.Errorf("the rename line should reach the pane:\n%s", out)
+	harness.press("h", "G") // the renamed hostile file is last
+	assertTame(test, "renamed file selected", harness.render())
+	if out := ansi.Strip(harness.render()); !strings.Contains(out, "Renamed:") {
+		test.Errorf("the rename line should reach the pane:\n%s", out)
 	}
-	h.press("k") // the hostile modified file, with hostile hunk content
-	assertTame(t, "file selected", h.render())
-	if !strings.Contains(h.v.rightTitle(), "dir/evil") {
-		t.Errorf("hostile path was dropped, not cleaned: %q", h.v.rightTitle())
+	harness.press("k") // the hostile modified file, with hostile hunk content
+	assertTame(test, "file selected", harness.render())
+	if !strings.Contains(harness.v.rightTitle(), "dir/evil") {
+		test.Errorf("hostile path was dropped, not cleaned: %q", harness.v.rightTitle())
 	}
-	if out := ansi.Strip(h.render()); !strings.Contains(out, "old evil") || !strings.Contains(out, "new evil") {
-		t.Errorf("hostile code lines should show, cleaned:\n%s", out)
+	if out := ansi.Strip(harness.render()); !strings.Contains(out, "old evil") || !strings.Contains(out, "new evil") {
+		test.Errorf("hostile code lines should show, cleaned:\n%s", out)
 	}
-	h.press("l", ")", "z o", ")", "z o", "G") // threads: open the resolved one, go to the end
-	assertTame(t, "hostile threads", h.render())
-	if out := ansi.Strip(h.render()); !strings.Contains(out, "│ cevil") {
-		t.Errorf("the hostile threads should show, cleaned:\n%s", out)
+	harness.press("l", ")", "z o", ")", "z o", "G") // threads: open the resolved one, go to the end
+	assertTame(test, "hostile threads", harness.render())
+	if out := ansi.Strip(harness.render()); !strings.Contains(out, "│ cevil") {
+		test.Errorf("the hostile threads should show, cleaned:\n%s", out)
 	}
-	h.press("h", "g g", "l", "G")
-	assertTame(t, "overview with hostile threads", h.render())
-	if out := ansi.Strip(h.render()); !strings.Contains(out, "│ eevil") {
-		t.Errorf("the overview should list the threads:\n%s", out)
+	harness.press("h", "g g", "l", "G")
+	assertTame(test, "overview with hostile threads", harness.render())
+	if out := ansi.Strip(harness.render()); !strings.Contains(out, "│ eevil") {
+		test.Errorf("the overview should list the threads:\n%s", out)
 	}
-	h.press("h", "G", "k")
-	h.press("j", "j", "j") // the hostile diff lines under the cursor, too
-	assertTame(t, "cursor in hostile hunk", h.render())
+	harness.press("h", "G", "k")
+	harness.press("j", "j", "j") // the hostile diff lines under the cursor, too
+	assertTame(test, "cursor in hostile hunk", harness.render())
 
-	h.press("f")
-	h.typ("evil")
-	assertTame(t, "picker", h.render())
-	h.send(keyEsc())
+	harness.press("f")
+	harness.typ("evil")
+	assertTame(test, "picker", harness.render())
+	harness.send(keyEsc())
 
 	// Narrow terminal, then the picker open over it.
-	h.send(sizeMessage(60, 20))
-	assertTame(t, "narrow", h.render())
-	h.press("f")
-	h.typ("evil")
-	if !h.v.CapturesKeys() {
-		t.Fatal("setup: picker should be open")
+	harness.send(sizeMessage(60, 20))
+	assertTame(test, "narrow", harness.render())
+	harness.press("f")
+	harness.typ("evil")
+	if !harness.v.CapturesKeys() {
+		test.Fatal("setup: picker should be open")
 	}
-	out := h.render()
-	assertTame(t, "narrow with picker", out)
+	out := harness.render()
+	assertTame(test, "narrow with picker", out)
 	if !strings.Contains(ansi.Strip(out), "Go to file") {
-		t.Errorf("the picker should be drawn over the narrow layout:\n%s", ansi.Strip(out))
+		test.Errorf("the picker should be drawn over the narrow layout:\n%s", ansi.Strip(out))
 	}
 }
 
-func TestHostileErrorsAreCleaned(t *testing.T) {
+func TestHostileErrorsAreCleaned(test *testing.T) {
 	hostileErr := errors.New("boom" + hostile)
-	h := newHarness(t, 100, 20)
-	h.client.SetError(fake.MethodGetPullRequest, hostileErr)
-	h.run(h.v.Init())
-	assertTame(t, "load failure", h.render())
+	harness := newHarness(test, 100, 20)
+	harness.client.SetError(fake.MethodGetPullRequest, hostileErr)
+	harness.run(harness.v.Init())
+	assertTame(test, "load failure", harness.render())
 
 	var got string
-	for _, m := range h.messages {
-		if e, ok := m.(userinterface.ErrorMessage); ok {
-			got = e.Err.Error()
+	for _, message := range harness.messages {
+		if errorMessage, ok := message.(userinterface.ErrorMessage); ok {
+			got = errorMessage.Err.Error()
 		}
 	}
 	if got == "" {
-		t.Fatal("no status bar error")
+		test.Fatal("no status bar error")
 	}
-	assertTame(t, "status bar error", got)
+	assertTame(test, "status bar error", got)
 
 	// Opening the browser can fail with attacker text in the URL.
-	h2 := loaded(t, 100, 20)
-	h2.v.detail.URL = "http://x/" + hostile
-	h2.v.open = func(string) error { return hostileErr }
-	h2.messages = nil
-	h2.press("o")
-	for _, m := range h2.messages {
-		if e, ok := m.(userinterface.ErrorMessage); ok {
-			assertTame(t, "open error", e.Err.Error())
+	secondHarness := loaded(test, 100, 20)
+	secondHarness.v.detail.URL = "http://x/" + hostile
+	secondHarness.v.open = func(string) error { return hostileErr }
+	secondHarness.messages = nil
+	secondHarness.press("o")
+	for _, message := range secondHarness.messages {
+		if errorMessage, ok := message.(userinterface.ErrorMessage); ok {
+			assertTame(test, "open error", errorMessage.Err.Error())
 		}
 	}
 }
 
 func keyEsc() tea.Msg { return tea.KeyPressMsg{Code: tea.KeyEscape} }
 
-func sizeMessage(w, h int) tea.Msg { return tea.WindowSizeMsg{Width: w, Height: h} }
+func sizeMessage(width, height int) tea.Msg { return tea.WindowSizeMsg{Width: width, Height: height} }
 
-func TestHostileDiffError(t *testing.T) {
-	h := newHarness(t, 100, 20)
-	h.client.SetError(fake.MethodGetDiff, errors.New("bad"+hostile))
-	h.run(h.v.Init())
-	h.press("}")
-	assertTame(t, "diff error", h.render())
+func TestHostileDiffError(test *testing.T) {
+	harness := newHarness(test, 100, 20)
+	harness.client.SetError(fake.MethodGetDiff, errors.New("bad"+hostile))
+	harness.run(harness.v.Init())
+	harness.press("}")
+	assertTame(test, "diff error", harness.render())
 
 	var status string
-	for _, m := range h.messages {
-		if e, ok := m.(userinterface.ErrorMessage); ok {
-			status = e.Err.Error()
+	for _, message := range harness.messages {
+		if errorMessage, ok := message.(userinterface.ErrorMessage); ok {
+			status = errorMessage.Err.Error()
 		}
 	}
 	if !strings.Contains(status, "bad") {
-		t.Fatalf("the diff failure should reach the status bar, got %q", status)
+		test.Fatalf("the diff failure should reach the status bar, got %q", status)
 	}
-	assertTame(t, "diff error on the status bar", status)
+	assertTame(test, "diff error on the status bar", status)
 }

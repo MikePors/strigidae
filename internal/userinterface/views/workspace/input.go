@@ -29,24 +29,24 @@ type bindings struct {
 }
 
 func defaultBindings() bindings {
-	b := func(k, helpKey, desc string) key.Binding {
-		return key.NewBinding(key.WithKeys(k), key.WithHelp(helpKey, desc))
+	bind := func(k, helpKey, description string) key.Binding {
+		return key.NewBinding(key.WithKeys(k), key.WithHelp(helpKey, description))
 	}
 	return bindings{
-		PaneLeft:        b("h", "h", "focus files pane"),
-		PaneRight:       b("l", "l", "focus right pane"),
-		NextFile:        b("}", "}", "next file"),
-		PreviousFile:    b("{", "{", "previous file"),
-		FilePicker:      b("f", "f", "file picker"),
-		NextSection:     b("]", "]", "next section (overview)"),
-		PreviousSection: b("[", "[", "previous section (overview)"),
-		Comment:         b("c", "c", "new comment: on the pull request (overview) or on the diff line / selection"),
-		Reply:           b("r", "r", "reply to the comment thread at the cursor (diff)"),
-		Viewed:          b("v", "v", "toggle file viewed"),
+		PaneLeft:        bind("h", "h", "focus files pane"),
+		PaneRight:       bind("l", "l", "focus right pane"),
+		NextFile:        bind("}", "}", "next file"),
+		PreviousFile:    bind("{", "{", "previous file"),
+		FilePicker:      bind("f", "f", "file picker"),
+		NextSection:     bind("]", "]", "next section (overview)"),
+		PreviousSection: bind("[", "[", "previous section (overview)"),
+		Comment:         bind("c", "c", "new comment: on the pull request (overview) or on the diff line / selection"),
+		Reply:           bind("r", "r", "reply to the comment thread at the cursor (diff)"),
+		Viewed:          bind("v", "v", "toggle file viewed"),
 
-		Visual:        b("V", "V", "select diff lines for a multi-line comment"),
-		EditComment:   b("e", "e", "edit your comment at the cursor (diff; also :edit-comment)"),
-		DeleteComment: b("D", "D", "delete your comment at the cursor (diff; also :delete-comment)"),
+		Visual:        bind("V", "V", "select diff lines for a multi-line comment"),
+		EditComment:   bind("e", "e", "edit your comment at the cursor (diff; also :edit-comment)"),
+		DeleteComment: bind("D", "D", "delete your comment at the cursor (diff; also :delete-comment)"),
 		VisualDown:    key.NewBinding(key.WithKeys("j", "down"), key.WithHelp("j", "extend selection down")),
 		VisualUp:      key.NewBinding(key.WithKeys("k", "up"), key.WithHelp("k", "extend selection up")),
 		VisualExit:    key.NewBinding(key.WithKeys("esc", "V"), key.WithHelp("esc", "leave visual mode")),
@@ -57,63 +57,63 @@ func openInBrowser(url string) error {
 	return browser.New("", io.Discard, io.Discard).Browse(url)
 }
 
-func (v *View) handleKey(msg keys.Message) tea.Cmd {
+func (view *View) handleKey(message keys.Message) tea.Cmd {
 	switch {
-	case key.Matches(msg, v.bind.PaneLeft):
-		v.focus = paneFiles
-	case key.Matches(msg, v.bind.PaneRight):
-		v.focus = paneRight
-	case key.Matches(msg, v.bind.NextFile):
-		v.stepFile(1)
-	case key.Matches(msg, v.bind.PreviousFile):
-		v.stepFile(-1)
-	case key.Matches(msg, v.bind.FilePicker):
-		v.openPicker()
-	case v.sel() == 0 && key.Matches(msg, v.bind.NextSection):
-		v.jumpSection(1)
-	case v.sel() == 0 && key.Matches(msg, v.bind.PreviousSection):
-		v.jumpSection(-1)
-	case key.Matches(msg, v.bind.Comment):
-		return v.comment()
-	case key.Matches(msg, v.bind.Viewed):
-		return v.toggleViewed()
-	case key.Matches(msg, v.bind.Reply):
-		return v.reply()
-	case v.sel() > 0 && key.Matches(msg, v.bind.Visual):
-		return v.startVisual()
-	case key.Matches(msg, v.bind.EditComment):
-		return v.editComment()
-	case key.Matches(msg, v.bind.DeleteComment):
-		return v.deleteComment()
-	case key.Matches(msg, v.km.Open):
-		return v.openBrowser()
-	case key.Matches(msg, v.km.Refresh):
-		return v.load()
-	case v.sel() > 0 && v.diffNav(msg):
+	case key.Matches(message, view.bind.PaneLeft):
+		view.focus = paneFiles
+	case key.Matches(message, view.bind.PaneRight):
+		view.focus = paneRight
+	case key.Matches(message, view.bind.NextFile):
+		view.stepFile(1)
+	case key.Matches(message, view.bind.PreviousFile):
+		view.stepFile(-1)
+	case key.Matches(message, view.bind.FilePicker):
+		view.openPicker()
+	case view.sel() == 0 && key.Matches(message, view.bind.NextSection):
+		view.jumpSection(1)
+	case view.sel() == 0 && key.Matches(message, view.bind.PreviousSection):
+		view.jumpSection(-1)
+	case key.Matches(message, view.bind.Comment):
+		return view.comment()
+	case key.Matches(message, view.bind.Viewed):
+		return view.toggleViewed()
+	case key.Matches(message, view.bind.Reply):
+		return view.reply()
+	case view.sel() > 0 && key.Matches(message, view.bind.Visual):
+		return view.startVisual()
+	case key.Matches(message, view.bind.EditComment):
+		return view.editComment()
+	case key.Matches(message, view.bind.DeleteComment):
+		return view.deleteComment()
+	case key.Matches(message, view.km.Open):
+		return view.openBrowser()
+	case key.Matches(message, view.km.Refresh):
+		return view.load()
+	case view.sel() > 0 && view.diffNav(message):
 		// Reserved globally: hunk and thread keys work from either pane.
-		return v.filePane.Update(msg)
-	case v.focus == paneFiles:
-		v.filesKey(msg)
+		return view.filePane.Update(message)
+	case view.focus == paneFiles:
+		view.filesKey(message)
 	default:
-		return v.rightKey(msg)
+		return view.rightKey(message)
 	}
-	v.layout()
+	view.layout()
 	return nil
 }
 
 // stepFile moves to the next or previous file. It never lands on Overview.
-func (v *View) stepFile(delta int) {
-	if len(v.files()) == 0 || (v.sel() == 0 && delta < 0) {
+func (view *View) stepFile(delta int) {
+	if len(view.files()) == 0 || (view.sel() == 0 && delta < 0) {
 		return
 	}
-	v.selectEntry(min(max(v.sel()+delta, 1), len(v.files())))
+	view.selectEntry(min(max(view.sel()+delta, 1), len(view.files())))
 }
 
-func (v *View) openBrowser() tea.Cmd {
-	if v.detail == nil || v.detail.URL == "" {
+func (view *View) openBrowser() tea.Cmd {
+	if view.detail == nil || view.detail.URL == "" {
 		return userinterface.Info("pull request not loaded yet")
 	}
-	url, open := v.detail.URL, v.open
+	url, open := view.detail.URL, view.open
 	return func() tea.Msg {
 		if err := open(url); err != nil {
 			return userinterface.ErrorMessage{Err: terminaltext.SafeError(fmt.Errorf("open %s in browser: %w", terminaltext.Clean(url), err))}
@@ -123,71 +123,71 @@ func (v *View) openBrowser() tea.Cmd {
 }
 
 // filesKey moves the selection in the Files pane.
-func (v *View) filesKey(msg keys.Message) {
-	prev := v.sel()
+func (view *View) filesKey(message keys.Message) {
+	previous := view.sel()
 	switch {
-	case key.Matches(msg, v.km.Down):
-		v.fw.Down(1)
-	case key.Matches(msg, v.km.Up):
-		v.fw.Up(1)
-	case key.Matches(msg, v.km.Top):
-		v.fw.GotoTop()
-	case key.Matches(msg, v.km.Bottom):
-		v.fw.GotoBottom()
-	case key.Matches(msg, v.km.HalfDown):
-		v.fw.HalfPageDown()
-	case key.Matches(msg, v.km.HalfUp):
-		v.fw.HalfPageUp()
-	case key.Matches(msg, v.km.PageDown):
-		v.fw.PageDown()
-	case key.Matches(msg, v.km.PageUp):
-		v.fw.PageUp()
-	case key.Matches(msg, v.km.Select):
-		v.focus = paneRight
+	case key.Matches(message, view.km.Down):
+		view.fw.Down(1)
+	case key.Matches(message, view.km.Up):
+		view.fw.Up(1)
+	case key.Matches(message, view.km.Top):
+		view.fw.GotoTop()
+	case key.Matches(message, view.km.Bottom):
+		view.fw.GotoBottom()
+	case key.Matches(message, view.km.HalfDown):
+		view.fw.HalfPageDown()
+	case key.Matches(message, view.km.HalfUp):
+		view.fw.HalfPageUp()
+	case key.Matches(message, view.km.PageDown):
+		view.fw.PageDown()
+	case key.Matches(message, view.km.PageUp):
+		view.fw.PageUp()
+	case key.Matches(message, view.km.Select):
+		view.focus = paneRight
 	}
-	if v.sel() != prev {
-		v.selectionChanged()
+	if view.sel() != previous {
+		view.selectionChanged()
 	}
 }
 
 // rightKey scrolls the Overview, or hands the key to the file pane.
-func (v *View) rightKey(msg keys.Message) tea.Cmd {
-	if v.sel() > 0 {
-		return v.filePane.Update(msg)
+func (view *View) rightKey(message keys.Message) tea.Cmd {
+	if view.sel() > 0 {
+		return view.filePane.Update(message)
 	}
-	vp := &v.ov.vp
+	viewport := &view.ov.vp
 	switch {
-	case key.Matches(msg, v.km.Down):
-		vp.ScrollDown(1)
-	case key.Matches(msg, v.km.Up):
-		vp.ScrollUp(1)
-	case key.Matches(msg, v.km.Top):
-		vp.GotoTop()
-	case key.Matches(msg, v.km.Bottom):
-		vp.GotoBottom()
-	case key.Matches(msg, v.km.HalfDown):
-		vp.HalfPageDown()
-	case key.Matches(msg, v.km.HalfUp):
-		vp.HalfPageUp()
-	case key.Matches(msg, v.km.PageDown):
-		vp.PageDown()
-	case key.Matches(msg, v.km.PageUp):
-		vp.PageUp()
+	case key.Matches(message, view.km.Down):
+		viewport.ScrollDown(1)
+	case key.Matches(message, view.km.Up):
+		viewport.ScrollUp(1)
+	case key.Matches(message, view.km.Top):
+		viewport.GotoTop()
+	case key.Matches(message, view.km.Bottom):
+		viewport.GotoBottom()
+	case key.Matches(message, view.km.HalfDown):
+		viewport.HalfPageDown()
+	case key.Matches(message, view.km.HalfUp):
+		viewport.HalfPageUp()
+	case key.Matches(message, view.km.PageDown):
+		viewport.PageDown()
+	case key.Matches(message, view.km.PageUp):
+		viewport.PageUp()
 	}
 	return nil
 }
 
 // jumpSection moves the Overview to the next or previous section. ] and [ are
 // sections only on the Overview; on a file they belong to the diff pane.
-func (v *View) jumpSection(delta int) {
-	if v.detail == nil {
+func (view *View) jumpSection(delta int) {
+	if view.detail == nil {
 		return
 	}
-	v.ov.jump(delta)
+	view.ov.jump(delta)
 }
 
 // diffNav reports whether msg is a hunk or thread movement key.
-func (v *View) diffNav(msg keys.Message) bool {
-	b := v.navBind
-	return key.Matches(msg, b.NextHunk, b.PreviousHunk, b.NextThread, b.PreviousThread)
+func (view *View) diffNav(message keys.Message) bool {
+	bindings := view.navBind
+	return key.Matches(message, bindings.NextHunk, bindings.PreviousHunk, bindings.NextThread, bindings.PreviousThread)
 }

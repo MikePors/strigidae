@@ -14,131 +14,133 @@ import (
 )
 
 // feed delivers msgs to v, and then the messages its commands produce.
-func feed(v *View, msgs []tea.Msg) {
-	for len(msgs) > 0 {
-		m := msgs[0]
-		msgs = msgs[1:]
-		_, cmd := v.Update(m)
-		msgs = append(msgs, messages(cmd)...)
+func feed(view *View, messageList []tea.Msg) {
+	for len(messageList) > 0 {
+		message := messageList[0]
+		messageList = messageList[1:]
+		_, command := view.Update(message)
+		messageList = append(messageList, messages(command)...)
 	}
 }
 
 // A refresh after a push whose diff fetch fails leaves the old diff on
 // screen, so the review must not go out for the new head.
-func TestReviewDiffRefreshFailedMeansHeadMoved(t *testing.T) {
-	c := newReviewer(t)
-	c.body = "ok"
-	c.client.SetHeadSHA(testRepository, 7, "bbbb2222")
-	c.client.SetError(fake.MethodGetDiff, errors.New("transient"))
-	c.press("R")
-	if c.v.detail.HeadSHA != "bbbb2222" || c.v.diffHead != headSHA {
-		t.Fatalf("detail head %q, diff head %q", c.v.detail.HeadSHA, c.v.diffHead)
+func TestReviewDiffRefreshFailedMeansHeadMoved(test *testing.T) {
+	composer := newReviewer(test)
+	composer.body = "ok"
+	composer.client.SetHeadSHA(testRepository, 7, "bbbb2222")
+	composer.client.SetError(fake.MethodGetDiff, errors.New("transient"))
+	composer.press("R")
+	if composer.v.detail.HeadSHA != "bbbb2222" || composer.v.diffHead != headSHA {
+		test.Fatalf("detail head %q, diff head %q", composer.v.detail.HeadSHA, composer.v.diffHead)
 	}
-	c.command("approve")
-	conf, ok := c.lastConfirm()
-	if !ok || !conf.Notice {
-		t.Fatalf("confirm = %+v, %v; want the head-moved notice", conf, ok)
+	composer.command("approve")
+	configuration, ok := composer.lastConfirm()
+	if !ok || !configuration.Notice {
+		test.Fatalf("confirm = %+v, %v; want the head-moved notice", configuration, ok)
 	}
-	if len(c.client.Submissions()) != 0 {
-		t.Error("submitted")
+	if len(composer.client.Submissions()) != 0 {
+		test.Error("submitted")
 	}
 }
 
-func TestReviewRefusedWhileDiffLoads(t *testing.T) {
-	c := newReviewer(t)
-	c.v.diffPending = true
-	for _, f := range []func() tea.Cmd{
-		func() tea.Cmd { return c.v.review.start(c.v.reviewEnvironment(), github.ReviewEventApprove) },
-		func() tea.Cmd { return c.v.review.openChooser(c.v.reviewEnvironment()) },
+func TestReviewRefusedWhileDiffLoads(test *testing.T) {
+	composer := newReviewer(test)
+	composer.v.diffPending = true
+	for _, function := range []func() tea.Cmd{
+		func() tea.Cmd {
+			return composer.v.review.start(composer.v.reviewEnvironment(), github.ReviewEventApprove)
+		},
+		func() tea.Cmd { return composer.v.review.openChooser(composer.v.reviewEnvironment()) },
 	} {
-		msgs := messages(f())
-		if len(msgs) != 1 || msgs[0] != tea.Msg(userinterface.InfoMessage{Text: "diff not loaded"}) {
-			t.Errorf("msgs = %#v", msgs)
+		messageList := messages(function())
+		if len(messageList) != 1 || messageList[0] != tea.Msg(userinterface.InfoMessage{Text: "diff not loaded"}) {
+			test.Errorf("msgs = %#v", messageList)
 		}
 	}
-	if c.v.review.chooser != nil || len(c.openedOn) != 0 {
-		t.Error("review started")
+	if composer.v.review.chooser != nil || len(composer.openedOn) != 0 {
+		test.Error("review started")
 	}
 }
 
-func TestReviewDiffHeadIsTheCommit(t *testing.T) {
-	c := newReviewer(t)
-	c.command("approve")
-	conf, _ := c.lastConfirm()
-	c.run(conf.OnYes)
-	if subs := c.client.Submissions(); len(subs) != 1 || subs[0].CommitObjectIdentifier != c.v.diffHead || c.v.diffHead != headSHA {
-		t.Errorf("submissions = %+v, diff head %q", subs, c.v.diffHead)
+func TestReviewDiffHeadIsTheCommit(test *testing.T) {
+	composer := newReviewer(test)
+	composer.command("approve")
+	configuration, _ := composer.lastConfirm()
+	composer.run(configuration.OnYes)
+	if subs := composer.client.Submissions(); len(subs) != 1 || subs[0].CommitObjectIdentifier != composer.v.diffHead || composer.v.diffHead != headSHA {
+		test.Errorf("submissions = %+v, diff head %q", subs, composer.v.diffHead)
 	}
 }
 
-func TestReviewSecondSubmitWhileInFlight(t *testing.T) {
-	c := newReviewer(t)
-	c.command("approve")
-	conf, _ := c.lastConfirm()
+func TestReviewSecondSubmitWhileInFlight(test *testing.T) {
+	composer := newReviewer(test)
+	composer.command("approve")
+	configuration, _ := composer.lastConfirm()
 	// The user said yes: handle the send message but do not deliver the result.
-	msgs := messages(conf.OnYes)
-	_, send := c.v.Update(msgs[0])
-	if !c.v.Loading() {
-		t.Error("not loading while submitting")
+	messageList := messages(configuration.OnYes)
+	_, send := composer.v.Update(messageList[0])
+	if !composer.v.Loading() {
+		test.Error("not loading while submitting")
 	}
-	calls := len(c.client.Calls())
-	got := messages(c.v.review.start(c.v.reviewEnvironment(), github.ReviewEventApprove))
+	calls := len(composer.client.Calls())
+	got := messages(composer.v.review.start(composer.v.reviewEnvironment(), github.ReviewEventApprove))
 	if len(got) != 1 || got[0] != tea.Msg(userinterface.InfoMessage{Text: "a review is being submitted"}) {
-		t.Errorf("second start: %#v", got)
+		test.Errorf("second start: %#v", got)
 	}
-	got = messages(c.v.review.openChooser(c.v.reviewEnvironment()))
+	got = messages(composer.v.review.openChooser(composer.v.reviewEnvironment()))
 	if len(got) != 1 || got[0] != tea.Msg(userinterface.InfoMessage{Text: "a review is being submitted"}) {
-		t.Errorf("chooser: %#v", got)
+		test.Errorf("chooser: %#v", got)
 	}
-	if len(c.client.Calls()) != calls || len(c.openedOn) != 1 {
-		t.Error("second review started")
+	if len(composer.client.Calls()) != calls || len(composer.openedOn) != 1 {
+		test.Error("second review started")
 	}
-	c.run(send) // the first one finishes
-	if c.v.review.submitting {
-		t.Error("still submitting after the result")
+	composer.run(send) // the first one finishes
+	if composer.v.review.submitting {
+		test.Error("still submitting after the result")
 	}
-	if diff := cmp.Diff([]string{"Submitting review…", "Approved #7"}, c.infos()); diff != "" {
-		t.Errorf("infos (-want +got):\n%s", diff)
+	if diff := cmp.Diff([]string{"Submitting review…", "Approved #7"}, composer.infos()); diff != "" {
+		test.Errorf("infos (-want +got):\n%s", diff)
 	}
 }
 
-func TestReviewSubmitFailureRefreshes(t *testing.T) {
-	c := newReviewer(t)
-	c.body = "x"
-	c.command("approve")
-	conf, _ := c.lastConfirm()
-	c.client.SetError(fake.MethodSubmitReview, errors.New("502 Bad Gateway"))
-	before := len(c.client.Calls())
-	c.run(conf.OnYes)
+func TestReviewSubmitFailureRefreshes(test *testing.T) {
+	composer := newReviewer(test)
+	composer.body = "x"
+	composer.command("approve")
+	configuration, _ := composer.lastConfirm()
+	composer.client.SetError(fake.MethodSubmitReview, errors.New("502 Bad Gateway"))
+	before := len(composer.client.Calls())
+	composer.run(configuration.OnYes)
 	var reloaded bool
-	for _, call := range c.client.Calls()[before:] {
+	for _, call := range composer.client.Calls()[before:] {
 		reloaded = reloaded || call.Method == fake.MethodGetPullRequest
 	}
-	if !reloaded || c.v.review.submitting {
-		t.Errorf("reloaded=%v submitting=%v", reloaded, c.v.review.submitting)
+	if !reloaded || composer.v.review.submitting {
+		test.Errorf("reloaded=%v submitting=%v", reloaded, composer.v.review.submitting)
 	}
 }
 
 // An empty body for a later verdict neither wipes the earlier draft nor is
 // stored, and an empty approval sends an empty body.
-func TestReviewEmptyBodyKeepsEarlierDraft(t *testing.T) {
-	c := newReviewer(t)
-	c.v.review.draft = "earlier thoughts"
-	c.body = ""
-	c.command("approve")
-	if c.v.review.draft != "earlier thoughts" {
-		t.Errorf("draft = %q", c.v.review.draft)
+func TestReviewEmptyBodyKeepsEarlierDraft(test *testing.T) {
+	composer := newReviewer(test)
+	composer.v.review.draft = "earlier thoughts"
+	composer.body = ""
+	composer.command("approve")
+	if composer.v.review.draft != "earlier thoughts" {
+		test.Errorf("draft = %q", composer.v.review.draft)
 	}
-	conf, ok := c.lastConfirm()
+	configuration, ok := composer.lastConfirm()
 	if !ok {
-		t.Fatal("no confirmation")
+		test.Fatal("no confirmation")
 	}
-	c.run(conf.OnYes)
-	subs := c.client.Submissions()
+	composer.run(configuration.OnYes)
+	subs := composer.client.Submissions()
 	if len(subs) != 1 || subs[0].Body != "" {
-		t.Errorf("submissions = %+v, want an empty body", subs)
+		test.Errorf("submissions = %+v, want an empty body", subs)
 	}
-	if !strings.Contains(strings.Join(c.infos(), ","), "Approved #7") {
-		t.Errorf("infos = %v", c.infos())
+	if !strings.Contains(strings.Join(composer.infos(), ","), "Approved #7") {
+		test.Errorf("infos = %v", composer.infos())
 	}
 }

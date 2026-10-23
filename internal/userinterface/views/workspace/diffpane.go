@@ -27,21 +27,21 @@ type diffBindings struct {
 }
 
 func defaultDiffBindings() diffBindings {
-	b := func(k, helpKey, desc string) key.Binding {
-		return key.NewBinding(key.WithKeys(k), key.WithHelp(helpKey, desc))
+	bind := func(k, helpKey, description string) key.Binding {
+		return key.NewBinding(key.WithKeys(k), key.WithHelp(helpKey, description))
 	}
 	return diffBindings{
-		NextHunk:        b("]", "]", "next hunk"),
-		PreviousHunk:    b("[", "[", "previous hunk"),
-		NextThread:      b(")", ")", "next comment thread"),
-		PreviousThread:  b("(", "(", "previous comment thread"),
-		ToggleThread:    b("z a", "za", "toggle comment thread (also enter on a marked line)"),
-		OpenThread:      b("z o", "zo", "open comment thread"),
-		CloseThread:     b("z c", "zc", "close comment thread"),
-		ScrollLeft:      b("z h", "zh", "scroll left"),
-		ScrollRight:     b("z l", "zl", "scroll right"),
-		HalfScrollLeft:  b("z H", "zH", "scroll half a screen left"),
-		HalfScrollRight: b("z L", "zL", "scroll half a screen right"),
+		NextHunk:        bind("]", "]", "next hunk"),
+		PreviousHunk:    bind("[", "[", "previous hunk"),
+		NextThread:      bind(")", ")", "next comment thread"),
+		PreviousThread:  bind("(", "(", "previous comment thread"),
+		ToggleThread:    bind("z a", "za", "toggle comment thread (also enter on a marked line)"),
+		OpenThread:      bind("z o", "zo", "open comment thread"),
+		CloseThread:     bind("z c", "zc", "close comment thread"),
+		ScrollLeft:      bind("z h", "zh", "scroll left"),
+		ScrollRight:     bind("z l", "zl", "scroll right"),
+		HalfScrollLeft:  bind("z H", "zH", "scroll half a screen left"),
+		HalfScrollRight: bind("z L", "zL", "scroll half a screen right"),
 	}
 }
 
@@ -59,118 +59,118 @@ type diffPane struct {
 
 var _ FilePane = (*diffPane)(nil)
 
-func newDiffPane(th theme.Theme, now func() time.Time) *diffPane {
-	return &diffPane{dv: diffview.New(th, diffview.WithClock(now)), km: keys.DefaultGlobal(), bind: defaultDiffBindings()}
+func newDiffPane(theme theme.Theme, now func() time.Time) *diffPane {
+	return &diffPane{dv: diffview.New(theme, diffview.WithClock(now)), km: keys.DefaultGlobal(), bind: defaultDiffBindings()}
 }
 
-func (p *diffPane) SetTheme(th theme.Theme) { p.dv.SetTheme(th) }
+func (pane *diffPane) SetTheme(theme theme.Theme) { pane.dv.SetTheme(theme) }
 
-func (p *diffPane) SetThreads(ts []github.ReviewThread) { p.dv.SetThreads(ts) }
+func (pane *diffPane) SetThreads(threads []github.ReviewThread) { pane.dv.SetThreads(threads) }
 
-func (p *diffPane) SetSize(w, h int) { p.dv.SetSize(w, h) }
+func (pane *diffPane) SetSize(width, height int) { pane.dv.SetSize(width, height) }
 
-func (p *diffPane) SetDiff(d DiffState) {
-	p.state = d
-	p.show()
+func (pane *diffPane) SetDiff(diffState DiffState) {
+	pane.state = diffState
+	pane.show()
 }
 
-func (p *diffPane) SetFile(f github.ChangedFile) {
-	p.file, p.hasFile = f, true
-	p.show()
+func (pane *diffPane) SetFile(file github.ChangedFile) {
+	pane.file, pane.hasFile = file, true
+	pane.show()
 }
 
 // show points the diff component at what the pane should display now.
 // diffview ignores a repeated *diff.File and keeps its position when the same
 // path is re-parsed, so calling this on every change is cheap and safe.
-func (p *diffPane) show() {
+func (pane *diffPane) show() {
 	switch {
-	case p.state.Err != nil:
-		p.dv.SetDiffError(p.state.Err)
-	case p.state.Parsed == nil:
-		p.dv.SetMessage("Loading diff…")
-	case !p.hasFile:
-		p.dv.SetFile(nil)
+	case pane.state.Err != nil:
+		pane.dv.SetDiffError(pane.state.Err)
+	case pane.state.Parsed == nil:
+		pane.dv.SetMessage("Loading diff…")
+	case !pane.hasFile:
+		pane.dv.SetFile(nil)
 	default:
-		f := p.state.Parsed.File(p.file.Path)
-		if f == nil {
-			msg := "No diff available for this file."
-			if p.state.ParseError != nil {
-				msg += "\nThe diff could not be fully parsed: " + p.state.ParseError.Error()
+		file := pane.state.Parsed.File(pane.file.Path)
+		if file == nil {
+			message := "No diff available for this file."
+			if pane.state.ParseError != nil {
+				message += "\nThe diff could not be fully parsed: " + pane.state.ParseError.Error()
 			}
-			p.dv.SetMessage(msg)
+			pane.dv.SetMessage(message)
 			return
 		}
-		p.dv.SetFile(f)
+		pane.dv.SetFile(file)
 	}
 }
 
-func (p *diffPane) Update(msg keys.Message) tea.Cmd {
-	dv := p.dv
+func (pane *diffPane) Update(message keys.Message) tea.Cmd {
+	diffView := pane.dv
 	switch {
-	case key.Matches(msg, p.km.Down):
-		dv.CursorDown(1)
-	case key.Matches(msg, p.km.Up):
-		dv.CursorUp(1)
-	case key.Matches(msg, p.km.Top):
-		dv.GotoTop()
-	case key.Matches(msg, p.km.Bottom):
-		dv.GotoBottom()
-	case key.Matches(msg, p.km.HalfDown):
-		dv.HalfPageDown()
-	case key.Matches(msg, p.km.HalfUp):
-		dv.HalfPageUp()
-	case key.Matches(msg, p.km.PageDown):
-		dv.PageDown()
-	case key.Matches(msg, p.km.PageUp):
-		dv.PageUp()
-	case key.Matches(msg, p.bind.NextHunk):
-		dv.NextHunk()
-	case key.Matches(msg, p.bind.PreviousHunk):
-		dv.PreviousHunk()
-	case key.Matches(msg, p.bind.NextThread):
-		dv.NextThread()
-	case key.Matches(msg, p.bind.PreviousThread):
-		dv.PreviousThread()
-	case key.Matches(msg, p.bind.ToggleThread), key.Matches(msg, p.km.Select):
-		dv.ToggleThread()
-	case key.Matches(msg, p.bind.OpenThread):
-		dv.OpenThread()
-	case key.Matches(msg, p.bind.CloseThread):
-		dv.CloseThread()
-	case key.Matches(msg, p.bind.ScrollLeft):
-		dv.ScrollLeft(hScrollStep)
-	case key.Matches(msg, p.bind.ScrollRight):
-		dv.ScrollRight(hScrollStep)
-	case key.Matches(msg, p.bind.HalfScrollLeft):
-		dv.HalfScrollLeft()
-	case key.Matches(msg, p.bind.HalfScrollRight):
-		dv.HalfScrollRight()
+	case key.Matches(message, pane.km.Down):
+		diffView.CursorDown(1)
+	case key.Matches(message, pane.km.Up):
+		diffView.CursorUp(1)
+	case key.Matches(message, pane.km.Top):
+		diffView.GotoTop()
+	case key.Matches(message, pane.km.Bottom):
+		diffView.GotoBottom()
+	case key.Matches(message, pane.km.HalfDown):
+		diffView.HalfPageDown()
+	case key.Matches(message, pane.km.HalfUp):
+		diffView.HalfPageUp()
+	case key.Matches(message, pane.km.PageDown):
+		diffView.PageDown()
+	case key.Matches(message, pane.km.PageUp):
+		diffView.PageUp()
+	case key.Matches(message, pane.bind.NextHunk):
+		diffView.NextHunk()
+	case key.Matches(message, pane.bind.PreviousHunk):
+		diffView.PreviousHunk()
+	case key.Matches(message, pane.bind.NextThread):
+		diffView.NextThread()
+	case key.Matches(message, pane.bind.PreviousThread):
+		diffView.PreviousThread()
+	case key.Matches(message, pane.bind.ToggleThread), key.Matches(message, pane.km.Select):
+		diffView.ToggleThread()
+	case key.Matches(message, pane.bind.OpenThread):
+		diffView.OpenThread()
+	case key.Matches(message, pane.bind.CloseThread):
+		diffView.CloseThread()
+	case key.Matches(message, pane.bind.ScrollLeft):
+		diffView.ScrollLeft(hScrollStep)
+	case key.Matches(message, pane.bind.ScrollRight):
+		diffView.ScrollRight(hScrollStep)
+	case key.Matches(message, pane.bind.HalfScrollLeft):
+		diffView.HalfScrollLeft()
+	case key.Matches(message, pane.bind.HalfScrollRight):
+		diffView.HalfScrollRight()
 	}
 	return nil
 }
 
-func (p *diffPane) FocusedThreads() []github.ReviewThread { return p.dv.ThreadsAtCursor() }
+func (pane *diffPane) FocusedThreads() []github.ReviewThread { return pane.dv.ThreadsAtCursor() }
 
-func (p *diffPane) CommentRange() (LineRange, bool) {
-	r, ok := p.dv.Anchor()
+func (pane *diffPane) CommentRange() (LineRange, bool) {
+	lineRange, ok := pane.dv.Anchor()
 	if !ok {
 		return LineRange{}, false
 	}
 	side := github.SideRight
-	if r.Side == diffview.SideLeft {
+	if lineRange.Side == diffview.SideLeft {
 		side = github.SideLeft
 	}
-	return LineRange{Path: r.Path, Side: side, Start: r.Start, End: r.End}, true
+	return LineRange{Path: lineRange.Path, Side: side, Start: lineRange.Start, End: lineRange.End}, true
 }
 
-func (p *diffPane) VisualStart() bool          { return p.dv.VisualStart() }
-func (p *diffPane) VisualActive() bool         { return p.dv.VisualActive() }
-func (p *diffPane) VisualMove(delta int) error { return p.dv.VisualMove(delta) }
-func (p *diffPane) VisualEnd()                 { p.dv.VisualEnd() }
+func (pane *diffPane) VisualStart() bool          { return pane.dv.VisualStart() }
+func (pane *diffPane) VisualActive() bool         { return pane.dv.VisualActive() }
+func (pane *diffPane) VisualMove(delta int) error { return pane.dv.VisualMove(delta) }
+func (pane *diffPane) VisualEnd()                 { pane.dv.VisualEnd() }
 
-func (p *diffPane) Render(width, height int) string { return p.dv.Render(width, height) }
+func (pane *diffPane) Render(width, height int) string { return pane.dv.Render(width, height) }
 
-func (p *diffPane) FullHelp() [][]key.Binding {
-	b := p.bind
-	return [][]key.Binding{{b.NextHunk, b.PreviousHunk, b.NextThread, b.PreviousThread}, {b.ToggleThread, b.OpenThread, b.CloseThread}, {b.ScrollLeft, b.ScrollRight, b.HalfScrollLeft, b.HalfScrollRight}}
+func (pane *diffPane) FullHelp() [][]key.Binding {
+	bindings := pane.bind
+	return [][]key.Binding{{bindings.NextHunk, bindings.PreviousHunk, bindings.NextThread, bindings.PreviousThread}, {bindings.ToggleThread, bindings.OpenThread, bindings.CloseThread}, {bindings.ScrollLeft, bindings.ScrollRight, bindings.HalfScrollLeft, bindings.HalfScrollRight}}
 }

@@ -14,7 +14,7 @@ import (
 // commandSpec is one entry in the command registry.
 type commandSpec struct {
 	names []string // the command and its aliases, without the leading ":"
-	run   func(args string) tea.Cmd
+	run   func(arguments string) tea.Cmd
 }
 
 // commandTable lists the commands the command line understands. Add new
@@ -35,19 +35,19 @@ func parseCommand(line string, top View) tea.Cmd {
 	if line == "" {
 		return nil
 	}
-	name, args, _ := strings.Cut(line, " ")
-	args = strings.TrimSpace(args)
-	for _, c := range commandTable() {
-		for _, n := range c.names {
-			if n == name {
-				return c.run(args)
+	name, arguments, _ := strings.Cut(line, " ")
+	arguments = strings.TrimSpace(arguments)
+	for _, spec := range commandTable() {
+		for _, variableName := range spec.names {
+			if variableName == name {
+				return spec.run(arguments)
 			}
 		}
 	}
 	if slices.Contains(viewCommands, name) {
-		if c, ok := top.(Commander); ok {
-			if cmd, handled := c.Command(name, args); handled {
-				return cmd
+		if capturer, ok := top.(Commander); ok {
+			if command, handled := capturer.Command(name, arguments); handled {
+				return command
 			}
 		}
 		return Error(fmt.Errorf("not available here: %s", name))
@@ -71,71 +71,71 @@ type commandLine struct {
 
 var _ KeyCapturer = (*commandLine)(nil)
 
-func newCommandLine(th theme.Theme) commandLine {
+func newCommandLine(theme theme.Theme) commandLine {
 	in := textinput.New()
 	in.Prompt = ":"
-	c := commandLine{input: in}
-	c.setTheme(th)
-	return c
+	currentCommandLine := commandLine{input: in}
+	currentCommandLine.setTheme(theme)
+	return currentCommandLine
 }
 
 // setTheme styles the input from the theme's command-line styles, so the
 // typed text is readable on light and dark backgrounds alike.
-func (c *commandLine) setTheme(th theme.Theme) {
+func (commandLine *commandLine) setTheme(theme theme.Theme) {
 	state := textinput.StyleState{
-		Text:        th.CommandText,
-		Prompt:      th.CommandPrompt,
-		Placeholder: th.CommandHint,
-		Suggestion:  th.CommandHint,
+		Text:        theme.CommandText,
+		Prompt:      theme.CommandPrompt,
+		Placeholder: theme.CommandHint,
+		Suggestion:  theme.CommandHint,
 	}
-	c.input.SetStyles(textinput.Styles{
+	commandLine.input.SetStyles(textinput.Styles{
 		Focused: state,
 		Blurred: state,
-		Cursor:  textinput.CursorStyle{Color: th.CommandText.GetForeground(), Shape: tea.CursorBlock, Blink: true},
+		Cursor:  textinput.CursorStyle{Color: theme.CommandText.GetForeground(), Shape: tea.CursorBlock, Blink: true},
 	})
 }
 
 // CapturesKeys implements KeyCapturer.
-func (c *commandLine) CapturesKeys() bool { return c.active }
+func (commandLine *commandLine) CapturesKeys() bool { return commandLine.active }
 
-func (c *commandLine) open() tea.Cmd {
-	c.input.Reset()
-	c.active = true
-	return c.input.Focus()
+func (commandLine *commandLine) open() tea.Cmd {
+	commandLine.input.Reset()
+	commandLine.active = true
+	return commandLine.input.Focus()
 }
 
-func (c *commandLine) close() {
-	c.active = false
-	c.input.Blur()
-	c.input.Reset()
+func (commandLine *commandLine) close() {
+	commandLine.active = false
+	commandLine.input.Blur()
+	commandLine.input.Reset()
 }
 
 // handleKey processes one key press. esc cancels, enter submits, and
 // backspace on an empty line cancels, as in vim. When the line is submitted
 // the text is returned with ok true.
-func (c *commandLine) handleKey(msg tea.KeyPressMsg) (line string, ok bool, cmd tea.Cmd) {
-	switch msg.String() {
+func (commandLine *commandLine) handleKey(message tea.KeyPressMsg) (line string, ok bool, command tea.Cmd) {
+	switch message.String() {
 	case "esc":
-		c.close()
+		commandLine.close()
 	case "enter":
-		line = c.input.Value()
-		c.close()
+		line = commandLine.input.Value()
+		commandLine.close()
 		return line, true, nil
 	case "backspace":
-		if c.input.Value() == "" {
-			c.close()
+		if commandLine.input.Value() == "" {
+			commandLine.close()
 			return "", false, nil
 		}
 		fallthrough
 	default:
-		c.input, cmd = c.input.Update(msg)
+		commandLine.input, command = commandLine.input.Update(message)
 	}
-	return "", false, cmd
+	return "", false, command
 }
 
 // update forwards non-key messages (cursor blink) to the input.
-func (c *commandLine) update(msg tea.Msg) tea.Cmd {
-	var cmd tea.Cmd
-	c.input, cmd = c.input.Update(msg)
-	return cmd
+func (commandLine *commandLine) update(message tea.Msg) tea.Cmd {
+	var command tea.Cmd
+	commandLine.input, command = commandLine.input.Update(message)
+	return command
 }

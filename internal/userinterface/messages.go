@@ -26,7 +26,7 @@ type ErrorMessage struct{ Err error }
 type ThemeMessage struct{ Theme theme.Theme }
 
 // Push returns a command that pushes v.
-func Push(v View) tea.Cmd { return messageCommand(PushMessage{View: v}) }
+func Push(view View) tea.Cmd { return messageCommand(PushMessage{View: view}) }
 
 // Pop returns a command that pops the active view.
 func Pop() tea.Cmd { return messageCommand(PopMessage{}) }
@@ -40,4 +40,4 @@ func Info(text string) tea.Cmd { return messageCommand(InfoMessage{Text: text}) 
 // Error returns a command that shows an error message.
 func Error(err error) tea.Cmd { return messageCommand(ErrorMessage{Err: err}) }
 
-func messageCommand(m tea.Msg) tea.Cmd { return func() tea.Msg { return m } }
+func messageCommand(message tea.Msg) tea.Cmd { return func() tea.Msg { return message } }

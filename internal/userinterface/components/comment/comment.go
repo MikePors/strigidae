@@ -32,44 +32,44 @@ type Comment struct {
 }
 
 // Header renders the header line, not truncated.
-func Header(th theme.Theme, now time.Time, c Comment) string {
-	name := th.Author
-	if c.Muted {
-		name = th.Muted
+func Header(theme theme.Theme, now time.Time, comment Comment) string {
+	name := theme.Author
+	if comment.Muted {
+		name = theme.Muted
 	}
-	s := name.Render(Author(c.Author))
-	if c.Action != "" && !c.Pending {
-		s += " " + c.Action
+	text := name.Render(Author(comment.Author))
+	if comment.Action != "" && !comment.Pending {
+		text += " " + comment.Action
 	}
-	if !c.At.IsZero() {
-		s += th.Muted.Render(" · " + RelativeTime(now, c.At))
+	if !comment.At.IsZero() {
+		text += theme.Muted.Render(" · " + RelativeTime(now, comment.At))
 	}
-	if c.Pending {
+	if comment.Pending {
 		label := "PENDING (draft, not submitted)"
-		if c.Action != "" {
-			label = "PENDING " + c.Action + " (draft, not submitted)"
+		if comment.Action != "" {
+			label = "PENDING " + comment.Action + " (draft, not submitted)"
 		}
-		s += " " + th.Pending.Render(label)
+		text += " " + theme.Pending.Render(label)
 	}
-	if r := reactions(c.Reactions); r != "" {
-		s += "  " + th.Muted.Render(r)
+	if reactionText := reactions(comment.Reactions); reactionText != "" {
+		text += "  " + theme.Muted.Render(reactionText)
 	}
-	return s
+	return text
 }
 
 // Body renders the Markdown body in width columns, or "" for a blank body.
 // Muted bodies lose their styling and are drawn in the muted colour.
-func Body(th theme.Theme, md *markdown.Renderer, c Comment, width int) string {
-	if strings.TrimSpace(c.Body) == "" {
+func Body(theme theme.Theme, markdownSource *markdown.Renderer, comment Comment, width int) string {
+	if strings.TrimSpace(comment.Body) == "" {
 		return ""
 	}
-	out := md.Render(terminaltext.CleanBlock(c.Body), width)
-	if !c.Muted {
+	out := markdownSource.Render(terminaltext.CleanBlock(comment.Body), width)
+	if !comment.Muted {
 		return out
 	}
 	lines := strings.Split(out, "\n")
-	for i, l := range lines {
-		lines[i] = th.Muted.Render(strings.TrimRight(ansi.Strip(l), " "))
+	for i, line := range lines {
+		lines[i] = theme.Muted.Render(strings.TrimRight(ansi.Strip(line), " "))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -83,31 +83,31 @@ func Author(name string) string {
 }
 
 // reactions formats the non-zero reaction counts: "👍 2 👀 1".
-func reactions(rs []github.ReactionSummary) string {
+func reactions(reactionList []github.ReactionSummary) string {
 	var parts []string
-	for _, r := range rs {
-		if r.Count > 0 {
-			parts = append(parts, terminaltext.Clean(r.Content.Emoji())+" "+strconv.Itoa(r.Count))
+	for _, review := range reactionList {
+		if review.Count > 0 {
+			parts = append(parts, terminaltext.Clean(review.Content.Emoji())+" "+strconv.Itoa(review.Count))
 		}
 	}
 	return strings.Join(parts, " ")
 }
 
 // RelTime formats t relative to now ("5m ago").
-func RelativeTime(now, t time.Time) string {
-	d := now.Sub(t)
+func RelativeTime(now, timestamp time.Time) string {
+	duration := now.Sub(timestamp)
 	switch {
-	case d < time.Minute:
+	case duration < time.Minute:
 		return "just now"
-	case d < time.Hour:
-		return fmt.Sprintf("%dm ago", int(d/time.Minute))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh ago", int(d/time.Hour))
-	case d < 30*24*time.Hour:
-		return fmt.Sprintf("%dd ago", int(d/(24*time.Hour)))
-	case d < 365*24*time.Hour:
-		return fmt.Sprintf("%dmo ago", int(d/(30*24*time.Hour)))
+	case duration < time.Hour:
+		return fmt.Sprintf("%dm ago", int(duration/time.Minute))
+	case duration < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(duration/time.Hour))
+	case duration < 30*24*time.Hour:
+		return fmt.Sprintf("%dd ago", int(duration/(24*time.Hour)))
+	case duration < 365*24*time.Hour:
+		return fmt.Sprintf("%dmo ago", int(duration/(30*24*time.Hour)))
 	default:
-		return fmt.Sprintf("%dy ago", int(d/(365*24*time.Hour)))
+		return fmt.Sprintf("%dy ago", int(duration/(365*24*time.Hour)))
 	}
 }

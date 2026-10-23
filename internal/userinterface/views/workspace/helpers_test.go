@@ -90,104 +90,104 @@ type harness struct {
 	messages []tea.Msg // ui messages emitted by commands
 }
 
-func readDiff(t *testing.T) string {
-	t.Helper()
-	b, err := os.ReadFile("testdata/pull_request.diff")
+func readDiff(test *testing.T) string {
+	test.Helper()
+	bytes, err := os.ReadFile("testdata/pull_request.diff")
 	if err != nil {
-		t.Fatal(err)
+		test.Fatal(err)
 	}
-	return string(b)
+	return string(bytes)
 }
 
-func newHarness(t *testing.T, w, h int) *harness {
-	t.Helper()
-	c := fake.New()
-	c.SetPullRequest(testDetail())
-	c.SetDiff(testRepository, 7, readDiff(t))
-	hs := &harness{t: t, client: c}
-	hs.v = New(c, testRepository, 7,
+func newHarness(test *testing.T, width, height int) *harness {
+	test.Helper()
+	client := fake.New()
+	client.SetPullRequest(testDetail())
+	client.SetDiff(testRepository, 7, readDiff(test))
+	otherHarness := &harness{t: test, client: client}
+	otherHarness.v = New(client, testRepository, 7,
 		WithClock(func() time.Time { return testNow }),
 		WithTheme(theme.New(true)),
-		WithOpener(func(u string) error { hs.opened = append(hs.opened, u); return nil }),
+		WithOpener(func(address string) error { otherHarness.opened = append(otherHarness.opened, address); return nil }),
 	)
-	hs.send(tea.WindowSizeMsg{Width: w, Height: h})
-	return hs
+	otherHarness.send(tea.WindowSizeMsg{Width: width, Height: height})
+	return otherHarness
 }
 
 // loaded returns a harness whose Init results have been delivered.
-func loaded(t *testing.T, w, h int) *harness {
-	hs := newHarness(t, w, h)
-	hs.run(hs.v.Init())
-	return hs
+func loaded(test *testing.T, width, height int) *harness {
+	otherHarness := newHarness(test, width, height)
+	otherHarness.run(otherHarness.v.Init())
+	return otherHarness
 }
 
-func (h *harness) send(msg tea.Msg) {
-	h.t.Helper()
-	v, cmd := h.v.Update(msg)
-	h.v = v.(*View)
-	h.run(cmd)
+func (harness *harness) send(message tea.Msg) {
+	harness.t.Helper()
+	view, command := harness.v.Update(message)
+	harness.v = view.(*View)
+	harness.run(command)
 }
 
 // run executes cmd, delivering result messages back to the view.
-func (h *harness) run(cmd tea.Cmd) {
-	h.t.Helper()
-	if cmd == nil {
+func (harness *harness) run(command tea.Cmd) {
+	harness.t.Helper()
+	if command == nil {
 		return
 	}
-	switch msg := cmd().(type) {
+	switch message := command().(type) {
 	case nil:
 	case tea.BatchMsg:
-		for _, c := range msg {
-			h.run(c)
+		for _, command := range message {
+			harness.run(command)
 		}
 	case userinterface.InfoMessage, userinterface.ErrorMessage, userinterface.ConfirmMessage:
-		h.messages = append(h.messages, msg)
+		harness.messages = append(harness.messages, message)
 	default:
-		h.send(msg)
+		harness.send(message)
 	}
 }
 
-func (h *harness) press(seqs ...string) {
-	h.t.Helper()
-	for _, s := range seqs {
-		h.send(keys.Message{Sequence: s})
+func (harness *harness) press(sequences ...string) {
+	harness.t.Helper()
+	for _, text := range sequences {
+		harness.send(keys.Message{Sequence: text})
 	}
 }
 
 // typ sends raw key presses, as the root does while the view captures keys.
-func (h *harness) typ(text string) {
-	h.t.Helper()
-	for _, r := range text {
-		h.send(tea.KeyPressMsg{Code: r, Text: string(r)})
+func (harness *harness) typ(text string) {
+	harness.t.Helper()
+	for _, character := range text {
+		harness.send(tea.KeyPressMsg{Code: character, Text: string(character)})
 	}
 }
 
-func (h *harness) render() string { return h.v.Render(h.v.width, h.v.height) }
+func (harness *harness) render() string { return harness.v.Render(harness.v.width, harness.v.height) }
 
-func (h *harness) lastErr() error {
-	for i := len(h.messages) - 1; i >= 0; i-- {
-		if e, ok := h.messages[i].(userinterface.ErrorMessage); ok {
-			return e.Err
+func (harness *harness) lastErr() error {
+	for i := len(harness.messages) - 1; i >= 0; i-- {
+		if errorMessage, ok := harness.messages[i].(userinterface.ErrorMessage); ok {
+			return errorMessage.Err
 		}
 	}
 	return nil
 }
 
 // messages runs cmd (and the commands of any batch) and returns what they produce.
-func messages(cmd tea.Cmd) []tea.Msg {
-	if cmd == nil {
+func messages(command tea.Cmd) []tea.Msg {
+	if command == nil {
 		return nil
 	}
-	switch m := cmd().(type) {
+	switch message := command().(type) {
 	case nil:
 		return nil
 	case tea.BatchMsg:
 		var out []tea.Msg
-		for _, c := range m {
-			out = append(out, messages(c)...)
+		for _, command := range message {
+			out = append(out, messages(command)...)
 		}
 		return out
 	default:
-		return []tea.Msg{m}
+		return []tea.Msg{message}
 	}
 }

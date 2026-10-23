@@ -11,19 +11,19 @@ import (
 
 // TestHeaderChecksSurviveTruncation pins the line order: with a long branch
 // name at 80 columns, truncation eats the branches, not the check state.
-func TestHeaderChecksSurviveTruncation(t *testing.T) {
-	h := newHarness(t, 80, 24)
-	d := testDetail()
-	d.Author = "dependabot[bot]"
-	d.BaseBranch, d.HeadBranch = "main", "dependabot/github_actions/actions-1c0c2ed584"
-	d.ReviewDecision = github.ReviewDecisionReviewRequired
-	d.Checks = github.ChecksPassing
-	h.client.SetPullRequest(d)
-	h.run(h.v.Init())
-	line := strings.Split(ansi.Strip(h.render()), "\n")[1]
+func TestHeaderChecksSurviveTruncation(test *testing.T) {
+	harness := newHarness(test, 80, 24)
+	detail := testDetail()
+	detail.Author = "dependabot[bot]"
+	detail.BaseBranch, detail.HeadBranch = "main", "dependabot/github_actions/actions-1c0c2ed584"
+	detail.ReviewDecision = github.ReviewDecisionReviewRequired
+	detail.Checks = github.ChecksPassing
+	harness.client.SetPullRequest(detail)
+	harness.run(harness.v.Init())
+	line := strings.Split(ansi.Strip(harness.render()), "\n")[1]
 	for _, want := range []string{"dependabot[bot]", "✓ checks passing", "review required"} {
 		if !strings.Contains(line, want) {
-			t.Errorf("header line %q lacks %q", line, want)
+			test.Errorf("header line %q lacks %q", line, want)
 		}
 	}
 }

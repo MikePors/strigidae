@@ -22,50 +22,55 @@ type stubPane struct {
 	keys  []string
 }
 
-func (p *stubPane) SetTheme(theme.Theme) {}
+func (pane *stubPane) SetTheme(theme.Theme) {}
 
-func (p *stubPane) CommentRange() (LineRange, bool) { return LineRange{}, false }
-func (p *stubPane) VisualStart() bool               { return false }
-func (p *stubPane) VisualActive() bool              { return false }
-func (p *stubPane) VisualMove(int) error            { return nil }
-func (p *stubPane) VisualEnd()                      {}
+func (pane *stubPane) CommentRange() (LineRange, bool) { return LineRange{}, false }
+func (pane *stubPane) VisualStart() bool               { return false }
+func (pane *stubPane) VisualActive() bool              { return false }
+func (pane *stubPane) VisualMove(int) error            { return nil }
+func (pane *stubPane) VisualEnd()                      {}
 
-func (p *stubPane) SetDiff(DiffState) {}
+func (pane *stubPane) SetDiff(DiffState) {}
 
-func (p *stubPane) SetThreads([]github.ReviewThread)      {}
-func (p *stubPane) FocusedThreads() []github.ReviewThread { return nil }
+func (pane *stubPane) SetThreads([]github.ReviewThread)      {}
+func (pane *stubPane) FocusedThreads() []github.ReviewThread { return nil }
 
-func (p *stubPane) SetFile(f github.ChangedFile) { p.files = append(p.files, f.Path) }
+func (pane *stubPane) SetFile(file github.ChangedFile) { pane.files = append(pane.files, file.Path) }
 
-func (p *stubPane) SetSize(w, h int) { p.sizes = append(p.sizes, [2]int{w, h}) }
+func (pane *stubPane) SetSize(width, height int) {
+	pane.sizes = append(pane.sizes, [2]int{width, height})
+}
 
-func (p *stubPane) Update(m keys.Message) tea.Cmd { p.keys = append(p.keys, m.Sequence); return nil }
+func (pane *stubPane) Update(message keys.Message) tea.Cmd {
+	pane.keys = append(pane.keys, message.Sequence)
+	return nil
+}
 
-func (p *stubPane) Render(int, int) string { return "stub" }
+func (pane *stubPane) Render(int, int) string { return "stub" }
 
-func (p *stubPane) FullHelp() [][]key.Binding {
+func (pane *stubPane) FullHelp() [][]key.Binding {
 	return [][]key.Binding{{
 		key.NewBinding(key.WithKeys("]")), key.NewBinding(key.WithKeys("z h")),
 	}}
 }
 
-func TestSetFileOnChangedMetadata(t *testing.T) {
-	h := loaded(t, 100, 30)
-	p := &recordPane{}
-	h.v.filePane = p
-	h.press("j")
-	if len(p.files) != 1 {
-		t.Fatalf("SetFile calls = %v", p.files)
+func TestSetFileOnChangedMetadata(test *testing.T) {
+	harness := loaded(test, 100, 30)
+	pane := &recordPane{}
+	harness.v.filePane = pane
+	harness.press("j")
+	if len(pane.files) != 1 {
+		test.Fatalf("SetFile calls = %v", pane.files)
 	}
-	d := testDetail()
-	d.Files[0].Additions = 99
-	h.send(pullRequestLoadedMessage{owner: h.v, repository: testRepository, number: 7, sequence: h.v.sequence, detail: d})
-	if len(p.files) != 2 || p.files[1].Additions != 99 || p.files[1].Path != p.files[0].Path {
-		t.Errorf("pane did not get the new metadata: %+v", p.files)
+	detail := testDetail()
+	detail.Files[0].Additions = 99
+	harness.send(pullRequestLoadedMessage{owner: harness.v, repository: testRepository, number: 7, sequence: harness.v.sequence, detail: detail})
+	if len(pane.files) != 2 || pane.files[1].Additions != 99 || pane.files[1].Path != pane.files[0].Path {
+		test.Errorf("pane did not get the new metadata: %+v", pane.files)
 	}
-	h.send(pullRequestLoadedMessage{owner: h.v, repository: testRepository, number: 7, sequence: h.v.sequence, detail: d})
-	if len(p.files) != 2 {
-		t.Errorf("unchanged file repeated: %+v", p.files)
+	harness.send(pullRequestLoadedMessage{owner: harness.v, repository: testRepository, number: 7, sequence: harness.v.sequence, detail: detail})
+	if len(pane.files) != 2 {
+		test.Errorf("unchanged file repeated: %+v", pane.files)
 	}
 }
 
@@ -74,30 +79,30 @@ type recordPane struct {
 	files []github.ChangedFile
 }
 
-func (p *recordPane) SetFile(f github.ChangedFile) { p.files = append(p.files, f) }
+func (pane *recordPane) SetFile(file github.ChangedFile) { pane.files = append(pane.files, file) }
 
-func TestFilePaneContractThroughRoot(t *testing.T) {
-	c := fake.New()
-	c.SetPullRequest(testDetail())
-	c.SetDiff(testRepository, 7, readDiff(t))
-	p := &stubPane{}
-	v := New(c, testRepository, 7, WithTheme(theme.New(true)), WithFilePane(p))
+func TestFilePaneContractThroughRoot(test *testing.T) {
+	client := fake.New()
+	client.SetPullRequest(testDetail())
+	client.SetDiff(testRepository, 7, readDiff(test))
+	pane := &stubPane{}
+	view := New(client, testRepository, 7, WithTheme(theme.New(true)), WithFilePane(pane))
 	noTick := func(time.Duration, func(time.Time) tea.Msg) tea.Cmd { return nil }
-	m := userinterface.New(v, theme.New(true), userinterface.Options{Tick: noTick})
-	h := &harness{t: t, v: v, client: c}
+	model := userinterface.New(view, theme.New(true), userinterface.Options{Tick: noTick})
+	testHarness := &harness{t: test, v: view, client: client}
 
-	step := func(msg tea.Msg) { _, _ = m.Update(msg) }
+	step := func(message tea.Msg) { _, _ = model.Update(message) }
 	keyp := func(k string) { step(tea.KeyPressMsg{Code: rune(k[0]), Text: k}) }
 	step(tea.WindowSizeMsg{Width: 100, Height: 25})
-	h.run(v.Init())
+	testHarness.run(view.Init())
 
-	if len(p.sizes) == 0 {
-		t.Fatal("SetSize was never called")
+	if len(pane.sizes) == 0 {
+		test.Fatal("SetSize was never called")
 	}
-	last := p.sizes[len(p.sizes)-1]
+	last := pane.sizes[len(pane.sizes)-1]
 	step(tea.WindowSizeMsg{Width: 120, Height: 30})
-	if got := p.sizes[len(p.sizes)-1]; got == last {
-		t.Errorf("resize did not change SetSize: %v", got)
+	if got := pane.sizes[len(pane.sizes)-1]; got == last {
+		test.Errorf("resize did not change SetSize: %v", got)
 	}
 
 	keyp("}") // selects the first file
@@ -106,19 +111,19 @@ func TestFilePaneContractThroughRoot(t *testing.T) {
 	keyp("z")
 	keyp("h")
 	keyp("j")
-	if diff := cmp.Diff([]string{"]", "z h", "j"}, p.keys); diff != "" {
-		t.Errorf("keys reaching the pane (-want +got):\n%s", diff)
+	if diff := cmp.Diff([]string{"]", "z h", "j"}, pane.keys); diff != "" {
+		test.Errorf("keys reaching the pane (-want +got):\n%s", diff)
 	}
-	if diff := cmp.Diff([]string{"internal/sync/client.go"}, p.files); diff != "" {
-		t.Fatalf("SetFile calls (-want +got):\n%s", diff)
+	if diff := cmp.Diff([]string{"internal/sync/client.go"}, pane.files); diff != "" {
+		test.Fatalf("SetFile calls (-want +got):\n%s", diff)
 	}
 
 	// Refresh with the same file selected must not call SetFile again.
-	h.press("R")
-	if len(p.files) != 1 {
-		t.Errorf("SetFile called on refresh: %v", p.files)
+	testHarness.press("R")
+	if len(pane.files) != 1 {
+		test.Errorf("SetFile called on refresh: %v", pane.files)
 	}
-	if v.selectedPath() != "internal/sync/client.go" {
-		t.Errorf("selection lost: %q", v.selectedPath())
+	if view.selectedPath() != "internal/sync/client.go" {
+		test.Errorf("selection lost: %q", view.selectedPath())
 	}
 }

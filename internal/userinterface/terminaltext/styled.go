@@ -12,88 +12,88 @@ import (
 // parameters and URL hold no control or bidi runes. Every other escape
 // sequence is dropped, and every control, C1 and bidi rune other than "\n"
 // becomes a space.
-func CleanStyled(s string) string {
-	var b strings.Builder
-	b.Grow(len(s))
-	for i := 0; i < len(s); {
-		if s[i] != 0x1b {
-			r, n := utf8.DecodeRuneInString(s[i:])
+func CleanStyled(text string) string {
+	var builder strings.Builder
+	builder.Grow(len(text))
+	for i := 0; i < len(text); {
+		if text[i] != 0x1b {
+			character, count := utf8.DecodeRuneInString(text[i:])
 			switch {
-			case r == '\n':
-				b.WriteByte('\n')
-			case r == '\t': // keeps code indentation readable
-				b.WriteString("    ")
-			case r == utf8.RuneError && n == 1: // invalid byte
-				b.WriteRune(utf8.RuneError)
-			case unsafeRune(r):
-				b.WriteByte(' ')
+			case character == '\n':
+				builder.WriteByte('\n')
+			case character == '\t': // keeps code indentation readable
+				builder.WriteString("    ")
+			case character == utf8.RuneError && count == 1: // invalid byte
+				builder.WriteRune(utf8.RuneError)
+			case unsafeRune(character):
+				builder.WriteByte(' ')
 			default:
-				b.WriteString(s[i : i+n])
+				builder.WriteString(text[i : i+count])
 			}
-			i += n
+			i += count
 			continue
 		}
-		seq, n := escapeSequence(s[i:])
-		if keepSequence(seq) {
-			b.WriteString(seq)
+		sequence, count := escapeSequence(text[i:])
+		if keepSequence(sequence) {
+			builder.WriteString(sequence)
 		}
-		i += n
+		i += count
 	}
-	return b.String()
+	return builder.String()
 }
 
 // escapeSequence returns the escape sequence at the start of s (which begins
 // with ESC) and its length. A sequence that never ends swallows the rest of s.
-func escapeSequence(s string) (string, int) {
-	if len(s) < 2 {
-		return s, len(s)
+func escapeSequence(text string) (string, int) {
+	if len(text) < 2 {
+		return text, len(text)
 	}
-	switch s[1] {
+	switch text[1] {
 	case '[': // CSI: parameter bytes, intermediate bytes, one final byte
 		i := 2
-		for i < len(s) && s[i] >= 0x30 && s[i] <= 0x3f {
+		for i < len(text) && text[i] >= 0x30 && text[i] <= 0x3f {
 			i++
 		}
-		for i < len(s) && s[i] >= 0x20 && s[i] <= 0x2f {
+		for i < len(text) && text[i] >= 0x20 && text[i] <= 0x2f {
 			i++
 		}
-		if i < len(s) && s[i] >= 0x40 && s[i] <= 0x7e {
+		if i < len(text) && text[i] >= 0x40 && text[i] <= 0x7e {
 			i++
 		}
-		return s[:i], i
+		return text[:i], i
 	case ']', 'P', 'X', '^', '_': // OSC, DCS, SOS, PM, APC: end at BEL or ST
-		for i := 2; i < len(s); i++ {
+		for i := 2; i < len(text); i++ {
 			switch {
-			case s[i] == 0x07:
-				return s[:i+1], i + 1
-			case s[i] == 0x1b && i+1 < len(s) && s[i+1] == '\\':
-				return s[:i+2], i + 2
+			case text[i] == 0x07:
+				return text[:i+1], i + 1
+			case text[i] == 0x1b && i+1 < len(text) && text[i+1] == '\\':
+				return text[:i+2], i + 2
 			}
 		}
-		return s, len(s)
+		return text, len(text)
 	default: // two-byte escape, possibly with intermediates
 		i := 1
-		for i < len(s) && s[i] >= 0x20 && s[i] <= 0x2f {
+		for i < len(text) && text[i] >= 0x20 && text[i] <= 0x2f {
 			i++
 		}
-		if i < len(s) {
+		if i < len(text) {
 			i++
 		}
-		return s[:i], i
+		return text[:i], i
 	}
 }
 
-func keepSequence(seq string) bool {
+func keepSequence(sequence string) bool {
 	switch {
-	case strings.HasPrefix(seq, "\x1b["):
-		if !strings.HasSuffix(seq, "m") {
+	case strings.HasPrefix(sequence, "\x1b["):
+		if !strings.HasSuffix(sequence, "m") {
 			return false
 		}
-		return !strings.ContainsFunc(seq[2:len(seq)-1], func(r rune) bool {
-			return (r < '0' || r > '9') && r != ';' && r != ':'
+		return !strings.ContainsFunc(sequence[2:len(sequence)-1], func(character rune) bool {
+			return (character < '0' || character > '9') && character != ';' && character != ':'
 		})
-	case strings.HasPrefix(seq, "\x1b]8;"):
-		body := seq[4:]
+	case strings.HasPrefix(sequence, "\x1b]8;"):
+		body := sequence[4:]
 		switch {
 		case strings.HasSuffix(body, "\x07"):
 			body = body[:len(body)-1]
@@ -104,7 +104,7 @@ func keepSequence(seq string) bool {
 		}
 		params, url, ok := strings.Cut(body, ";")
 		return ok && !strings.Contains(params, ";") &&
-			!strings.ContainsFunc(params+url, func(r rune) bool { return r == 0x1b || unsafeRune(r) })
+			!strings.ContainsFunc(params+url, func(character rune) bool { return character == 0x1b || unsafeRune(character) })
 	}
 	return false
 }
