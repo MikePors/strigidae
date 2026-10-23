@@ -17,7 +17,7 @@ import (
 // A ConfirmMsg that arrives while another prompt is open replaces it
 // silently (the visible text always matches the action that would run). Views
 // whose confirmation arrives after a network round trip should expect that.
-type ConfirmMsg struct {
+type ConfirmMessage struct {
 	// Text is the question, already cleaned of untrusted escapes.
 	Text string
 	// OnYes runs when the user answers yes.
@@ -31,7 +31,7 @@ type ConfirmMsg struct {
 
 // Confirm returns a command that asks the question.
 func Confirm(text string, onYes tea.Cmd) tea.Cmd {
-	return msgCmd(ConfirmMsg{Text: text, OnYes: onYes})
+	return messageCommand(ConfirmMessage{Text: text, OnYes: onYes})
 }
 
 // confirmPrompt is the open question. It implements KeyCapturer.
@@ -45,7 +45,7 @@ type confirmPrompt struct {
 
 var _ KeyCapturer = (*confirmPrompt)(nil)
 
-func newConfirmPrompt(msg ConfirmMsg) *confirmPrompt {
+func newConfirmPrompt(msg ConfirmMessage) *confirmPrompt {
 	return &confirmPrompt{
 		text:      msg.Text,
 		onYes:     msg.OnYes,

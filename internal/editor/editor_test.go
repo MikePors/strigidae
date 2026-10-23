@@ -9,15 +9,15 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func env(m map[string]string) func(string) string {
+func environment(m map[string]string) func(string) string {
 	return func(k string) string { return m[k] }
 }
 
 func TestCommandChoice(t *testing.T) {
 	tests := []struct {
-		name string
-		env  map[string]string
-		want string // the editor string handed to the shell
+		name        string
+		environment map[string]string
+		want        string // the editor string handed to the shell
 	}{
 		{"fallback", nil, "vi"},
 		{"editor", map[string]string{"EDITOR": "nano"}, "nano"},
@@ -28,7 +28,7 @@ func TestCommandChoice(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			want := []string{"sh", "-c", tt.want + ` "$@"`, "strig", "f.md"}
-			if diff := cmp.Diff(want, Command("f.md", env(tt.env)).Args); diff != "" {
+			if diff := cmp.Diff(want, Command("f.md", environment(tt.environment)).Args); diff != "" {
 				t.Errorf("args (-want +got):\n%s", diff)
 			}
 		})
@@ -45,7 +45,7 @@ func TestSessionRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	// "cp src <file>" stands in for an editor that replaces the content.
-	s, err := New("draft", env(map[string]string{"EDITOR": cp + " " + src}))
+	s, err := New("draft", environment(map[string]string{"EDITOR": cp + " " + src}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestSessionRoundTrip(t *testing.T) {
 	if filepath.Ext(s.Path()) != ".md" {
 		t.Errorf("path %q is not .md", s.Path())
 	}
-	if err := s.Cmd().Run(); err != nil {
+	if err := s.Command().Run(); err != nil {
 		t.Fatal(err)
 	}
 	got, err := s.Result()
@@ -80,11 +80,11 @@ func TestQuotedEditorAndPathWithSpaces(t *testing.T) {
 	if err := os.WriteFile(src, []byte("quoted"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	s, err := New("", env(map[string]string{"VISUAL": `"` + cp + `" "` + src + `"`}))
+	s, err := New("", environment(map[string]string{"VISUAL": `"` + cp + `" "` + src + `"`}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Cmd().Run(); err != nil {
+	if err := s.Command().Run(); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := s.Result(); err != nil || got != "quoted" {
@@ -93,7 +93,7 @@ func TestQuotedEditorAndPathWithSpaces(t *testing.T) {
 }
 
 func TestResultRemovesFileWhenEditorFailed(t *testing.T) {
-	s, err := New("", env(nil))
+	s, err := New("", environment(nil))
 	if err != nil {
 		t.Fatal(err)
 	}

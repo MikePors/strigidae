@@ -65,10 +65,10 @@ func TestOutputFollowsTheme(t *testing.T) {
 		out := New(th).Render(md, 60)
 		for name, c := range map[string]color.Color{
 			"link":   th.Roles.Link,
-			"string": th.Roles.SynString,
+			"string": th.Roles.SyntaxString,
 		} {
 			if rgb := sgrRGB(c); !strings.Contains(out, rgb) {
-				t.Errorf("%s theme: output lacks the %s role colour %s: %q", th.ID, name, rgb, out)
+				t.Errorf("%s theme: output lacks the %s role colour %s: %q", th.Identifier, name, rgb, out)
 			}
 		}
 	}
@@ -80,7 +80,7 @@ func TestOverrideColoursCodeBlocks(t *testing.T) {
 	const md = "```go\nvar s = \"x\"\n```"
 	p := testPalette(t)
 	base := theme.FromPalette(p)
-	over := theme.FromPaletteWithOverrides(p, theme.Roles{SynString: color.RGBA{R: 255, B: 255, A: 255}})
+	over := theme.FromPaletteWithOverrides(p, theme.Roles{SyntaxString: color.RGBA{R: 255, B: 255, A: 255}})
 	if out := New(base).Render(md, 40); strings.Contains(out, "2;255;0;255") {
 		t.Fatalf("setup: default theme already uses the override colour: %q", out)
 	}

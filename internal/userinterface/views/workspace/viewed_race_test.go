@@ -18,7 +18,7 @@ import (
 // decides when the mutation reaches the server.
 func (h *harness) pressV() tea.Cmd {
 	h.t.Helper()
-	v, cmd := h.v.Update(keys.Msg{Seq: "v"})
+	v, cmd := h.v.Update(keys.Message{Sequence: "v"})
 	h.v = v.(*View)
 	return cmd
 }
@@ -30,8 +30,8 @@ func (h *harness) finish(cmd tea.Cmd) tea.Cmd {
 	var next tea.Cmd
 	for _, m := range messages(cmd) {
 		switch m.(type) {
-		case userinterface.ErrorMsg, userinterface.InfoMsg:
-			h.msgs = append(h.msgs, m)
+		case userinterface.ErrorMessage, userinterface.InfoMessage:
+			h.messages = append(h.messages, m)
 		default:
 			v, c := h.v.Update(m)
 			h.v = v.(*View)
@@ -53,7 +53,7 @@ func sentStates(c *fake.Client) []bool {
 
 func (h *harness) reload(d github.PullRequestDetail) {
 	h.t.Helper()
-	h.send(prLoadedMsg{owner: h.v, repo: testRepo, number: 7, seq: h.v.seq, detail: d})
+	h.send(pullRequestLoadedMessage{owner: h.v, repository: testRepository, number: 7, sequence: h.v.sequence, detail: d})
 }
 
 func TestRapidTogglesAreSerialised(t *testing.T) {
@@ -139,7 +139,7 @@ func TestRefreshMidToggleKeepsOptimisticMark(t *testing.T) {
 		t.Errorf("after success shown = %q", got)
 	}
 	// Once settled, the next reload shows the server's state again.
-	h.v.seq++ // a reload started after the mutation settled
+	h.v.sequence++ // a reload started after the mutation settled
 	d := testDetail()
 	d.Files[0].Viewed = github.FileDismissed
 	h.reload(d)
@@ -187,18 +187,18 @@ func TestToggleOnVanishedFileIsDropped(t *testing.T) {
 func TestViewedResultForOtherViewIgnored(t *testing.T) {
 	tests := []struct {
 		name string
-		mut  func(m *viewedMsg)
+		mut  func(m *viewedMessage)
 	}{
-		{"other number", func(m *viewedMsg) { m.number = 8 }},
-		{"other repo", func(m *viewedMsg) { m.repo = github.Repository{Owner: "x", Name: "y"} }},
-		{"other view", func(m *viewedMsg) { m.owner = New(nil, testRepo, 7) }},
+		{"other number", func(m *viewedMessage) { m.number = 8 }},
+		{"other repo", func(m *viewedMessage) { m.repository = github.Repository{Owner: "x", Name: "y"} }},
+		{"other view", func(m *viewedMessage) { m.owner = New(nil, testRepository, 7) }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := viewedHarness(t, 100, 24)
 			h.press("j")
 			h.pressV()
-			m := viewedMsg{owner: h.v, repo: testRepo, number: 7, path: firstFile, sent: github.FileViewed, err: errors.New("x")}
+			m := viewedMessage{owner: h.v, repository: testRepository, number: 7, path: firstFile, sent: github.FileViewed, err: errors.New("x")}
 			tt.mut(&m)
 			h.send(m)
 			if got := h.stateOf(); got != github.FileViewed {
@@ -219,7 +219,7 @@ func TestReloadStartedBeforeSettleKeepsMark(t *testing.T) {
 		t.Fatalf("stale reload overwrote the settled mark: %q", got)
 	}
 	// A reload started afterwards (a newer seq) shows the server's state.
-	h.v.seq++
+	h.v.sequence++
 	d := unviewedDetail()
 	d.Files[0].Viewed = github.FileDismissed
 	h.reload(d)

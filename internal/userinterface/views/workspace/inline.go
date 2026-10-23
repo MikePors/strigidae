@@ -21,14 +21,14 @@ import (
 
 // commentDeletedMsg is the result of deleting a comment (or of a refusal
 // before the question). Like a post it is identified by its origin only.
-type commentDeletedMsg struct {
+type commentDeletedMessage struct {
 	origin origin
 	err    error
 }
 
 // commentCheckedMsg carries a question for the user, asked after a comment
 // was re-read: onYes runs on yes.
-type commentCheckedMsg struct {
+type commentCheckedMessage struct {
 	origin   origin
 	question string
 	onYes    tea.Cmd
@@ -37,18 +37,18 @@ type commentCheckedMsg struct {
 // commentAgreedMsg is what a "yes" produces: the write that was asked about.
 // It goes through the view so the write is counted as in flight and refused
 // when a review or merge is.
-type commentAgreedMsg struct {
+type commentAgreedMessage struct {
 	origin origin
 	run    tea.Cmd
 }
 
 // commentReadMsg is the result of re-reading a comment before the editor
 // opens on it: tgt holds the fresh body, or err why it cannot be edited.
-type commentReadMsg struct {
-	origin origin
-	seq    int // the compose sequence it was asked under; a later compose supersedes it
-	tgt    target
-	err    error
+type commentReadMessage struct {
+	origin   origin
+	sequence int // the compose sequence it was asked under; a later compose supersedes it
+	target   target
+	err      error
 }
 
 // staleError is why a comment cannot be changed any more: what is on screen
@@ -145,10 +145,10 @@ func (a answer) covers(pending bool) bool { return a.given && a.pending == pendi
 // asked about. A comment that changed state while the question was open is
 // asked about again, so nothing is written on a stale yes.
 type commentWrite struct {
-	origin origin
-	client github.Client
-	id     string
-	change change
+	origin     origin
+	client     github.Client
+	identifier string
+	change     change
 	// ask returns the question for a comment that is pending or published, or
 	// "" to write without asking.
 	ask    func(pending bool) string
@@ -160,14 +160,14 @@ type commentWrite struct {
 // has already said yes to (the zero answer before any question).
 func (w commentWrite) run(given answer) tea.Msg {
 	ctx := context.Background()
-	fresh, err := freshComment(ctx, w.client, w.id, w.change)
+	fresh, err := freshComment(ctx, w.client, w.identifier, w.change)
 	if err != nil {
 		return w.result(err)
 	}
 	if q := w.ask(fresh.Pending); q != "" && !given.covers(fresh.Pending) {
 		pending := fresh.Pending
 		again := func() tea.Msg { return w.run(yes(pending)) }
-		return commentCheckedMsg{origin: w.origin, question: q, onYes: agreed(w.origin, again)}
+		return commentCheckedMessage{origin: w.origin, question: q, onYes: agreed(w.origin, again)}
 	}
 	err = w.write(ctx, w.client)
 	if errors.Is(err, github.ErrNotFound) {
@@ -178,7 +178,7 @@ func (w commentWrite) run(given answer) tea.Msg {
 
 // agreed wraps the write to run on a yes, so the view sees the yes first.
 func agreed(o origin, run tea.Cmd) tea.Cmd {
-	return func() tea.Msg { return commentAgreedMsg{origin: o, run: run} }
+	return func() tea.Msg { return commentAgreedMessage{origin: o, run: run} }
 }
 
 // agreed is agreed for this view's origin.
@@ -187,7 +187,7 @@ func (v *View) agreed(run tea.Cmd) tea.Cmd { return agreed(v.origin(), run) }
 // commentAgreed starts the write a yes was given for, unless a review is being
 // submitted or a merge is running; the write then counts as in flight until its
 // result arrives.
-func (v *View) commentAgreed(msg commentAgreedMsg) tea.Cmd {
+func (v *View) commentAgreed(msg commentAgreedMessage) tea.Cmd {
 	switch {
 	case v.review.submitting:
 		return userinterface.Info("a review is being submitted")
@@ -203,7 +203,7 @@ func (v *View) commentAgreed(msg commentAgreedMsg) tea.Cmd {
 // withShownError returns res together with an error to show, so the error
 // shows even if the view was left meanwhile.
 func withShownError(res tea.Msg, shown error) tea.Msg {
-	return tea.BatchMsg{func() tea.Msg { return res }, func() tea.Msg { return userinterface.ErrorMsg{Err: shown} }}
+	return tea.BatchMsg{func() tea.Msg { return res }, func() tea.Msg { return userinterface.ErrorMessage{Err: shown} }}
 }
 
 // writeStarted and writeDone count the comment writes in flight; the count
@@ -223,13 +223,13 @@ func (v *View) writeBusy() tea.Cmd {
 // reloadPendingComments refreshes what shows pending comments: the threads in
 // the diff, and the pull request (whose reviews list the pending review).
 func (v *View) reloadPendingComments() tea.Cmd {
-	return tea.Batch(v.reloadPR(), v.reloadThreads())
+	return tea.Batch(v.reloadPullRequest(), v.reloadThreads())
 }
 
 // commentBlocked says why comments cannot be written or changed now (a review
 // is being submitted, a comment is being saved, or the pull request or its
 // diff is not loaded), or returns nil.
-func (v *View) commentBlocked() tea.Cmd { return v.review.blocked(v.reviewEnv()) }
+func (v *View) commentBlocked() tea.Cmd { return v.review.blocked(v.reviewEnvironment()) }
 
 // focusedThread returns the one thread under the diff cursor. ok is false when
 // there is none (or the diff is not showing); hint is the message to show when
@@ -327,13 +327,13 @@ func (v *View) editComment() tea.Cmd {
 		return cmd
 	}
 	o, client := v.origin(), v.client
-	tgt := target{kind: kindEdit, commentID: c.Identifier, threadID: t.Identifier, label: threadLocation(t), home: v.reachableHome(t)}
+	tgt := target{kind: kindEdit, commentIdentifier: c.Identifier, threadIdentifier: t.Identifier, label: threadLocation(t), home: v.reachableHome(t)}
 	v.cseq++ // a compose started meanwhile supersedes this read
 	seq := v.cseq
 	return func() tea.Msg {
-		fresh, err := freshComment(context.Background(), client, tgt.commentID, changeEdit)
+		fresh, err := freshComment(context.Background(), client, tgt.commentIdentifier, changeEdit)
 		tgt.initial = fresh.Body
-		return commentReadMsg{origin: o, seq: seq, tgt: tgt, err: err}
+		return commentReadMessage{origin: o, sequence: seq, target: tgt, err: err}
 	}
 }
 
@@ -367,14 +367,14 @@ func (v *View) lineInDiff(path string, side github.DiffSide, n int) bool {
 }
 
 // commentRead opens the editor on a freshly read comment, or refuses.
-func (v *View) commentRead(msg commentReadMsg) tea.Cmd {
+func (v *View) commentRead(msg commentReadMessage) tea.Cmd {
 	if msg.err != nil {
 		return v.refuse(msg.err, "read comment")
 	}
 	if blocked := v.commentBlocked(); blocked != nil {
 		return blocked
 	}
-	return v.compose(msg.tgt)
+	return v.compose(msg.target)
 }
 
 // refuse shows why a comment cannot be changed, and refreshes when what is on
@@ -396,7 +396,7 @@ func (v *View) deleteComment() tea.Cmd {
 	}
 	o, id, label := v.origin(), c.Identifier, terminaltext.Clean(threadLocation(t))
 	w := commentWrite{
-		origin: o, client: v.client, id: id, change: changeDelete,
+		origin: o, client: v.client, identifier: id, change: changeDelete,
 		ask: func(pending bool) string {
 			if pending {
 				return "Delete pending comment on " + label + "?"
@@ -405,7 +405,7 @@ func (v *View) deleteComment() tea.Cmd {
 		},
 		write: func(ctx context.Context, cl github.Client) error { return cl.DeleteReviewComment(ctx, id) },
 		result: func(err error) tea.Msg {
-			res := commentDeletedMsg{origin: o, err: err}
+			res := commentDeletedMessage{origin: o, err: err}
 			if err == nil {
 				return res
 			}
@@ -426,7 +426,7 @@ func commentFailure(err error, what string) error {
 	return terminaltext.SafeError(fmt.Errorf("%s: %w", what, err))
 }
 
-func (v *View) commentDeleted(msg commentDeletedMsg) tea.Cmd {
+func (v *View) commentDeleted(msg commentDeletedMessage) tea.Cmd {
 	v.writeDone()
 	if isStale(msg.err) {
 		return v.reloadPendingComments() // the error is already shown
@@ -448,7 +448,7 @@ func (v *View) sendEdit(tgt target, body string) tea.Cmd {
 	}
 	o, client, label := v.origin(), v.client, terminaltext.Clean(tgt.label)
 	w := commentWrite{
-		origin: o, client: client, id: tgt.commentID, change: changeEdit,
+		origin: o, client: client, identifier: tgt.commentIdentifier, change: changeEdit,
 		ask: func(pending bool) string {
 			if pending {
 				return ""
@@ -456,16 +456,16 @@ func (v *View) sendEdit(tgt target, body string) tea.Cmd {
 			return fmt.Sprintf("Update your published comment on #%d %s?", o.number, label)
 		},
 		write: func(ctx context.Context, cl github.Client) error {
-			_, err := cl.UpdateReviewComment(ctx, tgt.commentID, body)
+			_, err := cl.UpdateReviewComment(ctx, tgt.commentIdentifier, body)
 			return err
 		},
 		result: func(err error) tea.Msg {
-			res := postedMsg{origin: o, tgt: tgt, body: body, err: err}
+			res := postedMessage{origin: o, target: tgt, body: body, err: err}
 			if err == nil {
 				return res
 			}
 			if isStale(err) {
-				res.threadLive = threadExists(client, o, tgt.threadID)
+				res.threadLive = threadExists(client, o, tgt.threadIdentifier)
 			}
 			return withShownError(res, editFailure(err, tgt, res.threadLive))
 		},
@@ -477,19 +477,19 @@ func (v *View) sendEdit(tgt target, body string) tea.Cmd {
 // threadExists reports whether a thread is still on the pull request. When the
 // threads cannot be listed it says no, which keeps the text where `c` finds it.
 func threadExists(client github.Client, o origin, threadID string) bool {
-	ts, err := loadThreads(context.Background(), client, o.repo, o.number)
+	ts, err := loadThreads(context.Background(), client, o.repository, o.number)
 	return err == nil && slices.ContainsFunc(ts, func(t github.ReviewThread) bool { return t.Identifier == threadID })
 }
 
 // homeKey is the draft a refused edit's text goes to: the reply draft of its
 // thread while the thread exists, else the draft of a new comment on its lines
 // when `c` can reach them, else the top-level draft.
-func homeKey(msg postedMsg) string {
+func homeKey(msg postedMessage) string {
 	switch {
 	case msg.threadLive:
-		return target{kind: kindReply, threadID: msg.tgt.threadID}.draftKey()
-	case msg.tgt.home != nil:
-		return target{kind: kindInline, inline: msg.tgt.home}.draftKey()
+		return target{kind: kindReply, threadIdentifier: msg.target.threadIdentifier}.draftKey()
+	case msg.target.home != nil:
+		return target{kind: kindInline, inline: msg.target.home}.draftKey()
 	}
 	return target{}.draftKey()
 }
@@ -534,11 +534,11 @@ func joinDraft(old, text string) string {
 // draft already there. Whether the thread still exists was read after the
 // refusal, in the command, because the refreshed list arrives too late and may
 // be an older snapshot.
-func (v *View) staleEdit(msg postedMsg) tea.Cmd {
-	if msg.tgt.threadID != "" {
+func (v *View) staleEdit(msg postedMessage) tea.Cmd {
+	if msg.target.threadIdentifier != "" {
 		key := homeKey(msg)
 		v.drafts[key] = joinDraft(v.drafts[key], msg.body)
-		delete(v.drafts, msg.tgt.draftKey())
+		delete(v.drafts, msg.target.draftKey())
 	}
 	return v.reloadPendingComments()
 }
@@ -551,12 +551,12 @@ func (v *View) sendInline(tgt target, body string) tea.Cmd {
 	// checked that the pull request is loaded.)
 	o, client := v.origin(), v.client
 	in := *tgt.inline
-	in.Repository, in.Number, in.Body = o.repo, o.number, body
+	in.Repository, in.Number, in.Body = o.repository, o.number, body
 	prID := v.detail.Identifier
 	v.writeStarted()
 	return func() tea.Msg {
 		err := addPendingThread(context.Background(), client, in, prID, tgt.head)
-		res := postedMsg{origin: o, tgt: tgt, body: body, err: err}
+		res := postedMessage{origin: o, target: tgt, body: body, err: err}
 		if err == nil {
 			return res
 		}

@@ -133,10 +133,10 @@ func TestFromANSIMutedShade(t *testing.T) {
 	_, _, ansi := ansiFixture()
 	blended := func(bg, fg color.Color) string { return HexString(blend(bg, fg, 0.45)) }
 	tests := []struct {
-		name      string
-		bg, fg    string
-		bright    string
-		wantBlend bool
+		name                   string
+		background, foreground string
+		bright                 string
+		wantBlend              bool
 	}{
 		{"distinct bright black is used", "#101010", "#e0e0e0", "#555555", false},
 		// Solarized Dark: color8 is the background.
@@ -147,10 +147,10 @@ func TestFromANSIMutedShade(t *testing.T) {
 	for _, tc := range tests {
 		a := ansi
 		a[8] = hex(tc.bright)
-		p := mustPalette(t)(FromANSI("term", hex(tc.bg), hex(tc.fg), a))
+		p := mustPalette(t)(FromANSI("term", hex(tc.background), hex(tc.foreground), a))
 		want := tc.bright
 		if tc.wantBlend {
-			want = blended(hex(tc.bg), hex(tc.fg))
+			want = blended(hex(tc.background), hex(tc.foreground))
 		}
 		if got := HexString(p.colors[Base03]); got != want {
 			t.Errorf("%s: base03 = %s, want %s", tc.name, got, want)
@@ -161,10 +161,10 @@ func TestFromANSIMutedShade(t *testing.T) {
 func TestFromANSIVariant(t *testing.T) {
 	_, _, ansi := ansiFixture()
 	tests := []struct {
-		name  string
-		bg    string
-		want  Variant
-		far07 color.Color
+		name       string
+		background string
+		want       Variant
+		far07      color.Color
 	}{
 		{"white", "#fafafa", Light, ansi[0]},
 		{"black", "#101010", Dark, ansi[15]},
@@ -173,7 +173,7 @@ func TestFromANSIVariant(t *testing.T) {
 		{"mid grey", "#9a9a9a", Light, ansi[0]},
 	}
 	for _, tc := range tests {
-		p := mustPalette(t)(FromANSI("term", hex(tc.bg), hex("#202020"), ansi))
+		p := mustPalette(t)(FromANSI("term", hex(tc.background), hex("#202020"), ansi))
 		if p.Variant != tc.want {
 			t.Errorf("%s: variant = %v, want %v", tc.name, p.Variant, tc.want)
 		}
@@ -223,7 +223,7 @@ func TestBuiltinPalettesComplete(t *testing.T) {
 			t.Error(err)
 		}
 	}
-	if New(true).ID == New(false).ID {
+	if New(true).Identifier == New(false).Identifier {
 		t.Error("dark and light share an ID")
 	}
 }
@@ -232,7 +232,7 @@ func TestVariants(t *testing.T) {
 	if !New(true).IsDark || New(false).IsDark || !Default().IsDark {
 		t.Error("IsDark does not follow the palette variant")
 	}
-	if diff := cmp.Diff(New(true).ID, FromPalette(builtinDark).ID); diff != "" {
+	if diff := cmp.Diff(New(true).Identifier, FromPalette(builtinDark).Identifier); diff != "" {
 		t.Errorf("New(true) is not the dark built-in: %s", diff)
 	}
 }
@@ -322,10 +322,10 @@ func TestGuardFixesUnreadableDerivedRoles(t *testing.T) {
 	bad.colors[Base0B] = bad.colors[Base00] // success invisible
 	r := deriveRoles(bad, Roles{})
 	checks := []struct {
-		name string
-		fg   color.Color
-		bg   color.Color
-		min  float64
+		name       string
+		foreground color.Color
+		background color.Color
+		min        float64
 	}{
 		{"text", r.Text, r.Background, minTextContrast},
 		{"text on bar", r.Text, r.Surface, minTextContrast},
@@ -334,7 +334,7 @@ func TestGuardFixesUnreadableDerivedRoles(t *testing.T) {
 		{"success", r.Success, r.Background, minAccentContrast},
 	}
 	for _, tc := range checks {
-		if got := contrast(tc.fg, tc.bg); got < tc.min {
+		if got := contrast(tc.foreground, tc.background); got < tc.min {
 			t.Errorf("%s contrast = %.2f, want at least %.1f", tc.name, got, tc.min)
 		}
 	}
@@ -424,8 +424,8 @@ func TestOverridesAreExact(t *testing.T) {
 
 func TestOverrideChangesIdentity(t *testing.T) {
 	base := FromPalette(builtinDark)
-	over := FromPaletteWithOverrides(builtinDark, Roles{SynString: hex("#ff00ff")})
-	if base.ID == over.ID {
+	over := FromPaletteWithOverrides(builtinDark, Roles{SyntaxString: hex("#ff00ff")})
+	if base.Identifier == over.Identifier {
 		t.Fatal("a role override did not change Theme.ID")
 	}
 	if base.ChromaStyleName() == over.ChromaStyleName() {
@@ -435,7 +435,7 @@ func TestOverrideChangesIdentity(t *testing.T) {
 	if got != "#ff00ff" {
 		t.Errorf("string colour in the overridden Chroma style = %s, want #ff00ff", got)
 	}
-	if FromPalette(builtinDark).ID != base.ID {
+	if FromPalette(builtinDark).Identifier != base.Identifier {
 		t.Error("ID is not stable for the same inputs")
 	}
 }
@@ -508,7 +508,7 @@ func loudPalette(t *testing.T) Palette {
 // differs. Anything still hardcoded would be identical in both.
 func TestNothingIsHardcoded(t *testing.T) {
 	a, b := FromPalette(builtinDark), FromPalette(loudPalette(t))
-	if a.ID == b.ID {
+	if a.Identifier == b.Identifier {
 		t.Fatal("setup: themes share an ID")
 	}
 	got := map[string][]string{}
@@ -534,7 +534,7 @@ func TestNothingIsHardcoded(t *testing.T) {
 	}
 
 	// Syntax holds its styles privately, one per class.
-	for c := ClassKeyword; c < NumSyntaxClasses; c++ {
+	for c := ClassKeyword; c < NumberSyntaxClasses; c++ {
 		ca, cb := styleColors(a.Syntax.For(c)), styleColors(b.Syntax.For(c))
 		if ca[0] == "" || ca[0] == cb[0] {
 			t.Errorf("syntax class %d colour %q / %q", c, ca[0], cb[0])
@@ -565,7 +565,7 @@ func TestChromaStyleFollowsClasses(t *testing.T) {
 		for tok := range chroma.StandardTypes {
 			entry := st.Get(tok)
 			if entry.Background.IsSet() {
-				t.Errorf("%s: token %v has a background %s", th.ID, tok, entry.Background)
+				t.Errorf("%s: token %v has a background %s", th.Identifier, tok, entry.Background)
 			}
 			if _, ok := markup[tok]; ok || tok == chroma.Background {
 				continue
@@ -573,7 +573,7 @@ func TestChromaStyleFollowsClasses(t *testing.T) {
 			class := ClassOf(tok)
 			want := HexString(th.Roles.syntaxColour(class))
 			if got := entry.Colour.String(); got != want {
-				t.Errorf("%s: token %v (class %d): chroma colour %s, want %s", th.ID, tok, class, got, want)
+				t.Errorf("%s: token %v (class %d): chroma colour %s, want %s", th.Identifier, tok, class, got, want)
 			}
 			diffFg := styleColors(th.Syntax.For(class))[0]
 			if class == ClassPlain {
@@ -581,7 +581,7 @@ func TestChromaStyleFollowsClasses(t *testing.T) {
 					t.Errorf("token %v is plain but its diff style sets %s", tok, diffFg)
 				}
 			} else if diffFg != want {
-				t.Errorf("%s: token %v (class %d): diff colour %s, want %s", th.ID, tok, class, diffFg, want)
+				t.Errorf("%s: token %v (class %d): diff colour %s, want %s", th.Identifier, tok, class, diffFg, want)
 			}
 			checked++
 		}

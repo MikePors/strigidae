@@ -46,7 +46,7 @@ const (
 	Base15             // bright cyan
 	Base16             // bright blue
 	Base17             // bright magenta
-	numSlots
+	numberSlots
 )
 
 // String returns the slot's Base24 name, such as "base0B".
@@ -58,7 +58,7 @@ func (s Slot) String() string { return fmt.Sprintf("base%02X", int(s)) }
 type Palette struct {
 	Name    string
 	Variant Variant
-	colors  [numSlots]color.Color
+	colors  [numberSlots]color.Color
 }
 
 // Slot returns the colour in slot s. Only roles.go and the palette

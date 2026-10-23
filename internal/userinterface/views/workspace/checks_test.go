@@ -17,9 +17,9 @@ func TestHeaderChecks(t *testing.T) {
 		text  string
 		style func(string) string
 	}{
-		{github.ChecksPassing, "✓ checks passing", func(s string) string { return th.PRList.ChecksPassing.Render(s) }},
-		{github.ChecksFailing, "✗ checks failing", func(s string) string { return th.PRList.ChecksFailing.Render(s) }},
-		{github.ChecksRunning, "● checks running", func(s string) string { return th.PRList.ChecksRunning.Render(s) }},
+		{github.ChecksPassing, "✓ checks passing", func(s string) string { return th.PullRequestList.ChecksPassing.Render(s) }},
+		{github.ChecksFailing, "✗ checks failing", func(s string) string { return th.PullRequestList.ChecksFailing.Render(s) }},
+		{github.ChecksRunning, "● checks running", func(s string) string { return th.PullRequestList.ChecksRunning.Render(s) }},
 		{github.ChecksNone, "", nil},
 	}
 	for _, tt := range tests {

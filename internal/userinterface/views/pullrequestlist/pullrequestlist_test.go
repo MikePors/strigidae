@@ -21,15 +21,15 @@ import (
 )
 
 var (
-	testRepo = github.Repository{Owner: "acme", Name: "widgets"}
-	testNow  = time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC)
+	testRepository = github.Repository{Owner: "acme", Name: "widgets"}
+	testNow        = time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC)
 )
 
 func makePRs(n int) []github.PullRequest {
 	prs := make([]github.PullRequest, n)
 	for i := range prs {
 		prs[i] = github.PullRequest{
-			Repository: testRepo,
+			Repository: testRepository,
 			Number:     n - i,
 			Title:      fmt.Sprintf("Change number %d", n-i),
 			Author:     "alice",
@@ -42,7 +42,7 @@ func makePRs(n int) []github.PullRequest {
 }
 
 func newView(client github.Client, open func(string) error) *View {
-	v := New(client, testRepo, theme.Default(), Options{Now: func() time.Time { return testNow }, Open: open})
+	v := New(client, testRepository, theme.Default(), Options{Now: func() time.Time { return testNow }, Open: open})
 	v.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
 	return v
 }
@@ -58,7 +58,7 @@ func deliver(t *testing.T, v *View, cmd tea.Cmd) tea.Cmd {
 }
 
 func press(v *View, seq string) tea.Cmd {
-	_, cmd := v.Update(keys.Msg{Seq: seq})
+	_, cmd := v.Update(keys.Message{Sequence: seq})
 	return cmd
 }
 
@@ -71,7 +71,7 @@ func loadedView(t *testing.T, client github.Client, open func(string) error) *Vi
 
 func fakeWith(prs []github.PullRequest) *fake.Client {
 	c := fake.New()
-	c.SetPullRequests(testRepo, prs)
+	c.SetPullRequests(testRepository, prs)
 	return c
 }
 
@@ -87,10 +87,10 @@ func TestFirstLoad(t *testing.T) {
 	if cmd := deliver(t, v, v.Init()); cmd != nil {
 		t.Errorf("single page should not trigger more loading")
 	}
-	if v.Loading() || len(v.prs) != 3 {
-		t.Errorf("loading=%v prs=%d, want loaded with 3", v.Loading(), len(v.prs))
+	if v.Loading() || len(v.pullRequests) != 3 {
+		t.Errorf("loading=%v prs=%d, want loaded with 3", v.Loading(), len(v.pullRequests))
 	}
-	want := []fake.Call{{Method: fake.MethodListPullRequests, Repository: testRepo}}
+	want := []fake.Call{{Method: fake.MethodListPullRequests, Repository: testRepository}}
 	if diff := cmp.Diff(want, c.Calls()); diff != "" {
 		t.Errorf("calls (-want +got):\n%s", diff)
 	}
@@ -99,8 +99,8 @@ func TestFirstLoad(t *testing.T) {
 func TestPaginationTrigger(t *testing.T) {
 	c := fakeWith(makePRs(45))
 	v := loadedView(t, c, nil)
-	if len(v.prs) != 30 || v.next == "" {
-		t.Fatalf("first page: prs=%d next=%q", len(v.prs), v.next)
+	if len(v.pullRequests) != 30 || v.next == "" {
+		t.Fatalf("first page: prs=%d next=%q", len(v.pullRequests), v.next)
 	}
 
 	// Far from the end: no request.
@@ -116,8 +116,8 @@ func TestPaginationTrigger(t *testing.T) {
 		t.Error("a load is in flight; no second request")
 	}
 	deliver(t, v, cmd)
-	if len(v.prs) != 45 || v.next != "" {
-		t.Errorf("after page 2: prs=%d next=%q", len(v.prs), v.next)
+	if len(v.pullRequests) != 45 || v.next != "" {
+		t.Errorf("after page 2: prs=%d next=%q", len(v.pullRequests), v.next)
 	}
 	calls := c.Calls()
 	if len(calls) != 2 || calls[1].Page.After != "30" {
@@ -139,17 +139,17 @@ func TestStaleResultsIgnored(t *testing.T) {
 	}
 	// The first load finishes after the refresh was requested.
 	deliver(t, v, first)
-	if len(v.prs) != 0 || !v.Loading() {
-		t.Errorf("stale result applied: prs=%d loading=%v", len(v.prs), v.Loading())
+	if len(v.pullRequests) != 0 || !v.Loading() {
+		t.Errorf("stale result applied: prs=%d loading=%v", len(v.pullRequests), v.Loading())
 	}
 	// A result for another repository is not ours either.
-	v.Update(prsLoadedMsg{repo: github.Repository{Owner: "x", Name: "y"}, seq: v.seq, page: github.Page[github.PullRequest]{Items: makePRs(1)}})
-	if len(v.prs) != 0 {
+	v.Update(pullRequestsLoadedMessage{repository: github.Repository{Owner: "x", Name: "y"}, sequence: v.sequence, page: github.Page[github.PullRequest]{Items: makePRs(1)}})
+	if len(v.pullRequests) != 0 {
 		t.Error("other repo's result applied")
 	}
 	deliver(t, v, refresh)
-	if len(v.prs) != 3 || v.Loading() {
-		t.Errorf("refresh result not applied: prs=%d", len(v.prs))
+	if len(v.pullRequests) != 3 || v.Loading() {
+		t.Errorf("refresh result not applied: prs=%d", len(v.pullRequests))
 	}
 }
 
@@ -158,9 +158,9 @@ func TestRefreshKeepsSelection(t *testing.T) {
 	v := loadedView(t, c, nil)
 	press(v, "j")
 	press(v, "j")
-	want := v.prs[v.win.Cursor()].Number
+	want := v.pullRequests[v.win.Cursor()].Number
 	deliver(t, v, press(v, "R"))
-	if got := v.prs[v.win.Cursor()].Number; got != want {
+	if got := v.pullRequests[v.win.Cursor()].Number; got != want {
 		t.Errorf("selected #%d after refresh, want #%d", got, want)
 	}
 }
@@ -170,25 +170,25 @@ func TestRefreshKeepsSelectionPastFirstPage(t *testing.T) {
 	v := loadedView(t, c, nil)
 	deliver(t, v, press(v, "G"))
 	press(v, "G")
-	if len(v.prs) != 45 || v.win.Cursor() != 44 {
-		t.Fatalf("setup: prs=%d cursor=%d", len(v.prs), v.win.Cursor())
+	if len(v.pullRequests) != 45 || v.win.Cursor() != 44 {
+		t.Fatalf("setup: prs=%d cursor=%d", len(v.pullRequests), v.win.Cursor())
 	}
-	want := v.prs[v.win.Cursor()].Number
+	want := v.pullRequests[v.win.Cursor()].Number
 
 	deliver(t, v, press(v, "R"))
 	calls := c.Calls()
 	if got := calls[len(calls)-1].Page.Limit; got != 45 {
 		t.Errorf("refresh limit = %d, want 45", got)
 	}
-	if len(v.prs) != 45 || v.prs[v.win.Cursor()].Number != want {
-		t.Errorf("after refresh: prs=%d selected #%d, want 45 rows and #%d", len(v.prs), v.prs[v.win.Cursor()].Number, want)
+	if len(v.pullRequests) != 45 || v.pullRequests[v.win.Cursor()].Number != want {
+		t.Errorf("after refresh: prs=%d selected #%d, want 45 rows and #%d", len(v.pullRequests), v.pullRequests[v.win.Cursor()].Number, want)
 	}
 }
 
 func TestRefreshCapsAtMaxPageSize(t *testing.T) {
 	c := fakeWith(makePRs(250))
 	v := loadedView(t, c, nil)
-	for len(v.prs) < 150 {
+	for len(v.pullRequests) < 150 {
 		deliver(t, v, press(v, "G"))
 	}
 	v.win.Restore(120, 0, 0)
@@ -199,8 +199,8 @@ func TestRefreshCapsAtMaxPageSize(t *testing.T) {
 	}
 	// Pinned: only the first 100 rows are reloaded and the cursor keeps its
 	// index (clamped), even though that may now be a different PR.
-	if len(v.prs) != 100 || v.win.Cursor() != 99 {
-		t.Errorf("after refresh: prs=%d cursor=%d, want 100 and 99", len(v.prs), v.win.Cursor())
+	if len(v.pullRequests) != 100 || v.win.Cursor() != 99 {
+		t.Errorf("after refresh: prs=%d cursor=%d, want 100 and 99", len(v.pullRequests), v.win.Cursor())
 	}
 }
 
@@ -219,7 +219,7 @@ func TestUntrustedTextIsCleaned(t *testing.T) {
 	}
 
 	cmd := deliver(t, v, v.Init())
-	status := cmd().(userinterface.ErrorMsg).Err.Error()
+	status := cmd().(userinterface.ErrorMessage).Err.Error()
 	out := ansi.Strip(v.Render(80, 8))
 	for _, s := range []string{status, out} {
 		for _, r := range strings.ReplaceAll(s, "\n", "") {
@@ -240,9 +240,9 @@ func TestRefreshSelectionGone(t *testing.T) {
 		press(v, "j")
 	}
 	// The selected PR disappears from the list; the row index is kept.
-	c.SetPullRequests(testRepo, makePRs(10)[:3])
+	c.SetPullRequests(testRepository, makePRs(10)[:3])
 	press(v, "R")
-	v.Update(prsLoadedMsg{repo: testRepo, seq: v.seq, page: github.Page[github.PullRequest]{Items: makePRs(3)}})
+	v.Update(pullRequestsLoadedMessage{repository: testRepository, sequence: v.sequence, page: github.Page[github.PullRequest]{Items: makePRs(3)}})
 	if v.win.Cursor() != 2 {
 		t.Errorf("cursor = %d, want 2 (clamped)", v.win.Cursor())
 	}
@@ -257,7 +257,7 @@ func TestLoadError(t *testing.T) {
 	if v.Loading() {
 		t.Error("still loading after error")
 	}
-	msg, ok := cmd().(userinterface.ErrorMsg)
+	msg, ok := cmd().(userinterface.ErrorMessage)
 	if !ok || !errors.Is(msg.Err, boom) {
 		t.Fatalf("cmd produced %#v, want userinterface.ErrorMsg wrapping boom", msg)
 	}
@@ -272,7 +272,7 @@ func TestFailedNextPageIsNotRetried(t *testing.T) {
 	cmd := press(v, "G")
 	c.SetError(fake.MethodListPullRequests, errors.New("rate limited"))
 	errCmd := deliver(t, v, cmd)
-	if _, ok := errCmd().(userinterface.ErrorMsg); !ok {
+	if _, ok := errCmd().(userinterface.ErrorMessage); !ok {
 		t.Fatal("failed page should report an error")
 	}
 	if v.Loading() {
@@ -308,13 +308,13 @@ func TestOpenInBrowser(t *testing.T) {
 	if len(opened) != 0 {
 		t.Fatal("browser launched during Update; it must run in the command")
 	}
-	msg, ok := cmd().(userinterface.InfoMsg)
+	msg, ok := cmd().(userinterface.InfoMessage)
 	if !ok || len(opened) != 1 || opened[0] != "https://github.com/acme/widgets/pull/3" {
 		t.Errorf("opened=%v msg=%#v", opened, msg)
 	}
 
 	failing := loadedView(t, fakeWith(makePRs(1)), func(string) error { return errors.New("no browser") })
-	if _, ok := press(failing, "o")().(userinterface.ErrorMsg); !ok {
+	if _, ok := press(failing, "o")().(userinterface.ErrorMessage); !ok {
 		t.Error("launch failure should become userinterface.ErrorMsg")
 	}
 
@@ -331,7 +331,7 @@ func TestEnterPushesWorkspace(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("enter should produce a command")
 	}
-	push, ok := cmd().(userinterface.PushMsg)
+	push, ok := cmd().(userinterface.PushMessage)
 	if !ok {
 		t.Fatalf("enter produced %T, want userinterface.PushMsg", cmd())
 	}
@@ -535,7 +535,7 @@ func TestPagingNearTheEndLoadsMore(t *testing.T) {
 			var cmd tea.Cmd
 			for i := 0; i < 10 && cmd == nil; i++ {
 				cmd = press(v, k)
-				if cmd == nil && v.win.Cursor() >= len(v.prs)-1-loadMoreMargin {
+				if cmd == nil && v.win.Cursor() >= len(v.pullRequests)-1-loadMoreMargin {
 					t.Fatalf("%s reached cursor %d inside the margin without loading", k, v.win.Cursor())
 				}
 			}
@@ -544,8 +544,8 @@ func TestPagingNearTheEndLoadsMore(t *testing.T) {
 			}
 			cursor, top := v.win.Cursor(), v.win.Top()
 			deliver(t, v, cmd)
-			if len(v.prs) != 45 {
-				t.Fatalf("rows after next page = %d, want 45", len(v.prs))
+			if len(v.pullRequests) != 45 {
+				t.Fatalf("rows after next page = %d, want 45", len(v.pullRequests))
 			}
 			calls := c.Calls()
 			if calls[len(calls)-1].Page.After == "" {
@@ -570,10 +570,10 @@ func TestChecksMark(t *testing.T) {
 		glyph string
 		style lipgloss.Style
 	}{
-		{github.ChecksPassing, "✓", th.PRList.ChecksPassing},
-		{github.ChecksFailing, "✗", th.PRList.ChecksFailing},
-		{github.ChecksRunning, "●", th.PRList.ChecksRunning},
-		{github.ChecksNone, "", th.PRList.Comments},
+		{github.ChecksPassing, "✓", th.PullRequestList.ChecksPassing},
+		{github.ChecksFailing, "✗", th.PullRequestList.ChecksFailing},
+		{github.ChecksRunning, "●", th.PullRequestList.ChecksRunning},
+		{github.ChecksNone, "", th.PullRequestList.Comments},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.state), func(t *testing.T) {

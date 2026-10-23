@@ -80,15 +80,15 @@ func (m *Model) expanded(t github.ReviewThread) bool {
 
 // blockSig is what every cached block depends on besides its own key.
 type blockSig struct {
-	width   int
-	themeID string
-	minute  time.Time // relative times age
+	width           int
+	themeIdentifier string
+	minute          time.Time // relative times age
 }
 
 type blockKey struct {
-	id       string
-	expanded bool
-	location bool
+	identifier string
+	expanded   bool
+	location   bool
 }
 
 // renderBlock returns the lines of thread ti, from the cache when the thread,
@@ -96,16 +96,16 @@ type blockKey struct {
 func (m *Model) renderBlock(ti int) []string {
 	t := m.fthreads[ti]
 	now := m.now()
-	sig := blockSig{width: m.w - m.gutterW(), themeID: m.th.ID, minute: now.Truncate(time.Minute)}
+	sig := blockSig{width: m.w - m.gutterWidth(), themeIdentifier: m.th.Identifier, minute: now.Truncate(time.Minute)}
 	if m.bcache == nil || sig != m.bsig {
 		m.bcache, m.bsig = map[blockKey][]string{}, sig
 	}
-	key := blockKey{id: t.Identifier, expanded: m.expanded(t), location: slices.Contains(m.orphans, ti)}
+	key := blockKey{identifier: t.Identifier, expanded: m.expanded(t), location: slices.Contains(m.orphans, ti)}
 	if lines, ok := m.bcache[key]; ok {
 		return lines
 	}
 	m.renders++
-	env := thread.Env{Theme: m.th, Markdown: m.md, Now: now}
+	env := thread.Environment{Theme: m.th, Markdown: m.md, Now: now}
 	lines := thread.Lines(env, t, sig.width, thread.Options{Expanded: key.expanded, Location: key.location})
 	m.bcache[key] = lines
 	return lines
@@ -118,7 +118,7 @@ func (m *Model) noticeRows() []row {
 	for _, l := range m.messageLines() {
 		l, _ = displayText(l)
 		for _, w := range strings.Split(ansi.Wrap(l, max(m.w-1, 1), ""), "\n") {
-			out = append(out, row{msg: true, text: w, bi: len(out)})
+			out = append(out, row{message: true, text: w, bi: len(out)})
 		}
 	}
 	return out
@@ -197,7 +197,7 @@ func (m *Model) NextThread() {
 }
 
 // PrevThread moves the cursor to the header of the closest thread above it.
-func (m *Model) PrevThread() {
+func (m *Model) PreviousThread() {
 	for i := min(m.win.Cursor(), len(m.rows)) - 1; i >= 0; i-- {
 		if r := m.rows[i]; r.tr != nil && r.tr.i == 0 {
 			m.win.JumpTo(i)
@@ -230,7 +230,7 @@ func (m *Model) renderThreadRow(i int, r row) string {
 	if i == m.win.Cursor() {
 		lead = ">"
 	}
-	lead += spaces(m.gutterW() - 1)
+	lead += spaces(m.gutterWidth() - 1)
 	s := ansi.Truncate(lead+m.blocks[r.tr.t][r.tr.i], m.w, "")
 	return s + spaces(m.w-ansi.StringWidth(s))
 }

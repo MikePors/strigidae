@@ -131,8 +131,8 @@ func TestOpenInBrowser(t *testing.T) {
 
 	h2 := newHarness(t, 100, 24) // not loaded yet
 	h2.press("o")
-	if len(h2.opened) != 0 || len(h2.msgs) == 0 {
-		t.Errorf("o before load: opened=%v msgs=%v", h2.opened, h2.msgs)
+	if len(h2.opened) != 0 || len(h2.messages) == 0 {
+		t.Errorf("o before load: opened=%v msgs=%v", h2.opened, h2.messages)
 	}
 
 	h3 := loaded(t, 100, 24)

@@ -13,15 +13,15 @@ import (
 
 // app is everything the TUI needs, resolved before it starts.
 type app struct {
-	client github.Client
-	repo   github.Repository
-	theme  theme.Theme
+	client     github.Client
+	repository github.Repository
+	theme      theme.Theme
 	// config holds the tabs and sections the dashboard (#12) will show.
 	config config.Config
 }
 
 // newApp resolves the repository to show and a client for its host.
-func newApp(repoFlag string, cfg config.Config, d deps) (app, error) {
+func newApp(repoFlag string, cfg config.Config, d dependencies) (app, error) {
 	target, err := resolveTarget(repoFlag, d)
 	if err != nil {
 		return app{}, err
@@ -33,19 +33,19 @@ func newApp(repoFlag string, cfg config.Config, d deps) (app, error) {
 	if err != nil {
 		return app{}, err
 	}
-	return app{client: client, repo: target.Repo, theme: theme.Default(), config: cfg}, nil
+	return app{client: client, repository: target.Repository, theme: theme.Default(), config: cfg}, nil
 }
 
 // resolveTarget decides which repository to show: -R if given, else the
 // current checkout's remote.
-func resolveTarget(repoFlag string, d deps) (gitrepository.Remote, error) {
+func resolveTarget(repoFlag string, d dependencies) (gitrepository.Remote, error) {
 	if repoFlag != "" {
 		repo, err := github.ParseRepository(repoFlag)
 		if err != nil {
 			return gitrepository.Remote{}, &usageError{fmt.Sprintf("-R: %v", err)}
 		}
 		// No host: the client uses the gh default (GH_HOST or github.com).
-		return gitrepository.Remote{Repo: repo}, nil
+		return gitrepository.Remote{Repository: repo}, nil
 	}
 	dir, err := d.getwd()
 	if err != nil {

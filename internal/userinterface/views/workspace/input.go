@@ -16,12 +16,12 @@ import (
 // bindings are the keys specific to the workspace. Movement keys come from
 // keys.Global.
 type bindings struct {
-	PaneLeft, PaneRight      key.Binding
-	NextFile, PrevFile       key.Binding
-	FilePicker               key.Binding
-	NextSection, PrevSection key.Binding
-	Comment, Reply           key.Binding
-	Viewed                   key.Binding
+	PaneLeft, PaneRight          key.Binding
+	NextFile, PreviousFile       key.Binding
+	FilePicker                   key.Binding
+	NextSection, PreviousSection key.Binding
+	Comment, Reply               key.Binding
+	Viewed                       key.Binding
 	// Inline comments: V starts a line selection, e and D change your comment
 	// at the cursor. The Visual* keys apply while a selection is open.
 	Visual, EditComment, DeleteComment key.Binding
@@ -33,16 +33,16 @@ func defaultBindings() bindings {
 		return key.NewBinding(key.WithKeys(k), key.WithHelp(helpKey, desc))
 	}
 	return bindings{
-		PaneLeft:    b("h", "h", "focus files pane"),
-		PaneRight:   b("l", "l", "focus right pane"),
-		NextFile:    b("}", "}", "next file"),
-		PrevFile:    b("{", "{", "previous file"),
-		FilePicker:  b("f", "f", "file picker"),
-		NextSection: b("]", "]", "next section (overview)"),
-		PrevSection: b("[", "[", "previous section (overview)"),
-		Comment:     b("c", "c", "new comment: on the pull request (overview) or on the diff line / selection"),
-		Reply:       b("r", "r", "reply to the comment thread at the cursor (diff)"),
-		Viewed:      b("v", "v", "toggle file viewed"),
+		PaneLeft:        b("h", "h", "focus files pane"),
+		PaneRight:       b("l", "l", "focus right pane"),
+		NextFile:        b("}", "}", "next file"),
+		PreviousFile:    b("{", "{", "previous file"),
+		FilePicker:      b("f", "f", "file picker"),
+		NextSection:     b("]", "]", "next section (overview)"),
+		PreviousSection: b("[", "[", "previous section (overview)"),
+		Comment:         b("c", "c", "new comment: on the pull request (overview) or on the diff line / selection"),
+		Reply:           b("r", "r", "reply to the comment thread at the cursor (diff)"),
+		Viewed:          b("v", "v", "toggle file viewed"),
 
 		Visual:        b("V", "V", "select diff lines for a multi-line comment"),
 		EditComment:   b("e", "e", "edit your comment at the cursor (diff; also :edit-comment)"),
@@ -57,7 +57,7 @@ func openInBrowser(url string) error {
 	return browser.New("", io.Discard, io.Discard).Browse(url)
 }
 
-func (v *View) handleKey(msg keys.Msg) tea.Cmd {
+func (v *View) handleKey(msg keys.Message) tea.Cmd {
 	switch {
 	case key.Matches(msg, v.bind.PaneLeft):
 		v.focus = paneFiles
@@ -65,13 +65,13 @@ func (v *View) handleKey(msg keys.Msg) tea.Cmd {
 		v.focus = paneRight
 	case key.Matches(msg, v.bind.NextFile):
 		v.stepFile(1)
-	case key.Matches(msg, v.bind.PrevFile):
+	case key.Matches(msg, v.bind.PreviousFile):
 		v.stepFile(-1)
 	case key.Matches(msg, v.bind.FilePicker):
 		v.openPicker()
 	case v.sel() == 0 && key.Matches(msg, v.bind.NextSection):
 		v.jumpSection(1)
-	case v.sel() == 0 && key.Matches(msg, v.bind.PrevSection):
+	case v.sel() == 0 && key.Matches(msg, v.bind.PreviousSection):
 		v.jumpSection(-1)
 	case key.Matches(msg, v.bind.Comment):
 		return v.comment()
@@ -116,14 +116,14 @@ func (v *View) openBrowser() tea.Cmd {
 	url, open := v.detail.URL, v.open
 	return func() tea.Msg {
 		if err := open(url); err != nil {
-			return userinterface.ErrorMsg{Err: terminaltext.SafeError(fmt.Errorf("open %s in browser: %w", terminaltext.Clean(url), err))}
+			return userinterface.ErrorMessage{Err: terminaltext.SafeError(fmt.Errorf("open %s in browser: %w", terminaltext.Clean(url), err))}
 		}
 		return nil
 	}
 }
 
 // filesKey moves the selection in the Files pane.
-func (v *View) filesKey(msg keys.Msg) {
+func (v *View) filesKey(msg keys.Message) {
 	prev := v.sel()
 	switch {
 	case key.Matches(msg, v.km.Down):
@@ -151,7 +151,7 @@ func (v *View) filesKey(msg keys.Msg) {
 }
 
 // rightKey scrolls the Overview, or hands the key to the file pane.
-func (v *View) rightKey(msg keys.Msg) tea.Cmd {
+func (v *View) rightKey(msg keys.Message) tea.Cmd {
 	if v.sel() > 0 {
 		return v.filePane.Update(msg)
 	}
@@ -187,7 +187,7 @@ func (v *View) jumpSection(delta int) {
 }
 
 // diffNav reports whether msg is a hunk or thread movement key.
-func (v *View) diffNav(msg keys.Msg) bool {
+func (v *View) diffNav(msg keys.Message) bool {
 	b := v.navBind
-	return key.Matches(msg, b.NextHunk, b.PrevHunk, b.NextThread, b.PrevThread)
+	return key.Matches(msg, b.NextHunk, b.PreviousHunk, b.NextThread, b.PreviousThread)
 }

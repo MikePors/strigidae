@@ -34,19 +34,19 @@ func newComposer(t *testing.T) *composer {
 }
 
 // lastConfirm returns the most recent confirmation asked, and forgets it.
-func (c *composer) lastConfirm() (userinterface.ConfirmMsg, bool) {
-	for i := len(c.msgs) - 1; i >= 0; i-- {
-		if m, ok := c.msgs[i].(userinterface.ConfirmMsg); ok {
-			c.msgs = c.msgs[:i]
+func (c *composer) lastConfirm() (userinterface.ConfirmMessage, bool) {
+	for i := len(c.messages) - 1; i >= 0; i-- {
+		if m, ok := c.messages[i].(userinterface.ConfirmMessage); ok {
+			c.messages = c.messages[:i]
 			return m, true
 		}
 	}
-	return userinterface.ConfirmMsg{}, false
+	return userinterface.ConfirmMessage{}, false
 }
 
 func (c *composer) infos() (out []string) {
-	for _, m := range c.msgs {
-		if i, ok := m.(userinterface.InfoMsg); ok {
+	for _, m := range c.messages {
+		if i, ok := m.(userinterface.InfoMessage); ok {
 			out = append(out, i.Text)
 		}
 	}
@@ -201,17 +201,17 @@ func TestStaleComposeResultsIgnored(t *testing.T) {
 	c.onThread()
 	c.body = "x"
 	c.press("r")
-	stale := editedMsg{owner: c.v, repo: testRepo, number: 7, seq: c.v.cseq - 1, tgt: target{kind: kindReply, threadID: "t-resolved"}, body: "late"}
-	c.msgs = nil
+	stale := editedMessage{owner: c.v, repository: testRepository, number: 7, sequence: c.v.cseq - 1, target: target{kind: kindReply, threadIdentifier: "t-resolved"}, body: "late"}
+	c.messages = nil
 	c.send(stale)
 	if _, ok := c.lastConfirm(); ok {
 		t.Error("stale edit result asked for confirmation")
 	}
 	other := stale
-	other.owner, other.seq = &View{}, c.v.cseq
+	other.owner, other.sequence = &View{}, c.v.cseq
 	c.send(other)
-	c.send(editedMsg{owner: c.v, repo: github.Repository{Owner: "x", Name: "y"}, number: 7, seq: c.v.cseq, body: "late"})
-	c.send(editedMsg{owner: c.v, repo: testRepo, number: 8, seq: c.v.cseq, body: "late"})
+	c.send(editedMessage{owner: c.v, repository: github.Repository{Owner: "x", Name: "y"}, number: 7, sequence: c.v.cseq, body: "late"})
+	c.send(editedMessage{owner: c.v, repository: testRepository, number: 8, sequence: c.v.cseq, body: "late"})
 	if _, ok := c.lastConfirm(); ok || c.v.drafts["t-resolved"] == "late" {
 		t.Error("foreign edit result was accepted")
 	}
@@ -231,7 +231,7 @@ func TestPostResultAfterNewComposeIsHandled(t *testing.T) {
 		t.Fatal("setup: no new compose started")
 	}
 	c.drafts(map[string]string{"t-resolved": "first"})
-	c.msgs = nil
+	c.messages = nil
 	c.run(conf.OnYes)
 	if diff := cmp.Diff([]string{"Reply posted"}, c.infos()); diff != "" {
 		t.Errorf("info (-want +got):\n%s", diff)
@@ -242,7 +242,7 @@ func TestPostResultAfterNewComposeIsHandled(t *testing.T) {
 
 	// A newer draft for the same target survives the older post.
 	c.drafts(map[string]string{"t-resolved": "newer"})
-	c.send(postedMsg{origin: c.v.origin(), tgt: target{kind: kindReply, threadID: "t-resolved"}, body: "first"})
+	c.send(postedMessage{origin: c.v.origin(), target: target{kind: kindReply, threadIdentifier: "t-resolved"}, body: "first"})
 	if c.v.drafts["t-resolved"] != "newer" {
 		t.Errorf("newer draft deleted: %v", c.v.drafts)
 	}
@@ -250,8 +250,8 @@ func TestPostResultAfterNewComposeIsHandled(t *testing.T) {
 	// A failure is reported by the command itself, and keeps the draft.
 	c.client.SetError(fake.MethodReplyToThread, errors.New("boom"))
 	c.drafts(map[string]string{"t-resolved": "first"})
-	c.msgs = nil
-	c.run(c.v.post(target{kind: kindReply, threadID: "t-resolved"}, "first"))
+	c.messages = nil
+	c.run(c.v.post(target{kind: kindReply, threadIdentifier: "t-resolved"}, "first"))
 	if err := c.lastErr(); err == nil || !strings.Contains(err.Error(), "post reply: boom") {
 		t.Errorf("error = %v", err)
 	}
@@ -269,15 +269,15 @@ func TestReplyWithZeroOneAndSeveralThreads(t *testing.T) {
 		{Identifier: "b", Path: "internal/sync/client.go", Line: 14, DiffSide: github.SideRight, Comments: []github.ReviewComment{tc("eve", "two", time.Hour)}},
 		{Identifier: "c", Path: "internal/sync/client.go", Line: 12, DiffSide: github.SideRight, Comments: []github.ReviewComment{tc("dan", "three", time.Hour)}},
 	}
-	c.client.SetReviewThreads(testRepo, 7, two)
+	c.client.SetReviewThreads(testRepository, 7, two)
 	c.run(c.v.load())
 	c.selectFile()
 	c.body = "hi"
 
 	c.press("g g") // a hunk header: no thread
 	c.press("r")
-	if len(c.openedOn) != 0 || c.lastErr() != nil || len(c.msgs) != 0 {
-		t.Errorf("zero threads: opened %v, msgs %v", c.openedOn, c.msgs)
+	if len(c.openedOn) != 0 || c.lastErr() != nil || len(c.messages) != 0 {
+		t.Errorf("zero threads: opened %v, msgs %v", c.openedOn, c.messages)
 	}
 
 	c.press(")") // line 12, one thread
@@ -291,7 +291,7 @@ func TestReplyWithZeroOneAndSeveralThreads(t *testing.T) {
 		t.Errorf("replies = %v", r)
 	}
 
-	c.msgs = nil
+	c.messages = nil
 	for range 12 { // walk the diff until the cursor is on line 14, two threads
 		c.press("j")
 		if len(c.v.filePane.FocusedThreads()) == 2 {
@@ -314,8 +314,8 @@ func TestReplyInOverviewDoesNothing(t *testing.T) {
 	c := newComposer(t)
 	c.body = "x"
 	c.press("r") // Overview selected
-	if len(c.openedOn) != 0 || len(c.msgs) != 0 {
-		t.Errorf("opened %v, msgs %v", c.openedOn, c.msgs)
+	if len(c.openedOn) != 0 || len(c.messages) != 0 {
+		t.Errorf("opened %v, msgs %v", c.openedOn, c.messages)
 	}
 }
 
@@ -342,7 +342,7 @@ func TestTopLevelCommentIsPostedFromTheOverview(t *testing.T) {
 		t.Fatalf("confirmation = %q (%v)", conf.Text, ok)
 	}
 	c.run(conf.OnYes)
-	want := []fake.Comment{{Repository: testRepo, Number: 7, Body: "LGTM, one question\nbelow"}}
+	want := []fake.Comment{{Repository: testRepository, Number: 7, Body: "LGTM, one question\nbelow"}}
 	if diff := cmp.Diff(want, c.client.Comments()); diff != "" {
 		t.Errorf("comments (-want +got):\n%s", diff)
 	}
@@ -354,13 +354,13 @@ func TestTopLevelCommentIsPostedFromTheOverview(t *testing.T) {
 		t.Errorf("conversation not reloaded:\n%s", out)
 	}
 
-	c.msgs, c.openedOn = nil, nil
+	c.messages, c.openedOn = nil, nil
 	c.selectFile()
 	c.press("c")
 	// On a hunk header there is no line to comment on (inline comments have
 	// their own tests in inline_test.go).
 	if len(c.openedOn) != 0 || len(c.infos()) != 1 || !strings.Contains(c.infos()[0], "diff line") {
-		t.Errorf("c on a hunk header: %v %v", c.openedOn, c.msgs)
+		t.Errorf("c on a hunk header: %v %v", c.openedOn, c.messages)
 	}
 }
 

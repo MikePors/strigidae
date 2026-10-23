@@ -12,9 +12,9 @@ import (
 )
 
 type cacheKey struct {
-	body    string
-	width   int
-	themeID string
+	body            string
+	width           int
+	themeIdentifier string
 }
 
 // Renderer renders Markdown with a Glamour style built from a theme's roles.
@@ -45,7 +45,7 @@ func (r *Renderer) Render(body string, width int) string {
 		r.width, r.tr = width, nil
 		clear(r.cache)
 	}
-	k := cacheKey{body, width, r.th.ID}
+	k := cacheKey{body, width, r.th.Identifier}
 	if s, ok := r.cache[k]; ok {
 		return s
 	}

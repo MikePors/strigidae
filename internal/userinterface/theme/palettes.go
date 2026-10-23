@@ -9,7 +9,7 @@ import "image/color"
 var builtinDark = Palette{
 	Name:    "strig-dark",
 	Variant: Dark,
-	colors: [numSlots]color.Color{
+	colors: [numberSlots]color.Color{
 		Base00: hex("#1a1a22"),
 		Base01: hex("#2b2b36"),
 		Base02: hex("#33364d"),
@@ -40,7 +40,7 @@ var builtinDark = Palette{
 var builtinLight = Palette{
 	Name:    "strig-light",
 	Variant: Light,
-	colors: [numSlots]color.Color{
+	colors: [numberSlots]color.Color{
 		Base00: hex("#ffffff"),
 		Base01: hex("#e4e4ea"),
 		Base02: hex("#dde1f5"),

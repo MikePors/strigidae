@@ -49,9 +49,9 @@ func WithFilePane(p FilePane) Option { return func(v *View) { v.filePane = p } }
 
 // View is the PR workspace screen.
 type View struct {
-	client github.Client
-	repo   github.Repository
-	number int
+	client     github.Client
+	repository github.Repository
+	number     int
 
 	now      func() time.Time
 	open     func(url string) error
@@ -61,20 +61,20 @@ type View struct {
 	navBind  diffBindings // hunk/thread keys, routed to the file pane from either focus
 	md       *markdown.Renderer
 	filePane FilePane
-	edit     EditFunc
+	edit     EditFunction
 
-	seq         int // latest load request; older results are stale
-	prPending   bool
-	diffPending bool
-	thrPending  bool
-	thrLoaded   bool                  // a thread load has succeeded
-	thrErr      error                 // why the last thread load failed; cleared when a load starts
-	threads     []github.ReviewThread // sorted by file and line
-	detail      *github.PullRequestDetail
-	diff        DiffState
-	diffHead    string // head SHA the diff on screen was loaded for; "" if unknown
-	err         error  // load failure while there is nothing to show
-	notFound    bool
+	sequence           int // latest load request; older results are stale
+	pullRequestPending bool
+	diffPending        bool
+	thrPending         bool
+	thrLoaded          bool                  // a thread load has succeeded
+	thrErr             error                 // why the last thread load failed; cleared when a load starts
+	threads            []github.ReviewThread // sorted by file and line
+	detail             *github.PullRequestDetail
+	diff               DiffState
+	diffHead           string // head SHA the diff on screen was loaded for; "" if unknown
+	err                error  // load failure while there is nothing to show
+	notFound           bool
 
 	cseq int // latest compose request; older results are stale
 	// writes counts the comment writes in flight, from the start of a write
@@ -96,8 +96,8 @@ type View struct {
 	pickerItems []string
 	pickerPaths []string           // raw paths, parallel to pickerItems
 	paneFile    github.ChangedFile // last value given to filePane.SetFile
-	paneW       int                // size last given to filePane.SetSize
-	paneH       int
+	paneWidth   int                // size last given to filePane.SetSize
+	paneHeight  int
 
 	width, height int
 }
@@ -113,7 +113,7 @@ var (
 func New(client github.Client, repo github.Repository, number int, opts ...Option) *View {
 	v := &View{
 		client:      client,
-		repo:        repo,
+		repository:  repo,
 		number:      number,
 		now:         time.Now,
 		open:        openInBrowser,
@@ -142,7 +142,7 @@ func (v *View) Title() string { return fmt.Sprintf("#%d", v.number) }
 
 // Loading implements userinterface.Loader.
 func (v *View) Loading() bool {
-	return v.prPending || v.diffPending || v.thrPending || v.review.submitting || v.merge.merging
+	return v.pullRequestPending || v.diffPending || v.thrPending || v.review.submitting || v.merge.merging
 }
 
 // CapturesKeys implements userinterface.KeyCapturer: the file picker, the verdict
@@ -170,8 +170,8 @@ func (v *View) ShortHelp() []key.Binding {
 // workspace and its file pane react to.
 func (v *View) FullHelp() [][]key.Binding {
 	out := [][]key.Binding{
-		{v.bind.PaneLeft, v.bind.PaneRight, v.bind.NextFile, v.bind.PrevFile, v.bind.FilePicker},
-		{v.bind.NextSection, v.bind.PrevSection, v.bind.Comment, v.bind.Reply, v.bind.Viewed},
+		{v.bind.PaneLeft, v.bind.PaneRight, v.bind.NextFile, v.bind.PreviousFile, v.bind.FilePicker},
+		{v.bind.NextSection, v.bind.PreviousSection, v.bind.Comment, v.bind.Reply, v.bind.Viewed},
 		{v.bind.Visual, v.bind.EditComment, v.bind.DeleteComment},
 	}
 	return append(out, v.filePane.FullHelp()...)
@@ -179,86 +179,86 @@ func (v *View) FullHelp() [][]key.Binding {
 
 // Update implements userinterface.View.
 func (v *View) Update(msg tea.Msg) (userinterface.View, tea.Cmd) {
-	if cmd, ok := v.review.update(msg, v.reviewEnv()); ok {
+	if cmd, ok := v.review.update(msg, v.reviewEnvironment()); ok {
 		return v, cmd
 	}
-	if cmd, ok := v.merge.update(msg, v.reviewEnv()); ok {
+	if cmd, ok := v.merge.update(msg, v.reviewEnvironment()); ok {
 		return v, cmd
 	}
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		v.width, v.height = msg.Width, msg.Height
 		v.layout()
-	case userinterface.ThemeMsg:
+	case userinterface.ThemeMessage:
 		v.th = msg.Theme
 		v.md = markdown.New(v.th)
 		v.ov.invalidate()
 		v.filePane.SetTheme(v.th)
 		v.layout()
-	case prLoadedMsg:
-		if !v.mine(msg.owner, msg.repo, msg.number, msg.seq) {
+	case pullRequestLoadedMessage:
+		if !v.mine(msg.owner, msg.repository, msg.number, msg.sequence) {
 			return v, nil
 		}
-		cmd := v.prLoaded(msg)
+		cmd := v.pullRequestLoaded(msg)
 		if msg.thenDiff {
 			cmd = tea.Batch(cmd, v.fetchDiff(msg))
 		}
 		return v, cmd
-	case diffLoadedMsg:
-		if !v.mine(msg.owner, msg.repo, msg.number, msg.seq) {
+	case diffLoadedMessage:
+		if !v.mine(msg.owner, msg.repository, msg.number, msg.sequence) {
 			return v, nil
 		}
 		return v, v.diffLoaded(msg)
-	case threadsLoadedMsg:
-		if !v.mine(msg.owner, msg.repo, msg.number, msg.seq) {
+	case threadsLoadedMessage:
+		if !v.mine(msg.owner, msg.repository, msg.number, msg.sequence) {
 			return v, nil
 		}
 		return v, v.threadsLoaded(msg)
-	case viewedMsg:
+	case viewedMessage:
 		if v.viewedMine(msg) {
 			return v, v.viewedDone(msg)
 		}
-	case editedMsg:
-		if !v.composeMine(origin{msg.owner, msg.repo, msg.number}, msg.seq) {
+	case editedMessage:
+		if !v.composeMine(origin{msg.owner, msg.repository, msg.number}, msg.sequence) {
 			return v, nil
 		}
 		return v, v.edited(msg)
-	case postedMsg:
+	case postedMessage:
 		// A post is never superseded by a later compose, so it is identified
 		// by owner, repo and number only.
 		if !v.owns(msg.origin) {
 			return v, nil
 		}
 		return v, v.posted(msg)
-	case commentDeletedMsg:
+	case commentDeletedMessage:
 		if !v.owns(msg.origin) {
 			return v, nil
 		}
 		return v, v.commentDeleted(msg)
-	case commentCheckedMsg:
+	case commentCheckedMessage:
 		if !v.owns(msg.origin) {
 			return v, nil
 		}
 		v.writeDone() // the write waits for the answer
 		return v, userinterface.Confirm(msg.question, msg.onYes)
-	case commentAgreedMsg:
+	case commentAgreedMessage:
 		if !v.owns(msg.origin) {
 			return v, nil
 		}
 		return v, v.commentAgreed(msg)
-	case commentReadMsg:
-		if !v.owns(msg.origin) || msg.seq != v.cseq { // another editor started meanwhile
+	case commentReadMessage:
+		if !v.owns(msg.origin) || msg.sequence != v.cseq { // another editor started meanwhile
 			return v, nil
 		}
 		return v, v.commentRead(msg)
-	case keys.Msg:
+	case keys.Message:
 		return v, v.handleKey(msg)
 	case tea.KeyPressMsg:
 		if v.visualActive() {
 			return v, v.visualKey(msg)
 		}
 		if v.review.chooser != nil {
-			return v, v.review.chooserKey(msg, v.reviewEnv())
+			return v, v.review.chooserKey(msg, v.reviewEnvironment())
 		}
 		if v.picker != nil {
 			v.pickerKey(msg)

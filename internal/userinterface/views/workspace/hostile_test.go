@@ -121,8 +121,8 @@ func TestHostileTextNeverReachesTheScreen(t *testing.T) {
 	c := fake.New()
 	d := hostileDetail()
 	c.SetPullRequest(d)
-	c.SetDiff(testRepo, 7, hostileDiff())
-	c.SetReviewThreads(testRepo, 7, hostileThreads())
+	c.SetDiff(testRepository, 7, hostileDiff())
+	c.SetReviewThreads(testRepository, 7, hostileThreads())
 	if parsed, err := diff.Parse(hostileDiff()); err != nil || parsed.File(hostileGoPath) == nil || parsed.File(hostileNewPath) == nil {
 		t.Fatalf("setup: the hostile diff must parse so its content reaches the pane (err=%v)", err)
 	}
@@ -168,7 +168,7 @@ func TestHostileTextNeverReachesTheScreen(t *testing.T) {
 	h.send(keyEsc())
 
 	// Narrow terminal, then the picker open over it.
-	h.send(sizeMsg(60, 20))
+	h.send(sizeMessage(60, 20))
 	assertTame(t, "narrow", h.render())
 	h.press("f")
 	h.typ("evil")
@@ -190,8 +190,8 @@ func TestHostileErrorsAreCleaned(t *testing.T) {
 	assertTame(t, "load failure", h.render())
 
 	var got string
-	for _, m := range h.msgs {
-		if e, ok := m.(userinterface.ErrorMsg); ok {
+	for _, m := range h.messages {
+		if e, ok := m.(userinterface.ErrorMessage); ok {
 			got = e.Err.Error()
 		}
 	}
@@ -204,10 +204,10 @@ func TestHostileErrorsAreCleaned(t *testing.T) {
 	h2 := loaded(t, 100, 20)
 	h2.v.detail.URL = "http://x/" + hostile
 	h2.v.open = func(string) error { return hostileErr }
-	h2.msgs = nil
+	h2.messages = nil
 	h2.press("o")
-	for _, m := range h2.msgs {
-		if e, ok := m.(userinterface.ErrorMsg); ok {
+	for _, m := range h2.messages {
+		if e, ok := m.(userinterface.ErrorMessage); ok {
 			assertTame(t, "open error", e.Err.Error())
 		}
 	}
@@ -215,7 +215,7 @@ func TestHostileErrorsAreCleaned(t *testing.T) {
 
 func keyEsc() tea.Msg { return tea.KeyPressMsg{Code: tea.KeyEscape} }
 
-func sizeMsg(w, h int) tea.Msg { return tea.WindowSizeMsg{Width: w, Height: h} }
+func sizeMessage(w, h int) tea.Msg { return tea.WindowSizeMsg{Width: w, Height: h} }
 
 func TestHostileDiffError(t *testing.T) {
 	h := newHarness(t, 100, 20)
@@ -225,8 +225,8 @@ func TestHostileDiffError(t *testing.T) {
 	assertTame(t, "diff error", h.render())
 
 	var status string
-	for _, m := range h.msgs {
-		if e, ok := m.(userinterface.ErrorMsg); ok {
+	for _, m := range h.messages {
+		if e, ok := m.(userinterface.ErrorMessage); ok {
 			status = e.Err.Error()
 		}
 	}

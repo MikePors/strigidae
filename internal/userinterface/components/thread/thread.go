@@ -21,7 +21,7 @@ import (
 )
 
 // Env is what rendering needs besides the thread.
-type Env struct {
+type Environment struct {
 	Theme    theme.Theme
 	Markdown *markdown.Renderer
 	Now      time.Time
@@ -44,7 +44,7 @@ func Quiet(t github.ReviewThread) bool { return t.IsResolved || t.IsOutdated }
 
 // Lines renders t in at most width columns per line. The first line is the
 // header; its first cell is the fold glyph. Lines are not padded.
-func Lines(e Env, t github.ReviewThread, width int, o Options) []string {
+func Lines(e Environment, t github.ReviewThread, width int, o Options) []string {
 	width = max(width, 8)
 	out := []string{header(e, t, width, o)}
 	if !o.Expanded {
@@ -73,7 +73,7 @@ func Lines(e Env, t github.ReviewThread, width int, o Options) []string {
 	return out
 }
 
-func header(e Env, t github.ReviewThread, width int, o Options) string {
+func header(e Environment, t github.ReviewThread, width int, o Options) string {
 	th := e.Theme
 	glyph := "▸"
 	if o.Expanded {
@@ -96,7 +96,7 @@ func header(e Env, t github.ReviewThread, width int, o Options) string {
 		meta += "s"
 	}
 	if n > 0 {
-		meta += " · " + comment.RelTime(e.Now, t.Comments[n-1].CreatedAt)
+		meta += " · " + comment.RelativeTime(e.Now, t.Comments[n-1].CreatedAt)
 	}
 	parts = append(parts, th.Muted.Render(meta))
 	if t.IsResolved {

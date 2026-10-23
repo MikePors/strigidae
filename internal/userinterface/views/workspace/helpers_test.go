@@ -15,8 +15,8 @@ import (
 )
 
 var (
-	testNow  = time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)
-	testRepo = github.Repository{Owner: "acme", Name: "widgets"}
+	testNow        = time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)
+	testRepository = github.Repository{Owner: "acme", Name: "widgets"}
 )
 
 const longBody = `## Summary
@@ -53,7 +53,7 @@ func testDetail() github.PullRequestDetail {
 	return github.PullRequestDetail{
 		PullRequest: github.PullRequest{
 			Identifier: "PR_7",
-			Repository: testRepo, Number: 7, Title: "Add retry policy to sync client",
+			Repository: testRepository, Number: 7, Title: "Add retry policy to sync client",
 			Author: "alice", State: github.PullRequestStateOpen,
 			ReviewDecision: github.ReviewDecisionChangesRequested,
 			HeadBranch:     "feat/retry", BaseBranch: "main",
@@ -83,11 +83,11 @@ func testDetail() github.PullRequestDetail {
 }
 
 type harness struct {
-	t      *testing.T
-	v      *View
-	client *fake.Client
-	opened []string
-	msgs   []tea.Msg // ui messages emitted by commands
+	t        *testing.T
+	v        *View
+	client   *fake.Client
+	opened   []string
+	messages []tea.Msg // ui messages emitted by commands
 }
 
 func readDiff(t *testing.T) string {
@@ -103,9 +103,9 @@ func newHarness(t *testing.T, w, h int) *harness {
 	t.Helper()
 	c := fake.New()
 	c.SetPullRequest(testDetail())
-	c.SetDiff(testRepo, 7, readDiff(t))
+	c.SetDiff(testRepository, 7, readDiff(t))
 	hs := &harness{t: t, client: c}
-	hs.v = New(c, testRepo, 7,
+	hs.v = New(c, testRepository, 7,
 		WithClock(func() time.Time { return testNow }),
 		WithTheme(theme.New(true)),
 		WithOpener(func(u string) error { hs.opened = append(hs.opened, u); return nil }),
@@ -140,8 +140,8 @@ func (h *harness) run(cmd tea.Cmd) {
 		for _, c := range msg {
 			h.run(c)
 		}
-	case userinterface.InfoMsg, userinterface.ErrorMsg, userinterface.ConfirmMsg:
-		h.msgs = append(h.msgs, msg)
+	case userinterface.InfoMessage, userinterface.ErrorMessage, userinterface.ConfirmMessage:
+		h.messages = append(h.messages, msg)
 	default:
 		h.send(msg)
 	}
@@ -150,7 +150,7 @@ func (h *harness) run(cmd tea.Cmd) {
 func (h *harness) press(seqs ...string) {
 	h.t.Helper()
 	for _, s := range seqs {
-		h.send(keys.Msg{Seq: s})
+		h.send(keys.Message{Sequence: s})
 	}
 }
 
@@ -165,8 +165,8 @@ func (h *harness) typ(text string) {
 func (h *harness) render() string { return h.v.Render(h.v.width, h.v.height) }
 
 func (h *harness) lastErr() error {
-	for i := len(h.msgs) - 1; i >= 0; i-- {
-		if e, ok := h.msgs[i].(userinterface.ErrorMsg); ok {
+	for i := len(h.messages) - 1; i >= 0; i-- {
+		if e, ok := h.messages[i].(userinterface.ErrorMessage); ok {
 			return e.Err
 		}
 	}

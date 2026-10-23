@@ -15,15 +15,15 @@ import (
 )
 
 const (
-	headSHA  = "aaaa1111"
-	prNodeID = "PR_node_7"
+	headSHA                   = "aaaa1111"
+	pullRequestNodeIdentifier = "PR_node_7"
 )
 
 // reviewer is a composer whose pull request has a head commit.
 func newReviewer(t *testing.T) *composer {
 	c := newComposer(t)
 	d := testDetail()
-	d.Identifier = prNodeID
+	d.Identifier = pullRequestNodeIdentifier
 	c.client.SetPullRequest(d)
 	c.setHead(headSHA)
 	return c
@@ -31,7 +31,7 @@ func newReviewer(t *testing.T) *composer {
 
 // setHead moves the head on the server and, when load is true, refreshes the view.
 func (c *composer) setHead(sha string) {
-	c.client.SetHeadSHA(testRepo, 7, sha)
+	c.client.SetHeadSHA(testRepository, 7, sha)
 	c.press("R")
 }
 
@@ -63,19 +63,19 @@ func TestReviewVerdicts(t *testing.T) {
 		{
 			name: "approve with no comment", command: "approve", body: "",
 			wantText: "Approve #7 in acme/widgets?",
-			want:     fake.Submission{Repository: testRepo, Number: 7, PullRequestIdentifier: prNodeID, Event: github.ReviewEventApprove, CommitObjectIdentifier: headSHA},
+			want:     fake.Submission{Repository: testRepository, Number: 7, PullRequestIdentifier: pullRequestNodeIdentifier, Event: github.ReviewEventApprove, CommitObjectIdentifier: headSHA},
 			info:     "Approved #7",
 		},
 		{
 			name: "approve with a summary", command: "approve", body: "Nice.\n",
 			wantText: "Approve #7 in acme/widgets?",
-			want:     fake.Submission{Repository: testRepo, Number: 7, PullRequestIdentifier: prNodeID, Event: github.ReviewEventApprove, Body: "Nice.", CommitObjectIdentifier: headSHA},
+			want:     fake.Submission{Repository: testRepository, Number: 7, PullRequestIdentifier: pullRequestNodeIdentifier, Event: github.ReviewEventApprove, Body: "Nice.", CommitObjectIdentifier: headSHA},
 			info:     "Approved #7",
 		},
 		{
 			name: "request changes", command: "request-changes", body: "Please fix.",
 			wantText: "Request changes on #7 in acme/widgets?",
-			want:     fake.Submission{Repository: testRepo, Number: 7, PullRequestIdentifier: prNodeID, Event: github.ReviewEventRequestChanges, Body: "Please fix.", CommitObjectIdentifier: headSHA},
+			want:     fake.Submission{Repository: testRepository, Number: 7, PullRequestIdentifier: pullRequestNodeIdentifier, Event: github.ReviewEventRequestChanges, Body: "Please fix.", CommitObjectIdentifier: headSHA},
 			info:     "Requested changes on #7",
 		},
 	}
@@ -192,7 +192,7 @@ func TestReviewEmptyBodyIsAnError(t *testing.T) {
 			c.body = "  \n"
 			if name == "comment" {
 				c.v.review.chooser = nil
-				cmd := c.v.review.start(c.v.reviewEnv(), github.ReviewEventComment)
+				cmd := c.v.review.start(c.v.reviewEnvironment(), github.ReviewEventComment)
 				c.run(cmd)
 			} else {
 				c.command(name)
@@ -212,9 +212,9 @@ func TestReviewEmptyBodyIsAnError(t *testing.T) {
 
 func TestReviewWithPendingReview(t *testing.T) {
 	c := newReviewer(t)
-	c.client.SetPendingReview(testRepo, 7, &github.PendingReview{Identifier: "PRR_1", Body: "draft on github", CommentCount: 3})
+	c.client.SetPendingReview(testRepository, 7, &github.PendingReview{Identifier: "PRR_1", Body: "draft on github", CommentCount: 3})
 	c.body = "" // an empty body is fine with inline comments
-	cmd := c.v.review.start(c.v.reviewEnv(), github.ReviewEventComment)
+	cmd := c.v.review.start(c.v.reviewEnvironment(), github.ReviewEventComment)
 	c.run(cmd)
 	if diff := cmp.Diff([]string{"draft on github"}, c.openedOn); diff != "" {
 		t.Errorf("editor opened on (-want +got):\n%s", diff)
@@ -227,7 +227,7 @@ func TestReviewWithPendingReview(t *testing.T) {
 		t.Errorf("text = %q, want %q", conf.Text, want)
 	}
 	c.run(conf.OnYes)
-	want := []fake.Submission{{Repository: testRepo, Number: 7, PullRequestIdentifier: prNodeID, Event: github.ReviewEventComment, CommitObjectIdentifier: headSHA, PendingReviewIdentifier: "PRR_1"}}
+	want := []fake.Submission{{Repository: testRepository, Number: 7, PullRequestIdentifier: pullRequestNodeIdentifier, Event: github.ReviewEventComment, CommitObjectIdentifier: headSHA, PendingReviewIdentifier: "PRR_1"}}
 	if diff := cmp.Diff(want, c.client.Submissions()); diff != "" {
 		t.Errorf("submissions (-want +got):\n%s", diff)
 	}
@@ -235,14 +235,14 @@ func TestReviewWithPendingReview(t *testing.T) {
 
 func TestReviewPendingGoneAtSubmit(t *testing.T) {
 	c := newReviewer(t)
-	c.client.SetPendingReview(testRepo, 7, &github.PendingReview{Identifier: "PRR_1", CommentCount: 1})
+	c.client.SetPendingReview(testRepository, 7, &github.PendingReview{Identifier: "PRR_1", CommentCount: 1})
 	c.body = "my summary"
 	c.command("approve")
 	conf, ok := c.lastConfirm()
 	if !ok {
 		t.Fatal("no confirmation")
 	}
-	c.client.SetPendingReview(testRepo, 7, nil) // submitted elsewhere meanwhile
+	c.client.SetPendingReview(testRepository, 7, nil) // submitted elsewhere meanwhile
 	before := len(c.client.Calls())
 	c.run(conf.OnYes)
 	if len(c.client.Submissions()) != 0 {
@@ -266,7 +266,7 @@ func TestReviewPendingGoneAtSubmit(t *testing.T) {
 func TestReviewHeadMoved(t *testing.T) {
 	c := newReviewer(t)
 	c.body = "ok"
-	c.client.SetHeadSHA(testRepo, 7, "bbbb2222") // pushed after the view loaded
+	c.client.SetHeadSHA(testRepository, 7, "bbbb2222") // pushed after the view loaded
 	c.command("approve")
 	conf, ok := c.lastConfirm()
 	if !ok {
@@ -349,14 +349,14 @@ func TestReviewStatusErrorIsShown(t *testing.T) {
 func TestReviewStaleResultsAreIgnored(t *testing.T) {
 	c := newReviewer(t)
 	c.body = "x"
-	old := c.v.review.start(c.v.reviewEnv(), github.ReviewEventApprove)
-	c.v.review.seq++ // another review was started meanwhile
+	old := c.v.review.start(c.v.reviewEnvironment(), github.ReviewEventApprove)
+	c.v.review.sequence++ // another review was started meanwhile
 	c.run(old)
 	if len(c.openedOn) != 0 {
 		t.Error("stale status opened the editor")
 	}
 	// A result for another workspace is ignored too.
-	c.send(reviewSubmittedMsg{flow: nil, repo: testRepo, number: 7, event: github.ReviewEventApprove})
+	c.send(reviewSubmittedMessage{flow: nil, repository: testRepository, number: 7, event: github.ReviewEventApprove})
 	if len(c.infos()) != 0 {
 		t.Errorf("foreign result acted on: %v", c.infos())
 	}
@@ -376,11 +376,11 @@ func TestCommandsReachOnlyKnownNames(t *testing.T) {
 
 func TestReviewBeforeLoad(t *testing.T) {
 	v := newHarness(t, 80, 24).v // Init not run: nothing loaded
-	msgs := messages(v.review.openChooser(v.reviewEnv()))
+	msgs := messages(v.review.openChooser(v.reviewEnvironment()))
 	if len(msgs) != 1 {
 		t.Fatalf("msgs = %v", msgs)
 	}
-	if i, ok := msgs[0].(userinterface.InfoMsg); !ok || i.Text != "pull request not loaded yet" {
+	if i, ok := msgs[0].(userinterface.InfoMessage); !ok || i.Text != "pull request not loaded yet" {
 		t.Errorf("msg = %#v", msgs[0])
 	}
 }

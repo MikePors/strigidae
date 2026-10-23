@@ -40,7 +40,7 @@ func helpColumn(th theme.Theme, heading string, groups [][]key.Binding) string {
 				continue
 			}
 			pad := strings.Repeat(" ", max(0, helpKeyWidth-lipgloss.Width(h.Key)))
-			lines = append(lines, th.HelpKey.Render(h.Key)+pad+th.HelpDesc.Render(h.Desc))
+			lines = append(lines, th.HelpKey.Render(h.Key)+pad+th.HelpDescription.Render(h.Desc))
 		}
 		if len(lines) > 0 {
 			blocks = append(blocks, strings.Join(lines, "\n"))

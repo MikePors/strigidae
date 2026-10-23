@@ -7,7 +7,7 @@ import (
 )
 
 // PRListStyles are the styles for pull request tables (the PR list view).
-type PRListStyles struct {
+type PullRequestListStyles struct {
 	Header           lipgloss.Style // column headings
 	Selected         lipgloss.Style // the whole highlighted row
 	Number           lipgloss.Style
@@ -23,10 +23,10 @@ type PRListStyles struct {
 	Comments         lipgloss.Style
 }
 
-func newPRListStyles(r Roles) PRListStyles {
+func newPullRequestListStyles(r Roles) PullRequestListStyles {
 	fg := func(c color.Color) lipgloss.Style { return lipgloss.NewStyle().Foreground(c) }
 	muted := fg(r.Muted)
-	return PRListStyles{
+	return PullRequestListStyles{
 		Header:           muted.Bold(true),
 		Selected:         lipgloss.NewStyle().Bold(true).Foreground(r.OnAccent).Background(r.Accent),
 		Number:           fg(r.Warning),

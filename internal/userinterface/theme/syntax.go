@@ -28,7 +28,7 @@ const (
 	ClassOperator
 	ClassVariable // variables and tags
 	ClassEscape   // string escapes and regular expressions
-	NumSyntaxClasses
+	NumberSyntaxClasses
 )
 
 // tokenClasses is the one mapping from Chroma token types to classes. A token
@@ -73,23 +73,23 @@ func ClassOf(t chroma.TokenType) SyntaxClass {
 func (r Roles) syntaxColour(c SyntaxClass) color.Color {
 	switch c {
 	case ClassKeyword:
-		return r.SynKeyword
+		return r.SyntaxKeyword
 	case ClassString:
-		return r.SynString
+		return r.SyntaxString
 	case ClassComment:
-		return r.SynComment
+		return r.SyntaxComment
 	case ClassNumber:
-		return r.SynNumber
+		return r.SyntaxNumber
 	case ClassFunction:
-		return r.SynFunction
+		return r.SyntaxFunction
 	case ClassType:
-		return r.SynType
+		return r.SyntaxType
 	case ClassOperator:
-		return r.SynOperator
+		return r.SyntaxOperator
 	case ClassVariable:
-		return r.SynVariable
+		return r.SyntaxVariable
 	case ClassEscape:
-		return r.SynEscape
+		return r.SyntaxEscape
 	}
 	return r.Text
 }
@@ -97,12 +97,12 @@ func (r Roles) syntaxColour(c SyntaxClass) color.Color {
 // Syntax holds the foreground-only styles for highlighted code tokens, one
 // per SyntaxClass.
 type Syntax struct {
-	byClass [NumSyntaxClasses]lipgloss.Style
+	byClass [NumberSyntaxClasses]lipgloss.Style
 }
 
 func newSyntax(r Roles) Syntax {
 	var s Syntax
-	for c := range NumSyntaxClasses {
+	for c := range NumberSyntaxClasses {
 		if c == ClassPlain {
 			continue // plain code keeps the pane's own text colour
 		}
@@ -171,7 +171,7 @@ var (
 // not what makes this safe. The rule is that this method and every Glamour
 // render run on the UI goroutine (never in a tea.Cmd).
 func (t Theme) ChromaStyleName() string {
-	name := "strig-" + t.ID
+	name := "strig-" + t.Identifier
 	chromaMu.Lock()
 	defer chromaMu.Unlock()
 	if !chromaRegistered[name] {

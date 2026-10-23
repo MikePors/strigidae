@@ -43,15 +43,15 @@ type Roles struct {
 	HunkCursorTint    color.Color
 
 	// Syntax token colours.
-	SynKeyword  color.Color
-	SynString   color.Color
-	SynComment  color.Color
-	SynNumber   color.Color // numbers and constants
-	SynFunction color.Color
-	SynType     color.Color
-	SynOperator color.Color
-	SynVariable color.Color // variables and tags
-	SynEscape   color.Color // string escapes and regular expressions
+	SyntaxKeyword  color.Color
+	SyntaxString   color.Color
+	SyntaxComment  color.Color
+	SyntaxNumber   color.Color // numbers and constants
+	SyntaxFunction color.Color
+	SyntaxType     color.Color
+	SyntaxOperator color.Color
+	SyntaxVariable color.Color // variables and tags
+	SyntaxEscape   color.Color // string escapes and regular expressions
 }
 
 // tintParams say how a tint is made from a role: how far the background's
@@ -114,15 +114,15 @@ func defaultRoles(p Palette) Roles {
 		Added:        s(Base0B),
 		Removed:      s(Base08),
 
-		SynKeyword:  s(Base0E),
-		SynString:   s(Base0B),
-		SynComment:  s(Base03),
-		SynNumber:   s(Base09),
-		SynFunction: s(Base0D),
-		SynType:     s(Base0A),
-		SynOperator: s(Base0C),
-		SynVariable: s(Base08),
-		SynEscape:   s(Base0C),
+		SyntaxKeyword:  s(Base0E),
+		SyntaxString:   s(Base0B),
+		SyntaxComment:  s(Base03),
+		SyntaxNumber:   s(Base09),
+		SyntaxFunction: s(Base0D),
+		SyntaxType:     s(Base0A),
+		SyntaxOperator: s(Base0C),
+		SyntaxVariable: s(Base08),
+		SyntaxEscape:   s(Base0C),
 	}
 	r.deriveTints(tintsFor(p.Variant))
 	return r
@@ -164,15 +164,15 @@ func (r *Roles) fields() []roleField {
 		{"removed-gutter-tint", &r.RemovedGutterTint},
 		{"hunk-tint", &r.HunkTint},
 		{"hunk-cursor-tint", &r.HunkCursorTint},
-		{"syn-keyword", &r.SynKeyword},
-		{"syn-string", &r.SynString},
-		{"syn-comment", &r.SynComment},
-		{"syn-number", &r.SynNumber},
-		{"syn-function", &r.SynFunction},
-		{"syn-type", &r.SynType},
-		{"syn-operator", &r.SynOperator},
-		{"syn-variable", &r.SynVariable},
-		{"syn-escape", &r.SynEscape},
+		{"syn-keyword", &r.SyntaxKeyword},
+		{"syn-string", &r.SyntaxString},
+		{"syn-comment", &r.SyntaxComment},
+		{"syn-number", &r.SyntaxNumber},
+		{"syn-function", &r.SyntaxFunction},
+		{"syn-type", &r.SyntaxType},
+		{"syn-operator", &r.SyntaxOperator},
+		{"syn-variable", &r.SyntaxVariable},
+		{"syn-escape", &r.SyntaxEscape},
 	}
 }
 
@@ -254,15 +254,15 @@ func (r *Roles) guard(overridden map[string]bool) {
 		{"success", &r.Success},
 		{"added", &r.Added},
 		{"removed", &r.Removed},
-		{"syn-keyword", &r.SynKeyword},
-		{"syn-string", &r.SynString},
-		{"syn-comment", &r.SynComment},
-		{"syn-number", &r.SynNumber},
-		{"syn-function", &r.SynFunction},
-		{"syn-type", &r.SynType},
-		{"syn-operator", &r.SynOperator},
-		{"syn-variable", &r.SynVariable},
-		{"syn-escape", &r.SynEscape},
+		{"syn-keyword", &r.SyntaxKeyword},
+		{"syn-string", &r.SyntaxString},
+		{"syn-comment", &r.SyntaxComment},
+		{"syn-number", &r.SyntaxNumber},
+		{"syn-function", &r.SyntaxFunction},
+		{"syn-type", &r.SyntaxType},
+		{"syn-operator", &r.SyntaxOperator},
+		{"syn-variable", &r.SyntaxVariable},
+		{"syn-escape", &r.SyntaxEscape},
 	} {
 		check(f.name, f.c, minAccentContrast, r.Background)
 	}

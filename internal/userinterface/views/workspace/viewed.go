@@ -25,13 +25,13 @@ type viewedToggle struct {
 // viewedMsg is the result of one mutation. It is matched on owner, repo,
 // number and path, not on the load sequence: a reload does not make the
 // result irrelevant.
-type viewedMsg struct {
-	owner  *View
-	repo   github.Repository
-	number int
-	path   string
-	sent   github.ViewedState // state the mutation asked for
-	err    error
+type viewedMessage struct {
+	owner      *View
+	repository github.Repository
+	number     int
+	path       string
+	sent       github.ViewedState // state the mutation asked for
+	err        error
 }
 
 // viewedCount returns how many files are marked viewed. Dismissed files
@@ -87,10 +87,10 @@ func (v *View) toggleViewed() tea.Cmd {
 // sendViewed is the command that runs one mutation. On failure it also
 // returns the error itself, so it shows even if the view was left meanwhile.
 func (v *View) sendViewed(path string, state github.ViewedState) tea.Cmd {
-	client, repo, number, owner, prID := v.client, v.repo, v.number, v, v.detail.Identifier
+	client, repo, number, owner, prID := v.client, v.repository, v.number, v, v.detail.Identifier
 	return func() tea.Msg {
 		err := client.SetFileViewed(context.Background(), prID, path, state == github.FileViewed)
-		res := viewedMsg{owner: owner, repo: repo, number: number, path: path, sent: state, err: err}
+		res := viewedMessage{owner: owner, repository: repo, number: number, path: path, sent: state, err: err}
 		if err == nil {
 			return res
 		}
@@ -98,18 +98,18 @@ func (v *View) sendViewed(path string, state github.ViewedState) tea.Cmd {
 		if state != github.FileViewed {
 			verb = "unmark"
 		}
-		shown := userinterface.ErrorMsg{Err: terminaltext.SafeError(fmt.Errorf("%s %s as viewed: %w", verb, terminaltext.Clean(path), err))}
+		shown := userinterface.ErrorMessage{Err: terminaltext.SafeError(fmt.Errorf("%s %s as viewed: %w", verb, terminaltext.Clean(path), err))}
 		return tea.BatchMsg{func() tea.Msg { return res }, func() tea.Msg { return shown }}
 	}
 }
 
-func (v *View) viewedMine(msg viewedMsg) bool {
-	return msg.owner == v && msg.repo == v.repo && msg.number == v.number
+func (v *View) viewedMine(msg viewedMessage) bool {
+	return msg.owner == v && msg.repository == v.repository && msg.number == v.number
 }
 
 // viewedDone records a mutation's outcome and sends the next wanted state, if
 // the user toggled again meanwhile.
-func (v *View) viewedDone(msg viewedMsg) tea.Cmd {
+func (v *View) viewedDone(msg viewedMessage) tea.Cmd {
 	t := v.viewedState[msg.path]
 	if t == nil {
 		return nil
@@ -123,7 +123,7 @@ func (v *View) viewedDone(msg viewedMsg) tea.Cmd {
 	if t.want != msg.sent && t.want != t.confirmed {
 		return v.sendViewed(msg.path, t.want)
 	}
-	t.inflight, t.settledAt = false, v.seq
+	t.inflight, t.settledAt = false, v.sequence
 	return nil
 }
 

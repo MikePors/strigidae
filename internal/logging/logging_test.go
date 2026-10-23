@@ -14,11 +14,11 @@ import (
 func TestPath(t *testing.T) {
 	home := func() (string, error) { return "/home/u", nil }
 	tests := []struct {
-		name    string
-		env     map[string]string
-		home    func() (string, error)
-		want    string
-		wantErr bool
+		name        string
+		environment map[string]string
+		home        func() (string, error)
+		want        string
+		wantErr     bool
 	}{
 		{"xdg", map[string]string{"XDG_STATE_HOME": "/state"}, home, "/state/strig/strig.log", false},
 		{"fallback", nil, home, "/home/u/.local/state/strig/strig.log", false},
@@ -27,7 +27,7 @@ func TestPath(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Path(func(k string) string { return tt.env[k] }, tt.home)
+			got, err := Path(func(k string) string { return tt.environment[k] }, tt.home)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -62,14 +62,14 @@ func TestStart(t *testing.T) {
 	}
 	home := func() (string, error) { return dir, nil }
 	tests := []struct {
-		name     string
-		env      map[string]string
-		home     func() (string, error)
-		wantFile string // log file that should receive the line; "" means discarded
-		wantErr  string // prefix of the returned error; "" means no error
+		name        string
+		environment map[string]string
+		home        func() (string, error)
+		wantFile    string // log file that should receive the line; "" means discarded
+		wantErr     string // prefix of the returned error; "" means no error
 	}{
 		{
-			name: "opens the file", env: map[string]string{"XDG_STATE_HOME": dir}, home: home,
+			name: "opens the file", environment: map[string]string{"XDG_STATE_HOME": dir}, home: home,
 			wantFile: filepath.Join(dir, "strig", "strig.log"),
 		},
 		{
@@ -77,14 +77,14 @@ func TestStart(t *testing.T) {
 			wantErr: "find home directory: none",
 		},
 		{
-			name: "unwritable directory", env: map[string]string{"XDG_STATE_HOME": blocker}, home: home,
+			name: "unwritable directory", environment: map[string]string{"XDG_STATE_HOME": blocker}, home: home,
 			wantErr: "create log directory: ",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// The logger and close must be usable whether or not Start failed.
-			l, closeLog, err := Start(func(k string) string { return tt.env[k] }, tt.home)
+			l, closeLog, err := Start(func(k string) string { return tt.environment[k] }, tt.home)
 			l.Info("hello")
 			closeLog()
 

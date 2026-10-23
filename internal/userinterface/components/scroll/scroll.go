@@ -56,7 +56,7 @@ func (w *Window) Cursor() int { return w.cursor }
 func (w *Window) Top() int { return w.top }
 
 // XOffset returns the horizontal scroll in cells.
-func (w *Window) XOffset() int { return w.x }
+func (w *Window) HorizontalOffset() int { return w.x }
 
 // Height returns the number of visible rows.
 func (w *Window) Height() int { return w.height }
@@ -65,7 +65,7 @@ func (w *Window) Height() int { return w.height }
 func (w *Window) MaxTop() int { return max(w.rows-w.height, 0) }
 
 // MaxX returns the largest valid horizontal offset.
-func (w *Window) MaxX() int { return max(w.content-w.view, 0) }
+func (w *Window) MaxHorizontalOffset() int { return max(w.content-w.view, 0) }
 
 func (w *Window) clamp() {
 	if w.rows == 0 {
@@ -74,7 +74,7 @@ func (w *Window) clamp() {
 	}
 	w.cursor = min(max(w.cursor, 0), w.rows-1)
 	w.top = min(max(w.top, 0), w.MaxTop())
-	w.x = min(max(w.x, 0), w.MaxX())
+	w.x = min(max(w.x, 0), w.MaxHorizontalOffset())
 	w.follow()
 }
 

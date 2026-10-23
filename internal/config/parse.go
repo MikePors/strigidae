@@ -26,7 +26,7 @@ var (
 // Empty data yields Default.
 func Parse(path string, data []byte) (Config, error) {
 	if len(data) > MaxFileSize {
-		return Config{}, &Error{Path: path, Msg: fmt.Sprintf("config file is too large (limit %d bytes)", MaxFileSize)}
+		return Config{}, &Error{Path: path, Message: fmt.Sprintf("config file is too large (limit %d bytes)", MaxFileSize)}
 	}
 	doc, err := decodeSingle(path, data)
 	if err != nil {

@@ -109,7 +109,7 @@ func TestPickerChoosesByPathAcrossRefresh(t *testing.T) {
 	// A refresh lands while the picker is open, with a new file sorted first.
 	d := testDetail()
 	d.Files = append([]github.ChangedFile{{Path: "aaa/new.go", Additions: 1, Change: github.FileAdded}}, d.Files...)
-	h.send(prLoadedMsg{owner: h.v, repo: testRepo, number: 7, seq: h.v.seq, detail: d})
+	h.send(pullRequestLoadedMessage{owner: h.v, repository: testRepository, number: 7, sequence: h.v.sequence, detail: d})
 	h.send(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if got := h.v.selectedPath(); got != "internal/sync/legacy.go" {
 		t.Errorf("picker selected %q, want legacy.go", got)

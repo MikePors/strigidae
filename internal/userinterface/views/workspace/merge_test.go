@@ -59,12 +59,12 @@ func TestResolveMethod(t *testing.T) {
 
 func TestMergeConfirmationAndSuccess(t *testing.T) {
 	tests := []struct {
-		name     string
-		args     string
-		settings fake.MergeSettings
-		question string
-		method   github.MergeMethod
-		info     string
+		name      string
+		arguments string
+		settings  fake.MergeSettings
+		question  string
+		method    github.MergeMethod
+		info      string
 	}{
 		{
 			"default, branch kept", "",
@@ -85,8 +85,8 @@ func TestMergeConfirmationAndSuccess(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := newReviewer(t)
-			c.client.SetMergeSettings(testRepo, tt.settings)
-			c.mergeCommand(tt.args)
+			c.client.SetMergeSettings(testRepository, tt.settings)
+			c.mergeCommand(tt.arguments)
 			conf, ok := c.lastConfirm()
 			if !ok {
 				t.Fatalf("no confirmation; error: %q", c.lastError())
@@ -98,7 +98,7 @@ func TestMergeConfirmationAndSuccess(t *testing.T) {
 				t.Fatal("merged before the answer")
 			}
 			c.run(conf.OnYes)
-			want := []fake.Merge{{Repository: testRepo, Number: 7, PullRequestIdentifier: prNodeID, Method: tt.method, ExpectedHeadObjectIdentifier: headSHA}}
+			want := []fake.Merge{{Repository: testRepository, Number: 7, PullRequestIdentifier: pullRequestNodeIdentifier, Method: tt.method, ExpectedHeadObjectIdentifier: headSHA}}
 			if diff := cmp.Diff(want, c.client.Merges()); diff != "" {
 				t.Errorf("merges (-want +got):\n%s", diff)
 			}
@@ -117,7 +117,7 @@ func TestMergeConfirmationAndSuccess(t *testing.T) {
 
 func TestMergeNotAllowedMethodDoesNothing(t *testing.T) {
 	c := newReviewer(t)
-	c.client.SetMergeSettings(testRepo, fake.MergeSettings{Allowed: []github.MergeMethod{github.MergeMethodMerge}})
+	c.client.SetMergeSettings(testRepository, fake.MergeSettings{Allowed: []github.MergeMethod{github.MergeMethodMerge}})
 	c.mergeCommand("squash")
 	if got := c.lastError(); got != "squash merges are not allowed in this repo" {
 		t.Errorf("error = %q", got)
@@ -144,7 +144,7 @@ func TestMergeUnknownMethodArgument(t *testing.T) {
 
 func TestMergeHeadMoved(t *testing.T) {
 	c := newReviewer(t)
-	c.client.SetHeadSHA(testRepo, 7, "bbbb2222") // pushed after the view loaded
+	c.client.SetHeadSHA(testRepository, 7, "bbbb2222") // pushed after the view loaded
 	c.mergeCommand("")
 	conf, ok := c.lastConfirm()
 	if !ok {
@@ -166,7 +166,7 @@ func TestMergeHeadMovesAfterConfirmationIsRefusedAndNotRetried(t *testing.T) {
 	c := newReviewer(t)
 	c.mergeCommand("")
 	conf, _ := c.lastConfirm()
-	c.client.SetHeadSHA(testRepo, 7, "bbbb2222") // pushed while the question was open
+	c.client.SetHeadSHA(testRepository, 7, "bbbb2222") // pushed while the question was open
 	c.run(conf.OnYes)
 	if c.callCount(fake.MethodMergePullRequest) != 1 || len(c.client.Merges()) != 0 {
 		t.Errorf("merge calls = %d, merges = %d", c.callCount(fake.MethodMergePullRequest), len(c.client.Merges()))
@@ -217,7 +217,7 @@ func TestMergeBlockedWhileInFlight(t *testing.T) {
 		t.Fatalf("merging = %v, loading = %v", c.v.merge.merging, c.v.Loading())
 	}
 	before := len(c.client.Calls())
-	c.msgs = nil
+	c.messages = nil
 	c.mergeCommand("")
 	if diff := cmp.Diff([]string{"a merge is in progress"}, c.infos()); diff != "" {
 		t.Errorf("info (-want +got):\n%s", diff)
@@ -247,22 +247,22 @@ func TestMergeNeedsLoadedPullRequestAndDiff(t *testing.T) {
 
 func TestMergeFlowIgnoresOtherFlowsAndStaleResults(t *testing.T) {
 	var f, other mergeFlow
-	env := flowEnv(fake.New())
-	if _, handled := f.update(refreshMsg{}, env); handled {
+	env := flowEnvironment(fake.New())
+	if _, handled := f.update(refreshMessage{}, env); handled {
 		t.Error("an unrelated message was claimed")
 	}
-	cmd, handled := f.update(mergedMsg{flow: &other, repo: testRepo, number: 7}, env)
+	cmd, handled := f.update(mergedMessage{flow: &other, repository: testRepository, number: 7}, env)
 	if !handled || cmd != nil {
 		t.Errorf("foreign result: handled=%v cmd=%v", handled, cmd != nil)
 	}
-	f.seq = 2
-	cmd, handled = f.update(mergeFreshMsg{flow: &f, repo: testRepo, number: 7, seq: 1}, env)
+	f.sequence = 2
+	cmd, handled = f.update(mergeFreshMessage{flow: &f, repository: testRepository, number: 7, sequence: 1}, env)
 	if !handled || cmd != nil {
 		t.Errorf("stale result: handled=%v cmd=%v", handled, cmd != nil)
 	}
 }
 
-func TestMergeQuestionCleansBaseRef(t *testing.T) {
+func TestMergeQuestionCleansBaseBranch(t *testing.T) {
 	q := mergeQuestion(7, github.MergeMethodMerge, github.MergeStatus{BaseBranch: "ma\x1b[31min"})
 	if strings.Contains(q, "\x1b") {
 		t.Errorf("question = %q", q)

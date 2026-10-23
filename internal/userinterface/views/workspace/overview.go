@@ -89,7 +89,7 @@ func (o *overview) ensure(th theme.Theme, md *markdown.Renderer, d *github.PullR
 			add(th.Muted.Render("No review threads."))
 		}
 	}
-	env := thread.Env{Theme: th, Markdown: md, Now: now}
+	env := thread.Environment{Theme: th, Markdown: md, Now: now}
 	for _, t := range threads.list {
 		add(strings.Join(thread.Lines(env, t, width, thread.Options{Expanded: true, Location: true}), "\n"))
 		add("")

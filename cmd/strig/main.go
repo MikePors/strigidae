@@ -19,7 +19,7 @@ import (
 // deps are the side effects run needs, injected so tests exercise flag
 // handling and repository inference without a checkout, the network or a
 // terminal.
-type deps struct {
+type dependencies struct {
 	getwd  func() (string, error)
 	getenv func(string) string
 	home   func() (string, error)
@@ -30,8 +30,8 @@ type deps struct {
 	start     func(a app, stderr io.Writer) error
 }
 
-func realDeps() deps {
-	return deps{
+func realDependencies() dependencies {
+	return dependencies{
 		getwd:     os.Getwd,
 		getenv:    os.Getenv,
 		home:      os.UserHomeDir,
@@ -49,14 +49,14 @@ func realDeps() deps {
 }
 
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr, realDeps()))
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr, realDependencies()))
 }
 
-func run(args []string, stdout, stderr io.Writer, d deps) int {
+func run(args []string, stdout, stderr io.Writer, d dependencies) int {
 	return report(stderr, execute(args, stdout, stderr, d))
 }
 
-func execute(args []string, stdout, stderr io.Writer, d deps) error {
+func execute(args []string, stdout, stderr io.Writer, d dependencies) error {
 	fs := flag.NewFlagSet("strig", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	showVersion := fs.Bool("version", false, "print version and exit")
@@ -107,7 +107,7 @@ func execute(args []string, stdout, stderr io.Writer, d deps) error {
 }
 
 // configLocation is the --config path if given, else the default location.
-func configLocation(flagValue string, d deps) (string, error) {
+func configLocation(flagValue string, d dependencies) (string, error) {
 	if flagValue != "" {
 		return flagValue, nil
 	}

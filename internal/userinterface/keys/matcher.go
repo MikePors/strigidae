@@ -23,8 +23,8 @@ const (
 // Matched (for example "g g"), the pending sequence for Pending, and the raw
 // key for NoMatch.
 type Result struct {
-	Kind Kind
-	Seq  string
+	Kind     Kind
+	Sequence string
 }
 
 // Matcher resolves multi-key sequences such as "g g" or "z a b". Sequences are
@@ -50,15 +50,15 @@ func (m *Matcher) Feed(k string, bindings []key.Binding) Result {
 	switch {
 	case longer:
 		m.pending = append(m.pending, k)
-		return Result{Kind: Pending, Seq: seq}
+		return Result{Kind: Pending, Sequence: seq}
 	case exact:
 		m.Reset()
-		return Result{Kind: Matched, Seq: seq}
+		return Result{Kind: Matched, Sequence: seq}
 	case had:
 		m.Reset()
 		return m.Feed(k, bindings)
 	default:
-		return Result{Kind: NoMatch, Seq: k}
+		return Result{Kind: NoMatch, Sequence: k}
 	}
 }
 
@@ -72,9 +72,9 @@ func (m *Matcher) Expire(bindings []key.Binding) Result {
 		return Result{Kind: NoMatch}
 	}
 	if exact, _ := lookup(seq, bindings); exact {
-		return Result{Kind: Matched, Seq: seq}
+		return Result{Kind: Matched, Sequence: seq}
 	}
-	return Result{Kind: NoMatch, Seq: seq}
+	return Result{Kind: NoMatch, Sequence: seq}
 }
 
 // Pending reports whether a sequence is in progress.

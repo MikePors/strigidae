@@ -121,7 +121,7 @@ func TestVisualRendering(t *testing.T) {
 		if selected {
 			st = st.Background(tint)
 		}
-		return st.Render(mark + numCell(old, m.numW) + " " + numCell(0, m.numW) + " ")
+		return st.Render(mark + numberCell(old, m.numberWidth) + " " + numberCell(0, m.numberWidth) + " ")
 	}
 	raw := strings.Split(m.Render(80, 30), "\n")
 	if !strings.Contains(raw[15], gutter(markSelected, 32, true)) {

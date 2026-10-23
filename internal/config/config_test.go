@@ -16,9 +16,9 @@ func sec(name, query string, limit int, sort Sort, order Order) Section {
 
 func defaultsFor(user string) []Section {
 	return []Section{
-		sec("Review requested", "is:pr is:open review-requested:"+user, 30, SortUpdated, OrderDesc),
-		sec("My PRs", "is:pr is:open author:"+user, 30, SortUpdated, OrderDesc),
-		sec("Involved", "is:pr is:open involves:"+user+" -author:"+user, 30, SortUpdated, OrderDesc),
+		sec("Review requested", "is:pr is:open review-requested:"+user, 30, SortUpdated, OrderDescending),
+		sec("My PRs", "is:pr is:open author:"+user, 30, SortUpdated, OrderDescending),
+		sec("Involved", "is:pr is:open involves:"+user+" -author:"+user, 30, SortUpdated, OrderDescending),
 	}
 }
 
@@ -49,9 +49,9 @@ func TestParseValid(t *testing.T) {
       - {name: Type, query: 'type:pr label:x'}
 `,
 			Config{Tabs: []Tab{{Name: "A", User: "a", Sections: []Section{
-				sec("Bug", "is:pr label:bug author:a", 30, SortUpdated, OrderDesc),
-				sec("Has", "author:a IS:PR", 30, SortUpdated, OrderDesc),
-				sec("Type", "type:pr label:x", 30, SortUpdated, OrderDesc),
+				sec("Bug", "is:pr label:bug author:a", 30, SortUpdated, OrderDescending),
+				sec("Has", "author:a IS:PR", 30, SortUpdated, OrderDescending),
+				sec("Type", "type:pr label:x", 30, SortUpdated, OrderDescending),
 			}}}},
 		},
 		{
@@ -79,8 +79,8 @@ func TestParseValid(t *testing.T) {
         query: is:pr label:bug
 `,
 			Config{Tabs: []Tab{{Name: "Bob", User: "bob", Sections: []Section{
-				sec("Theirs", "is:pr author:bob -author:bob-bot", 5, SortComments, OrderAsc),
-				sec("Plain", "is:pr label:bug", 30, SortUpdated, OrderDesc),
+				sec("Theirs", "is:pr author:bob -author:bob-bot", 5, SortComments, OrderAscending),
+				sec("Plain", "is:pr label:bug", 30, SortUpdated, OrderDescending),
 			}}}},
 		},
 	}
@@ -197,9 +197,9 @@ func TestExampleParses(t *testing.T) {
 func TestPath(t *testing.T) {
 	home := func() (string, error) { return "/home/u", nil }
 	tests := []struct {
-		name string
-		env  string
-		want string
+		name        string
+		environment string
+		want        string
 	}{
 		{"xdg", "/x/cfg", "/x/cfg/strig/config.yml"},
 		{"unset", "", "/home/u/.config/strig/config.yml"},
@@ -207,7 +207,7 @@ func TestPath(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Path(func(string) string { return tt.env }, home)
+			got, err := Path(func(string) string { return tt.environment }, home)
 			if err != nil {
 				t.Fatal(err)
 			}

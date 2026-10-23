@@ -40,7 +40,7 @@ func TestRefreshWithShorterListStaysInBounds(t *testing.T) {
 	h.press("G")
 	d := testDetail()
 	d.Files = d.Files[:2]
-	h.send(prLoadedMsg{owner: h.v, repo: testRepo, number: 7, seq: h.v.seq, detail: d})
+	h.send(pullRequestLoadedMessage{owner: h.v, repository: testRepository, number: 7, sequence: h.v.sequence, detail: d})
 	if h.v.sel() < 0 || h.v.sel() > 2 {
 		t.Errorf("selection = %d after the list shrank", h.v.sel())
 	}

@@ -19,25 +19,25 @@ import "charm.land/bubbles/v2/key"
 // Msg is not a tea.KeyPressMsg: embedded bubbles components (viewport, ...)
 // ignore it. Views drive them through their methods (ScrollDown, GotoTop, ...)
 // in response to a Msg and never forward it to the component's Update.
-type Msg struct{ Seq string }
+type Message struct{ Sequence string }
 
 // String returns the matched key or sequence.
-func (m Msg) String() string { return m.Seq }
+func (m Message) String() string { return m.Sequence }
 
 // Global holds the bindings reserved across the whole app. Views use them
 // through the Msg they receive; the root model itself handles Help and Command.
 type Global struct {
-	Down, Up             key.Binding
-	Top, Bottom          key.Binding
-	HalfDown, HalfUp     key.Binding
-	PageDown, PageUp     key.Binding
-	Select               key.Binding
-	Open                 key.Binding
-	Refresh              key.Binding
-	Search               key.Binding
-	NextMatch, PrevMatch key.Binding
-	Cancel               key.Binding
-	Help                 key.Binding
+	Down, Up                 key.Binding
+	Top, Bottom              key.Binding
+	HalfDown, HalfUp         key.Binding
+	PageDown, PageUp         key.Binding
+	Select                   key.Binding
+	Open                     key.Binding
+	Refresh                  key.Binding
+	Search                   key.Binding
+	NextMatch, PreviousMatch key.Binding
+	Cancel                   key.Binding
+	Help                     key.Binding
 	// Command opens the command line (":q", ":qa"). The root handles it.
 	Command key.Binding
 }
@@ -48,23 +48,23 @@ func DefaultGlobal() Global {
 		return key.NewBinding(key.WithKeys(keys), key.WithHelp(helpKey, desc))
 	}
 	return Global{
-		Down:      b("j", "j", "down"),
-		Up:        b("k", "k", "up"),
-		Top:       b("g g", "gg", "top"),
-		Bottom:    b("G", "G", "bottom"),
-		HalfDown:  b("ctrl+d", "ctrl+d", "half page down"),
-		HalfUp:    b("ctrl+u", "ctrl+u", "half page up"),
-		PageDown:  b("ctrl+f", "ctrl+f", "page down"),
-		PageUp:    b("ctrl+b", "ctrl+b", "page up"),
-		Select:    b("enter", "enter", "open / select"),
-		Open:      b("o", "o", "open in browser"),
-		Refresh:   b("R", "R", "refresh"),
-		Search:    b("/", "/", "filter / search"),
-		NextMatch: b("n", "n", "next match"),
-		PrevMatch: b("N", "N", "previous match"),
-		Cancel:    b("esc", "esc", "cancel / clear"),
-		Help:      b("?", "?", "toggle help"),
-		Command:   b(":", ":", "command line (:q close, :qa quit)"),
+		Down:          b("j", "j", "down"),
+		Up:            b("k", "k", "up"),
+		Top:           b("g g", "gg", "top"),
+		Bottom:        b("G", "G", "bottom"),
+		HalfDown:      b("ctrl+d", "ctrl+d", "half page down"),
+		HalfUp:        b("ctrl+u", "ctrl+u", "half page up"),
+		PageDown:      b("ctrl+f", "ctrl+f", "page down"),
+		PageUp:        b("ctrl+b", "ctrl+b", "page up"),
+		Select:        b("enter", "enter", "open / select"),
+		Open:          b("o", "o", "open in browser"),
+		Refresh:       b("R", "R", "refresh"),
+		Search:        b("/", "/", "filter / search"),
+		NextMatch:     b("n", "n", "next match"),
+		PreviousMatch: b("N", "N", "previous match"),
+		Cancel:        b("esc", "esc", "cancel / clear"),
+		Help:          b("?", "?", "toggle help"),
+		Command:       b(":", ":", "command line (:q close, :qa quit)"),
 	}
 }
 
@@ -81,7 +81,7 @@ func (g Global) Bindings() []key.Binding {
 func (g Global) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{g.Down, g.Up, g.Top, g.Bottom, g.HalfDown, g.HalfUp, g.PageDown, g.PageUp},
-		{g.Select, g.Open, g.Refresh, g.Search, g.NextMatch, g.PrevMatch},
+		{g.Select, g.Open, g.Refresh, g.Search, g.NextMatch, g.PreviousMatch},
 		{g.Cancel, g.Help, g.Command},
 	}
 }

@@ -17,7 +17,7 @@ import (
 func TestThemeMessageRebuilds(t *testing.T) {
 	h := loaded(t, 100, 24)
 	dark := h.render()
-	h.send(userinterface.ThemeMsg{Theme: theme.New(false)})
+	h.send(userinterface.ThemeMessage{Theme: theme.New(false)})
 	if h.render() == dark {
 		t.Error("light theme should change the rendering")
 	}
@@ -87,8 +87,8 @@ func TestGolden(t *testing.T) {
 		d.Body, d.Files, d.Comments, d.Reviews = "", nil, nil, nil
 		c := fake.New()
 		c.SetPullRequest(d)
-		c.SetDiff(testRepo, 7, readDiff(t))
-		v := New(c, testRepo, 7, WithClock(func() time.Time { return testNow }), WithTheme(theme.New(true)))
+		c.SetDiff(testRepository, 7, readDiff(t))
+		v := New(c, testRepository, 7, WithClock(func() time.Time { return testNow }), WithTheme(theme.New(true)))
 		h := &harness{t: t, v: v, client: c}
 		h.send(tea.WindowSizeMsg{Width: 80, Height: 12})
 		h.run(v.Init())
@@ -97,7 +97,7 @@ func TestGolden(t *testing.T) {
 	})
 }
 
-func TestLoadingLineCleansRepo(t *testing.T) {
+func TestLoadingLineCleansRepository(t *testing.T) {
 	v := New(fake.New(), github.Repository{Owner: "o\x1b[2J\x1b]52;c;aGk=\x07", Name: "n\u202e"}, 7, WithTheme(theme.New(true)))
 	v.Update(tea.WindowSizeMsg{Width: 80, Height: 10})
 	assertTame(t, "loading line", v.Render(80, 10))

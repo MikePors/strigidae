@@ -17,23 +17,23 @@ import (
 // (repo, number and the view's request sequence), because every view in the
 // stack receives every non-key message.
 type (
-	prLoadedMsg struct {
-		owner  *View // the workspace that asked; compared, never dereferenced
-		repo   github.Repository
-		number int
-		seq    int
-		detail github.PullRequestDetail
-		err    error
+	pullRequestLoadedMessage struct {
+		owner      *View // the workspace that asked; compared, never dereferenced
+		repository github.Repository
+		number     int
+		sequence   int
+		detail     github.PullRequestDetail
+		err        error
 		// thenDiff makes the result start the diff load. The diff is fetched
 		// after the detail so that the head recorded for it can only be older
 		// than the diff, never newer.
 		thenDiff bool
 	}
-	diffLoadedMsg struct {
-		owner  *View
-		repo   github.Repository
-		number int
-		seq    int
+	diffLoadedMessage struct {
+		owner      *View
+		repository github.Repository
+		number     int
+		sequence   int
 		// head is the detail's head SHA this diff followed; empty when the
 		// detail failed to load.
 		head string
@@ -44,13 +44,13 @@ type (
 		parseErr error
 		err      error // the GetDiff failure
 	}
-	threadsLoadedMsg struct {
-		owner   *View
-		repo    github.Repository
-		number  int
-		seq     int
-		threads []github.ReviewThread
-		err     error
+	threadsLoadedMessage struct {
+		owner      *View
+		repository github.Repository
+		number     int
+		sequence   int
+		threads    []github.ReviewThread
+		err        error
 	}
 )
 
@@ -79,17 +79,17 @@ func loadThreads(ctx context.Context, c github.Client, repo github.Repository, n
 
 // load starts a fresh load of the pull request and its diff.
 func (v *View) load() tea.Cmd {
-	v.seq++
+	v.sequence++
 	v.diffPending = true
 	v.diff.Loading = true
 	v.filePane.SetDiff(v.diff)
 
-	return tea.Batch(v.fetchPR(true), v.reloadThreads())
+	return tea.Batch(v.fetchPullRequest(true), v.reloadThreads())
 }
 
 // fetchDiff loads the diff once the detail has landed.
-func (v *View) fetchDiff(msg prLoadedMsg) tea.Cmd {
-	client, repo, number, seq, owner := v.client, v.repo, v.number, msg.seq, v
+func (v *View) fetchDiff(msg pullRequestLoadedMessage) tea.Cmd {
+	client, repo, number, seq, owner := v.client, v.repository, v.number, msg.sequence, v
 	head := ""
 	if msg.err == nil {
 		head = msg.detail.HeadSHA
@@ -97,26 +97,26 @@ func (v *View) fetchDiff(msg prLoadedMsg) tea.Cmd {
 	return func() tea.Msg {
 		raw, err := client.GetDiff(context.Background(), repo, number)
 		if err != nil {
-			return diffLoadedMsg{owner: owner, repo: repo, number: number, seq: seq, err: err}
+			return diffLoadedMessage{owner: owner, repository: repo, number: number, sequence: seq, err: err}
 		}
 		// diff.Parse returns a best-effort result with its error, so
 		// files before a malformed hunk still show.
 		parsed, perr := diff.Parse(raw)
-		return diffLoadedMsg{owner: owner, repo: repo, number: number, seq: seq, head: head, raw: raw, parsed: parsed, parseErr: perr}
+		return diffLoadedMessage{owner: owner, repository: repo, number: number, sequence: seq, head: head, raw: raw, parsed: parsed, parseErr: perr}
 	}
 }
 
 // reloadPR loads the pull request again under the current request sequence;
 // after posting a comment it refreshes just the conversation.
-func (v *View) reloadPR() tea.Cmd { return v.fetchPR(false) }
+func (v *View) reloadPullRequest() tea.Cmd { return v.fetchPullRequest(false) }
 
-func (v *View) fetchPR(thenDiff bool) tea.Cmd {
-	v.prPending = true
+func (v *View) fetchPullRequest(thenDiff bool) tea.Cmd {
+	v.pullRequestPending = true
 	v.ov.invalidate()
-	client, repo, number, seq, owner := v.client, v.repo, v.number, v.seq, v
+	client, repo, number, seq, owner := v.client, v.repository, v.number, v.sequence, v
 	return func() tea.Msg {
 		d, err := client.GetPullRequest(context.Background(), repo, number)
-		return prLoadedMsg{owner: owner, repo: repo, number: number, seq: seq, detail: d, err: err, thenDiff: thenDiff}
+		return pullRequestLoadedMessage{owner: owner, repository: repo, number: number, sequence: seq, detail: d, err: err, thenDiff: thenDiff}
 	}
 }
 
@@ -124,10 +124,10 @@ func (v *View) fetchPR(thenDiff bool) tea.Cmd {
 // sequence; after posting a reply it refreshes just the threads.
 func (v *View) reloadThreads() tea.Cmd {
 	v.thrPending, v.thrErr = true, nil
-	client, repo, number, seq, owner := v.client, v.repo, v.number, v.seq, v
+	client, repo, number, seq, owner := v.client, v.repository, v.number, v.sequence, v
 	return func() tea.Msg {
 		ts, err := loadThreads(context.Background(), client, repo, number)
-		return threadsLoadedMsg{owner: owner, repo: repo, number: number, seq: seq, threads: ts, err: err}
+		return threadsLoadedMessage{owner: owner, repository: repo, number: number, sequence: seq, threads: ts, err: err}
 	}
 }
 
@@ -136,11 +136,11 @@ func (v *View) reloadThreads() tea.Cmd {
 // closed workspace's commands may still be running when a new workspace for
 // the same pull request starts counting its requests from 1 again.
 func (v *View) mine(owner *View, repo github.Repository, number, seq int) bool {
-	return owner == v && repo == v.repo && number == v.number && seq == v.seq
+	return owner == v && repo == v.repository && number == v.number && seq == v.sequence
 }
 
-func (v *View) prLoaded(msg prLoadedMsg) tea.Cmd {
-	v.prPending = false
+func (v *View) pullRequestLoaded(msg pullRequestLoadedMessage) tea.Cmd {
+	v.pullRequestPending = false
 	if msg.err != nil {
 		if v.detail == nil {
 			v.err, v.notFound = msg.err, errors.Is(msg.err, github.ErrNotFound)
@@ -149,7 +149,7 @@ func (v *View) prLoaded(msg prLoadedMsg) tea.Cmd {
 	}
 	prev := v.selectedPath()
 	v.detail, v.err, v.notFound = &msg.detail, nil, false
-	v.reapplyViewed(msg.seq)
+	v.reapplyViewed(msg.sequence)
 	top, sel := v.fw.Top(), 0
 	for i, f := range msg.detail.Files {
 		if prev != "" && f.Path == prev {
@@ -164,7 +164,7 @@ func (v *View) prLoaded(msg prLoadedMsg) tea.Cmd {
 	return nil
 }
 
-func (v *View) threadsLoaded(msg threadsLoadedMsg) tea.Cmd {
+func (v *View) threadsLoaded(msg threadsLoadedMessage) tea.Cmd {
 	v.thrPending = false
 	if msg.err != nil {
 		// Keep whatever threads were shown before; the error goes to the status
@@ -180,18 +180,18 @@ func (v *View) threadsLoaded(msg threadsLoadedMsg) tea.Cmd {
 	return nil
 }
 
-func (v *View) diffLoaded(msg diffLoadedMsg) tea.Cmd {
+func (v *View) diffLoaded(msg diffLoadedMessage) tea.Cmd {
 	v.diffPending = false
 	if msg.err != nil && v.diff.Parsed != nil && !errors.Is(msg.err, github.ErrDiffTooLarge) {
 		v.diff.Loading = false // keep the loaded diff; the error goes to the status bar
 	} else {
-		v.diff = DiffState{Raw: msg.raw, Parsed: msg.parsed, ParseErr: msg.parseErr, Err: msg.err}
+		v.diff = DiffState{Raw: msg.raw, Parsed: msg.parsed, ParseError: msg.parseErr, Err: msg.err}
 		v.diffHead = msg.head
 	}
 	v.filePane.SetDiff(v.diff)
 	if msg.parseErr != nil {
 		// Files that parsed still show; the problem is reported once here.
-		return userinterface.Error(terminaltext.SafeError(fmt.Errorf("%s#%d: %w", v.repo, v.number, msg.parseErr)))
+		return userinterface.Error(terminaltext.SafeError(fmt.Errorf("%s#%d: %w", v.repository, v.number, msg.parseErr)))
 	}
 	// A diff that is merely too large is shown in the diff pane, not as a
 	// transient error.

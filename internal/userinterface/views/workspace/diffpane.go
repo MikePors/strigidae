@@ -18,8 +18,8 @@ const hScrollStep = 4
 // diffBindings are the diff pane's own keys; the movement keys come from
 // keys.Global.
 type diffBindings struct {
-	NextHunk, PrevHunk              key.Binding
-	NextThread, PrevThread          key.Binding
+	NextHunk, PreviousHunk          key.Binding
+	NextThread, PreviousThread      key.Binding
 	ToggleThread                    key.Binding
 	OpenThread, CloseThread         key.Binding
 	ScrollLeft, ScrollRight         key.Binding
@@ -32,9 +32,9 @@ func defaultDiffBindings() diffBindings {
 	}
 	return diffBindings{
 		NextHunk:        b("]", "]", "next hunk"),
-		PrevHunk:        b("[", "[", "previous hunk"),
+		PreviousHunk:    b("[", "[", "previous hunk"),
 		NextThread:      b(")", ")", "next comment thread"),
-		PrevThread:      b("(", "(", "previous comment thread"),
+		PreviousThread:  b("(", "(", "previous comment thread"),
 		ToggleThread:    b("z a", "za", "toggle comment thread (also enter on a marked line)"),
 		OpenThread:      b("z o", "zo", "open comment thread"),
 		CloseThread:     b("z c", "zc", "close comment thread"),
@@ -94,8 +94,8 @@ func (p *diffPane) show() {
 		f := p.state.Parsed.File(p.file.Path)
 		if f == nil {
 			msg := "No diff available for this file."
-			if p.state.ParseErr != nil {
-				msg += "\nThe diff could not be fully parsed: " + p.state.ParseErr.Error()
+			if p.state.ParseError != nil {
+				msg += "\nThe diff could not be fully parsed: " + p.state.ParseError.Error()
 			}
 			p.dv.SetMessage(msg)
 			return
@@ -104,7 +104,7 @@ func (p *diffPane) show() {
 	}
 }
 
-func (p *diffPane) Update(msg keys.Msg) tea.Cmd {
+func (p *diffPane) Update(msg keys.Message) tea.Cmd {
 	dv := p.dv
 	switch {
 	case key.Matches(msg, p.km.Down):
@@ -125,12 +125,12 @@ func (p *diffPane) Update(msg keys.Msg) tea.Cmd {
 		dv.PageUp()
 	case key.Matches(msg, p.bind.NextHunk):
 		dv.NextHunk()
-	case key.Matches(msg, p.bind.PrevHunk):
-		dv.PrevHunk()
+	case key.Matches(msg, p.bind.PreviousHunk):
+		dv.PreviousHunk()
 	case key.Matches(msg, p.bind.NextThread):
 		dv.NextThread()
-	case key.Matches(msg, p.bind.PrevThread):
-		dv.PrevThread()
+	case key.Matches(msg, p.bind.PreviousThread):
+		dv.PreviousThread()
 	case key.Matches(msg, p.bind.ToggleThread), key.Matches(msg, p.km.Select):
 		dv.ToggleThread()
 	case key.Matches(msg, p.bind.OpenThread):
@@ -172,5 +172,5 @@ func (p *diffPane) Render(width, height int) string { return p.dv.Render(width, 
 
 func (p *diffPane) FullHelp() [][]key.Binding {
 	b := p.bind
-	return [][]key.Binding{{b.NextHunk, b.PrevHunk, b.NextThread, b.PrevThread}, {b.ToggleThread, b.OpenThread, b.CloseThread}, {b.ScrollLeft, b.ScrollRight, b.HalfScrollLeft, b.HalfScrollRight}}
+	return [][]key.Binding{{b.NextHunk, b.PreviousHunk, b.NextThread, b.PreviousThread}, {b.ToggleThread, b.OpenThread, b.CloseThread}, {b.ScrollLeft, b.ScrollRight, b.HalfScrollLeft, b.HalfScrollRight}}
 }

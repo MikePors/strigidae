@@ -16,8 +16,8 @@ const fallback = "vi"
 
 // Session is one editing round: a temporary file and the command to edit it.
 type Session struct {
-	cmd  *exec.Cmd
-	path string
+	command *exec.Cmd
+	path    string
 }
 
 // New writes initial to a new temporary .md file and returns a session whose
@@ -34,11 +34,11 @@ func New(initial string, getenv func(string) string) (*Session, error) {
 		_ = os.Remove(path)
 		return nil, fmt.Errorf("write temporary file: %w", err)
 	}
-	return &Session{cmd: Command(path, getenv), path: path}, nil
+	return &Session{command: Command(path, getenv), path: path}, nil
 }
 
 // Cmd is the editor command, ready to run.
-func (s *Session) Cmd() *exec.Cmd { return s.cmd }
+func (s *Session) Command() *exec.Cmd { return s.command }
 
 // Path is the temporary file.
 func (s *Session) Path() string { return s.path }

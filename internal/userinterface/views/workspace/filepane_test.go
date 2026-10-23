@@ -39,7 +39,7 @@ func (p *stubPane) SetFile(f github.ChangedFile) { p.files = append(p.files, f.P
 
 func (p *stubPane) SetSize(w, h int) { p.sizes = append(p.sizes, [2]int{w, h}) }
 
-func (p *stubPane) Update(m keys.Msg) tea.Cmd { p.keys = append(p.keys, m.Seq); return nil }
+func (p *stubPane) Update(m keys.Message) tea.Cmd { p.keys = append(p.keys, m.Sequence); return nil }
 
 func (p *stubPane) Render(int, int) string { return "stub" }
 
@@ -59,11 +59,11 @@ func TestSetFileOnChangedMetadata(t *testing.T) {
 	}
 	d := testDetail()
 	d.Files[0].Additions = 99
-	h.send(prLoadedMsg{owner: h.v, repo: testRepo, number: 7, seq: h.v.seq, detail: d})
+	h.send(pullRequestLoadedMessage{owner: h.v, repository: testRepository, number: 7, sequence: h.v.sequence, detail: d})
 	if len(p.files) != 2 || p.files[1].Additions != 99 || p.files[1].Path != p.files[0].Path {
 		t.Errorf("pane did not get the new metadata: %+v", p.files)
 	}
-	h.send(prLoadedMsg{owner: h.v, repo: testRepo, number: 7, seq: h.v.seq, detail: d})
+	h.send(pullRequestLoadedMessage{owner: h.v, repository: testRepository, number: 7, sequence: h.v.sequence, detail: d})
 	if len(p.files) != 2 {
 		t.Errorf("unchanged file repeated: %+v", p.files)
 	}
@@ -79,9 +79,9 @@ func (p *recordPane) SetFile(f github.ChangedFile) { p.files = append(p.files, f
 func TestFilePaneContractThroughRoot(t *testing.T) {
 	c := fake.New()
 	c.SetPullRequest(testDetail())
-	c.SetDiff(testRepo, 7, readDiff(t))
+	c.SetDiff(testRepository, 7, readDiff(t))
 	p := &stubPane{}
-	v := New(c, testRepo, 7, WithTheme(theme.New(true)), WithFilePane(p))
+	v := New(c, testRepository, 7, WithTheme(theme.New(true)), WithFilePane(p))
 	noTick := func(time.Duration, func(time.Time) tea.Msg) tea.Cmd { return nil }
 	m := userinterface.New(v, theme.New(true), userinterface.Options{Tick: noTick})
 	h := &harness{t: t, v: v, client: c}

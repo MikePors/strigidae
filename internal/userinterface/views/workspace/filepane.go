@@ -22,7 +22,7 @@ type DiffState struct {
 	Parsed *diff.Diff
 	// ParseErr is why Raw could not be parsed completely. The workspace reports
 	// it once on the status bar; Parsed is still usable.
-	ParseErr error
+	ParseError error
 	// Err is why the diff could not be loaded at all, for example
 	// github.ErrDiffTooLarge. Raw and Parsed are empty then. A failed refresh
 	// does not set it: the previous diff is kept instead.
@@ -94,7 +94,7 @@ type FilePane interface {
 	// VisualEnd leaves the line selection.
 	VisualEnd()
 	// Update handles a key while the right pane has focus.
-	Update(msg keys.Msg) tea.Cmd
+	Update(msg keys.Message) tea.Cmd
 	// Render draws the pane in exactly width columns and at most height rows.
 	Render(width, height int) string
 	// FullHelp lists the pane's bindings for the help overlay and sequence matching.

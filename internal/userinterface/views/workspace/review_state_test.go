@@ -28,7 +28,7 @@ func feed(v *View, msgs []tea.Msg) {
 func TestReviewDiffRefreshFailedMeansHeadMoved(t *testing.T) {
 	c := newReviewer(t)
 	c.body = "ok"
-	c.client.SetHeadSHA(testRepo, 7, "bbbb2222")
+	c.client.SetHeadSHA(testRepository, 7, "bbbb2222")
 	c.client.SetError(fake.MethodGetDiff, errors.New("transient"))
 	c.press("R")
 	if c.v.detail.HeadSHA != "bbbb2222" || c.v.diffHead != headSHA {
@@ -48,11 +48,11 @@ func TestReviewRefusedWhileDiffLoads(t *testing.T) {
 	c := newReviewer(t)
 	c.v.diffPending = true
 	for _, f := range []func() tea.Cmd{
-		func() tea.Cmd { return c.v.review.start(c.v.reviewEnv(), github.ReviewEventApprove) },
-		func() tea.Cmd { return c.v.review.openChooser(c.v.reviewEnv()) },
+		func() tea.Cmd { return c.v.review.start(c.v.reviewEnvironment(), github.ReviewEventApprove) },
+		func() tea.Cmd { return c.v.review.openChooser(c.v.reviewEnvironment()) },
 	} {
 		msgs := messages(f())
-		if len(msgs) != 1 || msgs[0] != tea.Msg(userinterface.InfoMsg{Text: "diff not loaded"}) {
+		if len(msgs) != 1 || msgs[0] != tea.Msg(userinterface.InfoMessage{Text: "diff not loaded"}) {
 			t.Errorf("msgs = %#v", msgs)
 		}
 	}
@@ -82,12 +82,12 @@ func TestReviewSecondSubmitWhileInFlight(t *testing.T) {
 		t.Error("not loading while submitting")
 	}
 	calls := len(c.client.Calls())
-	got := messages(c.v.review.start(c.v.reviewEnv(), github.ReviewEventApprove))
-	if len(got) != 1 || got[0] != tea.Msg(userinterface.InfoMsg{Text: "a review is being submitted"}) {
+	got := messages(c.v.review.start(c.v.reviewEnvironment(), github.ReviewEventApprove))
+	if len(got) != 1 || got[0] != tea.Msg(userinterface.InfoMessage{Text: "a review is being submitted"}) {
 		t.Errorf("second start: %#v", got)
 	}
-	got = messages(c.v.review.openChooser(c.v.reviewEnv()))
-	if len(got) != 1 || got[0] != tea.Msg(userinterface.InfoMsg{Text: "a review is being submitted"}) {
+	got = messages(c.v.review.openChooser(c.v.reviewEnvironment()))
+	if len(got) != 1 || got[0] != tea.Msg(userinterface.InfoMessage{Text: "a review is being submitted"}) {
 		t.Errorf("chooser: %#v", got)
 	}
 	if len(c.client.Calls()) != calls || len(c.openedOn) != 1 {

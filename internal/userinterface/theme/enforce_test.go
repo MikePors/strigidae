@@ -170,7 +170,7 @@ func foldStrings(e ast.Expr) (string, bool) {
 func TestEnforcementRules(t *testing.T) {
 	const imports = `import ("charm.land/lipgloss/v2"; "image/color"; "github.com/charmbracelet/x/ansi")` + "\n"
 	tests := []struct {
-		name, rel, body, want string // want is a substring of a violation; "" means clean
+		name, relative, body, want string // want is a substring of a violation; "" means clean
 	}{
 		{"hex6 in a view", "views/x/x.go", `var c = "#ff8787"`, "hex colour"},
 		{"hex3 in a view", "views/x/x.go", `var c = "#f00"`, "hex colour"},
@@ -207,7 +207,7 @@ func TestEnforcementRules(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := violations(tc.rel, "package p\n"+imports+tc.body+"\n")
+			got, err := violations(tc.relative, "package p\n"+imports+tc.body+"\n")
 			if err != nil {
 				t.Fatal(err)
 			}

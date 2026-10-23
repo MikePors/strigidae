@@ -26,7 +26,7 @@ type position struct {
 }
 
 func (m *Model) capture() position {
-	p := position{path: m.file.Path(), xoff: m.win.XOffset()}
+	p := position{path: m.file.Path(), xoff: m.win.HorizontalOffset()}
 	if len(m.rows) == 0 {
 		return p
 	}
@@ -41,7 +41,7 @@ func (m *Model) capture() position {
 	if r := m.rows[i]; r.line != nil && r.line.Kind == diff.NoNewline && i > 0 {
 		i-- // markers have no numbers; anchor to the line they belong to
 	}
-	if r := m.rows[i]; r.tr != nil || r.msg {
+	if r := m.rows[i]; r.tr != nil || r.message {
 		return p // no diff row to anchor to
 	}
 	p.a = m.anchorAt(i)
@@ -98,7 +98,7 @@ func (m *Model) find(a anchor) int {
 		var dist int
 		switch {
 		case a.header:
-			if r.line != nil || r.tr != nil || r.msg {
+			if r.line != nil || r.tr != nil || r.message {
 				continue
 			}
 			h := m.file.Hunks[r.hunk]

@@ -9,12 +9,12 @@ import (
 
 // ParseError describes the first malformed spot Parse found.
 type ParseError struct {
-	Line int // 1-based line number in the input
-	Msg  string
+	Line    int // 1-based line number in the input
+	Message string
 }
 
 func (err *ParseError) Error() string {
-	return fmt.Sprintf("parse diff: line %d: %s", err.Line, err.Msg)
+	return fmt.Sprintf("parse diff: line %d: %s", err.Line, err.Message)
 }
 
 var hunkRegex = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@ ?(.*)$`)
@@ -35,7 +35,7 @@ func Parse(text string) (*Diff, error) {
 		parsed.fail(n, "truncated hunk")
 	}
 	if len(parsed.d.Files) == 0 && parsed.sawText && parsed.err == nil {
-		parsed.err = &ParseError{Line: 1, Msg: "no diff found"}
+		parsed.err = &ParseError{Line: 1, Message: "no diff found"}
 	}
 	return parsed.d, parsed.err
 }
@@ -55,7 +55,7 @@ type parser struct {
 
 func (parsed *parser) fail(n int, message string) {
 	if parsed.err == nil {
-		parsed.err = &ParseError{Line: n, Msg: message}
+		parsed.err = &ParseError{Line: n, Message: message}
 	}
 }
 

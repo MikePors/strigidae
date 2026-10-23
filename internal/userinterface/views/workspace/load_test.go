@@ -100,24 +100,24 @@ func TestStaleResultsIgnored(t *testing.T) {
 	h := loaded(t, 100, 30)
 	other := testDetail()
 	other.Title = "stale"
-	cur := h.v.seq
-	for name, msg := range map[string]prLoadedMsg{
-		"old seq":      {owner: h.v, repo: testRepo, number: 7, seq: cur - 1, detail: other},
-		"other number": {owner: h.v, repo: testRepo, number: 8, seq: cur, detail: other},
-		"other repo":   {owner: h.v, repo: github.Repository{Owner: "x", Name: "y"}, number: 7, seq: cur, detail: other},
+	cur := h.v.sequence
+	for name, msg := range map[string]pullRequestLoadedMessage{
+		"old seq":      {owner: h.v, repository: testRepository, number: 7, sequence: cur - 1, detail: other},
+		"other number": {owner: h.v, repository: testRepository, number: 8, sequence: cur, detail: other},
+		"other repo":   {owner: h.v, repository: github.Repository{Owner: "x", Name: "y"}, number: 7, sequence: cur, detail: other},
 	} {
 		h.send(msg)
 		if h.v.detail.Title == "stale" {
 			t.Errorf("%s: stale result applied", name)
 		}
 	}
-	h.send(diffLoadedMsg{owner: h.v, repo: testRepo, number: 7, seq: cur - 1, raw: "stale"})
+	h.send(diffLoadedMessage{owner: h.v, repository: testRepository, number: 7, sequence: cur - 1, raw: "stale"})
 	if h.v.diff.Raw == "stale" {
 		t.Error("stale diff applied")
 	}
 	h.press("R")
-	prev := h.v.seq - 1
-	h.send(prLoadedMsg{owner: h.v, repo: testRepo, number: 7, seq: prev, detail: other})
+	prev := h.v.sequence - 1
+	h.send(pullRequestLoadedMessage{owner: h.v, repository: testRepository, number: 7, sequence: prev, detail: other})
 	if h.v.detail.Title == "stale" {
 		t.Error("result of a superseded request applied")
 	}
@@ -150,16 +150,16 @@ func TestReopenedWorkspaceIgnoresOldResults(t *testing.T) {
 	old := testDetail()
 	old.Title = "old snapshot"
 	c.SetPullRequest(old)
-	c.SetDiff(testRepo, 7, readDiff(t))
+	c.SetDiff(testRepository, 7, readDiff(t))
 	opts := []Option{WithClock(func() time.Time { return testNow }), WithTheme(theme.New(true))}
 
-	first := New(c, testRepo, 7, opts...)
+	first := New(c, testRepository, 7, opts...)
 	oldResults := messages(first.Init()) // still "in flight" when it is closed
 
 	fresh := testDetail()
 	fresh.Title = "fresh data"
 	c.SetPullRequest(fresh)
-	second := New(c, testRepo, 7, opts...)
+	second := New(c, testRepository, 7, opts...)
 	newResults := messages(second.Init())
 
 	for _, m := range oldResults {
@@ -193,7 +193,7 @@ func malformedDiff(t *testing.T) string {
 
 func TestPartialDiffStillShowsParsedFiles(t *testing.T) {
 	h := newHarness(t, 100, 24)
-	h.client.SetDiff(testRepo, 7, malformedDiff(t))
+	h.client.SetDiff(testRepository, 7, malformedDiff(t))
 	h.run(h.v.Init())
 
 	h.press("}") // client.go parsed fine
@@ -211,8 +211,8 @@ func TestPartialDiffStillShowsParsedFiles(t *testing.T) {
 	}
 
 	var errs []string
-	for _, m := range h.msgs {
-		if e, ok := m.(userinterface.ErrorMsg); ok {
+	for _, m := range h.messages {
+		if e, ok := m.(userinterface.ErrorMessage); ok {
 			errs = append(errs, e.Err.Error())
 		}
 	}

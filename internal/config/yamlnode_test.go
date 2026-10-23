@@ -27,7 +27,7 @@ func errText(p *parser) string {
 func TestParserInt(t *testing.T) {
 	tests := []struct {
 		name    string
-		src     string
+		source  string
 		want    int
 		wantErr string
 	}{
@@ -44,7 +44,7 @@ func TestParserInt(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := &parser{path: "c.yml"}
-			got := p.int(node(t, tt.src), "n", 1, 100)
+			got := p.int(node(t, tt.source), "n", 1, 100)
 			if got != tt.want {
 				t.Errorf("value = %d, want %d", got, tt.want)
 			}
@@ -59,7 +59,7 @@ func TestParserOneOf(t *testing.T) {
 	allowed := []string{"asc", "desc"}
 	tests := []struct {
 		name    string
-		src     string
+		source  string
 		want    string
 		wantErr string
 	}{
@@ -71,7 +71,7 @@ func TestParserOneOf(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := &parser{path: "c.yml"}
-			got := p.oneOf(node(t, tt.src), "order", allowed)
+			got := p.oneOf(node(t, tt.source), "order", allowed)
 			if got != tt.want {
 				t.Errorf("value = %q, want %q", got, tt.want)
 			}
@@ -91,7 +91,7 @@ func TestUniqueList(t *testing.T) {
 	}
 	tests := []struct {
 		name    string
-		src     string
+		source  string
 		want    []string
 		wantErr string
 	}{
@@ -104,7 +104,7 @@ func TestUniqueList(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := &parser{path: "c.yml"}
-			got := uniqueList(p, node(t, tt.src), "things", read(p), "duplicate thing %q")
+			got := uniqueList(p, node(t, tt.source), "things", read(p), "duplicate thing %q")
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("items (-want +got):\n%s", diff)
 			}

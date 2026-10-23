@@ -48,7 +48,7 @@ func testThreads() []github.ReviewThread {
 func threadHarness(t *testing.T, w, h int) *harness {
 	t.Helper()
 	hs := newHarness(t, w, h)
-	hs.client.SetReviewThreads(testRepo, 7, testThreads())
+	hs.client.SetReviewThreads(testRepository, 7, testThreads())
 	hs.run(hs.v.Init())
 	return hs
 }
@@ -74,7 +74,7 @@ func TestThreadsPagedLoad(t *testing.T) {
 	for i := range 75 {
 		many = append(many, github.ReviewThread{Identifier: fmt.Sprintf("t%02d", i), Path: "README.md", Line: i + 1, Comments: []github.ReviewComment{tc("x", "y", time.Hour)}})
 	}
-	h.client.SetReviewThreads(testRepo, 7, many)
+	h.client.SetReviewThreads(testRepository, 7, many)
 	h.run(h.v.Init())
 	if len(h.v.threads) != 75 {
 		t.Errorf("loaded %d threads, want all 75", len(h.v.threads))
@@ -118,7 +118,7 @@ func TestThreadErrorKeepsPullRequestUsable(t *testing.T) {
 	}
 	// A later good refresh brings them in; a failing refresh keeps them.
 	h.client.SetError(fake.MethodListReviewThreads, nil)
-	h.client.SetReviewThreads(testRepo, 7, testThreads())
+	h.client.SetReviewThreads(testRepository, 7, testThreads())
 	h.press("R")
 	if len(h.v.threads) != 4 {
 		t.Fatalf("threads after refresh = %d", len(h.v.threads))
@@ -132,12 +132,12 @@ func TestThreadErrorKeepsPullRequestUsable(t *testing.T) {
 
 func TestStaleThreadsIgnored(t *testing.T) {
 	h := loaded(t, 100, 30)
-	cur := h.v.seq
+	cur := h.v.sequence
 	stale := []github.ReviewThread{{Identifier: "stale", Path: "x"}}
-	for name, msg := range map[string]threadsLoadedMsg{
-		"old seq":      {owner: h.v, repo: testRepo, number: 7, seq: cur - 1, threads: stale},
-		"other number": {owner: h.v, repo: testRepo, number: 8, seq: cur, threads: stale},
-		"other view":   {owner: nil, repo: testRepo, number: 7, seq: cur, threads: stale},
+	for name, msg := range map[string]threadsLoadedMessage{
+		"old seq":      {owner: h.v, repository: testRepository, number: 7, sequence: cur - 1, threads: stale},
+		"other number": {owner: h.v, repository: testRepository, number: 8, sequence: cur, threads: stale},
+		"other view":   {owner: nil, repository: testRepository, number: 7, sequence: cur, threads: stale},
 	} {
 		h.send(msg)
 		if len(h.v.threads) != 0 {
@@ -287,7 +287,7 @@ func overviewThreadsText(h *harness) string {
 func TestOverviewThreadsLoadingState(t *testing.T) {
 	h := newHarness(t, 100, 40)
 	for _, m := range messages(h.v.Init()) {
-		if _, ok := m.(threadsLoadedMsg); !ok { // the thread load is still in flight
+		if _, ok := m.(threadsLoadedMessage); !ok { // the thread load is still in flight
 			h.send(m)
 		}
 	}

@@ -25,9 +25,9 @@ func runTUI(a app, stderr io.Writer) error {
 	defer closeLog()
 	logging.Install(logger)
 	silenceBrowser()
-	logger.Info("starting", "version", version.String(), "repo", a.repo.String())
+	logger.Info("starting", "version", version.String(), "repo", a.repository.String())
 
-	model := userinterface.New(pullrequestlist.New(a.client, a.repo, a.theme, pullrequestlist.Options{}), a.theme, userinterface.Options{Logger: logger})
+	model := userinterface.New(pullrequestlist.New(a.client, a.repository, a.theme, pullrequestlist.Options{}), a.theme, userinterface.Options{Logger: logger})
 	if _, err := tea.NewProgram(model).Run(); err != nil {
 		logger.Error("program failed", "err", err)
 		return fmt.Errorf("run: %w", err)

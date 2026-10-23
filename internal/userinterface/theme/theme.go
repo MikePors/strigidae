@@ -43,10 +43,10 @@ type Theme struct {
 	HeadingMarker lipgloss.Style // the "#" marks before Markdown headings
 
 	// Help overlay.
-	HelpTitle   lipgloss.Style
-	HelpSection lipgloss.Style
-	HelpKey     lipgloss.Style
-	HelpDesc    lipgloss.Style
+	HelpTitle       lipgloss.Style
+	HelpSection     lipgloss.Style
+	HelpKey         lipgloss.Style
+	HelpDescription lipgloss.Style
 
 	// General content.
 	Title    lipgloss.Style // screen headings
@@ -58,7 +58,7 @@ type Theme struct {
 	IsDark bool
 	// ID fingerprints the final roles and the variant, so any change to a
 	// role, including an override, changes it. Renderer caches include it.
-	ID string
+	Identifier string
 	// Roles are the colours the styles were built from. Renderers with their
 	// own style systems (Markdown) read them; views use the named styles.
 	Roles Roles
@@ -102,7 +102,7 @@ type Theme struct {
 	ThreadBar        lipgloss.Style // left bar of a thread's comment lines
 	// --- end diff pane ---
 
-	PRList PRListStyles // pull request tables
+	PullRequestList PullRequestListStyles // pull request tables
 }
 
 // Default returns the default theme for a dark terminal background.
@@ -145,18 +145,18 @@ func newTheme(p Palette, r Roles) Theme {
 
 		HeadingMarker: fg(r.Muted),
 
-		HelpTitle:   bold(r.Accent),
-		HelpSection: lipgloss.NewStyle().Bold(true).Underline(true),
-		HelpKey:     fg(r.Warning),
-		HelpDesc:    lipgloss.NewStyle(),
+		HelpTitle:       bold(r.Accent),
+		HelpSection:     lipgloss.NewStyle().Bold(true).Underline(true),
+		HelpKey:         fg(r.Warning),
+		HelpDescription: lipgloss.NewStyle(),
 
-		Title:    bold(r.Accent),
-		Normal:   lipgloss.NewStyle(),
-		Muted:    fg(r.Muted),
-		Selected: bold(r.AccentStrong),
-		IsDark:   p.Variant == Dark,
-		ID:       r.fingerprint(p.Variant, ""),
-		Roles:    r,
+		Title:      bold(r.Accent),
+		Normal:     lipgloss.NewStyle(),
+		Muted:      fg(r.Muted),
+		Selected:   bold(r.AccentStrong),
+		IsDark:     p.Variant == Dark,
+		Identifier: r.fingerprint(p.Variant, ""),
+		Roles:      r,
 
 		// --- PR workspace ---
 		PaneBorder:       fg(r.Muted),
@@ -197,6 +197,6 @@ func newTheme(p Palette, r Roles) Theme {
 		ThreadBar:        fg(r.Info),
 		// --- end diff pane ---
 
-		PRList: newPRListStyles(r),
+		PullRequestList: newPullRequestListStyles(r),
 	}
 }

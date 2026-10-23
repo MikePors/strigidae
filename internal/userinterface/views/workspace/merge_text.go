@@ -9,7 +9,7 @@ import (
 )
 
 // methodArgs maps the :merge argument to a method; "" is the default.
-var methodArgs = map[string]github.MergeMethod{
+var methodArguments = map[string]github.MergeMethod{
 	"merge":  github.MergeMethodMerge,
 	"squash": github.MergeMethodSquash,
 	"rebase": github.MergeMethodRebase,
@@ -30,12 +30,12 @@ var methodPlurals = map[github.MergeMethod]string{
 }
 
 // parseMergeArgs returns the requested method, or "" for the default.
-func parseMergeArgs(args string) (github.MergeMethod, error) {
+func parseMergeArguments(args string) (github.MergeMethod, error) {
 	args = strings.TrimSpace(args)
 	if args == "" {
 		return "", nil
 	}
-	if m, ok := methodArgs[args]; ok {
+	if m, ok := methodArguments[args]; ok {
 		return m, nil
 	}
 	return "", fmt.Errorf("unknown merge method %q (use merge, squash or rebase)", terminaltext.Clean(args))

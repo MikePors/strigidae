@@ -27,15 +27,15 @@ var sortNames = []string{
 	string(SortReactions), string(SortInteractions),
 }
 
-var orderNames = []string{string(OrderAsc), string(OrderDesc)}
+var orderNames = []string{string(OrderAscending), string(OrderDescending)}
 
 // Order is the sort direction.
 type Order string
 
 // Supported orders.
 const (
-	OrderDesc Order = "desc"
-	OrderAsc  Order = "asc"
+	OrderDescending Order = "desc"
+	OrderAscending  Order = "asc"
 )
 
 // defaultSections are the sections every tab gets unless it lists its own.
@@ -68,7 +68,7 @@ func (t *Tab) resolve() {
 			s.Sort = SortUpdated
 		}
 		if s.Order == "" {
-			s.Order = OrderDesc
+			s.Order = OrderDescending
 		}
 	}
 }

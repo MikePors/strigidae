@@ -21,18 +21,18 @@ import (
 // messages carry the flow's own pointer as their identity.
 type reviewFlow struct {
 	chooser    *picker.Model // non-nil while the verdict chooser is open
-	seq        int           // latest review request; older results are stale
+	sequence   int           // latest review request; older results are stale
 	draft      string        // unsent summary, kept until a review is submitted
 	submitting bool          // a submission is in flight
 }
 
 // reviewEnv is what the flow needs from the workspace at one moment.
-type reviewEnv struct {
+type reviewEnvironment struct {
 	client      github.Client
-	repo        github.Repository
+	repository  github.Repository
 	number      int
 	theme       theme.Theme
-	edit        EditFunc
+	edit        EditFunction
 	reload      func() tea.Cmd // reloads the workspace
 	loaded      bool           // the pull request detail has loaded
 	diffHead    string         // head SHA the diff on screen was loaded for
@@ -47,64 +47,64 @@ type reviewEnv struct {
 // flow's sequence, so starting another review makes older results stale.
 type (
 	// reviewPendingMsg is the pending review fetched to pre-fill the editor.
-	reviewPendingMsg struct {
-		flow    *reviewFlow
-		repo    github.Repository
-		number  int
-		seq     int
-		event   github.ReviewEvent
-		pending *github.PendingReview
-		err     error
+	reviewPendingMessage struct {
+		flow       *reviewFlow
+		repository github.Repository
+		number     int
+		sequence   int
+		event      github.ReviewEvent
+		pending    *github.PendingReview
+		err        error
 	}
-	reviewEditedMsg struct {
-		flow   *reviewFlow
-		repo   github.Repository
-		number int
-		seq    int
-		event  github.ReviewEvent
-		body   string
-		err    error
+	reviewEditedMessage struct {
+		flow       *reviewFlow
+		repository github.Repository
+		number     int
+		sequence   int
+		event      github.ReviewEvent
+		body       string
+		err        error
 	}
 	// reviewFreshMsg is the status fetched just before confirming.
-	reviewFreshMsg struct {
-		flow   *reviewFlow
-		repo   github.Repository
-		number int
-		seq    int
-		event  github.ReviewEvent
-		body   string // the edited summary
-		status github.ReviewStatus
-		err    error
+	reviewFreshMessage struct {
+		flow       *reviewFlow
+		repository github.Repository
+		number     int
+		sequence   int
+		event      github.ReviewEvent
+		body       string // the edited summary
+		status     github.ReviewStatus
+		err        error
 	}
 	// reviewSendMsg is what the confirmation's "yes" produces; handling it
 	// marks the submission as in flight before the call starts.
-	reviewSendMsg struct {
-		flow   *reviewFlow
-		repo   github.Repository
-		number int
-		event  github.ReviewEvent
-		body   string
-		status github.ReviewStatus
+	reviewSendMessage struct {
+		flow       *reviewFlow
+		repository github.Repository
+		number     int
+		event      github.ReviewEvent
+		body       string
+		status     github.ReviewStatus
 	}
-	reviewSubmittedMsg struct {
-		flow   *reviewFlow
-		repo   github.Repository
-		number int
-		event  github.ReviewEvent
-		body   string
-		err    error
+	reviewSubmittedMessage struct {
+		flow       *reviewFlow
+		repository github.Repository
+		number     int
+		event      github.ReviewEvent
+		body       string
+		err        error
 	}
 	// refreshMsg asks the workspace to reload after its head moved.
-	refreshMsg struct {
-		flow   *reviewFlow
-		repo   github.Repository
-		number int
+	refreshMessage struct {
+		flow       *reviewFlow
+		repository github.Repository
+		number     int
 	}
 )
 
-func (v *View) reviewEnv() reviewEnv {
-	return reviewEnv{
-		client: v.client, repo: v.repo, number: v.number, theme: v.th,
+func (v *View) reviewEnvironment() reviewEnvironment {
+	return reviewEnvironment{
+		client: v.client, repository: v.repository, number: v.number, theme: v.th,
 		edit: v.edit, reload: v.load,
 		loaded:      v.detail != nil,
 		diffHead:    v.diffHead,
@@ -122,16 +122,16 @@ func (v *View) Command(name, args string) (tea.Cmd, bool) {
 	case "copy-filename":
 		return v.copyFilename(), true
 	case "merge":
-		return v.merge.command(args, v.reviewEnv()), true
+		return v.merge.command(args, v.reviewEnvironment()), true
 	case "edit-comment":
 		return v.editComment(), true
 	case "delete-comment":
 		return v.deleteComment(), true
 	}
-	return v.review.command(name, v.reviewEnv())
+	return v.review.command(name, v.reviewEnvironment())
 }
 
-func (f *reviewFlow) command(name string, env reviewEnv) (tea.Cmd, bool) {
+func (f *reviewFlow) command(name string, env reviewEnvironment) (tea.Cmd, bool) {
 	switch name {
 	case "approve":
 		return f.start(env, github.ReviewEventApprove), true
@@ -144,34 +144,34 @@ func (f *reviewFlow) command(name string, env reviewEnv) (tea.Cmd, bool) {
 }
 
 // mine reports whether a result belongs to this flow's latest attempt.
-func (f *reviewFlow) mine(env reviewEnv, flow *reviewFlow, repo github.Repository, number, seq int) bool {
-	return f.same(env, flow, repo, number) && seq == f.seq
+func (f *reviewFlow) mine(env reviewEnvironment, flow *reviewFlow, repo github.Repository, number, seq int) bool {
+	return f.same(env, flow, repo, number) && seq == f.sequence
 }
 
-func (f *reviewFlow) same(env reviewEnv, flow *reviewFlow, repo github.Repository, number int) bool {
-	return flow == f && repo == env.repo && number == env.number
+func (f *reviewFlow) same(env reviewEnvironment, flow *reviewFlow, repo github.Repository, number int) bool {
+	return flow == f && repo == env.repository && number == env.number
 }
 
 // update handles the flow's messages. handled is false for any other message.
-func (f *reviewFlow) update(msg tea.Msg, env reviewEnv) (cmd tea.Cmd, handled bool) {
+func (f *reviewFlow) update(msg tea.Msg, env reviewEnvironment) (cmd tea.Cmd, handled bool) {
 	switch msg := msg.(type) {
-	case reviewPendingMsg:
-		if !f.mine(env, msg.flow, msg.repo, msg.number, msg.seq) {
+	case reviewPendingMessage:
+		if !f.mine(env, msg.flow, msg.repository, msg.number, msg.sequence) {
 			return nil, true
 		}
 		return f.pendingFetched(msg, env), true
-	case reviewEditedMsg:
-		if !f.mine(env, msg.flow, msg.repo, msg.number, msg.seq) {
+	case reviewEditedMessage:
+		if !f.mine(env, msg.flow, msg.repository, msg.number, msg.sequence) {
 			return nil, true
 		}
 		return f.edited(msg, env), true
-	case reviewFreshMsg:
-		if !f.mine(env, msg.flow, msg.repo, msg.number, msg.seq) {
+	case reviewFreshMessage:
+		if !f.mine(env, msg.flow, msg.repository, msg.number, msg.sequence) {
 			return nil, true
 		}
 		return f.confirm(msg, env), true
-	case reviewSendMsg:
-		if !f.same(env, msg.flow, msg.repo, msg.number) {
+	case reviewSendMessage:
+		if !f.same(env, msg.flow, msg.repository, msg.number) {
 			return nil, true
 		}
 		if env.commentWriting { // a comment write started since the review did
@@ -179,13 +179,13 @@ func (f *reviewFlow) update(msg tea.Msg, env reviewEnv) (cmd tea.Cmd, handled bo
 		}
 		f.submitting = true
 		return tea.Batch(userinterface.Info("Submitting review…"), f.submit(env, msg.event, msg.body, msg.status)), true
-	case reviewSubmittedMsg:
-		if !f.same(env, msg.flow, msg.repo, msg.number) {
+	case reviewSubmittedMessage:
+		if !f.same(env, msg.flow, msg.repository, msg.number) {
 			return nil, true
 		}
 		return f.submitted(msg, env), true
-	case refreshMsg:
-		if !f.same(env, msg.flow, msg.repo, msg.number) {
+	case refreshMessage:
+		if !f.same(env, msg.flow, msg.repository, msg.number) {
 			return nil, true
 		}
 		return env.reload(), true
@@ -195,7 +195,7 @@ func (f *reviewFlow) update(msg tea.Msg, env reviewEnv) (cmd tea.Cmd, handled bo
 
 // blocked says why a review cannot start now, or returns nil. The diff must
 // be on screen: the review's commit is the one the diff shows.
-func (f *reviewFlow) blocked(env reviewEnv) tea.Cmd {
+func (f *reviewFlow) blocked(env reviewEnvironment) tea.Cmd {
 	switch {
 	case f.submitting:
 		return userinterface.Info("a review is being submitted")
@@ -210,7 +210,7 @@ func (f *reviewFlow) blocked(env reviewEnv) tea.Cmd {
 }
 
 // openChooser shows the verdict chooser.
-func (f *reviewFlow) openChooser(env reviewEnv) tea.Cmd {
+func (f *reviewFlow) openChooser(env reviewEnvironment) tea.Cmd {
 	if blocked := f.blocked(env); blocked != nil {
 		return blocked
 	}
@@ -223,7 +223,7 @@ func (f *reviewFlow) openChooser(env reviewEnv) tea.Cmd {
 }
 
 // chooserKey feeds a raw key to the open chooser.
-func (f *reviewFlow) chooserKey(msg tea.KeyPressMsg, env reviewEnv) tea.Cmd {
+func (f *reviewFlow) chooserKey(msg tea.KeyPressMsg, env reviewEnvironment) tea.Cmd {
 	res := f.chooser.Update(msg)
 	switch res.Outcome {
 	case picker.Cancelled:
@@ -238,21 +238,21 @@ func (f *reviewFlow) chooserKey(msg tea.KeyPressMsg, env reviewEnv) tea.Cmd {
 
 // start fetches the pending review (whose body pre-fills the editor); the
 // editor opens when it arrives.
-func (f *reviewFlow) start(env reviewEnv, event github.ReviewEvent) tea.Cmd {
+func (f *reviewFlow) start(env reviewEnvironment, event github.ReviewEvent) tea.Cmd {
 	if blocked := f.blocked(env); blocked != nil {
 		return blocked
 	}
-	f.seq++
-	flow, seq := f, f.seq
+	f.sequence++
+	flow, seq := f, f.sequence
 	return func() tea.Msg {
-		st, err := env.client.GetReviewStatus(context.Background(), env.repo, env.number)
-		return reviewPendingMsg{flow: flow, repo: env.repo, number: env.number, seq: seq, event: event, pending: st.Pending, err: err}
+		st, err := env.client.GetReviewStatus(context.Background(), env.repository, env.number)
+		return reviewPendingMessage{flow: flow, repository: env.repository, number: env.number, sequence: seq, event: event, pending: st.Pending, err: err}
 	}
 }
 
 // pendingFetched opens the editor on the saved draft, or the pending
 // review's body.
-func (f *reviewFlow) pendingFetched(msg reviewPendingMsg, env reviewEnv) tea.Cmd {
+func (f *reviewFlow) pendingFetched(msg reviewPendingMessage, env reviewEnvironment) tea.Cmd {
 	if msg.err != nil {
 		return userinterface.Error(terminaltext.SafeError(fmt.Errorf("check review state: %w", msg.err)))
 	}
@@ -260,16 +260,16 @@ func (f *reviewFlow) pendingFetched(msg reviewPendingMsg, env reviewEnv) tea.Cmd
 	if initial == "" && msg.pending != nil {
 		initial = msg.pending.Body
 	}
-	flow, seq, event := f, f.seq, msg.event
+	flow, seq, event := f, f.sequence, msg.event
 	return env.edit(initial, func(body string, err error) tea.Msg {
-		return reviewEditedMsg{flow: flow, repo: env.repo, number: env.number, seq: seq, event: event, body: body, err: err}
+		return reviewEditedMessage{flow: flow, repository: env.repository, number: env.number, sequence: seq, event: event, body: body, err: err}
 	})
 }
 
 // edited keeps a non-empty body as the draft, then re-queries the state to
 // confirm against. An empty body never overwrites an earlier draft, and is
 // not stored: it is only sent where that is allowed.
-func (f *reviewFlow) edited(msg reviewEditedMsg, env reviewEnv) tea.Cmd {
+func (f *reviewFlow) edited(msg reviewEditedMessage, env reviewEnvironment) tea.Cmd {
 	body := strings.TrimRight(msg.body, " \t\r\n")
 	if body != "" {
 		f.draft = body
@@ -277,15 +277,15 @@ func (f *reviewFlow) edited(msg reviewEditedMsg, env reviewEnv) tea.Cmd {
 	if msg.err != nil {
 		return userinterface.Error(terminaltext.SafeError(fmt.Errorf("edit review: %w", msg.err)))
 	}
-	flow, seq, event := f, f.seq, msg.event
+	flow, seq, event := f, f.sequence, msg.event
 	return func() tea.Msg {
-		st, err := env.client.GetReviewStatus(context.Background(), env.repo, env.number)
-		return reviewFreshMsg{flow: flow, repo: env.repo, number: env.number, seq: seq, event: event, body: body, status: st, err: err}
+		st, err := env.client.GetReviewStatus(context.Background(), env.repository, env.number)
+		return reviewFreshMessage{flow: flow, repository: env.repository, number: env.number, sequence: seq, event: event, body: body, status: st, err: err}
 	}
 }
 
 // confirm applies the checks that need fresh state, then asks.
-func (f *reviewFlow) confirm(msg reviewFreshMsg, env reviewEnv) tea.Cmd {
+func (f *reviewFlow) confirm(msg reviewFreshMessage, env reviewEnvironment) tea.Cmd {
 	if msg.err != nil {
 		return userinterface.Error(terminaltext.SafeError(fmt.Errorf("check review state: %w", msg.err)))
 	}
@@ -294,9 +294,9 @@ func (f *reviewFlow) confirm(msg reviewFreshMsg, env reviewEnv) tea.Cmd {
 	// not the head now (or the diff is not settled), the user must refresh.
 	flow := f
 	if env.diffPending || st.HeadSHA != env.diffHead {
-		refresh := func() tea.Msg { return refreshMsg{flow: flow, repo: env.repo, number: env.number} }
+		refresh := func() tea.Msg { return refreshMessage{flow: flow, repository: env.repository, number: env.number} }
 		return func() tea.Msg {
-			return userinterface.ConfirmMsg{Text: headMovedText, Notice: true, OnDismiss: refresh}
+			return userinterface.ConfirmMessage{Text: headMovedText, Notice: true, OnDismiss: refresh}
 		}
 	}
 	inline := 0
@@ -307,19 +307,19 @@ func (f *reviewFlow) confirm(msg reviewFreshMsg, env reviewEnv) tea.Cmd {
 		return userinterface.Error(errors.New("empty review, nothing sent (did the editor fail?)"))
 	}
 	send := func() tea.Msg {
-		return reviewSendMsg{flow: flow, repo: env.repo, number: env.number, event: msg.event, body: body, status: st}
+		return reviewSendMessage{flow: flow, repository: env.repository, number: env.number, event: msg.event, body: body, status: st}
 	}
-	return userinterface.Confirm(reviewQuestion(msg.event, env.repo, env.number, st.Pending), send)
+	return userinterface.Confirm(reviewQuestion(msg.event, env.repository, env.number, st.Pending), send)
 }
 
 // submit is the command that runs when the user confirms. The commit is the
 // head the diff on screen was loaded for, which confirm has just checked is
 // still the head. On failure it also returns the error itself, so it shows
 // even if the view was left meanwhile.
-func (f *reviewFlow) submit(env reviewEnv, event github.ReviewEvent, body string, st github.ReviewStatus) tea.Cmd {
+func (f *reviewFlow) submit(env reviewEnvironment, event github.ReviewEvent, body string, st github.ReviewStatus) tea.Cmd {
 	flow := f
 	in := github.SubmitReviewInput{
-		Repository: env.repo, Number: env.number, PullRequestIdentifier: st.PullRequestIdentifier,
+		Repository: env.repository, Number: env.number, PullRequestIdentifier: st.PullRequestIdentifier,
 		Event: event, Body: body, CommitObjectIdentifier: st.HeadSHA,
 	}
 	if st.Pending != nil {
@@ -327,16 +327,16 @@ func (f *reviewFlow) submit(env reviewEnv, event github.ReviewEvent, body string
 	}
 	return func() tea.Msg {
 		err := env.client.SubmitReview(context.Background(), in)
-		res := reviewSubmittedMsg{flow: flow, repo: env.repo, number: env.number, event: event, body: body, err: err}
+		res := reviewSubmittedMessage{flow: flow, repository: env.repository, number: env.number, event: event, body: body, err: err}
 		if err == nil {
 			return res
 		}
-		shown := userinterface.ErrorMsg{Err: submitFailure(err, in.PendingReviewIdentifier != "")}
+		shown := userinterface.ErrorMessage{Err: submitFailure(err, in.PendingReviewIdentifier != "")}
 		return tea.BatchMsg{func() tea.Msg { return res }, func() tea.Msg { return shown }}
 	}
 }
 
-func (f *reviewFlow) submitted(msg reviewSubmittedMsg, env reviewEnv) tea.Cmd {
+func (f *reviewFlow) submitted(msg reviewSubmittedMessage, env reviewEnvironment) tea.Cmd {
 	f.submitting = false
 	if msg.err != nil {
 		// The draft stays for the next attempt. Whatever went wrong, the

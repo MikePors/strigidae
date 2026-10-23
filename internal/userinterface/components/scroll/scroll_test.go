@@ -79,8 +79,8 @@ func TestHorizontal(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			w := win(10, 5, tt.content, tt.view)
 			tt.do(w)
-			if w.XOffset() != tt.want {
-				t.Errorf("XOffset = %d, want %d", w.XOffset(), tt.want)
+			if w.HorizontalOffset() != tt.want {
+				t.Errorf("XOffset = %d, want %d", w.HorizontalOffset(), tt.want)
 			}
 		})
 	}
@@ -89,8 +89,8 @@ func TestHorizontal(t *testing.T) {
 func TestHorizontalNeedsRows(t *testing.T) {
 	w := win(0, 5, 100, 40)
 	w.Right(10)
-	if w.XOffset() != 0 {
-		t.Errorf("empty window scrolled to %d", w.XOffset())
+	if w.HorizontalOffset() != 0 {
+		t.Errorf("empty window scrolled to %d", w.HorizontalOffset())
 	}
 }
 
@@ -103,8 +103,8 @@ func TestSettersReclamp(t *testing.T) {
 		t.Errorf("after fewer rows: cursor/top = %d/%d", w.Cursor(), w.Top())
 	}
 	w.SetWidths(60, 40)
-	if w.XOffset() != 20 {
-		t.Errorf("after narrower content: x = %d", w.XOffset())
+	if w.HorizontalOffset() != 20 {
+		t.Errorf("after narrower content: x = %d", w.HorizontalOffset())
 	}
 	w.SetRows(20)
 	w.GotoBottom()
@@ -127,16 +127,16 @@ func TestResetAndRestore(t *testing.T) {
 	w.Down(9)
 	w.Right(7)
 	w.Reset()
-	if w.Cursor() != 0 || w.Top() != 0 || w.XOffset() != 0 {
-		t.Errorf("after Reset: %d/%d/%d", w.Cursor(), w.Top(), w.XOffset())
+	if w.Cursor() != 0 || w.Top() != 0 || w.HorizontalOffset() != 0 {
+		t.Errorf("after Reset: %d/%d/%d", w.Cursor(), w.Top(), w.HorizontalOffset())
 	}
 	w.Restore(12, 10, 5)
-	if w.Cursor() != 12 || w.Top() != 10 || w.XOffset() != 5 {
-		t.Errorf("Restore: %d/%d/%d", w.Cursor(), w.Top(), w.XOffset())
+	if w.Cursor() != 12 || w.Top() != 10 || w.HorizontalOffset() != 5 {
+		t.Errorf("Restore: %d/%d/%d", w.Cursor(), w.Top(), w.HorizontalOffset())
 	}
 	w.Restore(99, -3, 1000) // clamps; the cursor stays visible
-	if w.Cursor() != 19 || w.Top() != 14 || w.XOffset() != 60 {
-		t.Errorf("Restore out of range: %d/%d/%d", w.Cursor(), w.Top(), w.XOffset())
+	if w.Cursor() != 19 || w.Top() != 14 || w.HorizontalOffset() != 60 {
+		t.Errorf("Restore out of range: %d/%d/%d", w.Cursor(), w.Top(), w.HorizontalOffset())
 	}
 	w.Restore(0, 12, 0) // a cursor above the restored top pulls the top up
 	if w.Cursor() != 0 || w.Top() != 0 {
@@ -146,14 +146,14 @@ func TestResetAndRestore(t *testing.T) {
 
 func TestAccessors(t *testing.T) {
 	w := win(20, 6, 100, 40)
-	if w.Height() != 6 || w.MaxTop() != 14 || w.MaxX() != 60 {
-		t.Errorf("Height/MaxTop/MaxX = %d/%d/%d", w.Height(), w.MaxTop(), w.MaxX())
+	if w.Height() != 6 || w.MaxTop() != 14 || w.MaxHorizontalOffset() != 60 {
+		t.Errorf("Height/MaxTop/MaxX = %d/%d/%d", w.Height(), w.MaxTop(), w.MaxHorizontalOffset())
 	}
 	var zero Window
 	zero.Down(3)
 	zero.Right(3)
 	zero.PageDown()
-	if zero.Cursor() != 0 || zero.Top() != 0 || zero.XOffset() != 0 {
+	if zero.Cursor() != 0 || zero.Top() != 0 || zero.HorizontalOffset() != 0 {
 		t.Error("zero Window should stay at 0")
 	}
 }

@@ -102,31 +102,31 @@ func TestResizeKeepsCursorVisible(t *testing.T) {
 // The code area, not the whole pane, is the horizontal view.
 func TestHorizontalScrollUsesCodeWidth(t *testing.T) {
 	m := newModel(t, 60, 8)
-	maxX := m.maxW - m.codeW()
+	maxX := m.maxWidth - m.codeWidth()
 	if maxX <= 0 {
 		t.Fatalf("expected a line wider than the code area, maxX = %d", maxX)
 	}
 	m.ScrollRight(10000)
-	if m.XOffset() != maxX {
-		t.Errorf("right clamp: %d, want %d", m.XOffset(), maxX)
+	if m.HorizontalOffset() != maxX {
+		t.Errorf("right clamp: %d, want %d", m.HorizontalOffset(), maxX)
 	}
 	m.HalfScrollLeft()
-	if want := maxX - m.codeW()/2; m.XOffset() != want {
-		t.Errorf("half left: %d, want %d", m.XOffset(), want)
+	if want := maxX - m.codeWidth()/2; m.HorizontalOffset() != want {
+		t.Errorf("half left: %d, want %d", m.HorizontalOffset(), want)
 	}
 	m.ScrollLeft(10000)
 	m.HalfScrollRight()
-	if m.XOffset() != m.codeW()/2 {
-		t.Errorf("half right: %d, want %d", m.XOffset(), m.codeW()/2)
+	if m.HorizontalOffset() != m.codeWidth()/2 {
+		t.Errorf("half right: %d, want %d", m.HorizontalOffset(), m.codeWidth()/2)
 	}
 	m.ScrollRight(3)
 	m.ScrollLeft(1)
-	if m.XOffset() != m.codeW()/2+2 {
-		t.Errorf("right/left: %d", m.XOffset())
+	if m.HorizontalOffset() != m.codeWidth()/2+2 {
+		t.Errorf("right/left: %d", m.HorizontalOffset())
 	}
 	m.SetSize(200, 8) // everything fits: no scrolling possible
-	if m.XOffset() != 0 {
-		t.Errorf("wide pane: x=%d", m.XOffset())
+	if m.HorizontalOffset() != 0 {
+		t.Errorf("wide pane: x=%d", m.HorizontalOffset())
 	}
 }
 
@@ -141,15 +141,15 @@ func TestHunkNavigation(t *testing.T) {
 		t.Errorf("next on last hunk moved to %d", m.win.Cursor())
 	}
 	m.CursorDown(3)
-	m.PrevHunk() // inside hunk 2: goes to its header
+	m.PreviousHunk() // inside hunk 2: goes to its header
 	if m.win.Cursor() != hunk2Row {
 		t.Errorf("prev inside hunk: %d", m.win.Cursor())
 	}
-	m.PrevHunk()
+	m.PreviousHunk()
 	if m.win.Cursor() != 0 {
 		t.Errorf("prev: %d", m.win.Cursor())
 	}
-	m.PrevHunk() // first hunk: no-op
+	m.PreviousHunk() // first hunk: no-op
 	if m.win.Cursor() != 0 {
 		t.Errorf("prev on first hunk moved to %d", m.win.Cursor())
 	}

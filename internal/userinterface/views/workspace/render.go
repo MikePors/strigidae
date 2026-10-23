@@ -57,8 +57,8 @@ func (v *View) sizeFilePane(filesW, rightW, h int) {
 		}
 	}
 	w := max(0, rightW-2)
-	if w != v.paneW || h != v.paneH {
-		v.paneW, v.paneH = w, h
+	if w != v.paneWidth || h != v.paneHeight {
+		v.paneWidth, v.paneHeight = w, h
 		v.filePane.SetSize(w, h)
 	}
 }
@@ -75,7 +75,7 @@ func (v *View) Render(width, height int) string {
 		return v.renderFailure()
 	case v.detail == nil:
 		return v.th.Title.Render(v.Title()) + "\n" +
-			v.th.Muted.Render(terminaltext.Clean(fmt.Sprintf("Loading %s#%d…", v.repo, v.number)))
+			v.th.Muted.Render(terminaltext.Clean(fmt.Sprintf("Loading %s#%d…", v.repository, v.number)))
 	}
 
 	filesW, rightW := v.paneWidths()
@@ -112,7 +112,7 @@ func (v *View) renderFailure() string {
 	head := v.th.Title.Render(v.Title())
 	if v.notFound {
 		return head + "\n" +
-			v.th.ErrorText.Render(terminaltext.Clean(fmt.Sprintf("Pull request %s#%d was not found.", v.repo, v.number))) + "\n" +
+			v.th.ErrorText.Render(terminaltext.Clean(fmt.Sprintf("Pull request %s#%d was not found.", v.repository, v.number))) + "\n" +
 			v.th.Muted.Render("It may not exist, or you may lack access. Press R to retry.")
 	}
 	return head + "\n" +
@@ -132,11 +132,11 @@ func (v *View) renderHeader(width int) []string {
 	}
 	switch d.Checks {
 	case github.ChecksPassing:
-		parts = append(parts, v.th.PRList.ChecksPassing.Render("✓ checks passing"))
+		parts = append(parts, v.th.PullRequestList.ChecksPassing.Render("✓ checks passing"))
 	case github.ChecksFailing:
-		parts = append(parts, v.th.PRList.ChecksFailing.Render("✗ checks failing"))
+		parts = append(parts, v.th.PullRequestList.ChecksFailing.Render("✗ checks failing"))
 	case github.ChecksRunning:
-		parts = append(parts, v.th.PRList.ChecksRunning.Render("● checks running"))
+		parts = append(parts, v.th.PullRequestList.ChecksRunning.Render("● checks running"))
 	case github.ChecksNone:
 	}
 	switch d.ReviewDecision {

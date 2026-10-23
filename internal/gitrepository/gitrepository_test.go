@@ -145,8 +145,8 @@ func TestInfer(t *testing.T) {
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("err = %v, want %v", err, tt.wantErr)
 			}
-			if got.Repo != tt.want {
-				t.Errorf("repo = %v, want %v", got.Repo, tt.want)
+			if got.Repository != tt.want {
+				t.Errorf("repo = %v, want %v", got.Repository, tt.want)
 			}
 		})
 	}

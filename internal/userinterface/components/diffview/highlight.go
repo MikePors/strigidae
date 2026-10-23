@@ -26,7 +26,7 @@ const (
 	ClassOperator = theme.ClassOperator
 	ClassVariable = theme.ClassVariable
 	ClassEscape   = theme.ClassEscape
-	numClasses    = int(theme.NumSyntaxClasses)
+	numberClasses = int(theme.NumberSyntaxClasses)
 )
 
 // Span is a run of text with one token class.

@@ -30,9 +30,9 @@ const (
 // prsLoadedMsg is the result of a ListPullRequests call. repo and seq identify
 // the request: every view receives every command result, and a refresh
 // supersedes any page still in flight.
-type prsLoadedMsg struct {
-	repo github.Repository
-	seq  int
+type pullRequestsLoadedMessage struct {
+	repository github.Repository
+	sequence   int
 	// more is true for a next-page fetch that is appended to the list, false
 	// for a first-page fetch that replaces it.
 	more bool
@@ -50,20 +50,20 @@ type Options struct {
 
 // View lists one repository's open pull requests.
 type View struct {
-	client github.Client
-	repo   github.Repository
-	th     theme.Theme
-	km     keys.Global
-	now    func() time.Time
-	open   func(url string) error
+	client     github.Client
+	repository github.Repository
+	th         theme.Theme
+	km         keys.Global
+	now        func() time.Time
+	open       func(url string) error
 
-	prs         []github.PullRequest
-	next        string // cursor of the next page, empty when all are loaded
-	seq         int    // latest request; older results are ignored
-	loading     bool   // a first-page (re)load is in flight
-	loadingMore bool   // a next-page load is in flight
-	err         error  // the last failed load, cleared by the next success
-	moreFailed  bool   // the last next-page load failed; no auto-retry until R
+	pullRequests []github.PullRequest
+	next         string // cursor of the next page, empty when all are loaded
+	sequence     int    // latest request; older results are ignored
+	loading      bool   // a first-page (re)load is in flight
+	loadingMore  bool   // a next-page load is in flight
+	err          error  // the last failed load, cleared by the next success
+	moreFailed   bool   // the last next-page load failed; no auto-retry until R
 
 	win           scroll.Window // cursor and top row over prs
 	width, height int
@@ -83,14 +83,14 @@ func New(client github.Client, repo github.Repository, th theme.Theme, opts Opti
 		opts.Open = openInBrowser
 	}
 	return &View{
-		client:  client,
-		repo:    repo,
-		th:      th,
-		km:      keys.DefaultGlobal(),
-		now:     opts.Now,
-		open:    opts.Open,
-		seq:     1,
-		loading: true,
+		client:     client,
+		repository: repo,
+		th:         th,
+		km:         keys.DefaultGlobal(),
+		now:        opts.Now,
+		open:       opts.Open,
+		sequence:   1,
+		loading:    true,
 	}
 }
 
@@ -105,10 +105,10 @@ func openInBrowser(url string) error {
 func (v *View) Loading() bool { return v.loading || v.loadingMore }
 
 // Title implements userinterface.View.
-func (v *View) Title() string { return v.repoName() }
+func (v *View) Title() string { return v.repositoryName() }
 
 // repoName is the repository name made safe to draw (it can come from -R).
-func (v *View) repoName() string { return terminaltext.Clean(v.repo.String()) }
+func (v *View) repositoryName() string { return terminaltext.Clean(v.repository.String()) }
 
 // ShortHelp implements userinterface.View.
 func (v *View) ShortHelp() []key.Binding {
@@ -125,12 +125,12 @@ func (v *View) Init() tea.Cmd { return v.fetch(github.PageRequest{}, false) }
 // fetch loads one page. The closure captures copies, so it shares no state
 // with the view.
 func (v *View) fetch(req github.PageRequest, more bool) tea.Cmd {
-	client, repo, seq := v.client, v.repo, v.seq
+	client, repo, seq := v.client, v.repository, v.sequence
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 		defer cancel()
 		page, err := client.ListPullRequests(ctx, repo, req)
-		return prsLoadedMsg{repo: repo, seq: seq, more: more, page: page, err: err}
+		return pullRequestsLoadedMessage{repository: repo, sequence: seq, more: more, page: page, err: err}
 	}
 }
 
@@ -141,18 +141,18 @@ func (v *View) Update(msg tea.Msg) (userinterface.View, tea.Cmd) {
 		v.width, v.height = msg.Width, msg.Height
 		v.win.SetSize(v.listHeight())
 		return v, nil
-	case userinterface.ThemeMsg:
+	case userinterface.ThemeMessage:
 		v.th = msg.Theme
-	case prsLoadedMsg:
+	case pullRequestsLoadedMessage:
 		return v, v.loaded(msg)
-	case keys.Msg:
+	case keys.Message:
 		return v, v.handleKey(msg)
 	}
 	return v, nil
 }
 
-func (v *View) loaded(msg prsLoadedMsg) tea.Cmd {
-	if msg.repo != v.repo || msg.seq != v.seq {
+func (v *View) loaded(msg pullRequestsLoadedMessage) tea.Cmd {
+	if msg.repository != v.repository || msg.sequence != v.sequence {
 		return nil // meant for another view, or superseded by a refresh
 	}
 	if msg.more {
@@ -164,16 +164,16 @@ func (v *View) loaded(msg prsLoadedMsg) tea.Cmd {
 		v.err = msg.err
 		v.moreFailed = msg.more // stop auto-paging until R
 
-		return userinterface.Error(terminaltext.SafeError(fmt.Errorf("load pull requests in %s: %w", v.repo, msg.err)))
+		return userinterface.Error(terminaltext.SafeError(fmt.Errorf("load pull requests in %s: %w", v.repository, msg.err)))
 	}
 	v.err = nil
 	v.next = msg.page.Next
 	if msg.more {
-		v.prs = append(v.prs, msg.page.Items...)
+		v.pullRequests = append(v.pullRequests, msg.page.Items...)
 	} else {
 		v.replace(msg.page.Items)
 	}
-	v.win.SetRows(len(v.prs))
+	v.win.SetRows(len(v.pullRequests))
 	return v.maybeLoadMore()
 }
 
@@ -184,7 +184,7 @@ func (v *View) replace(items []github.PullRequest) {
 	if pr, ok := v.selected(); ok {
 		selected = pr.Number
 	}
-	v.prs = items
+	v.pullRequests = items
 	// If the selected PR is gone, stay on the same row (the window clamps it).
 	v.win.SetRows(len(items))
 	for i, pr := range items {
@@ -196,13 +196,13 @@ func (v *View) replace(items []github.PullRequest) {
 }
 
 func (v *View) selected() (github.PullRequest, bool) {
-	if v.win.Cursor() >= len(v.prs) {
+	if v.win.Cursor() >= len(v.pullRequests) {
 		return github.PullRequest{}, false
 	}
-	return v.prs[v.win.Cursor()], true
+	return v.pullRequests[v.win.Cursor()], true
 }
 
-func (v *View) handleKey(msg keys.Msg) tea.Cmd {
+func (v *View) handleKey(msg keys.Message) tea.Cmd {
 	switch {
 	case key.Matches(msg, v.km.Down):
 		v.win.Down(1)
@@ -235,7 +235,7 @@ func (v *View) handleKey(msg keys.Msg) tea.Cmd {
 // refresh reloads from the first page. The old rows stay visible until the
 // new ones arrive.
 func (v *View) refresh() tea.Cmd {
-	v.seq++
+	v.sequence++
 	v.loading, v.loadingMore, v.moreFailed = true, false, false
 	// Intentional limit: the API caps a page at 100 rows, so past row 100 the
 	// refreshed list is shorter than the old one and the selection falls back
@@ -243,13 +243,13 @@ func (v *View) refresh() tea.Cmd {
 	// lazily as before.
 	// Ask for as many rows as are loaded (up to the API maximum) so the rows
 	// the user has paged through survive; zero means the default size.
-	return v.fetch(github.PageRequest{Limit: min(len(v.prs), github.MaxPageSize)}, false)
+	return v.fetch(github.PageRequest{Limit: min(len(v.pullRequests), github.MaxPageSize)}, false)
 }
 
 // maybeLoadMore requests the next page when the selection is near the end of
 // what is loaded.
 func (v *View) maybeLoadMore() tea.Cmd {
-	if v.next == "" || v.loading || v.moreFailed || v.loadingMore || v.win.Cursor() < len(v.prs)-1-loadMoreMargin {
+	if v.next == "" || v.loading || v.moreFailed || v.loadingMore || v.win.Cursor() < len(v.pullRequests)-1-loadMoreMargin {
 		return nil
 	}
 	v.loadingMore = true
@@ -264,7 +264,7 @@ func (v *View) openSelected() tea.Cmd {
 	if !ok {
 		return nil
 	}
-	return userinterface.Push(workspace.New(v.client, v.repo, pr.Number,
+	return userinterface.Push(workspace.New(v.client, v.repository, pr.Number,
 		workspace.WithTheme(v.th),
 		workspace.WithClock(v.now),
 		workspace.WithOpener(v.open),
@@ -279,12 +279,12 @@ func (v *View) browseSelected() tea.Cmd {
 	open, url := v.open, pr.URL
 	return func() tea.Msg {
 		if url == "" {
-			return userinterface.ErrorMsg{Err: fmt.Errorf("pull request #%d has no URL", pr.Number)}
+			return userinterface.ErrorMessage{Err: fmt.Errorf("pull request #%d has no URL", pr.Number)}
 		}
 		if err := open(url); err != nil {
-			return userinterface.ErrorMsg{Err: terminaltext.SafeError(fmt.Errorf("open #%d in browser: %w", pr.Number, err))}
+			return userinterface.ErrorMessage{Err: terminaltext.SafeError(fmt.Errorf("open #%d in browser: %w", pr.Number, err))}
 		}
-		return userinterface.InfoMsg{Text: fmt.Sprintf("opened #%d in browser", pr.Number)}
+		return userinterface.InfoMessage{Text: fmt.Sprintf("opened #%d in browser", pr.Number)}
 	}
 }
 

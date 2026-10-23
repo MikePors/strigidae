@@ -14,9 +14,9 @@ import (
 
 var now = time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)
 
-func env() Env {
+func environment() Environment {
 	th := theme.New(true)
-	return Env{Theme: th, Markdown: markdown.New(th), Now: now}
+	return Environment{Theme: th, Markdown: markdown.New(th), Now: now}
 }
 
 func TestLines(t *testing.T) {
@@ -42,7 +42,7 @@ func TestLines(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			out := ansi.Strip(strings.Join(Lines(env(), th, 80, tt.o), "\n"))
+			out := ansi.Strip(strings.Join(Lines(environment(), th, 80, tt.o), "\n"))
 			for _, w := range tt.want {
 				if !strings.Contains(out, w) {
 					t.Errorf("missing %q in:\n%s", w, out)
@@ -63,7 +63,7 @@ func TestLinesFitWidth(t *testing.T) {
 		Comments: []github.ReviewComment{{Author: strings.Repeat("n", 60), Body: strings.Repeat("word ", 60), CreatedAt: now}},
 	}
 	for _, o := range []Options{{}, {Expanded: true, Location: true}} {
-		for i, l := range Lines(env(), th, 40, o) {
+		for i, l := range Lines(environment(), th, 40, o) {
 			if w := ansi.StringWidth(l); w > 40 {
 				t.Errorf("%+v line %d is %d cells wide: %q", o, i, w, ansi.Strip(l))
 			}
@@ -77,7 +77,7 @@ func TestHostileText(t *testing.T) {
 		{Author: "a" + evil, Body: evil, CreatedAt: now, Reactions: []github.ReactionSummary{{Content: github.ReactionContent("R" + evil), Count: 1}}},
 	}}
 	for _, o := range []Options{{}, {Expanded: true, Location: true}} {
-		out := strings.Join(Lines(env(), th, 80, o), "\n")
+		out := strings.Join(Lines(environment(), th, 80, o), "\n")
 		plain := regexpSGR(out)
 		for _, r := range plain {
 			if r == 0x1b || r == 0x07 || r == '\r' || r == 0x202e {

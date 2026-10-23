@@ -41,7 +41,7 @@ func TestCopyFilename(t *testing.T) {
 			if len(msgs) != 2 || msgs[0] != tea.SetClipboard(tc.want)() {
 				t.Fatalf("msgs = %#v, want clipboard %q first", msgs, tc.want)
 			}
-			if info, ok := msgs[1].(userinterface.InfoMsg); !ok || info.Text != "Copied "+tc.want {
+			if info, ok := msgs[1].(userinterface.InfoMessage); !ok || info.Text != "Copied "+tc.want {
 				t.Errorf("status = %#v", msgs[1])
 			}
 		})
@@ -54,7 +54,7 @@ func TestCopyFilenameOverview(t *testing.T) {
 	if len(msgs) != 1 {
 		t.Fatalf("msgs = %#v", msgs)
 	}
-	if e, ok := msgs[0].(userinterface.ErrorMsg); !ok || e.Err.Error() != "no file to copy" {
+	if e, ok := msgs[0].(userinterface.ErrorMessage); !ok || e.Err.Error() != "no file to copy" {
 		t.Errorf("msg = %#v", msgs[0])
 	}
 }
@@ -67,7 +67,7 @@ func TestCopyFilenameRefusesControlCharacters(t *testing.T) {
 	if len(msgs) != 1 {
 		t.Fatalf("msgs = %#v", msgs)
 	}
-	e, ok := msgs[0].(userinterface.ErrorMsg)
+	e, ok := msgs[0].(userinterface.ErrorMessage)
 	if !ok || !strings.Contains(e.Err.Error(), "control characters") || strings.ContainsAny(e.Err.Error(), "\x1b\x07") {
 		t.Errorf("msg = %#v", msgs[0])
 	}

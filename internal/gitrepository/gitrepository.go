@@ -31,8 +31,8 @@ var remoteNames = []string{"upstream", "origin"}
 // Remote is a repository on a specific host.
 type Remote struct {
 	// Host is the GitHub host, e.g. "github.com" or a GitHub Enterprise host.
-	Host string
-	Repo github.Repository
+	Host       string
+	Repository github.Repository
 }
 
 // Runner runs git with args in dir and returns its trimmed standard output.
@@ -113,7 +113,7 @@ func ParseURL(raw string) (Remote, error) {
 	if err != nil || host == "" {
 		return Remote{}, fmt.Errorf("parse remote %q: want host and owner/repo", raw)
 	}
-	return Remote{Host: github.NormalizeHost(host), Repo: repo}, nil
+	return Remote{Host: github.NormalizeHost(host), Repository: repo}, nil
 }
 
 func splitURL(raw string) (host, path string, err error) {

@@ -17,50 +17,50 @@ import (
 
 // Defaults for Options.
 const (
-	DefaultSeqTimeout = 500 * time.Millisecond
-	DefaultMessageTTL = 4 * time.Second
+	DefaultSequenceTimeout = 500 * time.Millisecond
+	DefaultMessageLifetime = 4 * time.Second
 )
 
 // TickFunc schedules fn after d, like tea.Tick. Tests inject their own.
-type TickFunc func(d time.Duration, fn func(time.Time) tea.Msg) tea.Cmd
+type TickFunction func(d time.Duration, fn func(time.Time) tea.Msg) tea.Cmd
 
 // Options configures the root Model. Zero values select defaults.
 type Options struct {
-	Logger     *slog.Logger
-	SeqTimeout time.Duration // how long a pending key sequence waits
-	MessageTTL time.Duration // how long info/error messages stay
-	Tick       TickFunc
+	Logger          *slog.Logger
+	SequenceTimeout time.Duration // how long a pending key sequence waits
+	MessageLifetime time.Duration // how long info/error messages stay
+	Tick            TickFunction
 }
 
 // Internal timer messages. The id/gen fields discard timers that were
 // superseded before they fired.
 type (
-	seqTimeoutMsg  struct{ gen int }
-	clearStatusMsg struct{ id int }
+	sequenceTimeoutMessage struct{ generation int }
+	clearStatusMessage     struct{ identifier int }
 )
 
 // Model is the root Bubble Tea model. It owns the view stack, key sequence
 // resolution, the status bar, and the help overlay.
 type Model struct {
-	stack   []View
-	th      theme.Theme
-	keys    keys.Global
-	log     *slog.Logger
-	tick    TickFunc
-	seqWait time.Duration
-	msgTTL  time.Duration
+	stack           []View
+	th              theme.Theme
+	keys            keys.Global
+	log             *slog.Logger
+	tick            TickFunction
+	sequenceWait    time.Duration
+	messageLifetime time.Duration
 
-	width, height int
-	matcher       keys.Matcher
-	seqGen        int
+	width, height      int
+	matcher            keys.Matcher
+	sequenceGeneration int
 
 	showHelp bool
 	confirm  *confirmPrompt // open yes/no question, or nil
 	cmdline  commandLine
 	status   struct {
-		text string
-		kind statusKind
-		id   int
+		text       string
+		kind       statusKind
+		identifier int
 	}
 	spinning bool // the root spinner's tick chain is running
 	spin     spinner.Model
@@ -68,11 +68,11 @@ type Model struct {
 
 // New returns a root model whose stack holds just root.
 func New(root View, th theme.Theme, opts Options) *Model {
-	if opts.SeqTimeout == 0 {
-		opts.SeqTimeout = DefaultSeqTimeout
+	if opts.SequenceTimeout == 0 {
+		opts.SequenceTimeout = DefaultSequenceTimeout
 	}
-	if opts.MessageTTL == 0 {
-		opts.MessageTTL = DefaultMessageTTL
+	if opts.MessageLifetime == 0 {
+		opts.MessageLifetime = DefaultMessageLifetime
 	}
 	if opts.Tick == nil {
 		opts.Tick = tea.Tick
@@ -81,15 +81,15 @@ func New(root View, th theme.Theme, opts Options) *Model {
 		opts.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	return &Model{
-		stack:   []View{root},
-		th:      th,
-		keys:    keys.DefaultGlobal(),
-		log:     opts.Logger,
-		tick:    opts.Tick,
-		seqWait: opts.SeqTimeout,
-		msgTTL:  opts.MessageTTL,
-		cmdline: newCommandLine(th),
-		spin:    spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(th.Spinner)),
+		stack:           []View{root},
+		th:              th,
+		keys:            keys.DefaultGlobal(),
+		log:             opts.Logger,
+		tick:            opts.Tick,
+		sequenceWait:    opts.SequenceTimeout,
+		messageLifetime: opts.MessageLifetime,
+		cmdline:         newCommandLine(th),
+		spin:            spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(th.Spinner)),
 	}
 }
 
@@ -114,40 +114,40 @@ func (m *Model) update(msg tea.Msg) tea.Cmd {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.cmdline.input.SetWidth(max(1, msg.Width-2)) // room for the prompt and cursor
-		return m.broadcast(m.sizeMsg())
+		return m.broadcast(m.sizeMessage())
 	case tea.BackgroundColorMsg:
 		m.th = theme.New(msg.IsDark())
 		m.cmdline.setTheme(m.th)
 		m.spin.Style = m.th.Spinner
-		return m.broadcast(ThemeMsg{Theme: m.th})
+		return m.broadcast(ThemeMessage{Theme: m.th})
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
-	case PushMsg:
+	case PushMessage:
 		return m.push(msg.View)
-	case PopMsg:
+	case PopMessage:
 		return m.pop()
-	case QuitMsg:
+	case QuitMessage:
 		return tea.Quit
-	case ConfirmMsg:
+	case ConfirmMessage:
 		m.resetKeys()
 		m.confirm = newConfirmPrompt(msg)
 		return nil
-	case InfoMsg:
+	case InfoMessage:
 		return m.setStatus(msg.Text, statusInfo)
-	case ErrorMsg:
+	case ErrorMessage:
 		m.log.Warn("error shown to user", "err", msg.Err)
 		text := "error"
 		if msg.Err != nil {
 			text = msg.Err.Error()
 		}
 		return m.setStatus(text, statusError)
-	case clearStatusMsg:
-		if msg.id == m.status.id {
+	case clearStatusMessage:
+		if msg.identifier == m.status.identifier {
 			m.status.text, m.status.kind = "", statusNone
 		}
 		return nil
-	case seqTimeoutMsg:
-		return m.expireSequence(msg.gen)
+	case sequenceTimeoutMessage:
+		return m.expireSequence(msg.generation)
 	case spinner.TickMsg:
 		if msg.ID != m.spin.ID() {
 			return m.broadcastOther(msg) // a view's own spinner
@@ -163,7 +163,7 @@ func (m *Model) update(msg tea.Msg) tea.Cmd {
 	}
 }
 
-func (m *Model) sizeMsg() tea.WindowSizeMsg {
+func (m *Model) sizeMessage() tea.WindowSizeMsg {
 	w, h := m.contentSize()
 	return tea.WindowSizeMsg{Width: w, Height: h}
 }
@@ -199,7 +199,7 @@ func (m *Model) push(v View) tea.Cmd {
 	m.resetKeys()
 	m.stack = append(m.stack, v)
 	m.log.Debug("push view", "title", v.Title(), "depth", len(m.stack))
-	return tea.Batch(v.Init(), m.forward(m.sizeMsg()))
+	return tea.Batch(v.Init(), m.forward(m.sizeMessage()))
 }
 
 func (m *Model) pop() tea.Cmd {
@@ -220,14 +220,14 @@ func (m *Model) resetKeys() {
 	m.confirm = nil
 	m.cmdline.close()
 	m.matcher.Reset()
-	m.seqGen++
+	m.sequenceGeneration++
 }
 
 func (m *Model) setStatus(text string, kind statusKind) tea.Cmd {
-	m.status.id++
+	m.status.identifier++
 	m.status.text, m.status.kind = text, kind
-	id := m.status.id
-	return m.tick(m.msgTTL, func(time.Time) tea.Msg { return clearStatusMsg{id: id} })
+	id := m.status.identifier
+	return m.tick(m.messageLifetime, func(time.Time) tea.Msg { return clearStatusMessage{identifier: id} })
 }
 
 // syncSpinner starts the root spinner's tick chain when the top view is
@@ -280,25 +280,25 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	}
 
 	res := m.matcher.Feed(k, m.bindings())
-	m.seqGen++
+	m.sequenceGeneration++
 	switch res.Kind {
 	case keys.Pending:
-		gen := m.seqGen
-		return m.tick(m.seqWait, func(time.Time) tea.Msg { return seqTimeoutMsg{gen: gen} })
+		gen := m.sequenceGeneration
+		return m.tick(m.sequenceWait, func(time.Time) tea.Msg { return sequenceTimeoutMessage{generation: gen} })
 	case keys.Matched:
-		return m.dispatch(res.Seq)
+		return m.dispatch(res.Sequence)
 	default:
 		return m.forward(msg)
 	}
 }
 
 func (m *Model) expireSequence(gen int) tea.Cmd {
-	if gen != m.seqGen || !m.matcher.Pending() {
+	if gen != m.sequenceGeneration || !m.matcher.Pending() {
 		return nil
 	}
-	m.seqGen++
+	m.sequenceGeneration++
 	if res := m.matcher.Expire(m.bindings()); res.Kind == keys.Matched {
-		return m.dispatch(res.Seq)
+		return m.dispatch(res.Sequence)
 	}
 	return nil
 }
@@ -306,7 +306,7 @@ func (m *Model) expireSequence(gen int) tea.Cmd {
 // dispatch acts on a resolved key or sequence: the root consumes Help and
 // Command, everything else goes to the view.
 func (m *Model) dispatch(seq string) tea.Cmd {
-	km := keys.Msg{Seq: seq}
+	km := keys.Message{Sequence: seq}
 	switch {
 	case key.Matches(km, m.keys.Help):
 		m.showHelp = true

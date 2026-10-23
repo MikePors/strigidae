@@ -42,7 +42,7 @@ func Header(th theme.Theme, now time.Time, c Comment) string {
 		s += " " + c.Action
 	}
 	if !c.At.IsZero() {
-		s += th.Muted.Render(" · " + RelTime(now, c.At))
+		s += th.Muted.Render(" · " + RelativeTime(now, c.At))
 	}
 	if c.Pending {
 		label := "PENDING (draft, not submitted)"
@@ -94,7 +94,7 @@ func reactions(rs []github.ReactionSummary) string {
 }
 
 // RelTime formats t relative to now ("5m ago").
-func RelTime(now, t time.Time) string {
+func RelativeTime(now, t time.Time) string {
 	d := now.Sub(t)
 	switch {
 	case d < time.Minute:

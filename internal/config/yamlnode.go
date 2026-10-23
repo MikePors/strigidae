@@ -19,16 +19,16 @@ import (
 
 // Error is a problem in the config file, located by line.
 type Error struct {
-	Path string
-	Line int // 1-based; 0 if unknown
-	Msg  string
+	Path    string
+	Line    int // 1-based; 0 if unknown
+	Message string
 }
 
 func (e *Error) Error() string {
 	if e.Line > 0 {
-		return fmt.Sprintf("%s:%d: %s", e.Path, e.Line, e.Msg)
+		return fmt.Sprintf("%s:%d: %s", e.Path, e.Line, e.Message)
 	}
-	return e.Path + ": " + e.Msg
+	return e.Path + ": " + e.Message
 }
 
 var yamlLine = regexp.MustCompile(`line (\d+)`)
@@ -47,7 +47,7 @@ func decodeSingle(path string, data []byte) (*yaml.Node, *Error) {
 	var second yaml.Node
 	switch err := dec.Decode(&second); {
 	case err == nil:
-		return nil, &Error{Path: path, Line: second.Line, Msg: "the config file must contain a single YAML document"}
+		return nil, &Error{Path: path, Line: second.Line, Message: "the config file must contain a single YAML document"}
 	case !errors.Is(err, io.EOF):
 		return nil, syntaxError(path, err)
 	}
@@ -67,7 +67,7 @@ func syntaxError(path string, err error) *Error {
 		line, _ = strconv.Atoi(m[1])
 		msg = strings.Replace(msg, m[0]+": ", "", 1)
 	}
-	return &Error{Path: path, Line: line, Msg: "invalid YAML: " + msg}
+	return &Error{Path: path, Line: line, Message: "invalid YAML: " + msg}
 }
 
 // parser records the first error; callers check err once at the end.
@@ -78,7 +78,7 @@ type parser struct {
 
 func (p *parser) fail(n *yaml.Node, format string, args ...any) {
 	if p.err == nil {
-		p.err = &Error{Path: p.path, Line: n.Line, Msg: fmt.Sprintf(format, args...)}
+		p.err = &Error{Path: p.path, Line: n.Line, Message: fmt.Sprintf(format, args...)}
 	}
 }
 

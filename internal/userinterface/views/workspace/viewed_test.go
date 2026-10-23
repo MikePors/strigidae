@@ -40,7 +40,7 @@ func (h *harness) stateOf() github.ViewedState {
 
 func (h *harness) serverState() github.ViewedState {
 	h.t.Helper()
-	d, err := h.client.GetPullRequest(h.t.Context(), testRepo, 7)
+	d, err := h.client.GetPullRequest(h.t.Context(), testRepository, 7)
 	if err != nil {
 		h.t.Fatal(err)
 	}

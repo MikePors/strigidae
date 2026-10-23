@@ -157,13 +157,13 @@ func TestMatcherDisplayAndReset(t *testing.T) {
 
 func TestGlobalBindings(t *testing.T) {
 	g := DefaultGlobal()
-	if !key.Matches(Msg{Seq: "g g"}, g.Top) {
+	if !key.Matches(Message{Sequence: "g g"}, g.Top) {
 		t.Error("g g should match Top")
 	}
-	if !key.Matches(Msg{Seq: "R"}, g.Refresh) || key.Matches(Msg{Seq: "r"}, g.Refresh) {
+	if !key.Matches(Message{Sequence: "R"}, g.Refresh) || key.Matches(Message{Sequence: "r"}, g.Refresh) {
 		t.Error("refresh must be R, not r")
 	}
-	if !key.Matches(Msg{Seq: ":"}, g.Command) {
+	if !key.Matches(Message{Sequence: ":"}, g.Command) {
 		t.Error(": should open the command line")
 	}
 	seen := map[string]bool{}

@@ -211,7 +211,7 @@ func TestThreadNavigation(t *testing.T) {
 		t.Errorf("] c past the last thread should stay, at %q", seen[5])
 	}
 	for range 10 {
-		m.PrevThread()
+		m.PreviousThread()
 	}
 	if !strings.Contains(cursorRowText(m), "carol") {
 		t.Errorf("[ c should stop at the first thread, at %q", cursorRowText(m))

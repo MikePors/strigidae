@@ -60,9 +60,9 @@ func TestReport(t *testing.T) {
 
 func TestRunStartFailure(t *testing.T) {
 	h := newHarness(nil, false, nil)
-	h.deps.start = func(app, io.Writer) error { return errors.New("run: no tty") }
+	h.dependencies.start = func(app, io.Writer) error { return errors.New("run: no tty") }
 	var stdout, stderr bytes.Buffer
-	if code := run([]string{"-R", "o/r"}, &stdout, &stderr, h.deps); code != 1 {
+	if code := run([]string{"-R", "o/r"}, &stdout, &stderr, h.dependencies); code != 1 {
 		t.Fatalf("exit code = %d, want 1", code)
 	}
 	if got, want := stderr.String(), "strig: run: no tty\n"; got != want {

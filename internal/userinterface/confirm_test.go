@@ -42,7 +42,7 @@ func TestConfirm(t *testing.T) {
 			if got := cmd != nil && isAnswered(cmd); got != tt.wantYes {
 				t.Errorf("OnYes ran = %v, want %v", got, tt.wantYes)
 			}
-			if len(v.keyMsgs()) != 0 {
+			if len(v.keyMessages()) != 0 {
 				t.Error("the key reached the view")
 			}
 		})

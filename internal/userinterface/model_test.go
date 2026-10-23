@@ -48,7 +48,7 @@ func (f *fakeView) Update(msg tea.Msg) (View, tea.Cmd) {
 	if k, ok := msg.(tea.KeyPressMsg); ok && k.String() == "esc" {
 		f.capture = false
 	}
-	if _, ok := msg.(resultMsg); ok {
+	if _, ok := msg.(resultMessage); ok {
 		f.results++
 		f.loading = false
 	}
@@ -60,9 +60,9 @@ func (f *fakeView) ShortHelp() []key.Binding  { return []key.Binding{f.next} }
 func (f *fakeView) FullHelp() [][]key.Binding { return [][]key.Binding{{f.next}} }
 func (f *fakeView) CapturesKeys() bool        { return f.capture }
 func (f *fakeView) last() tea.Msg             { return f.got[len(f.got)-1] }
-func (f *fakeView) keyMsgs() (out []keys.Msg) {
+func (f *fakeView) keyMessages() (out []keys.Message) {
 	for _, m := range f.got {
-		if k, ok := m.(keys.Msg); ok {
+		if k, ok := m.(keys.Message); ok {
 			out = append(out, k)
 		}
 	}
@@ -147,7 +147,7 @@ func TestCommandLine(t *testing.T) {
 			t.Fatal(": should open the command line")
 		}
 		press(m, "j")
-		if len(v.keyMsgs()) != 0 || m.cmdline.input.Value() != "j" {
+		if len(v.keyMessages()) != 0 || m.cmdline.input.Value() != "j" {
 			t.Errorf("keys leaked to view or were not captured; value = %q", m.cmdline.input.Value())
 		}
 	})
@@ -173,7 +173,7 @@ func TestCommandLine(t *testing.T) {
 		if cmd == nil {
 			t.Fatal("expected a command")
 		}
-		if _, ok := cmd().(QuitMsg); !ok {
+		if _, ok := cmd().(QuitMessage); !ok {
 			t.Error(":qa should produce QuitMsg")
 		}
 	})
@@ -231,12 +231,12 @@ func TestParseCommand(t *testing.T) {
 		want tea.Msg // nil: expect a "not a command" error for wantName
 		name string
 	}{
-		{line: "q", want: PopMsg{}},
-		{line: "quit", want: PopMsg{}},
-		{line: "  q  ", want: PopMsg{}},
-		{line: "qa", want: QuitMsg{}},
-		{line: "qall", want: QuitMsg{}},
-		{line: "quitall", want: QuitMsg{}},
+		{line: "q", want: PopMessage{}},
+		{line: "quit", want: PopMessage{}},
+		{line: "  q  ", want: PopMessage{}},
+		{line: "qa", want: QuitMessage{}},
+		{line: "qall", want: QuitMessage{}},
+		{line: "quitall", want: QuitMessage{}},
 		{line: "zzz arg", name: "zzz"},
 		{line: "Q", name: "Q"},
 	}
@@ -244,7 +244,7 @@ func TestParseCommand(t *testing.T) {
 		t.Run(tt.line, func(t *testing.T) {
 			got := parseCommand(tt.line, nil)()
 			if tt.want == nil {
-				em, ok := got.(ErrorMsg)
+				em, ok := got.(ErrorMessage)
 				if !ok || em.Err.Error() != "not a command: "+tt.name {
 					t.Errorf("got %#v, want not-a-command error for %q", got, tt.name)
 				}
@@ -324,7 +324,7 @@ func TestPushPop(t *testing.T) {
 	if len(m.stack) != 1 {
 		t.Error("pushing nil should be ignored")
 	}
-	_, cmd := m.Update(PopMsg{})
+	_, cmd := m.Update(PopMessage{})
 	if !isQuit(cmd) {
 		t.Error("PopMsg on root should quit")
 	}
@@ -340,11 +340,11 @@ func TestSequences(t *testing.T) {
 		if m.matcher.Display() != "g" || m.bar().pending != "g" {
 			t.Errorf("pending prefix = %q, want g", m.bar().pending)
 		}
-		if len(v.keyMsgs()) != 0 {
+		if len(v.keyMessages()) != 0 {
 			t.Error("view received keys before sequence completed")
 		}
 		press(m, "g")
-		if diff := cmp.Diff([]keys.Msg{{Seq: "g g"}}, v.keyMsgs()); diff != "" {
+		if diff := cmp.Diff([]keys.Message{{Sequence: "g g"}}, v.keyMessages()); diff != "" {
 			t.Errorf("mismatch (-want +got):\n%s", diff)
 		}
 		if m.bar().pending != "" {
@@ -356,7 +356,7 @@ func TestSequences(t *testing.T) {
 		m := newModel(v)
 		press(m, "z")
 		press(m, "q")
-		if diff := cmp.Diff([]keys.Msg{{Seq: "z q"}}, v.keyMsgs()); diff != "" {
+		if diff := cmp.Diff([]keys.Message{{Sequence: "z q"}}, v.keyMessages()); diff != "" {
 			t.Errorf("mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -368,7 +368,7 @@ func TestSequences(t *testing.T) {
 		if m.matcher.Pending() {
 			t.Error("timeout should clear the pending prefix")
 		}
-		if len(v.keyMsgs()) != 0 {
+		if len(v.keyMessages()) != 0 {
 			t.Error("incomplete sequence must not reach the view")
 		}
 	})
@@ -415,7 +415,7 @@ func TestHelpToggle(t *testing.T) {
 		t.Fatal("? should open help")
 	}
 	press(m, "j")
-	if len(v.keyMsgs()) != 0 {
+	if len(v.keyMessages()) != 0 {
 		t.Error("keys must not reach the view while help is open")
 	}
 	for _, closer := range []string{"?", "esc"} {
@@ -433,13 +433,13 @@ func TestHelpToggle(t *testing.T) {
 func TestStatusMessages(t *testing.T) {
 	m := newModel(newFake("v"))
 
-	_, cmd := m.Update(InfoMsg{Text: "hello"})
+	_, cmd := m.Update(InfoMessage{Text: "hello"})
 	if m.status.text != "hello" || m.status.kind != statusInfo {
 		t.Errorf("status = %+v", m.status)
 	}
 	stale := cmd()
 
-	_, cmd = m.Update(ErrorMsg{Err: errors.New("boom")})
+	_, cmd = m.Update(ErrorMessage{Err: errors.New("boom")})
 	if m.status.text != "boom" || m.status.kind != statusError {
 		t.Errorf("status = %+v", m.status)
 	}
@@ -454,7 +454,7 @@ func TestStatusMessages(t *testing.T) {
 }
 
 // resultMsg stands in for a command result addressed to a view.
-type resultMsg struct{}
+type resultMessage struct{}
 
 func TestSpinnerFollowsTopView(t *testing.T) {
 	root, child := newFake("root"), newFake("child")
@@ -473,7 +473,7 @@ func TestSpinnerFollowsTopView(t *testing.T) {
 		t.Error("spinner should return when the loading view is revealed again")
 	}
 	root.loading = false
-	m.Update(resultMsg{})
+	m.Update(resultMessage{})
 	if m.bar().spinner != "" {
 		t.Error("spinner should stop when the view stops loading")
 	}
@@ -500,7 +500,7 @@ func TestResultReachesCoveredView(t *testing.T) {
 	m := newModel(root)
 	run(m, Push(child)) // pushed while root's load is in flight
 
-	m.Update(resultMsg{}) // the load finishes while child is on top
+	m.Update(resultMessage{}) // the load finishes while child is on top
 	if root.results != 1 || child.results != 1 {
 		t.Fatalf("result delivery: root %d, child %d; want both 1 (broadcast)", root.results, child.results)
 	}
@@ -556,7 +556,7 @@ func TestResizeAndTheme(t *testing.T) {
 	}
 
 	m.Update(tea.BackgroundColorMsg{})
-	if _, ok := child.last().(ThemeMsg); !ok {
+	if _, ok := child.last().(ThemeMessage); !ok {
 		t.Errorf("child last msg = %T, want ThemeMsg", child.last())
 	}
 }

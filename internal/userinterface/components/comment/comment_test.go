@@ -12,7 +12,7 @@ import (
 
 var now = time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)
 
-func TestRelTime(t *testing.T) {
+func TestRelativeTime(t *testing.T) {
 	tests := []struct {
 		d    time.Duration
 		want string
@@ -26,7 +26,7 @@ func TestRelTime(t *testing.T) {
 		{800 * 24 * time.Hour, "2y ago"},
 	}
 	for _, tt := range tests {
-		if got := RelTime(now, now.Add(-tt.d)); got != tt.want {
+		if got := RelativeTime(now, now.Add(-tt.d)); got != tt.want {
 			t.Errorf("RelTime(%v) = %q, want %q", tt.d, got, tt.want)
 		}
 	}

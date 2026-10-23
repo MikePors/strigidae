@@ -86,21 +86,21 @@ func TestDiffPaneKeys(t *testing.T) {
 
 	// Horizontal scrolling: 4 columns, then half a screen.
 	h.press("z l")
-	if dv.XOffset() != 4 {
-		t.Errorf("z l: offset = %d, want 4", dv.XOffset())
+	if dv.HorizontalOffset() != 4 {
+		t.Errorf("z l: offset = %d, want 4", dv.HorizontalOffset())
 	}
 	h.press("z h")
-	if dv.XOffset() != 0 {
-		t.Errorf("z h: offset = %d, want 0", dv.XOffset())
+	if dv.HorizontalOffset() != 0 {
+		t.Errorf("z h: offset = %d, want 0", dv.HorizontalOffset())
 	}
 	h.press("z L")
-	half := dv.XOffset()
+	half := dv.HorizontalOffset()
 	if half <= 4 {
 		t.Errorf("z L: offset = %d, want half a screen", half)
 	}
 	h.press("z H")
-	if dv.XOffset() != 0 {
-		t.Errorf("z H: offset = %d, want 0", dv.XOffset())
+	if dv.HorizontalOffset() != 0 {
+		t.Errorf("z H: offset = %d, want 0", dv.HorizontalOffset())
 	}
 }
 
@@ -153,7 +153,7 @@ func TestDiffPaneStates(t *testing.T) {
 	t.Run("loading", func(t *testing.T) {
 		h := newHarness(t, 100, 24)
 		h.v.Init()
-		h.send(prLoadedMsg{owner: h.v, repo: testRepo, number: 7, seq: h.v.seq, detail: testDetail()})
+		h.send(pullRequestLoadedMessage{owner: h.v, repository: testRepository, number: 7, sequence: h.v.sequence, detail: testDetail()})
 		h.press("}")
 		golden.Assert(t, "diff_loading", h.render(), false)
 	})
@@ -173,7 +173,7 @@ func TestDiffPaneStates(t *testing.T) {
 	})
 	t.Run("parse error", func(t *testing.T) {
 		h := newHarness(t, 100, 24)
-		h.client.SetDiff(testRepo, 7, "diff --git a/x b/x\n@@ -1,2 +1,2 @@\n+only one line\n")
+		h.client.SetDiff(testRepository, 7, "diff --git a/x b/x\n@@ -1,2 +1,2 @@\n+only one line\n")
 		h.run(h.v.Init())
 		h.press("}")
 		out := ansi.Strip(h.render())

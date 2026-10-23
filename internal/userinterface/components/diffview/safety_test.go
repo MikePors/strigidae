@@ -134,7 +134,7 @@ func TestEmojiRowsAreExactlyPaneWidth(t *testing.T) {
 		}
 		for i, r := range rows {
 			if got := ansi.StringWidth(r); got != w {
-				t.Fatalf("xoff %d row %d is %d cells wide, want %d: %q", m.XOffset(), i, got, w, ansi.Strip(r))
+				t.Fatalf("xoff %d row %d is %d cells wide, want %d: %q", m.HorizontalOffset(), i, got, w, ansi.Strip(r))
 			}
 		}
 	}
@@ -152,11 +152,11 @@ func TestSetFileKeepsPositionAcrossReparse(t *testing.T) {
 	m.SetSize(60, 6)
 	m.CursorDown(15)
 	m.ScrollRight(5)
-	cursor, top, xoff := m.win.Cursor(), m.win.Top(), m.win.XOffset()
+	cursor, top, xoff := m.win.Cursor(), m.win.Top(), m.win.HorizontalOffset()
 
 	m.SetFile(d2.File("server.go"))
-	if m.win.Cursor() != cursor || m.win.Top() != top || m.win.XOffset() != xoff {
-		t.Errorf("position after reparse = %d/%d/%d, want %d/%d/%d", m.win.Cursor(), m.win.Top(), m.win.XOffset(), cursor, top, xoff)
+	if m.win.Cursor() != cursor || m.win.Top() != top || m.win.HorizontalOffset() != xoff {
+		t.Errorf("position after reparse = %d/%d/%d, want %d/%d/%d", m.win.Cursor(), m.win.Top(), m.win.HorizontalOffset(), cursor, top, xoff)
 	}
 	if got, ok := m.Cursor(); !ok || got.Old != 32 {
 		t.Errorf("cursor line after reparse: %+v %v", got, ok)
@@ -173,7 +173,7 @@ func TestSetFileKeepsPositionAcrossReparse(t *testing.T) {
 	// A different path resets.
 	m.SetFile(d2.File("pkg/new.go"))
 	m.SetFile(d1.File("server.go"))
-	if m.win.Cursor() != 0 || m.win.Top() != 0 || m.win.XOffset() != 0 {
-		t.Errorf("different path should reset, got %d/%d/%d", m.win.Cursor(), m.win.Top(), m.win.XOffset())
+	if m.win.Cursor() != 0 || m.win.Top() != 0 || m.win.HorizontalOffset() != 0 {
+		t.Errorf("different path should reset, got %d/%d/%d", m.win.Cursor(), m.win.Top(), m.win.HorizontalOffset())
 	}
 }

@@ -12,9 +12,9 @@ import (
 
 // usageError is a mistake on the command line; it exits 2. An empty msg means
 // the flag package has already reported it.
-type usageError struct{ msg string }
+type usageError struct{ message string }
 
-func (e *usageError) Error() string { return e.msg }
+func (e *usageError) Error() string { return e.message }
 
 // signInError means there are no usable credentials for host ("" for the gh
 // default host).
@@ -47,7 +47,7 @@ func message(err error) (string, int) {
 	)
 	switch {
 	case errors.As(err, &usage):
-		return usage.msg, 2
+		return usage.message, 2
 	case errors.As(err, &signIn):
 		login := "gh auth login"
 		if signIn.host != "" {

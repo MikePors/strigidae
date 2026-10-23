@@ -12,19 +12,19 @@ import (
 )
 
 // classNoNewline styles the text of "\ No newline" marker rows.
-const classNoNewline = Class(numClasses)
+const classNoNewline = Class(numberClasses)
 
 // Line-kind indexes into the style set.
 const (
 	kindContext = iota
 	kindAdd
 	kindDelete
-	numKinds
+	numberKinds
 )
 
 // variant is the set of styles for one (kind, cursor) combination.
 type variant struct {
-	code   [numClasses + 1]lipgloss.Style
+	code   [numberClasses + 1]lipgloss.Style
 	fill   lipgloss.Style // pads the code area to full width
 	gutter lipgloss.Style
 	thread [2]lipgloss.Style // gutter marker: [0] quiet thread, [1] open thread
@@ -33,23 +33,23 @@ type variant struct {
 // styleSet precomputes every style combination so rendering never builds
 // styles.
 type styleSet struct {
-	v    [2][numKinds]variant // [cursor][kind]
+	v    [2][numberKinds]variant // [cursor][kind]
 	hunk [2]lipgloss.Style
 }
 
 func newStyleSet(th theme.Theme) styleSet {
 	var s styleSet
 	cursorBG := th.DiffCursor.GetBackground()
-	bases := [numKinds]lipgloss.Style{th.DiffContext, th.DiffAdd, th.DiffDelete}
-	gutters := [numKinds]lipgloss.Style{th.DiffGutter, th.DiffGutterAdd, th.DiffGutterDelete}
-	var fg [numClasses + 1]lipgloss.Style
-	for c := range Class(numClasses) {
+	bases := [numberKinds]lipgloss.Style{th.DiffContext, th.DiffAdd, th.DiffDelete}
+	gutters := [numberKinds]lipgloss.Style{th.DiffGutter, th.DiffGutterAdd, th.DiffGutterDelete}
+	var fg [numberClasses + 1]lipgloss.Style
+	for c := range Class(numberClasses) {
 		fg[c] = th.Syntax.For(c)
 	}
 	fg[ClassPlain] = lipgloss.NewStyle()
 	fg[classNoNewline] = th.DiffNoNewline
 	for cur := range 2 {
-		for k := range numKinds {
+		for k := range numberKinds {
 			base, gut := bases[k], gutters[k]
 			if cur == 1 {
 				base, gut = base.Background(cursorBG), gut.Background(cursorBG)
@@ -77,7 +77,7 @@ func (m *Model) renderRow(i int) string {
 	if r.tr != nil {
 		return m.renderThreadRow(i, r)
 	}
-	if r.msg {
+	if r.message {
 		return m.renderNoticeRow(i, r)
 	}
 	if r.line == nil {
@@ -100,7 +100,7 @@ func (m *Model) renderRow(i int) string {
 	v := &m.styles.v[cur][kind]
 
 	gutter := m.gutterText(r.line, r.bi, mark, v)
-	codeW := m.codeW()
+	codeW := m.codeWidth()
 	if codeW == 0 {
 		return ansi.Truncate(gutter, m.w, "")
 	}
@@ -109,7 +109,7 @@ func (m *Model) renderRow(i int) string {
 	if r.line.Kind == diff.NoNewline {
 		spans = []Span{{Text: r.text, Class: classNoNewline}}
 	}
-	visible, used := window(spans, m.win.XOffset(), codeW)
+	visible, used := window(spans, m.win.HorizontalOffset(), codeW)
 
 	var b strings.Builder
 	b.WriteString(gutter)
@@ -142,11 +142,11 @@ func (m *Model) gutterText(l *diff.Line, bi int, mark string, v *variant) string
 			ts = v.thread[1]
 		}
 	}
-	return v.gutter.Render(mark+numCell(l.Old, m.numW)+" "+numCell(l.New, m.numW)+" ") +
+	return v.gutter.Render(mark+numberCell(l.Old, m.numberWidth)+" "+numberCell(l.New, m.numberWidth)+" ") +
 		ts.Render(glyph) + v.gutter.Render(marker)
 }
 
-func numCell(n, w int) string {
+func numberCell(n, w int) string {
 	s := ""
 	if n > 0 {
 		s = strconv.Itoa(n)
