@@ -11,11 +11,11 @@ const ghost = "ghost"
 
 type graphqlActor struct{ Login string }
 
-func (a *graphqlActor) login() string {
-	if a == nil || a.Login == "" {
+func (actor *graphqlActor) login() string {
+	if actor == nil || actor.Login == "" {
 		return ghost
 	}
-	return a.Login
+	return actor.Login
 }
 
 type graphqlPageInfo struct {
@@ -23,17 +23,17 @@ type graphqlPageInfo struct {
 	EndCursor   string
 }
 
-func (p graphqlPageInfo) next() string {
-	if !p.HasNextPage {
+func (pageInformation graphqlPageInfo) next() string {
+	if !pageInformation.HasNextPage {
 		return ""
 	}
-	return p.EndCursor
+	return pageInformation.EndCursor
 }
 
-type graphqlConnection[N any] struct {
+type graphqlConnection[Node any] struct {
 	TotalCount int
 	PageInfo   graphqlPageInfo
-	Nodes      []N
+	Nodes      []Node
 }
 
 type graphqlPullRequest struct {
@@ -141,164 +141,164 @@ type graphqlThread struct {
 	Comments          struct{ Nodes []graphqlReviewComment }
 }
 
-func mapPullRequest(n graphqlPullRequest) (github.PullRequest, error) {
-	repo, err := github.ParseRepository(n.Repository.NameWithOwner)
+func mapPullRequest(node graphqlPullRequest) (github.PullRequest, error) {
+	repository, err := github.ParseRepository(node.Repository.NameWithOwner)
 	if err != nil {
 		return github.PullRequest{}, err
 	}
 	return github.PullRequest{
-		Identifier:     n.ID,
-		HeadSHA:        n.HeadRefOid,
-		Repository:     repo,
-		Number:         n.Number,
-		Title:          n.Title,
-		Author:         n.Author.login(),
-		State:          github.PullRequestState(n.State),
-		Draft:          n.IsDraft,
-		ReviewDecision: github.ReviewDecision(n.ReviewDecision),
-		Checks:         mapChecks(n),
-		CommentCount:   n.CommentCount.TotalCount,
-		CreatedAt:      n.CreatedAt,
-		UpdatedAt:      n.UpdatedAt,
-		URL:            n.URL,
-		HeadBranch:     n.HeadRefName,
-		BaseBranch:     n.BaseRefName,
+		Identifier:     node.ID,
+		HeadSHA:        node.HeadRefOid,
+		Repository:     repository,
+		Number:         node.Number,
+		Title:          node.Title,
+		Author:         node.Author.login(),
+		State:          github.PullRequestState(node.State),
+		Draft:          node.IsDraft,
+		ReviewDecision: github.ReviewDecision(node.ReviewDecision),
+		Checks:         mapChecks(node),
+		CommentCount:   node.CommentCount.TotalCount,
+		CreatedAt:      node.CreatedAt,
+		UpdatedAt:      node.UpdatedAt,
+		URL:            node.URL,
+		HeadBranch:     node.HeadRefName,
+		BaseBranch:     node.BaseRefName,
 	}, nil
 }
 
 // mapChecks reads the head commit's rollup; null means it has no checks.
-func mapChecks(n graphqlPullRequest) github.CheckState {
-	if n.StatusCheckRollup == nil {
+func mapChecks(node graphqlPullRequest) github.CheckState {
+	if node.StatusCheckRollup == nil {
 		return github.ChecksNone
 	}
-	return github.CheckStateFromRollup(n.StatusCheckRollup.State)
+	return github.CheckStateFromRollup(node.StatusCheckRollup.State)
 }
 
 func mapPullRequests(nodes []graphqlPullRequest) ([]github.PullRequest, error) {
 	out := make([]github.PullRequest, 0, len(nodes))
-	for _, n := range nodes {
+	for _, node := range nodes {
 		// Search results can contain nulls for inaccessible items, which decode
 		// to zero values.
-		if n.Number == 0 {
+		if node.Number == 0 {
 			continue
 		}
-		pr, err := mapPullRequest(n)
+		pullRequest, err := mapPullRequest(node)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, pr)
+		out = append(out, pullRequest)
 	}
 	return out, nil
 }
 
 func mapReactions(groups []graphqlReactionGroup) []github.ReactionSummary {
 	var out []github.ReactionSummary
-	for _, g := range groups {
-		if g.Reactors.TotalCount == 0 {
+	for _, group := range groups {
+		if group.Reactors.TotalCount == 0 {
 			continue
 		}
 		out = append(out, github.ReactionSummary{
-			Content:       github.ReactionContent(g.Content),
-			Count:         g.Reactors.TotalCount,
-			ViewerReacted: g.ViewerHasReacted,
+			Content:       github.ReactionContent(group.Content),
+			Count:         group.Reactors.TotalCount,
+			ViewerReacted: group.ViewerHasReacted,
 		})
 	}
 	return out
 }
 
-func mapIssueComment(n graphqlIssueComment) github.IssueComment {
+func mapIssueComment(node graphqlIssueComment) github.IssueComment {
 	return github.IssueComment{
-		Identifier: n.ID,
-		Author:     n.Author.login(),
-		Body:       n.Body,
-		CreatedAt:  n.CreatedAt,
-		URL:        n.URL,
-		Reactions:  mapReactions(n.ReactionGroups),
+		Identifier: node.ID,
+		Author:     node.Author.login(),
+		Body:       node.Body,
+		CreatedAt:  node.CreatedAt,
+		URL:        node.URL,
+		Reactions:  mapReactions(node.ReactionGroups),
 	}
 }
 
-func mapReviewComment(n graphqlReviewComment) github.ReviewComment {
+func mapReviewComment(node graphqlReviewComment) github.ReviewComment {
 	return github.ReviewComment{
-		Identifier: n.ID,
-		Author:     n.Author.login(),
-		Body:       n.Body,
-		CreatedAt:  n.CreatedAt,
-		URL:        n.URL,
-		DiffHunk:   n.DiffHunk,
-		Pending:    n.State == "PENDING",
+		Identifier: node.ID,
+		Author:     node.Author.login(),
+		Body:       node.Body,
+		CreatedAt:  node.CreatedAt,
+		URL:        node.URL,
+		DiffHunk:   node.DiffHunk,
+		Pending:    node.State == "PENDING",
 
-		ViewerCanUpdate: n.ViewerCanUpdate,
-		ViewerCanDelete: n.ViewerCanDelete,
-		ViewerDidAuthor: n.ViewerDidAuthor,
-		Reactions:       mapReactions(n.ReactionGroups),
+		ViewerCanUpdate: node.ViewerCanUpdate,
+		ViewerCanDelete: node.ViewerCanDelete,
+		ViewerDidAuthor: node.ViewerDidAuthor,
+		Reactions:       mapReactions(node.ReactionGroups),
 	}
 }
 
-func mapDetail(n graphqlPullRequestDetail, files []graphqlFile, comments []graphqlIssueComment, reviews []graphqlReview) (github.PullRequestDetail, error) {
-	pr, err := mapPullRequest(n.graphqlPullRequest)
+func mapDetail(node graphqlPullRequestDetail, files []graphqlFile, comments []graphqlIssueComment, reviews []graphqlReview) (github.PullRequestDetail, error) {
+	pullRequest, err := mapPullRequest(node.graphqlPullRequest)
 	if err != nil {
 		return github.PullRequestDetail{}, err
 	}
-	d := github.PullRequestDetail{
-		PullRequest: pr,
-		Body:        n.Body,
-		Additions:   n.Additions,
-		Deletions:   n.Deletions,
+	detail := github.PullRequestDetail{
+		PullRequest: pullRequest,
+		Body:        node.Body,
+		Additions:   node.Additions,
+		Deletions:   node.Deletions,
 	}
-	for _, l := range n.Labels.Nodes {
-		d.Labels = append(d.Labels, github.Label{Name: l.Name, Color: l.Color})
+	for _, label := range node.Labels.Nodes {
+		detail.Labels = append(detail.Labels, github.Label{Name: label.Name, Color: label.Color})
 	}
-	for _, r := range n.ReviewRequests.Nodes {
-		switch rr := r.RequestedReviewer; {
-		case rr == nil:
-		case rr.Typename == "Team":
-			d.ReviewRequests = append(d.ReviewRequests, github.Reviewer{Name: rr.Slug, IsTeam: true})
+	for _, record := range node.ReviewRequests.Nodes {
+		switch requestedReviewer := record.RequestedReviewer; {
+		case requestedReviewer == nil:
+		case requestedReviewer.Typename == "Team":
+			detail.ReviewRequests = append(detail.ReviewRequests, github.Reviewer{Name: requestedReviewer.Slug, IsTeam: true})
 		default:
-			d.ReviewRequests = append(d.ReviewRequests, github.Reviewer{Name: rr.Login})
+			detail.ReviewRequests = append(detail.ReviewRequests, github.Reviewer{Name: requestedReviewer.Login})
 		}
 	}
-	for _, f := range files {
-		d.Files = append(d.Files, github.ChangedFile{
-			Path: f.Path, Additions: f.Additions, Deletions: f.Deletions, Change: github.FileChangeType(f.ChangeType), Viewed: github.ViewedState(f.ViewerViewedState),
+	for _, file := range files {
+		detail.Files = append(detail.Files, github.ChangedFile{
+			Path: file.Path, Additions: file.Additions, Deletions: file.Deletions, Change: github.FileChangeType(file.ChangeType), Viewed: github.ViewedState(file.ViewerViewedState),
 		})
 	}
-	for _, c := range comments {
-		d.Comments = append(d.Comments, mapIssueComment(c))
+	for _, graphqlComment := range comments {
+		detail.Comments = append(detail.Comments, mapIssueComment(graphqlComment))
 	}
-	for _, r := range reviews {
-		d.Reviews = append(d.Reviews, github.Review{
-			Identifier: r.ID, Author: r.Author.login(), State: github.ReviewState(r.State), Body: r.Body, SubmittedAt: r.SubmittedAt,
+	for _, review := range reviews {
+		detail.Reviews = append(detail.Reviews, github.Review{
+			Identifier: review.ID, Author: review.Author.login(), State: github.ReviewState(review.State), Body: review.Body, SubmittedAt: review.SubmittedAt,
 		})
 	}
-	return d, nil
+	return detail, nil
 }
 
-func intOrZero(p *int) int {
-	if p == nil {
+func intOrZero(pointer *int) int {
+	if pointer == nil {
 		return 0
 	}
-	return *p
+	return *pointer
 }
 
-func mapThread(n graphqlThread) github.ReviewThread {
-	t := github.ReviewThread{
-		Identifier:        n.ID,
-		SubjectType:       github.ThreadSubject(n.SubjectType),
-		IsResolved:        n.IsResolved,
-		IsOutdated:        n.IsOutdated,
-		Path:              n.Path,
-		Line:              intOrZero(n.Line),
-		OriginalLine:      intOrZero(n.OriginalLine),
-		StartLine:         intOrZero(n.StartLine),
-		OriginalStartLine: intOrZero(n.OriginalStartLine),
-		DiffSide:          github.DiffSide(n.DiffSide),
-		StartDiffSide:     github.DiffSide(n.StartDiffSide),
+func mapThread(node graphqlThread) github.ReviewThread {
+	thread := github.ReviewThread{
+		Identifier:        node.ID,
+		SubjectType:       github.ThreadSubject(node.SubjectType),
+		IsResolved:        node.IsResolved,
+		IsOutdated:        node.IsOutdated,
+		Path:              node.Path,
+		Line:              intOrZero(node.Line),
+		OriginalLine:      intOrZero(node.OriginalLine),
+		StartLine:         intOrZero(node.StartLine),
+		OriginalStartLine: intOrZero(node.OriginalStartLine),
+		DiffSide:          github.DiffSide(node.DiffSide),
+		StartDiffSide:     github.DiffSide(node.StartDiffSide),
 	}
-	if n.ResolvedBy != nil {
-		t.ResolvedBy = n.ResolvedBy.login()
+	if node.ResolvedBy != nil {
+		thread.ResolvedBy = node.ResolvedBy.login()
 	}
-	for _, c := range n.Comments.Nodes {
-		t.Comments = append(t.Comments, mapReviewComment(c))
+	for _, graphqlComment := range node.Comments.Nodes {
+		thread.Comments = append(thread.Comments, mapReviewComment(graphqlComment))
 	}
-	return t
+	return thread
 }

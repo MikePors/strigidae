@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	ghapi "github.com/cli/go-gh/v2/pkg/api"
+	githubnetwork "github.com/cli/go-gh/v2/pkg/api"
 	"github.com/cli/go-gh/v2/pkg/auth"
 
 	"github.com/MikePors/strigidae/internal/github"
@@ -40,10 +40,10 @@ type Options struct {
 
 // Client is the real github.Client.
 type Client struct {
-	gql  *ghapi.GraphQLClient
-	rest *ghapi.RESTClient
+	gql  *githubnetwork.GraphQLClient
+	rest *githubnetwork.RESTClient
 	// diff is a REST client that asks for the unified diff media type.
-	diff  *ghapi.RESTClient
+	diff  *githubnetwork.RESTClient
 	limit *limitTracker
 	now   func() time.Time
 	host  string
@@ -53,64 +53,64 @@ var _ github.Client = (*Client)(nil)
 
 // New builds a Client. It returns an error wrapping github.ErrNotAuthenticated
 // when no token can be found.
-func New(opts Options) (*Client, error) {
-	host := opts.Host
+func New(options Options) (*Client, error) {
+	host := options.Host
 	if host == "" {
 		host, _ = auth.DefaultHost()
 	}
-	token := opts.Token
+	token := options.Token
 	if token == "" {
-		source := opts.TokenSource
+		source := options.TokenSource
 		if source == nil {
-			source = func(h string) string { t, _ := auth.TokenForHost(h); return t }
+			source = func(hostName string) string { token, _ := auth.TokenForHost(hostName); return token }
 		}
 		token = source(host)
 	}
 	if token == "" {
 		return nil, fmt.Errorf("host %s: %w", host, github.ErrNotAuthenticated)
 	}
-	now := opts.Now
+	now := options.Now
 	if now == nil {
 		now = time.Now
 	}
 
 	// Setting Transport (always, to observe rate-limit headers) means go-gh
 	// skips its config-based resolution, so Host and Token are given explicitly.
-	base := opts.Transport
+	base := options.Transport
 	if base == nil {
 		base = http.DefaultTransport
 	}
 	tracker := &limitTracker{base: base}
-	co := ghapi.ClientOptions{
+	clientOptions := githubnetwork.ClientOptions{
 		Host:         host,
-		APIHost:      opts.APIHost,
+		APIHost:      options.APIHost,
 		AuthToken:    token,
 		Transport:    tracker,
 		LogIgnoreEnv: true,
 	}
-	gql, err := ghapi.NewGraphQLClient(co)
+	graphqlClient, err := githubnetwork.NewGraphQLClient(clientOptions)
 	if err != nil {
 		return nil, fmt.Errorf("create graphql client: %w", err)
 	}
-	rest, err := ghapi.NewRESTClient(co)
+	rest, err := githubnetwork.NewRESTClient(clientOptions)
 	if err != nil {
 		return nil, fmt.Errorf("create rest client: %w", err)
 	}
-	co.Headers = map[string]string{"Accept": diffAccept}
-	diff, err := ghapi.NewRESTClient(co)
+	clientOptions.Headers = map[string]string{"Accept": diffAccept}
+	diff, err := githubnetwork.NewRESTClient(clientOptions)
 	if err != nil {
 		return nil, fmt.Errorf("create diff client: %w", err)
 	}
-	return &Client{gql: gql, rest: rest, diff: diff, limit: tracker, now: now, host: host}, nil
+	return &Client{gql: graphqlClient, rest: rest, diff: diff, limit: tracker, now: now, host: host}, nil
 }
 
 // Host returns the GitHub host this client talks to.
-func (c *Client) Host() string { return c.host }
+func (client *Client) Host() string { return client.host }
 
 // query runs a GraphQL operation and maps failures to typed errors.
-func (c *Client) query(ctx context.Context, query string, vars map[string]any, out any) error {
-	if err := c.gql.DoWithContext(ctx, query, vars, out); err != nil {
-		return c.mapError(err)
+func (client *Client) query(ctx context.Context, query string, variables map[string]any, out any) error {
+	if err := client.gql.DoWithContext(ctx, query, variables, out); err != nil {
+		return client.mapError(err)
 	}
 	return nil
 }
@@ -126,26 +126,26 @@ type limitTracker struct {
 	resets map[string]time.Time
 }
 
-func (t *limitTracker) RoundTrip(req *http.Request) (*http.Response, error) {
-	resp, err := t.base.RoundTrip(req)
+func (tracker *limitTracker) RoundTrip(request *http.Request) (*http.Response, error) {
+	response, err := tracker.base.RoundTrip(request)
 	if err != nil {
-		return resp, err
+		return response, err
 	}
-	resource := resp.Header.Get("X-RateLimit-Resource")
-	if reset, ok := parseReset(resp.Header.Get("X-RateLimit-Reset")); ok && resource != "" {
-		t.mu.Lock()
-		if t.resets == nil {
-			t.resets = map[string]time.Time{}
+	resource := response.Header.Get("X-RateLimit-Resource")
+	if reset, ok := parseReset(response.Header.Get("X-RateLimit-Reset")); ok && resource != "" {
+		tracker.mu.Lock()
+		if tracker.resets == nil {
+			tracker.resets = map[string]time.Time{}
 		}
-		t.resets[resource] = reset
-		t.mu.Unlock()
+		tracker.resets[resource] = reset
+		tracker.mu.Unlock()
 	}
-	return resp, nil
+	return response, nil
 }
 
 // resetFor returns the last reset time seen for the bucket, or zero.
-func (t *limitTracker) resetFor(resource string) time.Time {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.resets[resource]
+func (tracker *limitTracker) resetFor(resource string) time.Time {
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	return tracker.resets[resource]
 }

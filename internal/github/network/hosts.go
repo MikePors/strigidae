@@ -17,12 +17,12 @@ func KnownHost(host string) bool {
 
 // knownHost is KnownHost with gh's known hosts and GH_HOST injected, so tests
 // never read the real gh config or environment.
-func knownHost(host string, known []string, ghHost string) bool {
+func knownHost(host string, known []string, gitHubHost string) bool {
 	host = github.NormalizeHost(host)
 	if host == "" {
 		return false
 	}
-	if host == "github.com" || host == github.NormalizeHost(ghHost) {
+	if host == "github.com" || host == github.NormalizeHost(gitHubHost) {
 		return true
 	}
 	for _, k := range known {

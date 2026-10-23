@@ -2,7 +2,7 @@ package network
 
 import "testing"
 
-func TestKnownHost(t *testing.T) {
+func TestKnownHost(test *testing.T) {
 	known := []string{"github.com", "GHE.example.com"}
 	tests := []struct {
 		name   string
@@ -21,10 +21,10 @@ func TestKnownHost(t *testing.T) {
 		{name: "ssh config alias", host: "github-work", known: known, ghHost: "ghe.corp.test", want: false},
 		{name: "empty host with GH_HOST unset", host: "", want: false},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := knownHost(tt.host, tt.known, tt.ghHost); got != tt.want {
-				t.Errorf("knownHost(%q, %q, %q) = %v, want %v", tt.host, tt.known, tt.ghHost, got, tt.want)
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			if got := knownHost(testCase.host, testCase.known, testCase.ghHost); got != testCase.want {
+				test.Errorf("knownHost(%q, %q, %q) = %v, want %v", testCase.host, testCase.known, testCase.ghHost, got, testCase.want)
 			}
 		})
 	}

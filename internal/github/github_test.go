@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func TestParseRepository(t *testing.T) {
+func TestParseRepository(test *testing.T) {
 	tests := []struct {
 		in      string
 		want    Repository
@@ -23,67 +23,67 @@ func TestParseRepository(t *testing.T) {
 		{in: "a/b/c", wantErr: true},
 		{in: "a b/c", wantErr: true},
 	}
-	for _, tt := range tests {
-		got, err := ParseRepository(tt.in)
-		if (err != nil) != tt.wantErr {
-			t.Errorf("ParseRepo(%q) error = %v, wantErr %v", tt.in, err, tt.wantErr)
+	for _, testCase := range tests {
+		got, err := ParseRepository(testCase.in)
+		if (err != nil) != testCase.wantErr {
+			test.Errorf("ParseRepo(%q) error = %v, wantErr %v", testCase.in, err, testCase.wantErr)
 			continue
 		}
-		if got != tt.want {
-			t.Errorf("ParseRepo(%q) = %v, want %v", tt.in, got, tt.want)
+		if got != testCase.want {
+			test.Errorf("ParseRepo(%q) = %v, want %v", testCase.in, got, testCase.want)
 		}
-		if err == nil && got.String() != tt.want.Owner+"/"+tt.want.Name {
-			t.Errorf("String() = %q", got.String())
+		if err == nil && got.String() != testCase.want.Owner+"/"+testCase.want.Name {
+			test.Errorf("String() = %q", got.String())
 		}
 	}
 }
 
-func TestPageRequestSize(t *testing.T) {
+func TestPageRequestSize(test *testing.T) {
 	tests := []struct{ limit, want int }{
 		{0, DefaultPageSize}, {-1, DefaultPageSize}, {7, 7}, {100, 100}, {500, MaxPageSize},
 	}
-	for _, tt := range tests {
-		if got := (PageRequest{Limit: tt.limit}).Size(); got != tt.want {
-			t.Errorf("Size(%d) = %d, want %d", tt.limit, got, tt.want)
+	for _, testCase := range tests {
+		if got := (PageRequest{Limit: testCase.limit}).Size(); got != testCase.want {
+			test.Errorf("Size(%d) = %d, want %d", testCase.limit, got, testCase.want)
 		}
 	}
 }
 
-func TestRateLimitError(t *testing.T) {
+func TestRateLimitError(test *testing.T) {
 	now := time.Unix(1000, 0)
-	e := &RateLimitError{ResetAt: now.Add(90 * time.Second), Err: errors.New("api")}
-	if got := e.RetryAfter(now); got != 90*time.Second {
-		t.Errorf("RetryAfter = %v", got)
+	rateLimitError := &RateLimitError{ResetAt: now.Add(90 * time.Second), Err: errors.New("api")}
+	if got := rateLimitError.RetryAfter(now); got != 90*time.Second {
+		test.Errorf("RetryAfter = %v", got)
 	}
-	if got := e.RetryAfter(now.Add(time.Hour)); got != 0 {
-		t.Errorf("RetryAfter after reset = %v", got)
+	if got := rateLimitError.RetryAfter(now.Add(time.Hour)); got != 0 {
+		test.Errorf("RetryAfter after reset = %v", got)
 	}
 	if got := (&RateLimitError{}).RetryAfter(now); got != 0 {
-		t.Errorf("RetryAfter unknown = %v", got)
+		test.Errorf("RetryAfter unknown = %v", got)
 	}
 	// The message must not depend on the local time zone.
 	zoned := &RateLimitError{ResetAt: time.Date(2026, 10, 19, 10, 0, 0, 0, time.FixedZone("X", -7*3600))}
 	if got, want := zoned.Error(), "GitHub API rate limit exceeded; resets at 2026-10-19T17:00:00Z"; got != want {
-		t.Errorf("Error() = %q, want %q", got, want)
+		test.Errorf("Error() = %q, want %q", got, want)
 	}
 	if got := (&RateLimitError{}).Error(); got != "GitHub API rate limit exceeded" {
-		t.Errorf("Error() = %q", got)
+		test.Errorf("Error() = %q", got)
 	}
-	wrapped := fmt.Errorf("list: %w", e)
+	wrapped := fmt.Errorf("list: %w", rateLimitError)
 	var target *RateLimitError
-	if !errors.As(wrapped, &target) || target != e {
-		t.Error("errors.As should find RateLimitError")
+	if !errors.As(wrapped, &target) || target != rateLimitError {
+		test.Error("errors.As should find RateLimitError")
 	}
 }
 
-func TestNotAuthenticatedMessage(t *testing.T) {
+func TestNotAuthenticatedMessage(test *testing.T) {
 	if got := ErrNotAuthenticated.Error(); got == "" || !errors.Is(fmt.Errorf("x: %w", ErrNotAuthenticated), ErrNotAuthenticated) {
-		t.Errorf("unexpected: %q", got)
+		test.Errorf("unexpected: %q", got)
 	}
 }
 
-func TestReactionEmoji(t *testing.T) {
+func TestReactionEmoji(test *testing.T) {
 	if ReactionThumbsUp.Emoji() != "👍" || ReactionContent("NEW").Emoji() != "NEW" {
-		t.Error("unexpected emoji mapping")
+		test.Error("unexpected emoji mapping")
 	}
 }

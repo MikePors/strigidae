@@ -7,7 +7,7 @@ import (
 	"github.com/MikePors/strigidae/internal/github"
 )
 
-func TestMapChecks(t *testing.T) {
+func TestMapChecks(test *testing.T) {
 	tests := []struct {
 		name string
 		json string
@@ -21,14 +21,14 @@ func TestMapChecks(t *testing.T) {
 		{"null rollup", `null`, github.ChecksNone},
 		{"unknown state", `{"state":"WHATEVER"}`, github.ChecksNone},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var n graphqlPullRequest
-			if err := json.Unmarshal([]byte(`{"statusCheckRollup":`+tt.json+`}`), &n); err != nil {
-				t.Fatal(err)
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			var node graphqlPullRequest
+			if err := json.Unmarshal([]byte(`{"statusCheckRollup":`+testCase.json+`}`), &node); err != nil {
+				test.Fatal(err)
 			}
-			if got := mapChecks(n); got != tt.want {
-				t.Errorf("mapChecks = %q, want %q", got, tt.want)
+			if got := mapChecks(node); got != testCase.want {
+				test.Errorf("mapChecks = %q, want %q", got, testCase.want)
 			}
 		})
 	}

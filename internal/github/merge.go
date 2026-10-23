@@ -32,7 +32,9 @@ type MergeStatus struct {
 }
 
 // Allows reports whether the repository allows method.
-func (s MergeStatus) Allows(method MergeMethod) bool { return slices.Contains(s.Allowed, method) }
+func (state MergeStatus) Allows(method MergeMethod) bool {
+	return slices.Contains(state.Allowed, method)
+}
 
 // MergeInput describes a merge.
 type MergeInput struct {

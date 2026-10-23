@@ -50,80 +50,80 @@ mutation ` + operationDeleteReviewComment + `($commentId: ID!) {
 }`
 
 // StartReview implements github.Client.
-func (c *Client) StartReview(ctx context.Context, in github.StartReviewInput) (github.PendingReview, error) {
-	var resp struct {
+func (client *Client) StartReview(ctx context.Context, in github.StartReviewInput) (github.PendingReview, error) {
+	var response struct {
 		AddPullRequestReview *struct {
 			PullRequestReview *struct{ ID, Body string }
 		}
 	}
-	vars := map[string]any{"pullRequestId": in.PullRequestIdentifier, "commitOID": in.CommitObjectIdentifier}
-	if err := c.query(ctx, startReviewMutation, vars, &resp); err != nil {
+	variables := map[string]any{"pullRequestId": in.PullRequestIdentifier, "commitOID": in.CommitObjectIdentifier}
+	if err := client.query(ctx, startReviewMutation, variables, &response); err != nil {
 		return github.PendingReview{}, fmt.Errorf("start review on %s#%d: %w", in.Repository, in.Number, err)
 	}
-	if resp.AddPullRequestReview == nil || resp.AddPullRequestReview.PullRequestReview == nil {
+	if response.AddPullRequestReview == nil || response.AddPullRequestReview.PullRequestReview == nil {
 		return github.PendingReview{}, fmt.Errorf("start review on %s#%d: %w", in.Repository, in.Number, github.ErrNotFound)
 	}
-	r := resp.AddPullRequestReview.PullRequestReview
-	return github.PendingReview{Identifier: r.ID, Body: r.Body}, nil
+	record := response.AddPullRequestReview.PullRequestReview
+	return github.PendingReview{Identifier: record.ID, Body: record.Body}, nil
 }
 
 // AddReviewThread implements github.Client.
-func (c *Client) AddReviewThread(ctx context.Context, in github.AddThreadInput) (github.ReviewThread, error) {
-	var resp struct {
+func (client *Client) AddReviewThread(ctx context.Context, in github.AddThreadInput) (github.ReviewThread, error) {
+	var response struct {
 		AddPullRequestReviewThread *struct{ Thread *graphqlThread }
 	}
-	vars := map[string]any{
+	variables := map[string]any{
 		"reviewId": in.PendingReviewIdentifier, "path": in.Path, "body": in.Body,
 		"line": in.Line, "side": string(in.Side),
 	}
 	if in.StartLine > 0 {
-		vars["startLine"], vars["startSide"] = in.StartLine, string(in.StartSide)
+		variables["startLine"], variables["startSide"] = in.StartLine, string(in.StartSide)
 	}
-	if err := c.query(ctx, addReviewThreadMutation, vars, &resp); err != nil {
+	if err := client.query(ctx, addReviewThreadMutation, variables, &response); err != nil {
 		return github.ReviewThread{}, fmt.Errorf("add review comment on %s#%d: %w", in.Repository, in.Number, err)
 	}
 	// GitHub answers a null thread, without errors, when it does not accept the
 	// position (as far as known: to be confirmed live).
-	if resp.AddPullRequestReviewThread == nil || resp.AddPullRequestReviewThread.Thread == nil {
+	if response.AddPullRequestReviewThread == nil || response.AddPullRequestReviewThread.Thread == nil {
 		return github.ReviewThread{}, fmt.Errorf("add review comment on %s#%d: %w: GitHub did not accept it on %s:%d, which may not be in the diff",
 			in.Repository, in.Number, github.ErrCommentRejected, in.Path, in.Line)
 	}
-	return mapThread(*resp.AddPullRequestReviewThread.Thread), nil
+	return mapThread(*response.AddPullRequestReviewThread.Thread), nil
 }
 
 // UpdateReviewComment implements github.Client.
-func (c *Client) UpdateReviewComment(ctx context.Context, commentID, body string) (github.ReviewComment, error) {
-	var resp struct {
+func (client *Client) UpdateReviewComment(ctx context.Context, commentIdentifier, body string) (github.ReviewComment, error) {
+	var response struct {
 		UpdatePullRequestReviewComment *struct{ PullRequestReviewComment *graphqlReviewComment }
 	}
-	vars := map[string]any{"commentId": commentID, "body": body}
-	if err := c.query(ctx, updateReviewCommentMutation, vars, &resp); err != nil {
+	variables := map[string]any{"commentId": commentIdentifier, "body": body}
+	if err := client.query(ctx, updateReviewCommentMutation, variables, &response); err != nil {
 		return github.ReviewComment{}, fmt.Errorf("update review comment: %w", err)
 	}
-	if resp.UpdatePullRequestReviewComment == nil || resp.UpdatePullRequestReviewComment.PullRequestReviewComment == nil {
+	if response.UpdatePullRequestReviewComment == nil || response.UpdatePullRequestReviewComment.PullRequestReviewComment == nil {
 		return github.ReviewComment{}, fmt.Errorf("update review comment: %w", github.ErrNotFound)
 	}
-	return mapReviewComment(*resp.UpdatePullRequestReviewComment.PullRequestReviewComment), nil
+	return mapReviewComment(*response.UpdatePullRequestReviewComment.PullRequestReviewComment), nil
 }
 
 // DeleteReviewComment implements github.Client.
-func (c *Client) DeleteReviewComment(ctx context.Context, commentID string) error {
-	var resp map[string]any
-	if err := c.query(ctx, deleteReviewCommentMutation, map[string]any{"commentId": commentID}, &resp); err != nil {
+func (client *Client) DeleteReviewComment(ctx context.Context, commentIdentifier string) error {
+	var response map[string]any
+	if err := client.query(ctx, deleteReviewCommentMutation, map[string]any{"commentId": commentIdentifier}, &response); err != nil {
 		return fmt.Errorf("delete review comment: %w", err)
 	}
 	return nil
 }
 
 // GetReviewComment implements github.Client.
-func (c *Client) GetReviewComment(ctx context.Context, commentID string) (github.ReviewComment, error) {
-	var resp struct{ Node *graphqlReviewComment }
-	if err := c.query(ctx, getReviewCommentQuery, map[string]any{"id": commentID}, &resp); err != nil {
+func (client *Client) GetReviewComment(ctx context.Context, commentIdentifier string) (github.ReviewComment, error) {
+	var response struct{ Node *graphqlReviewComment }
+	if err := client.query(ctx, getReviewCommentQuery, map[string]any{"id": commentIdentifier}, &response); err != nil {
 		return github.ReviewComment{}, fmt.Errorf("load review comment: %w", err)
 	}
 	// A node of another type matches no fragment and comes back empty.
-	if resp.Node == nil || resp.Node.ID == "" {
+	if response.Node == nil || response.Node.ID == "" {
 		return github.ReviewComment{}, fmt.Errorf("load review comment: %w", github.ErrNotFound)
 	}
-	return mapReviewComment(*resp.Node), nil
+	return mapReviewComment(*response.Node), nil
 }

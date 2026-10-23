@@ -155,8 +155,8 @@ const (
 )
 
 // Emoji returns the emoji for the reaction, or the raw content if unknown.
-func (c ReactionContent) Emoji() string {
-	switch c {
+func (content ReactionContent) Emoji() string {
+	switch content {
 	case ReactionThumbsUp:
 		return "👍"
 	case ReactionThumbsDown:
@@ -174,7 +174,7 @@ func (c ReactionContent) Emoji() string {
 	case ReactionEyes:
 		return "👀"
 	default:
-		return string(c)
+		return string(content)
 	}
 }
 

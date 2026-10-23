@@ -85,7 +85,7 @@ query ` + operationPullRequestDetail + `($owner: String!, $name: String!, $numbe
 
 // moreQuery builds the query that continues one of the detail connections
 // (files, comments, reviews). The connection is aliased to "conn".
-func moreQuery(op, field, selection string) string {
+func moreQuery(operation, field, selection string) string {
 	return fmt.Sprintf(`
 query %s($owner: String!, $name: String!, $number: Int!, $after: String) {
   repository(owner: $owner, name: $name) {
@@ -93,7 +93,7 @@ query %s($owner: String!, $name: String!, $number: Int!, $after: String) {
       conn: %s(first: 100, after: $after) { pageInfo { hasNextPage endCursor } nodes { %s } }
     }
   }
-}`, op, field, selection)
+}`, operation, field, selection)
 }
 
 var (

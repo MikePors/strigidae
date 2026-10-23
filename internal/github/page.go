@@ -17,21 +17,21 @@ type PageRequest struct {
 }
 
 // Size returns the effective page size.
-func (p PageRequest) Size() int {
+func (pageRequest PageRequest) Size() int {
 	switch {
-	case p.Limit <= 0:
+	case pageRequest.Limit <= 0:
 		return DefaultPageSize
-	case p.Limit > MaxPageSize:
+	case pageRequest.Limit > MaxPageSize:
 		return MaxPageSize
 	default:
-		return p.Limit
+		return pageRequest.Limit
 	}
 }
 
 // Page is one page of results. Pass Next as PageRequest.After to load the
 // following page; the cursor is opaque.
-type Page[T any] struct {
-	Items []T
+type Page[Value any] struct {
+	Items []Value
 	// Next is the cursor for the following page, empty when there is none.
 	Next string
 	// Total is the total number of items across all pages, if known.
@@ -39,4 +39,4 @@ type Page[T any] struct {
 }
 
 // HasMore reports whether another page can be requested.
-func (p Page[T]) HasMore() bool { return p.Next != "" }
+func (page Page[Value]) HasMore() bool { return page.Next != "" }

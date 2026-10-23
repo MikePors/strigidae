@@ -29,8 +29,8 @@ mutation ` + operationMerge + `($pullRequestId: ID!, $mergeMethod: PullRequestMe
 }`
 
 // GetMergeStatus implements github.Client.
-func (c *Client) GetMergeStatus(ctx context.Context, repo github.Repository, number int) (github.MergeStatus, error) {
-	var resp struct {
+func (client *Client) GetMergeStatus(ctx context.Context, repository github.Repository, number int) (github.MergeStatus, error) {
+	var response struct {
 		Repository *struct {
 			MergeCommitAllowed  bool
 			SquashMergeAllowed  bool
@@ -43,38 +43,38 @@ func (c *Client) GetMergeStatus(ctx context.Context, repo github.Repository, num
 			}
 		}
 	}
-	vars := map[string]any{"owner": repo.Owner, "name": repo.Name, "number": number}
-	if err := c.query(ctx, mergeStatusQuery, vars, &resp); err != nil {
-		return github.MergeStatus{}, fmt.Errorf("load merge status of %s#%d: %w", repo, number, err)
+	variables := map[string]any{"owner": repository.Owner, "name": repository.Name, "number": number}
+	if err := client.query(ctx, mergeStatusQuery, variables, &response); err != nil {
+		return github.MergeStatus{}, fmt.Errorf("load merge status of %s#%d: %w", repository, number, err)
 	}
-	r := resp.Repository
-	if r == nil || r.PullRequest == nil {
-		return github.MergeStatus{}, fmt.Errorf("load merge status of %s#%d: %w", repo, number, github.ErrNotFound)
+	record := response.Repository
+	if record == nil || record.PullRequest == nil {
+		return github.MergeStatus{}, fmt.Errorf("load merge status of %s#%d: %w", repository, number, github.ErrNotFound)
 	}
-	st := github.MergeStatus{
-		PullRequestIdentifier: r.PullRequest.ID, HeadSHA: r.PullRequest.HeadRefOid, BaseBranch: r.PullRequest.BaseRefName,
-		DeleteBranchOnMerge: r.DeleteBranchOnMerge,
+	status := github.MergeStatus{
+		PullRequestIdentifier: record.PullRequest.ID, HeadSHA: record.PullRequest.HeadRefOid, BaseBranch: record.PullRequest.BaseRefName,
+		DeleteBranchOnMerge: record.DeleteBranchOnMerge,
 	}
-	for _, m := range []struct {
+	for _, method := range []struct {
 		method  github.MergeMethod
 		allowed bool
 	}{
-		{github.MergeMethodMerge, r.MergeCommitAllowed},
-		{github.MergeMethodSquash, r.SquashMergeAllowed},
-		{github.MergeMethodRebase, r.RebaseMergeAllowed},
+		{github.MergeMethodMerge, record.MergeCommitAllowed},
+		{github.MergeMethodSquash, record.SquashMergeAllowed},
+		{github.MergeMethodRebase, record.RebaseMergeAllowed},
 	} {
-		if m.allowed {
-			st.Allowed = append(st.Allowed, m.method)
+		if method.allowed {
+			status.Allowed = append(status.Allowed, method.method)
 		}
 	}
-	return st, nil
+	return status, nil
 }
 
 // MergePullRequest implements github.Client.
-func (c *Client) MergePullRequest(ctx context.Context, in github.MergeInput) error {
-	var resp map[string]any
-	vars := map[string]any{"pullRequestId": in.PullRequestIdentifier, "mergeMethod": string(in.Method), "expectedHeadOid": in.ExpectedHeadObjectIdentifier}
-	if err := c.query(ctx, mergeMutation, vars, &resp); err != nil {
+func (client *Client) MergePullRequest(ctx context.Context, in github.MergeInput) error {
+	var response map[string]any
+	variables := map[string]any{"pullRequestId": in.PullRequestIdentifier, "mergeMethod": string(in.Method), "expectedHeadOid": in.ExpectedHeadObjectIdentifier}
+	if err := client.query(ctx, mergeMutation, variables, &response); err != nil {
 		return fmt.Errorf("merge %s#%d: %w", in.Repository, in.Number, err)
 	}
 	return nil

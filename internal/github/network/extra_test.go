@@ -14,7 +14,7 @@ import (
 	"github.com/MikePors/strigidae/internal/github"
 )
 
-func TestHasPullRequestQualifier(t *testing.T) {
+func TestHasPullRequestQualifier(test *testing.T) {
 	tests := []struct {
 		query string
 		want  bool
@@ -30,197 +30,197 @@ func TestHasPullRequestQualifier(t *testing.T) {
 		{"is:prx", false},
 		{"", false},
 	}
-	for _, tt := range tests {
-		if got := hasPullRequestQualifier(tt.query); got != tt.want {
-			t.Errorf("hasPRQualifier(%q) = %v, want %v", tt.query, got, tt.want)
+	for _, testCase := range tests {
+		if got := hasPullRequestQualifier(testCase.query); got != testCase.want {
+			test.Errorf("hasPRQualifier(%q) = %v, want %v", testCase.query, got, testCase.want)
 		}
 	}
 }
 
-func TestSearchAddsPullRequestQualifierOnce(t *testing.T) {
+func TestSearchAddsPullRequestQualifierOnce(test *testing.T) {
 	tests := []struct{ in, want string }{
 		{"review-requested:@me", "is:pr review-requested:@me"},
 		{"is:pr author:octocat", "is:pr author:octocat"},
 		{"is:private author:octocat", "is:pr is:private author:octocat"},
 		{"-is:pr repo:o/r", "is:pr -is:pr repo:o/r"},
 	}
-	for _, tt := range tests {
-		s := &server{}
-		c := newTestClient(t, s)
-		if _, err := c.SearchPullRequests(context.Background(), tt.in, github.PageRequest{}); err != nil {
-			t.Fatal(err)
+	for _, testCase := range tests {
+		testServer := &server{}
+		client := newTestClient(test, testServer)
+		if _, err := client.SearchPullRequests(context.Background(), testCase.in, github.PageRequest{}); err != nil {
+			test.Fatal(err)
 		}
-		if got := s.Calls()[0].Variables["query"]; got != tt.want {
-			t.Errorf("query for %q = %v, want %q", tt.in, got, tt.want)
+		if got := testServer.Calls()[0].Variables["query"]; got != testCase.want {
+			test.Errorf("query for %q = %v, want %q", testCase.in, got, testCase.want)
 		}
 	}
 }
 
-func TestGetPullRequestWithoutTeamScope(t *testing.T) {
-	s := &server{}
-	s.override = func(c call, w http.ResponseWriter) bool {
+func TestGetPullRequestWithoutTeamScope(test *testing.T) {
+	testServer := &server{}
+	testServer.override = func(call call, writer http.ResponseWriter) bool {
 		// Only the query that asks for team slugs is refused.
-		if c.Operation == operationPullRequestDetail && strings.Contains(c.Query, "... on Team") {
-			s.fixture(w, http.StatusOK, "error_insufficient_scopes.json")
+		if call.Operation == operationPullRequestDetail && strings.Contains(call.Query, "... on Team") {
+			testServer.fixture(writer, http.StatusOK, "error_insufficient_scopes.json")
 			return true
 		}
-		if c.Operation == operationPullRequestDetail {
+		if call.Operation == operationPullRequestDetail {
 			// The fallback query cannot read the slug, so GitHub omits it.
-			b, err := os.ReadFile("testdata/PullRequestDetail.json")
+			bytes, err := os.ReadFile("testdata/PullRequestDetail.json")
 			if err != nil {
-				t.Error(err)
+				test.Error(err)
 				return true
 			}
-			w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			_, _ = w.Write([]byte(strings.Replace(string(b), `, "slug": "maintainers"`, "", 1)))
+			writer.Header().Set("Content-Type", "application/json; charset=utf-8")
+			_, _ = writer.Write([]byte(strings.Replace(string(bytes), `, "slug": "maintainers"`, "", 1)))
 			return true
 		}
 		return false
 	}
-	c := newTestClient(t, s)
-	got, err := c.GetPullRequest(context.Background(), repository, 27)
+	client := newTestClient(test, testServer)
+	got, err := client.GetPullRequest(context.Background(), repository, 27)
 	if err != nil {
-		t.Fatal(err)
+		test.Fatal(err)
 	}
 	// The team is still listed, with an unknown (empty) slug.
 	want := []github.Reviewer{{Name: "octocat"}, {IsTeam: true}}
 	if diff := cmp.Diff(want, got.ReviewRequests); diff != "" {
-		t.Errorf("reviewers mismatch (-want +got):\n%s", diff)
+		test.Errorf("reviewers mismatch (-want +got):\n%s", diff)
 	}
 	var detailCalls int
-	for _, c := range s.Calls() {
-		if c.Operation == operationPullRequestDetail {
+	for _, call := range testServer.Calls() {
+		if call.Operation == operationPullRequestDetail {
 			detailCalls++
 		}
 	}
 	if detailCalls != 2 {
-		t.Errorf("detail query sent %d times, want 2 (one retry)", detailCalls)
+		test.Errorf("detail query sent %d times, want 2 (one retry)", detailCalls)
 	}
 }
 
-func TestScopeErrorOnOtherQueriesIsForbidden(t *testing.T) {
-	s := &server{}
-	s.override = func(_ call, w http.ResponseWriter) bool {
-		s.fixture(w, http.StatusOK, "error_insufficient_scopes.json")
+func TestScopeErrorOnOtherQueriesIsForbidden(test *testing.T) {
+	testServer := &server{}
+	testServer.override = func(_ call, writer http.ResponseWriter) bool {
+		testServer.fixture(writer, http.StatusOK, "error_insufficient_scopes.json")
 		return true
 	}
-	c := newTestClient(t, s)
-	_, err := c.ListReviewThreads(context.Background(), repository, 27, github.PageRequest{})
+	client := newTestClient(test, testServer)
+	_, err := client.ListReviewThreads(context.Background(), repository, 27, github.PageRequest{})
 	if !errors.Is(err, github.ErrForbidden) {
-		t.Errorf("want ErrForbidden, got %v", err)
+		test.Errorf("want ErrForbidden, got %v", err)
 	}
 }
 
-func TestGetDiffTooLarge(t *testing.T) {
-	s := &server{}
-	s.override = func(_ call, w http.ResponseWriter) bool {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		s.fixture(w, http.StatusNotAcceptable, "too_large.json")
+func TestGetDiffTooLarge(test *testing.T) {
+	testServer := &server{}
+	testServer.override = func(_ call, writer http.ResponseWriter) bool {
+		writer.Header().Set("Content-Type", "application/json; charset=utf-8")
+		testServer.fixture(writer, http.StatusNotAcceptable, "too_large.json")
 		return true
 	}
-	c := newTestClient(t, s)
-	_, err := c.GetDiff(context.Background(), repository, 27)
+	client := newTestClient(test, testServer)
+	_, err := client.GetDiff(context.Background(), repository, 27)
 	if !errors.Is(err, github.ErrDiffTooLarge) {
-		t.Errorf("want ErrDiffTooLarge, got %v", err)
+		test.Errorf("want ErrDiffTooLarge, got %v", err)
 	}
 }
 
-func TestPartialGraphQLErrorsFail(t *testing.T) {
-	s := &server{}
-	s.override = func(_ call, w http.ResponseWriter) bool {
-		s.fixture(w, http.StatusOK, "error_partial.json")
+func TestPartialGraphQLErrorsFail(test *testing.T) {
+	testServer := &server{}
+	testServer.override = func(_ call, writer http.ResponseWriter) bool {
+		testServer.fixture(writer, http.StatusOK, "error_partial.json")
 		return true
 	}
-	c := newTestClient(t, s)
-	page, err := c.ListPullRequests(context.Background(), repository, github.PageRequest{})
+	client := newTestClient(test, testServer)
+	page, err := client.ListPullRequests(context.Background(), repository, github.PageRequest{})
 	if err == nil {
-		t.Fatalf("partial data with errors must fail, got %+v", page)
+		test.Fatalf("partial data with errors must fail, got %+v", page)
 	}
 	if errors.Is(err, github.ErrNotFound) || errors.Is(err, github.ErrForbidden) {
-		t.Errorf("unexpected classification: %v", err)
+		test.Errorf("unexpected classification: %v", err)
 	}
 	if len(page.Items) != 0 {
-		t.Errorf("no partial items expected, got %v", page.Items)
+		test.Errorf("no partial items expected, got %v", page.Items)
 	}
 }
 
-func TestRateLimitBucketsAreIndependent(t *testing.T) {
+func TestRateLimitBucketsAreIndependent(test *testing.T) {
 	graphqlReset, coreReset := "2000", "3000"
-	s := &server{}
-	s.override = func(c call, w http.ResponseWriter) bool {
-		switch c.Operation {
+	testServer := &server{}
+	testServer.override = func(call call, writer http.ResponseWriter) bool {
+		switch call.Operation {
 		case operationPullRequestList:
-			w.Header().Set("X-RateLimit-Resource", "graphql")
-			w.Header().Set("X-RateLimit-Remaining", "5")
-			w.Header().Set("X-RateLimit-Reset", graphqlReset)
-			s.fixture(w, http.StatusOK, "error_rate_limited.json")
+			writer.Header().Set("X-RateLimit-Resource", "graphql")
+			writer.Header().Set("X-RateLimit-Remaining", "5")
+			writer.Header().Set("X-RateLimit-Reset", graphqlReset)
+			testServer.fixture(writer, http.StatusOK, "error_rate_limited.json")
 		case "":
 			// A REST response lands in between and must not clobber the
 			// GraphQL bucket.
-			w.Header().Set("X-RateLimit-Resource", "core")
-			w.Header().Set("X-RateLimit-Remaining", "4000")
-			w.Header().Set("X-RateLimit-Reset", coreReset)
-			s.fixture(w, http.StatusOK, "pull_request.diff")
+			writer.Header().Set("X-RateLimit-Resource", "core")
+			writer.Header().Set("X-RateLimit-Remaining", "4000")
+			writer.Header().Set("X-RateLimit-Reset", coreReset)
+			testServer.fixture(writer, http.StatusOK, "pull_request.diff")
 		default:
 			return false
 		}
 		return true
 	}
-	c := newTestClient(t, s)
+	client := newTestClient(test, testServer)
 	ctx := context.Background()
 
 	// Prime the graphql bucket, then take a REST response, then fail again
 	// from a response carrying no headers at all.
-	_, _ = c.ListPullRequests(ctx, repository, github.PageRequest{})
-	if _, err := c.GetDiff(ctx, repository, 27); err != nil {
-		t.Fatal(err)
+	_, _ = client.ListPullRequests(ctx, repository, github.PageRequest{})
+	if _, err := client.GetDiff(ctx, repository, 27); err != nil {
+		test.Fatal(err)
 	}
-	s.override = func(_ call, w http.ResponseWriter) bool {
-		s.fixture(w, http.StatusOK, "error_rate_limited.json")
+	testServer.override = func(_ call, writer http.ResponseWriter) bool {
+		testServer.fixture(writer, http.StatusOK, "error_rate_limited.json")
 		return true
 	}
-	_, err := c.ListPullRequests(ctx, repository, github.PageRequest{})
-	var rl *github.RateLimitError
-	if !errors.As(err, &rl) {
-		t.Fatalf("want RateLimitError, got %v", err)
+	_, err := client.ListPullRequests(ctx, repository, github.PageRequest{})
+	var rateLimitError *github.RateLimitError
+	if !errors.As(err, &rateLimitError) {
+		test.Fatalf("want RateLimitError, got %v", err)
 	}
-	if !rl.ResetAt.Equal(time.Unix(2_000, 0)) {
-		t.Errorf("ResetAt = %v, want the graphql bucket reset", rl.ResetAt.Unix())
+	if !rateLimitError.ResetAt.Equal(time.Unix(2_000, 0)) {
+		test.Errorf("ResetAt = %v, want the graphql bucket reset", rateLimitError.ResetAt.Unix())
 	}
 }
 
-func TestCollectMoreRejectsRepeatedCursor(t *testing.T) {
-	s := &server{}
-	s.override = func(c call, w http.ResponseWriter) bool {
+func TestCollectMoreRejectsRepeatedCursor(test *testing.T) {
+	testServer := &server{}
+	testServer.override = func(call call, writer http.ResponseWriter) bool {
 		// Every follow-up page claims there is another page with the same cursor.
-		if c.Operation == "PullRequestFiles" {
-			w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			_, _ = w.Write([]byte(`{"data":{"repository":{"pullRequest":{"conn":{"pageInfo":{"hasNextPage":true,"endCursor":"FILES1"},"nodes":[]}}}}}`))
+		if call.Operation == "PullRequestFiles" {
+			writer.Header().Set("Content-Type", "application/json; charset=utf-8")
+			_, _ = writer.Write([]byte(`{"data":{"repository":{"pullRequest":{"conn":{"pageInfo":{"hasNextPage":true,"endCursor":"FILES1"},"nodes":[]}}}}}`))
 			return true
 		}
 		return false
 	}
-	c := newTestClient(t, s)
-	_, err := c.GetPullRequest(context.Background(), repository, 27)
+	client := newTestClient(test, testServer)
+	_, err := client.GetPullRequest(context.Background(), repository, 27)
 	if err == nil || !strings.Contains(err.Error(), "files:") || !strings.Contains(err.Error(), "repeated cursor") {
-		t.Fatalf("want a files pagination error, got %v", err)
+		test.Fatalf("want a files pagination error, got %v", err)
 	}
 }
 
-func TestFollowUpFailureNamesTheConnection(t *testing.T) {
-	s := &server{}
-	s.override = func(c call, w http.ResponseWriter) bool {
-		if c.Operation == "PullRequestComments" {
-			w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			w.WriteHeader(http.StatusBadGateway)
-			_, _ = w.Write([]byte(`{"message":"bad gateway"}`))
+func TestFollowUpFailureNamesTheConnection(test *testing.T) {
+	testServer := &server{}
+	testServer.override = func(call call, writer http.ResponseWriter) bool {
+		if call.Operation == "PullRequestComments" {
+			writer.Header().Set("Content-Type", "application/json; charset=utf-8")
+			writer.WriteHeader(http.StatusBadGateway)
+			_, _ = writer.Write([]byte(`{"message":"bad gateway"}`))
 			return true
 		}
 		return false
 	}
-	c := newTestClient(t, s)
-	_, err := c.GetPullRequest(context.Background(), repository, 27)
+	client := newTestClient(test, testServer)
+	_, err := client.GetPullRequest(context.Background(), repository, 27)
 	if err == nil || !strings.Contains(err.Error(), "comments:") {
-		t.Fatalf("want an error naming comments, got %v", err)
+		test.Fatalf("want an error naming comments, got %v", err)
 	}
 }

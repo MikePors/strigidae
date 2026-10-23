@@ -31,21 +31,21 @@ type RateLimitError struct {
 }
 
 // Error implements error.
-func (e *RateLimitError) Error() string {
-	if e.ResetAt.IsZero() {
+func (rateLimitError *RateLimitError) Error() string {
+	if rateLimitError.ResetAt.IsZero() {
 		return "GitHub API rate limit exceeded"
 	}
-	return fmt.Sprintf("GitHub API rate limit exceeded; resets at %s", e.ResetAt.UTC().Format(time.RFC3339))
+	return fmt.Sprintf("GitHub API rate limit exceeded; resets at %s", rateLimitError.ResetAt.UTC().Format(time.RFC3339))
 }
 
 // Unwrap returns the underlying API error.
-func (e *RateLimitError) Unwrap() error { return e.Err }
+func (rateLimitError *RateLimitError) Unwrap() error { return rateLimitError.Err }
 
 // RetryAfter returns how long until the limit resets relative to now, never
 // negative. It is zero when the reset time is unknown.
-func (e *RateLimitError) RetryAfter(now time.Time) time.Duration {
-	if e.ResetAt.IsZero() || !e.ResetAt.After(now) {
+func (rateLimitError *RateLimitError) RetryAfter(now time.Time) time.Duration {
+	if rateLimitError.ResetAt.IsZero() || !rateLimitError.ResetAt.After(now) {
 		return 0
 	}
-	return e.ResetAt.Sub(now)
+	return rateLimitError.ResetAt.Sub(now)
 }

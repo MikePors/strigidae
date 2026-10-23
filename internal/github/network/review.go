@@ -41,8 +41,8 @@ mutation ` + operationSubmitReview + `($reviewId: ID!, $event: PullRequestReview
 }`
 
 // GetReviewStatus implements github.Client.
-func (c *Client) GetReviewStatus(ctx context.Context, repo github.Repository, number int) (github.ReviewStatus, error) {
-	var resp struct {
+func (client *Client) GetReviewStatus(ctx context.Context, repository github.Repository, number int) (github.ReviewStatus, error) {
+	var response struct {
 		Repository *struct {
 			PullRequest *struct {
 				ID         string
@@ -58,36 +58,36 @@ func (c *Client) GetReviewStatus(ctx context.Context, repo github.Repository, nu
 			}
 		}
 	}
-	vars := map[string]any{"owner": repo.Owner, "name": repo.Name, "number": number}
-	if err := c.query(ctx, reviewStatusQuery, vars, &resp); err != nil {
-		return github.ReviewStatus{}, fmt.Errorf("load review status of %s#%d: %w", repo, number, err)
+	variables := map[string]any{"owner": repository.Owner, "name": repository.Name, "number": number}
+	if err := client.query(ctx, reviewStatusQuery, variables, &response); err != nil {
+		return github.ReviewStatus{}, fmt.Errorf("load review status of %s#%d: %w", repository, number, err)
 	}
-	if resp.Repository == nil || resp.Repository.PullRequest == nil {
-		return github.ReviewStatus{}, fmt.Errorf("load review status of %s#%d: %w", repo, number, github.ErrNotFound)
+	if response.Repository == nil || response.Repository.PullRequest == nil {
+		return github.ReviewStatus{}, fmt.Errorf("load review status of %s#%d: %w", repository, number, github.ErrNotFound)
 	}
-	pr := resp.Repository.PullRequest
-	st := github.ReviewStatus{PullRequestIdentifier: pr.ID, HeadSHA: pr.HeadRefOid}
+	pullRequest := response.Repository.PullRequest
+	status := github.ReviewStatus{PullRequestIdentifier: pullRequest.ID, HeadSHA: pullRequest.HeadRefOid}
 	// Pending reviews are visible only to their author, so any node is the viewer's.
-	if len(pr.Reviews.Nodes) > 0 {
-		n := pr.Reviews.Nodes[0]
-		st.Pending = &github.PendingReview{Identifier: n.ID, Body: n.Body, CommentCount: n.Comments.TotalCount}
-		if n.Commit != nil {
-			st.Pending.CommitObjectIdentifier = n.Commit.Oid
+	if len(pullRequest.Reviews.Nodes) > 0 {
+		node := pullRequest.Reviews.Nodes[0]
+		status.Pending = &github.PendingReview{Identifier: node.ID, Body: node.Body, CommentCount: node.Comments.TotalCount}
+		if node.Commit != nil {
+			status.Pending.CommitObjectIdentifier = node.Commit.Oid
 		}
 	}
-	return st, nil
+	return status, nil
 }
 
 // SubmitReview implements github.Client.
-func (c *Client) SubmitReview(ctx context.Context, in github.SubmitReviewInput) error {
-	var resp map[string]any
+func (client *Client) SubmitReview(ctx context.Context, in github.SubmitReviewInput) error {
+	var response map[string]any
 	var err error
 	if in.PendingReviewIdentifier != "" {
-		vars := map[string]any{"reviewId": in.PendingReviewIdentifier, "event": string(in.Event), "body": in.Body}
-		err = c.query(ctx, submitReviewMutation, vars, &resp)
+		variables := map[string]any{"reviewId": in.PendingReviewIdentifier, "event": string(in.Event), "body": in.Body}
+		err = client.query(ctx, submitReviewMutation, variables, &response)
 	} else {
-		vars := map[string]any{"pullRequestId": in.PullRequestIdentifier, "event": string(in.Event), "body": in.Body, "commitOID": in.CommitObjectIdentifier}
-		err = c.query(ctx, addReviewMutation, vars, &resp)
+		variables := map[string]any{"pullRequestId": in.PullRequestIdentifier, "event": string(in.Event), "body": in.Body, "commitOID": in.CommitObjectIdentifier}
+		err = client.query(ctx, addReviewMutation, variables, &response)
 	}
 	if err != nil {
 		return fmt.Errorf("submit review on %s#%d: %w", in.Repository, in.Number, err)

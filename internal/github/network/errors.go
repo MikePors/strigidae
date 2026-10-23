@@ -8,13 +8,13 @@ import (
 	"strings"
 	"time"
 
-	ghapi "github.com/cli/go-gh/v2/pkg/api"
+	githubnetwork "github.com/cli/go-gh/v2/pkg/api"
 
 	"github.com/MikePors/strigidae/internal/github"
 )
 
-func parseReset(v string) (time.Time, bool) {
-	secs, err := strconv.ParseInt(v, 10, 64)
+func parseReset(value string) (time.Time, bool) {
+	secs, err := strconv.ParseInt(value, 10, 64)
 	if err != nil || secs <= 0 {
 		return time.Time{}, false
 	}
@@ -23,45 +23,45 @@ func parseReset(v string) (time.Time, bool) {
 
 // mapError converts go-gh errors into the typed errors of package github,
 // keeping the original error in the chain.
-func (c *Client) mapError(err error) error {
-	var rl *github.RateLimitError
-	if errors.As(err, &rl) {
+func (client *Client) mapError(err error) error {
+	var rateLimitError *github.RateLimitError
+	if errors.As(err, &rateLimitError) {
 		return err
 	}
-	var httpErr *ghapi.HTTPError
+	var httpErr *githubnetwork.HTTPError
 	if errors.As(err, &httpErr) {
-		return c.mapHTTPError(httpErr)
+		return client.mapHTTPError(httpErr)
 	}
-	var gqlErr *ghapi.GraphQLError
-	if errors.As(err, &gqlErr) {
-		return c.mapGraphQLError(gqlErr)
+	var graphqlErr *githubnetwork.GraphQLError
+	if errors.As(err, &graphqlErr) {
+		return client.mapGraphQLError(graphqlErr)
 	}
 	return err
 }
 
-func (c *Client) mapHTTPError(e *ghapi.HTTPError) error {
+func (client *Client) mapHTTPError(httpError *githubnetwork.HTTPError) error {
 	switch {
-	case e.StatusCode == http.StatusUnauthorized:
-		return fmt.Errorf("%w: %w", github.ErrNotAuthenticated, e)
-	case e.StatusCode == http.StatusNotFound:
-		return fmt.Errorf("%w: %w", github.ErrNotFound, e)
-	case isRateLimited(e):
-		return &github.RateLimitError{ResetAt: c.httpResetAt(e), Err: e}
-	case e.StatusCode == http.StatusForbidden:
-		return fmt.Errorf("%w: %w", github.ErrForbidden, e)
+	case httpError.StatusCode == http.StatusUnauthorized:
+		return fmt.Errorf("%w: %w", github.ErrNotAuthenticated, httpError)
+	case httpError.StatusCode == http.StatusNotFound:
+		return fmt.Errorf("%w: %w", github.ErrNotFound, httpError)
+	case isRateLimited(httpError):
+		return &github.RateLimitError{ResetAt: client.httpResetAt(httpError), Err: httpError}
+	case httpError.StatusCode == http.StatusForbidden:
+		return fmt.Errorf("%w: %w", github.ErrForbidden, httpError)
 	}
-	return e
+	return httpError
 }
 
-func isRateLimited(e *ghapi.HTTPError) bool {
-	if e.StatusCode != http.StatusForbidden && e.StatusCode != http.StatusTooManyRequests {
+func isRateLimited(httpError *githubnetwork.HTTPError) bool {
+	if httpError.StatusCode != http.StatusForbidden && httpError.StatusCode != http.StatusTooManyRequests {
 		return false
 	}
-	if e.StatusCode == http.StatusTooManyRequests || e.Headers.Get("Retry-After") != "" ||
-		e.Headers.Get("X-RateLimit-Remaining") == "0" {
+	if httpError.StatusCode == http.StatusTooManyRequests || httpError.Headers.Get("Retry-After") != "" ||
+		httpError.Headers.Get("X-RateLimit-Remaining") == "0" {
 		return true
 	}
-	return strings.Contains(strings.ToLower(e.Message), "rate limit")
+	return strings.Contains(strings.ToLower(httpError.Message), "rate limit")
 }
 
 // defaultSecondaryWait is the documented advice when a secondary limit gives
@@ -71,30 +71,30 @@ const defaultSecondaryWait = time.Minute
 // httpResetAt works out when a rate-limited REST request may be retried.
 // X-RateLimit-Reset belongs to the primary bucket, so it is only used when
 // that bucket is actually exhausted.
-func (c *Client) httpResetAt(e *ghapi.HTTPError) time.Time {
-	if v := e.Headers.Get("Retry-After"); v != "" {
-		if secs, err := strconv.Atoi(v); err == nil {
-			return c.now().Add(time.Duration(secs) * time.Second)
+func (client *Client) httpResetAt(httpError *githubnetwork.HTTPError) time.Time {
+	if value := httpError.Headers.Get("Retry-After"); value != "" {
+		if secs, err := strconv.Atoi(value); err == nil {
+			return client.now().Add(time.Duration(secs) * time.Second)
 		}
-		if t, err := http.ParseTime(v); err == nil {
-			return t
+		if timestamp, err := http.ParseTime(value); err == nil {
+			return timestamp
 		}
 	}
-	if e.Headers.Get("X-RateLimit-Remaining") == "0" {
-		if reset, ok := parseReset(e.Headers.Get("X-RateLimit-Reset")); ok {
+	if httpError.Headers.Get("X-RateLimit-Remaining") == "0" {
+		if reset, ok := parseReset(httpError.Headers.Get("X-RateLimit-Reset")); ok {
 			return reset
 		}
 	}
-	return c.now().Add(defaultSecondaryWait)
+	return client.now().Add(defaultSecondaryWait)
 }
 
 // isScopeError reports whether err is a GraphQL permission/scope failure.
 func isScopeError(err error) bool {
-	var gqlErr *ghapi.GraphQLError
-	if err == nil || !errors.As(err, &gqlErr) {
+	var graphqlErr *githubnetwork.GraphQLError
+	if err == nil || !errors.As(err, &graphqlErr) {
 		return false
 	}
-	for _, item := range gqlErr.Errors {
+	for _, item := range graphqlErr.Errors {
 		if item.Type == "FORBIDDEN" || item.Type == "INSUFFICIENT_SCOPES" {
 			return true
 		}
@@ -102,16 +102,16 @@ func isScopeError(err error) bool {
 	return false
 }
 
-func (c *Client) mapGraphQLError(e *ghapi.GraphQLError) error {
-	for _, item := range e.Errors {
+func (client *Client) mapGraphQLError(graphqlError *githubnetwork.GraphQLError) error {
+	for _, item := range graphqlError.Errors {
 		switch item.Type {
 		case "RATE_LIMITED":
-			return &github.RateLimitError{ResetAt: c.limit.resetFor("graphql"), Err: e}
+			return &github.RateLimitError{ResetAt: client.limit.resetFor("graphql"), Err: graphqlError}
 		case "NOT_FOUND":
-			return fmt.Errorf("%w: %w", github.ErrNotFound, e)
+			return fmt.Errorf("%w: %w", github.ErrNotFound, graphqlError)
 		case "FORBIDDEN", "INSUFFICIENT_SCOPES":
-			return fmt.Errorf("%w: %w", github.ErrForbidden, e)
+			return fmt.Errorf("%w: %w", github.ErrForbidden, graphqlError)
 		}
 	}
-	return e
+	return graphqlError
 }
