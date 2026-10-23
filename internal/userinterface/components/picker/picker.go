@@ -130,8 +130,10 @@ func (model *Model) Render(width, height int) string {
 		return ""
 	}
 	inner := paneWidth - 2
+	// The selected item always keeps a row; the note gets what is left.
+	rows := min(max(len(model.matches), 1), min(height-4, 12))
 	noteLines := model.noteLines(inner - 2)
-	rows := min(max(len(model.matches), 1), min(height-4-len(noteLines), 12))
+	noteLines = noteLines[:min(len(noteLines), max(height-4-rows, 0))]
 
 	lines := make([]string, 0, rows+2)
 	query := string(model.query)
