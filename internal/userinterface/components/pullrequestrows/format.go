@@ -1,4 +1,6 @@
-package pullrequestlist
+// Package pullrequestrows draws pull request table rows: the column layout,
+// header and one row, shared by every screen that lists pull requests.
+package pullrequestrows
 
 import (
 	"fmt"
@@ -56,8 +58,8 @@ func commentText(count int) string {
 }
 
 // reviewMark returns the one-column glyph and style for a review decision.
-func (view *View) reviewMark(decision github.ReviewDecision) (string, lipgloss.Style) {
-	styles := view.theme.PullRequestList
+func (table Table) reviewMark(decision github.ReviewDecision) (string, lipgloss.Style) {
+	styles := table.theme.PullRequestList
 	switch decision {
 	case github.ReviewDecisionApproved:
 		return "✓", styles.Approved
@@ -72,8 +74,8 @@ func (view *View) reviewMark(decision github.ReviewDecision) (string, lipgloss.S
 
 // checksMark returns the one-column glyph and style for the head commit's
 // check state; no checks gives a blank.
-func (view *View) checksMark(state github.CheckState) (string, lipgloss.Style) {
-	styles := view.theme.PullRequestList
+func (table Table) checksMark(state github.CheckState) (string, lipgloss.Style) {
+	styles := table.theme.PullRequestList
 	switch state {
 	case github.ChecksPassing:
 		return "✓", styles.ChecksPassing
