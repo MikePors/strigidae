@@ -28,7 +28,7 @@ func (view *View) Render(width, height int) string {
 	if width < 1 || height < 1 {
 		return ""
 	}
-	view.width, view.height = width, height
+	view.height = height
 	if len(view.tabs) == 0 {
 		return clip(view.theme.Muted.Render("no tabs configured"), width, height)
 	}
@@ -39,8 +39,12 @@ func (view *View) Render(width, height int) string {
 	lines, selectedLine := current.lines()
 	current.window.SetRows(len(lines))
 	current.window.SetSize(view.listHeight())
+	if selectedLine > 0 && lines[selectedLine-1].row == headingLine {
+		current.window.GotoRow(selectedLine - 1) // keep the section's heading on screen
+	}
 	current.window.GotoRow(selectedLine)
 
+	selectedIndex := current.selectedIndex()
 	out := []string{view.tabBar(width), table.Header(layout, width)}
 	end := min(len(lines), current.window.Top()+view.listHeight())
 	for i := current.window.Top(); i < end; i++ {
@@ -52,7 +56,7 @@ func (view *View) Render(width, height int) string {
 		case noteLine:
 			out = append(out, view.note(target, width))
 		default:
-			selected := current.firstRow(entry.section)+entry.row == current.selected
+			selected := current.firstRow(entry.section)+entry.row == selectedIndex
 			out = append(out, table.Row(layout, target.pullRequests[entry.row], selected, width))
 		}
 	}
@@ -61,6 +65,7 @@ func (view *View) Render(width, height int) string {
 
 // lines lays out every section and reports which line holds the selection.
 func (current *tab) lines() ([]line, int) {
+	selectedIndex := current.selectedIndex()
 	var lines []line
 	selectedLine := 0
 	for i, target := range current.sections {
@@ -70,7 +75,7 @@ func (current *tab) lines() ([]line, int) {
 			continue
 		}
 		for row := range target.pullRequests {
-			if current.firstRow(i)+row == current.selected {
+			if current.firstRow(i)+row == selectedIndex {
 				selectedLine = len(lines)
 			}
 			lines = append(lines, line{section: i, row: row})
@@ -88,9 +93,9 @@ func (view *View) tabBar(width int) string {
 		label := " " + terminaltext.Clean(current.name) + " "
 		widths[i] = ansi.StringWidth(label)
 		if i == view.active {
-			chips[i] = view.theme.PullRequestList.Selected.Render(label)
+			chips[i] = view.theme.Dashboard.ActiveTab.Render(label)
 		} else {
-			chips[i] = view.theme.Muted.Render(label)
+			chips[i] = view.theme.Dashboard.InactiveTab.Render(label)
 		}
 	}
 	first := 0
@@ -111,7 +116,7 @@ func sum(values []int) int {
 func (view *View) heading(target section, width int) string {
 	title := view.theme.SectionHeading.Render(terminaltext.Clean(target.name))
 	if target.err != nil && len(target.pullRequests) > 0 {
-		title += " " + view.theme.ErrorText.Render("(refresh failed)")
+		title += " " + view.theme.ErrorText.Render("(refresh failed: "+terminaltext.SafeError(target.err).Error()+")")
 	}
 	query := "  " + view.theme.Muted.Render(terminaltext.Clean(target.query))
 	return ansi.Truncate(title+query, width, "…")

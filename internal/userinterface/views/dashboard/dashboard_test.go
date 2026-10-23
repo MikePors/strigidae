@@ -281,8 +281,177 @@ func TestRefreshKeepsRowsUntilNewOnesArrive(test *testing.T) {
 
 func TestResultsForUnknownSectionsAreIgnored(test *testing.T) {
 	view, _ := loadedView(test)
-	view.Update(sectionLoadedMessage{tab: 9, section: 0, sequence: 1})
+	before := ansi.Strip(view.Render(80, 16))
+	selected := selectedKey(test, view)
+	view.Update(sectionLoadedMessage{tab: 9, section: 0, sequence: 1, page: github.Page[github.PullRequest]{Items: []github.PullRequest{pullRequest("x/y", 1, "Bogus", 0)}}})
 	view.Update(sectionLoadedMessage{tab: 0, section: 9, sequence: 1})
+	view.Update(sectionLoadedMessage{tab: 0, section: 0, sequence: 99}) // not the latest request
+	if after := ansi.Strip(view.Render(80, 16)); after != before {
+		test.Errorf("a stray result changed the screen:\n%s\nwas:\n%s", after, before)
+	}
+	if got := selectedKey(test, view); got != selected {
+		test.Errorf("selection changed to %s, was %s", got, selected)
+	}
+	if view.Loading() {
+		test.Error("a stray result started loading")
+	}
+}
+
+func TestOutOfOrderResultsKeepTheCursorAtTheTop(test *testing.T) {
+	tabs := testTabs(test)
+	client := fake.New()
+	seed(test, client, tabs)
+	view := newView(client, tabs, nil)
+	all := messages(view.Init())
+	for i := len(all) - 1; i >= 0; i-- { // the lowest section answers first
+		view.Update(all[i])
+	}
+	if got := selectedKey(test, view); got != "acme/widgets#12" {
+		test.Errorf("selected %s, want the first row of the first section", got)
+	}
+}
+
+func TestRefreshKeepsTheCursorInItsSection(test *testing.T) {
+	tabs := testTabs(test)
+	client := fake.New()
+	shared := pullRequest("acme/widgets", 5, "Listed twice", time.Hour)
+	client.SetSearchResults(searchQuery(tabs[0].Sections[0]), []github.PullRequest{shared})
+	client.SetSearchResults(searchQuery(tabs[0].Sections[2]), []github.PullRequest{pullRequest("acme/widgets", 6, "Other", time.Hour), shared})
+	view := newView(client, tabs, nil)
+	settle(view, view.Init())
+	press(view, "G") // the copy in the third section
+	settle(view, press(view, "R"))
+	section, row, ok := view.tabs[0].position()
+	if !ok || section != 2 || row != 1 {
+		test.Errorf("after refresh the cursor is at section %d row %d, want section 2 row 1", section, row)
+	}
+}
+
+func TestSwitchingTabsWhileTheFirstIsLoading(test *testing.T) {
+	tabs := testTabs(test)
+	client := fake.New()
+	seed(test, client, tabs)
+	view := newView(client, tabs, nil)
+	first := messages(view.Init()) // in flight
+	second := messages(press(view, "g t"))
+	if !view.Loading() {
+		test.Fatal("the second tab is loading, so the view should be")
+	}
+	deliver(view, first)
+	if view.tabs[0].total() != 3 || view.tabs[1].total() != 0 {
+		test.Errorf("rows landed in the wrong tab: %d and %d, want 3 and 0", view.tabs[0].total(), view.tabs[1].total())
+	}
+	if !view.Loading() {
+		test.Error("Loading should follow the active tab, which has not answered")
+	}
+	deliver(view, second)
+	if view.Loading() || view.tabs[1].total() != 1 {
+		test.Errorf("second tab: loading %v, rows %d, want false and 1", view.Loading(), view.tabs[1].total())
+	}
+}
+
+func TestRefreshOnlyReloadsTheActiveTab(test *testing.T) {
+	view, client := loadedView(test)
+	settle(view, press(view, "g t"))
+	before := len(client.Calls())
+	settle(view, press(view, "R"))
+	calls := client.Calls()[before:]
+	if len(calls) != 1 || calls[0].Query != "is:pr review-requested:rivka sort:updated-desc" {
+		test.Errorf("refresh searched %+v, want only the teammate section", calls)
+	}
+}
+
+func TestSectionKeysSkipSectionsWithoutRows(test *testing.T) {
+	configured := func(name string) config.Section {
+		return config.Section{Name: name, Query: "is:pr " + name, Limit: 5, Sort: config.SortUpdated, Order: config.OrderDescending}
+	}
+	tabs := []config.Tab{{Name: "T", Sections: []config.Section{configured("a"), configured("b"), configured("c"), configured("d")}}}
+	client := fake.New()
+	client.SetSearchResults(searchQuery(tabs[0].Sections[0]), []github.PullRequest{pullRequest("o/a", 1, "A", 0)})
+	client.SetSearchResults(searchQuery(tabs[0].Sections[3]), []github.PullRequest{pullRequest("o/d", 4, "D", 0)})
+	view := newView(client, tabs, nil)
+	all := messages(view.Init())
+	failed := all[1].(sectionLoadedMessage)
+	failed.err = errors.New("boom")
+	deliver(view, []tea.Msg{all[0], failed, all[3]}) // section c is still loading
+
+	out := ansi.Strip(view.Render(80, 16))
+	for _, want := range []string{"Could not load: boom", "Loading..."} {
+		if !strings.Contains(out, want) {
+			test.Errorf("render lacks %q:\n%s", want, out)
+		}
+	}
+	press(view, "]")
+	if got := selectedKey(test, view); got != "o/d#4" {
+		test.Errorf("] selected %s, want o/d#4 (skipping the failed and loading sections)", got)
+	}
+	press(view, "[")
+	if got := selectedKey(test, view); got != "o/a#1" {
+		test.Errorf("[ selected %s, want o/a#1", got)
+	}
+}
+
+func TestSectionHeadingStaysVisible(test *testing.T) {
+	for _, keysPressed := range [][]string{{"G", "g g"}, {"G", "["}} {
+		view, _ := loadedView(test)
+		for _, sequence := range keysPressed {
+			press(view, sequence)
+			view.Render(80, 5)
+		}
+		if out := ansi.Strip(view.Render(80, 5)); !strings.Contains(out, "Review requested") {
+			test.Errorf("after %v the first section's heading is off screen:\n%s", keysPressed, out)
+		}
+	}
+}
+
+func TestPagingUsesTheLastRenderedHeight(test *testing.T) {
+	configured := config.Section{Name: "s", Query: "is:pr s", Limit: 30, Sort: config.SortUpdated, Order: config.OrderDescending}
+	tabs := []config.Tab{{Name: "T", Sections: []config.Section{configured}}}
+	var rows []github.PullRequest
+	for i := range 30 {
+		rows = append(rows, pullRequest("o/r", i+1, "Row", 0))
+	}
+	client := fake.New()
+	client.SetSearchResults(searchQuery(configured), rows)
+	view := newView(client, tabs, nil)
+	settle(view, view.Init())
+	view.Update(tea.WindowSizeMsg{Width: 80, Height: 40}) // a resize must not decide the page size
+	view.Render(80, 12)                                   // 10 list rows: half a page is 5
+	press(view, "ctrl+d")
+	if got := selectedKey(test, view); got != "o/r#6" {
+		test.Errorf("ctrl+d selected %s, want o/r#6", got)
+	}
+	view.Render(80, 6) // 4 list rows: half a page is 2
+	press(view, "ctrl+d")
+	if got := selectedKey(test, view); got != "o/r#8" {
+		test.Errorf("ctrl+d after a resize selected %s, want o/r#8", got)
+	}
+}
+
+func TestFailedRefreshShowsTheReason(test *testing.T) {
+	view, client := loadedView(test)
+	client.SetError(fake.MethodSearchPullRequests, errors.New("boom\x1b[2J"))
+	settle(view, press(view, "R"))
+	out := ansi.Strip(view.Render(100, 16))
+	if !strings.Contains(out, "refresh failed: boom") || !strings.Contains(out, "Cache the parsed diff") {
+		test.Errorf("want the reason and the old rows:\n%s", out)
+	}
+	if strings.ContainsRune(out, 0x1b) {
+		test.Errorf("escape reached the screen: %q", out)
+	}
+}
+
+func TestNoticeIsShownOnStart(test *testing.T) {
+	view := New(fake.New(), testTabs(test), theme.Default(), Options{Notice: "why we are here"})
+	var got []string
+	for _, message := range messages(view.Init()) {
+		if info, ok := message.(userinterface.InfoMessage); ok {
+			got = append(got, info.Text)
+		}
+	}
+	if diff := cmp.Diff([]string{"why we are here"}, got); diff != "" {
+		test.Errorf("info messages (-want +got):\n%s", diff)
+	}
 }
 
 func TestHelpListsTheDashboardKeys(test *testing.T) {
@@ -370,11 +539,10 @@ func TestGolden(test *testing.T) {
 			settle(view, press(view, "g t"))
 			return view
 		}, 80, 8},
-		{"narrow", func(test *testing.T) *View {
-			view, _ := loadedView(test)
-			press(view, "]")
-			return view
-		}, 40, 12},
+		{"narrow_48", narrowView, 48, 12},
+		{"narrow_40", narrowView, 40, 12},
+		{"narrow_36", narrowView, 36, 12},
+		{"narrow_30", narrowView, 30, 12},
 		{"scrolled", func(test *testing.T) *View {
 			view, _ := loadedView(test)
 			press(view, "G")
@@ -396,4 +564,10 @@ func TestGolden(test *testing.T) {
 			golden.Assert(test, testCase.name, out, false)
 		})
 	}
+}
+
+func narrowView(test *testing.T) *View {
+	view, _ := loadedView(test)
+	press(view, "]")
+	return view
 }

@@ -40,6 +40,9 @@ type Options struct {
 	Now func() time.Time
 	// Open opens a URL in the browser; it runs inside a tea.Cmd.
 	Open func(url string) error
+	// Notice, if set, is shown in the status bar when the view starts, for
+	// example why the dashboard is showing.
+	Notice string
 }
 
 // section is one search and what it found.
@@ -61,8 +64,8 @@ type tab struct {
 	sections  []section
 	requested bool // the sections were asked for at least once
 
-	selected int // index among all rows of all sections
-	window   scroll.Window
+	anchor *anchor // nil until the user moves the cursor
+	window scroll.Window
 }
 
 // View shows the tabs.
@@ -74,9 +77,13 @@ type View struct {
 	now        func() time.Time
 	open       func(url string) error
 
-	tabs          []tab
-	active        int
-	width, height int
+	notice string // shown once as an info message when the view starts
+
+	tabs   []tab
+	active int
+	// height is the space Render was last given; it is the only source of the
+	// list height that paging uses.
+	height int
 }
 
 type bindings struct {
@@ -107,8 +114,9 @@ func New(client github.Client, tabs []config.Tab, activeTheme theme.Theme, optio
 			nextSection:     key.NewBinding(key.WithKeys("]"), key.WithHelp("]", "next section")),
 			previousSection: key.NewBinding(key.WithKeys("["), key.WithHelp("[", "previous section")),
 		},
-		now:  options.Now,
-		open: options.Open,
+		now:    options.Now,
+		open:   options.Open,
+		notice: options.Notice,
 	}
 	for _, configured := range tabs {
 		current := tab{name: configured.Name}
@@ -167,7 +175,12 @@ func (view *View) FullHelp() [][]key.Binding {
 }
 
 // Init implements userinterface.View.
-func (view *View) Init() tea.Cmd { return view.show(view.active) }
+func (view *View) Init() tea.Cmd {
+	if view.notice == "" {
+		return view.show(view.active)
+	}
+	return tea.Batch(view.show(view.active), userinterface.Info(view.notice))
+}
 
 // show loads the tab's sections the first time it is shown.
 func (view *View) show(index int) tea.Cmd {
@@ -207,8 +220,6 @@ func (view *View) search(tabIndex, sectionIndex int, target section) tea.Cmd {
 // Update implements userinterface.View.
 func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 	switch message := message.(type) {
-	case tea.WindowSizeMsg:
-		view.width, view.height = message.Width, message.Height
 	case userinterface.ThemeMessage:
 		view.theme = message.Theme
 	case sectionLoadedMessage:
@@ -233,9 +244,7 @@ func (view *View) loaded(message sectionLoadedMessage) {
 	if message.err != nil {
 		return // keep the rows from the last good load
 	}
-	selected, hadSelection := current.selectedPullRequest()
 	target.pullRequests = message.page.Items
-	current.restore(selected, hadSelection)
 }
 
 func (view *View) handleKey(message keys.Message) tea.Cmd {
@@ -257,9 +266,9 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 	case key.Matches(message, view.globalKeys.Up):
 		current.move(-1)
 	case key.Matches(message, view.globalKeys.Top):
-		current.selected = 0
+		current.selectIndex(0)
 	case key.Matches(message, view.globalKeys.Bottom):
-		current.selected = current.total() - 1
+		current.selectIndex(current.total() - 1)
 	case key.Matches(message, view.globalKeys.HalfDown):
 		current.move(max(view.listHeight()/2, 1))
 	case key.Matches(message, view.globalKeys.HalfUp):
@@ -277,7 +286,6 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 	default:
 		return nil
 	}
-	current.clampSelection()
 	return nil
 }
 

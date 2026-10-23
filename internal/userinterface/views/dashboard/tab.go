@@ -2,6 +2,18 @@ package dashboard
 
 import "github.com/MikePors/strigidae/internal/github"
 
+// anchor is where the user put the cursor. It names the section as well as
+// the pull request, because one pull request often appears in several
+// sections, and it is resolved only within that section so results arriving
+// in any order cannot move the cursor into another one.
+type anchor struct {
+	section    int
+	repository github.Repository
+	number     int
+	// row is the fallback when the pull request is gone after a reload.
+	row int
+}
+
 // total is the number of rows across all sections.
 func (current *tab) total() int {
 	count := 0
@@ -20,50 +32,81 @@ func (current *tab) pullRequests() []github.PullRequest {
 	return all
 }
 
-func (current *tab) selectedPullRequest() (github.PullRequest, bool) {
-	all := current.pullRequests()
-	if current.selected < 0 || current.selected >= len(all) {
-		return github.PullRequest{}, false
+// position is the section and row the cursor is on. Until the user moves it,
+// it is the first row of the first section that has any, however the results
+// arrived.
+func (current *tab) position() (section, row int, ok bool) {
+	if current.total() == 0 {
+		return 0, 0, false
 	}
-	return all[current.selected], true
-}
-
-// restore keeps the selection on the same pull request after a reload, if it
-// is still listed; otherwise the selection stays on the same row index.
-func (current *tab) restore(previous github.PullRequest, had bool) {
-	if had {
-		for i, pullRequest := range current.pullRequests() {
-			if pullRequest.Repository == previous.Repository && pullRequest.Number == previous.Number {
-				current.selected = i
-				return
+	if current.anchor == nil {
+		for i, target := range current.sections {
+			if len(target.pullRequests) > 0 {
+				return i, 0, true
 			}
 		}
 	}
-	current.clampSelection()
-}
-
-func (current *tab) clampSelection() {
-	current.selected = min(max(current.selected, 0), max(current.total()-1, 0))
-}
-
-func (current *tab) move(count int) {
-	current.selected += count
-	current.clampSelection()
-}
-
-// sectionOfSelection is the index of the section holding the selected row.
-func (current *tab) sectionOfSelection() int {
-	remaining := current.selected
-	for i, target := range current.sections {
-		if remaining < len(target.pullRequests) {
-			return i
+	placed := current.anchor
+	rows := current.sections[placed.section].pullRequests
+	for i, pullRequest := range rows {
+		if pullRequest.Repository == placed.repository && pullRequest.Number == placed.number {
+			return placed.section, i, true
 		}
-		remaining -= len(target.pullRequests)
 	}
-	return 0
+	if len(rows) > 0 {
+		return placed.section, min(placed.row, len(rows)-1), true
+	}
+	// The section has no rows now: take the nearest section that does.
+	for i := placed.section + 1; i < len(current.sections); i++ {
+		if len(current.sections[i].pullRequests) > 0 {
+			return i, 0, true
+		}
+	}
+	for i := placed.section - 1; i >= 0; i-- {
+		if rows := current.sections[i].pullRequests; len(rows) > 0 {
+			return i, len(rows) - 1, true
+		}
+	}
+	return 0, 0, false
 }
 
-// firstRow is the selection index of the first row of a section.
+// selectedIndex is the cursor's index among all rows.
+func (current *tab) selectedIndex() int {
+	section, row, ok := current.position()
+	if !ok {
+		return 0
+	}
+	return current.firstRow(section) + row
+}
+
+func (current *tab) selectedPullRequest() (github.PullRequest, bool) {
+	section, row, ok := current.position()
+	if !ok {
+		return github.PullRequest{}, false
+	}
+	return current.sections[section].pullRequests[row], true
+}
+
+// selectIndex moves the cursor to a row index, clamped to the rows there are.
+func (current *tab) selectIndex(index int) {
+	total := current.total()
+	if total == 0 {
+		return
+	}
+	index = min(max(index, 0), total-1)
+	for i, target := range current.sections {
+		if index < len(target.pullRequests) {
+			pullRequest := target.pullRequests[index]
+			current.anchor = &anchor{section: i, repository: pullRequest.Repository, number: pullRequest.Number, row: index}
+			return
+		}
+		index -= len(target.pullRequests)
+	}
+}
+
+func (current *tab) move(count int) { current.selectIndex(current.selectedIndex() + count) }
+
+// firstRow is the row index of the first row of a section.
 func (current *tab) firstRow(index int) int {
 	count := 0
 	for _, target := range current.sections[:index] {
@@ -75,12 +118,13 @@ func (current *tab) firstRow(index int) int {
 // moveSection selects the first row of the next (or previous) section that
 // has rows. At the last (or first) such section it does nothing.
 func (current *tab) moveSection(step int) {
-	if current.total() == 0 {
+	section, _, ok := current.position()
+	if !ok {
 		return
 	}
-	for i := current.sectionOfSelection() + step; i >= 0 && i < len(current.sections); i += step {
+	for i := section + step; i >= 0 && i < len(current.sections); i += step {
 		if len(current.sections[i].pullRequests) > 0 {
-			current.selected = current.firstRow(i)
+			current.selectIndex(current.firstRow(i))
 			return
 		}
 	}
