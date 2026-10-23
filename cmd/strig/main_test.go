@@ -28,111 +28,111 @@ type harness struct {
 // newHarness returns deps whose checkout has the given remotes ("" key
 // "toplevel" absent means not a checkout).
 func newHarness(remotes map[string]string, checkout bool, clientErr error) harness {
-	h := harness{clientHost: new(string), started: new(github.Repository)}
-	h.dependencies = dependencies{
+	testHarness := harness{clientHost: new(string), started: new(github.Repository)}
+	testHarness.dependencies = dependencies{
 		getwd: func() (string, error) { return "/work", nil },
 		// Directories that don't exist, so tests never read a real config.
 		getenv: func(string) string { return "/nonexistent-xdg" },
 		home:   func() (string, error) { return "/nonexistent-home", nil },
-		runner: func(_ context.Context, _ string, args ...string) (string, error) {
-			if args[0] == "rev-parse" {
+		runner: func(_ context.Context, _ string, arguments ...string) (string, error) {
+			if arguments[0] == "rev-parse" {
 				if !checkout {
 					return "", errors.New("not a git repository")
 				}
 				return "/work", nil
 			}
-			if u, ok := remotes[args[2]]; ok {
-				return u, nil
+			if address, ok := remotes[arguments[2]]; ok {
+				return address, nil
 			}
 			return "", errors.New("no such remote")
 		},
 		knownHost: func(host string) bool { return host == "github.com" || host == "ghe.example.com" },
 		newClient: func(host string) (github.Client, error) {
-			*h.clientHost = host
+			*testHarness.clientHost = host
 			if clientErr != nil {
 				return nil, fmt.Errorf("host %s: %w", host, clientErr)
 			}
 			return fake.New(), nil
 		},
-		start: func(a app, _ io.Writer) error {
-			*h.started = a.repository
+		start: func(application application, _ io.Writer) error {
+			*testHarness.started = application.repository
 			return nil
 		},
 	}
-	return h
+	return testHarness
 }
 
-func TestRunVersion(t *testing.T) {
+func TestRunVersion(test *testing.T) {
 	var stdout, stderr bytes.Buffer
-	h := newHarness(nil, false, nil)
-	if code := run([]string{"--version"}, &stdout, &stderr, h.dependencies); code != 0 {
-		t.Fatalf("exit code = %d, want 0 (stderr: %s)", code, stderr.String())
+	harness := newHarness(nil, false, nil)
+	if code := run([]string{"--version"}, &stdout, &stderr, harness.dependencies); code != 0 {
+		test.Fatalf("exit code = %d, want 0 (stderr: %s)", code, stderr.String())
 	}
 	if !strings.HasPrefix(stdout.String(), "strig ") {
-		t.Fatalf("stdout = %q, want prefix %q", stdout.String(), "strig ")
+		test.Fatalf("stdout = %q, want prefix %q", stdout.String(), "strig ")
 	}
 }
 
-func TestRunUnknownFlag(t *testing.T) {
+func TestRunUnknownFlag(test *testing.T) {
 	var stdout, stderr bytes.Buffer
 	if code := run([]string{"--nope"}, &stdout, &stderr, newHarness(nil, false, nil).dependencies); code != 2 {
-		t.Fatalf("exit code = %d, want 2", code)
+		test.Fatalf("exit code = %d, want 2", code)
 	}
 }
 
-func TestRunPositionalArgument(t *testing.T) {
+func TestRunPositionalArgument(test *testing.T) {
 	var stdout, stderr bytes.Buffer
-	h := newHarness(map[string]string{"origin": "git@github.com:o/r.git"}, true, nil)
-	if code := run([]string{"cli/cli"}, &stdout, &stderr, h.dependencies); code != 2 {
-		t.Fatalf("exit code = %d, want 2", code)
+	harness := newHarness(map[string]string{"origin": "git@github.com:o/r.git"}, true, nil)
+	if code := run([]string{"cli/cli"}, &stdout, &stderr, harness.dependencies); code != 2 {
+		test.Fatalf("exit code = %d, want 2", code)
 	}
 	if want := `strig: unexpected argument "cli/cli" (did you mean -R cli/cli?)`; !strings.Contains(stderr.String(), want) {
-		t.Errorf("stderr = %q, want %q", stderr.String(), want)
+		test.Errorf("stderr = %q, want %q", stderr.String(), want)
 	}
-	if !h.started.IsZero() {
-		t.Error("TUI started despite the stray argument")
+	if !harness.started.IsZero() {
+		test.Error("TUI started despite the stray argument")
 	}
 }
 
-func TestSilenceBrowser(t *testing.T) {
+func TestSilenceBrowser(test *testing.T) {
 	oldOut, oldErr := cliBrowser.Stdout, cliBrowser.Stderr
-	t.Cleanup(func() { cliBrowser.Stdout, cliBrowser.Stderr = oldOut, oldErr })
+	test.Cleanup(func() { cliBrowser.Stdout, cliBrowser.Stderr = oldOut, oldErr })
 	var out, errOut bytes.Buffer
 	cliBrowser.Stdout, cliBrowser.Stderr = &out, &errOut
 
 	silenceBrowser()
 	if cliBrowser.Stdout != io.Discard || cliBrowser.Stderr != io.Discard {
-		t.Fatal("browser output not discarded")
+		test.Fatal("browser output not discarded")
 	}
 }
 
-func TestRunHelp(t *testing.T) {
+func TestRunHelp(test *testing.T) {
 	var stdout, stderr bytes.Buffer
-	h := newHarness(nil, false, nil)
+	harness := newHarness(nil, false, nil)
 	for _, flagName := range []string{"-h", "--help"} {
-		if code := run([]string{flagName}, &stdout, &stderr, h.dependencies); code != 0 {
-			t.Errorf("%s exit code = %d, want 0", flagName, code)
+		if code := run([]string{flagName}, &stdout, &stderr, harness.dependencies); code != 0 {
+			test.Errorf("%s exit code = %d, want 0", flagName, code)
 		}
 	}
 	for _, want := range []string{"-log-path", "-config-path", "-config path", "-R owner/repo"} {
 		if !strings.Contains(stderr.String(), want) {
-			t.Errorf("usage should mention %q: %q", want, stderr.String())
+			test.Errorf("usage should mention %q: %q", want, stderr.String())
 		}
 	}
 }
 
-func TestRunLogPath(t *testing.T) {
-	t.Setenv("XDG_STATE_HOME", "/xdg/state")
+func TestRunLogPath(test *testing.T) {
+	test.Setenv("XDG_STATE_HOME", "/xdg/state")
 	var stdout, stderr bytes.Buffer
 	if code := run([]string{"--log-path"}, &stdout, &stderr, newHarness(nil, false, nil).dependencies); code != 0 {
-		t.Fatalf("exit code = %d, want 0 (stderr: %s)", code, stderr.String())
+		test.Fatalf("exit code = %d, want 0 (stderr: %s)", code, stderr.String())
 	}
 	if got, want := stdout.String(), "/xdg/state/strig/strig.log\n"; got != want {
-		t.Errorf("stdout = %q, want %q", got, want)
+		test.Errorf("stdout = %q, want %q", got, want)
 	}
 }
 
-func TestRunRepositorySelection(t *testing.T) {
+func TestRunRepositorySelection(test *testing.T) {
 	origin := "git@github.com:fork/widgets.git"
 	upstream := "https://ghe.example.com/acme/widgets.git"
 	tests := []struct {
@@ -198,49 +198,49 @@ func TestRunRepositorySelection(t *testing.T) {
 			wantCode:  1, wantHost: "github.com", wantClient: true, wantStderr: "boom",
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			h := newHarness(tt.remotes, tt.checkout, tt.clientErr)
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			harness := newHarness(testCase.remotes, testCase.checkout, testCase.clientErr)
 			var clientCalled bool
-			inner := h.dependencies.newClient
-			h.dependencies.newClient = func(host string) (github.Client, error) { clientCalled = true; return inner(host) }
+			inner := harness.dependencies.newClient
+			harness.dependencies.newClient = func(host string) (github.Client, error) { clientCalled = true; return inner(host) }
 
 			var stdout, stderr bytes.Buffer
-			code := run(tt.arguments, &stdout, &stderr, h.dependencies)
-			if code != tt.wantCode {
-				t.Fatalf("exit code = %d, want %d (stderr: %q)", code, tt.wantCode, stderr.String())
+			code := run(testCase.arguments, &stdout, &stderr, harness.dependencies)
+			if code != testCase.wantCode {
+				test.Fatalf("exit code = %d, want %d (stderr: %q)", code, testCase.wantCode, stderr.String())
 			}
-			if !strings.Contains(stderr.String(), tt.wantStderr) {
-				t.Errorf("stderr = %q, want it to contain %q", stderr.String(), tt.wantStderr)
+			if !strings.Contains(stderr.String(), testCase.wantStderr) {
+				test.Errorf("stderr = %q, want it to contain %q", stderr.String(), testCase.wantStderr)
 			}
-			if clientCalled != tt.wantClient {
-				t.Errorf("client constructed = %v, want %v", clientCalled, tt.wantClient)
+			if clientCalled != testCase.wantClient {
+				test.Errorf("client constructed = %v, want %v", clientCalled, testCase.wantClient)
 			}
-			if tt.wantClient && *h.clientHost != tt.wantHost {
-				t.Errorf("client host = %q, want %q", *h.clientHost, tt.wantHost)
+			if testCase.wantClient && *harness.clientHost != testCase.wantHost {
+				test.Errorf("client host = %q, want %q", *harness.clientHost, testCase.wantHost)
 			}
-			if got := h.started.String(); tt.wantRepository != "" && got != tt.wantRepository {
-				t.Errorf("started on %q, want %q", got, tt.wantRepository)
+			if got := harness.started.String(); testCase.wantRepository != "" && got != testCase.wantRepository {
+				test.Errorf("started on %q, want %q", got, testCase.wantRepository)
 			}
-			if tt.wantRepository == "" && !h.started.IsZero() {
-				t.Errorf("TUI started on %v despite failure", *h.started)
+			if testCase.wantRepository == "" && !harness.started.IsZero() {
+				test.Errorf("TUI started on %v despite failure", *harness.started)
 			}
 		})
 	}
 }
 
-func TestRunConfig(t *testing.T) {
-	dir := t.TempDir()
+func TestRunConfig(test *testing.T) {
+	directory := test.TempDir()
 	write := func(name, body string) string {
-		path := filepath.Join(dir, name)
+		path := filepath.Join(directory, name)
 		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
-			t.Fatal(err)
+			test.Fatal(err)
 		}
 		return path
 	}
 	good := write("good.yml", "tabs:\n  - name: Alice\n    user: alice\n")
 	bad := write("bad.yml", "tabs:\n  - name: A\n    usr: x\n")
-	repo := []string{"-R", "o/r"}
+	repository := []string{"-R", "o/r"}
 
 	tests := []struct {
 		name       string
@@ -252,33 +252,33 @@ func TestRunConfig(t *testing.T) {
 	}{
 		{"config-path default", []string{"--config-path"}, 0, "/nonexistent-xdg/strig/config.yml\n", "", nil},
 		{"config-path honours --config", []string{"--config", good, "--config-path"}, 0, good + "\n", "", nil},
-		{"no file means defaults", repo, 0, "", "", []string{"Me"}},
-		{"valid file", append([]string{"--config", good}, repo...), 0, "", "", []string{"Alice"}},
-		{"explicit missing file", append([]string{"--config", filepath.Join(dir, "nope.yml")}, repo...), 1, "", "no such file", nil},
-		{"invalid file names file, line and key", append([]string{"--config", bad}, repo...), 1, "", bad + `:3: unknown key "usr"`, nil},
+		{"no file means defaults", repository, 0, "", "", []string{"Me"}},
+		{"valid file", append([]string{"--config", good}, repository...), 0, "", "", []string{"Alice"}},
+		{"explicit missing file", append([]string{"--config", filepath.Join(directory, "nope.yml")}, repository...), 1, "", "no such file", nil},
+		{"invalid file names file, line and key", append([]string{"--config", bad}, repository...), 1, "", bad + `:3: unknown key "usr"`, nil},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			h := newHarness(nil, false, nil)
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			harness := newHarness(nil, false, nil)
 			var tabs []string
-			h.dependencies.start = func(a app, _ io.Writer) error {
-				for _, tab := range a.config.Tabs {
+			harness.dependencies.start = func(application application, _ io.Writer) error {
+				for _, tab := range application.config.Tabs {
 					tabs = append(tabs, tab.Name)
 				}
 				return nil
 			}
 			var stdout, stderr bytes.Buffer
-			if code := run(tt.arguments, &stdout, &stderr, h.dependencies); code != tt.wantCode {
-				t.Errorf("exit code = %d, want %d (stderr: %s)", code, tt.wantCode, stderr.String())
+			if code := run(testCase.arguments, &stdout, &stderr, harness.dependencies); code != testCase.wantCode {
+				test.Errorf("exit code = %d, want %d (stderr: %s)", code, testCase.wantCode, stderr.String())
 			}
-			if stdout.String() != tt.wantStdout {
-				t.Errorf("stdout = %q, want %q", stdout.String(), tt.wantStdout)
+			if stdout.String() != testCase.wantStdout {
+				test.Errorf("stdout = %q, want %q", stdout.String(), testCase.wantStdout)
 			}
-			if !strings.Contains(stderr.String(), tt.wantStderr) {
-				t.Errorf("stderr = %q, want it to contain %q", stderr.String(), tt.wantStderr)
+			if !strings.Contains(stderr.String(), testCase.wantStderr) {
+				test.Errorf("stderr = %q, want it to contain %q", stderr.String(), testCase.wantStderr)
 			}
-			if diff := cmp.Diff(tt.wantTabs, tabs); diff != "" {
-				t.Errorf("tabs (-want +got):\n%s", diff)
+			if diff := cmp.Diff(testCase.wantTabs, tabs); diff != "" {
+				test.Errorf("tabs (-want +got):\n%s", diff)
 			}
 		})
 	}

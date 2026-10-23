@@ -12,7 +12,7 @@ import (
 	"github.com/MikePors/strigidae/internal/gitrepository"
 )
 
-func TestReport(t *testing.T) {
+func TestReport(test *testing.T) {
 	tests := []struct {
 		name       string
 		err        error
@@ -45,27 +45,27 @@ func TestReport(t *testing.T) {
 		},
 		{name: "anything else", err: errors.New("boom"), wantCode: 1, wantStderr: "strig: boom\n"},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
 			var stderr bytes.Buffer
-			if code := report(&stderr, tt.err); code != tt.wantCode {
-				t.Errorf("exit code = %d, want %d", code, tt.wantCode)
+			if code := report(&stderr, testCase.err); code != testCase.wantCode {
+				test.Errorf("exit code = %d, want %d", code, testCase.wantCode)
 			}
-			if got := stderr.String(); got != tt.wantStderr {
-				t.Errorf("stderr = %q, want %q", got, tt.wantStderr)
+			if got := stderr.String(); got != testCase.wantStderr {
+				test.Errorf("stderr = %q, want %q", got, testCase.wantStderr)
 			}
 		})
 	}
 }
 
-func TestRunStartFailure(t *testing.T) {
-	h := newHarness(nil, false, nil)
-	h.dependencies.start = func(app, io.Writer) error { return errors.New("run: no tty") }
+func TestRunStartFailure(test *testing.T) {
+	harness := newHarness(nil, false, nil)
+	harness.dependencies.start = func(application, io.Writer) error { return errors.New("run: no tty") }
 	var stdout, stderr bytes.Buffer
-	if code := run([]string{"-R", "o/r"}, &stdout, &stderr, h.dependencies); code != 1 {
-		t.Fatalf("exit code = %d, want 1", code)
+	if code := run([]string{"-R", "o/r"}, &stdout, &stderr, harness.dependencies); code != 1 {
+		test.Fatalf("exit code = %d, want 1", code)
 	}
 	if got, want := stderr.String(), "strig: run: no tty\n"; got != want {
-		t.Errorf("stderr = %q, want %q", got, want)
+		test.Errorf("stderr = %q, want %q", got, want)
 	}
 }

@@ -17,7 +17,7 @@ import (
 // runTUI starts the interactive program. Logs go to a file because the TUI
 // owns the terminal; if the file can't be opened we warn once and carry on
 // with logging discarded.
-func runTUI(a app, stderr io.Writer) error {
+func runTUI(application application, stderr io.Writer) error {
 	logger, closeLog, err := logging.Start(os.Getenv, os.UserHomeDir)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "strig: logging disabled: %v\n", err) // best effort, before the TUI starts
@@ -25,9 +25,9 @@ func runTUI(a app, stderr io.Writer) error {
 	defer closeLog()
 	logging.Install(logger)
 	silenceBrowser()
-	logger.Info("starting", "version", version.String(), "repo", a.repository.String())
+	logger.Info("starting", "version", version.String(), "repo", application.repository.String())
 
-	model := userinterface.New(pullrequestlist.New(a.client, a.repository, a.theme, pullrequestlist.Options{}), a.theme, userinterface.Options{Logger: logger})
+	model := userinterface.New(pullrequestlist.New(application.client, application.repository, application.theme, pullrequestlist.Options{}), application.theme, userinterface.Options{Logger: logger})
 	if _, err := tea.NewProgram(model).Run(); err != nil {
 		logger.Error("program failed", "err", err)
 		return fmt.Errorf("run: %w", err)

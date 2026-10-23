@@ -24,15 +24,15 @@ var hunkRegex = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@ 
 // the best-effort parse.
 func Parse(text string) (*Diff, error) {
 	parsed := &parser{d: &Diff{}}
-	n := 0
+	count := 0
 	for len(text) > 0 {
 		var line string
 		line, text, _ = strings.Cut(text, "\n")
-		n++
-		parsed.feed(n, line)
+		count++
+		parsed.feed(count, line)
 	}
 	if parsed.inBody {
-		parsed.fail(n, "truncated hunk")
+		parsed.fail(count, "truncated hunk")
 	}
 	if len(parsed.d.Files) == 0 && parsed.sawText && parsed.err == nil {
 		parsed.err = &ParseError{Line: 1, Message: "no diff found"}
@@ -53,13 +53,13 @@ type parser struct {
 	sawText bool
 }
 
-func (parsed *parser) fail(n int, message string) {
+func (parsed *parser) fail(count int, message string) {
 	if parsed.err == nil {
-		parsed.err = &ParseError{Line: n, Message: message}
+		parsed.err = &ParseError{Line: count, Message: message}
 	}
 }
 
-func (parser *parser) feed(n int, line string) {
+func (parser *parser) feed(count int, line string) {
 	if strings.TrimSpace(line) != "" {
 		parser.sawText = true
 	}
@@ -67,7 +67,7 @@ func (parser *parser) feed(n int, line string) {
 		if parser.bodyLine(line) {
 			return
 		}
-		parser.fail(n, "hunk ended before its line counts were reached")
+		parser.fail(count, "hunk ended before its line counts were reached")
 		parser.inBody = false
 	}
 	// A no-newline marker may follow a hunk whose counts are exhausted.
@@ -77,7 +77,7 @@ func (parser *parser) feed(n int, line string) {
 	}
 	if parser.hasHunk && line != "" && strings.IndexByte(" +-", line[0]) >= 0 {
 		// Counts are used up but the diff goes on: the header lied.
-		parser.fail(n, "diff line beyond the hunk's line counts")
+		parser.fail(count, "diff line beyond the hunk's line counts")
 		return
 	}
 	if rest, ok := strings.CutPrefix(line, "diff --git "); ok {
@@ -87,7 +87,7 @@ func (parser *parser) feed(n int, line string) {
 	if parser.file == nil {
 		return // preamble or garbage before the first file
 	}
-	if m := hunkRegex.FindStringSubmatch(line); m != nil && parser.startHunk(n, m) {
+	if messages := hunkRegex.FindStringSubmatch(line); messages != nil && parser.startHunk(count, messages) {
 		return
 	}
 	if !parser.hasHunk {
@@ -132,28 +132,28 @@ func (parser *parser) bodyLine(line string) bool {
 	return true
 }
 
-func (parser *parser) addLine(l Line) {
-	h := &parser.file.Hunks[len(parser.file.Hunks)-1]
-	h.Lines = append(h.Lines, l)
+func (parser *parser) addLine(line Line) {
+	hunk := &parser.file.Hunks[len(parser.file.Hunks)-1]
+	hunk.Lines = append(hunk.Lines, line)
 }
 
-func (parser *parser) startHunk(n int, m []string) bool {
+func (parser *parser) startHunk(count int, messages []string) bool {
 	vals := [4]int{0, 1, 0, 1}
-	for i, idx := range []int{1, 2, 3, 4} {
-		if m[idx] == "" {
+	for i, index := range []int{1, 2, 3, 4} {
+		if messages[index] == "" {
 			continue
 		}
-		v, err := strconv.Atoi(m[idx])
-		if err != nil || v > 1<<30 {
-			parser.fail(n, "bad hunk header")
+		value, err := strconv.Atoi(messages[index])
+		if err != nil || value > 1<<30 {
+			parser.fail(count, "bad hunk header")
 			return false
 		}
-		vals[i] = v
+		vals[i] = value
 	}
 	parser.file.Hunks = append(parser.file.Hunks, Hunk{
 		OldStart: vals[0], OldLines: vals[1],
 		NewStart: vals[2], NewLines: vals[3],
-		Section: strings.TrimSpace(m[5]),
+		Section: strings.TrimSpace(messages[5]),
 	})
 	parser.hasHunk = true
 	parser.oldRem, parser.newRem = vals[1], vals[3]
@@ -163,10 +163,10 @@ func (parser *parser) startHunk(n int, m []string) bool {
 }
 
 func (parser *parser) startFile(rest string) {
-	f := &File{}
-	f.OldPath, f.NewPath = splitGitPaths(rest)
-	parser.d.Files = append(parser.d.Files, f)
-	parser.file, parser.hasHunk, parser.inBody = f, false, false
+	file := &File{}
+	file.OldPath, file.NewPath = splitGitPaths(rest)
+	parser.d.Files = append(parser.d.Files, file)
+	parser.file, parser.hasHunk, parser.inBody = file, false, false
 }
 
 func (parser *parser) headerLine(line string) {
@@ -185,8 +185,8 @@ func (parser *parser) headerLine(line string) {
 		file.OldMode = strings.TrimSpace(line[len("deleted file mode "):])
 		file.NewPath = ""
 	case strings.HasPrefix(line, "similarity index "):
-		str := strings.TrimSuffix(strings.TrimSpace(line[len("similarity index "):]), "%")
-		file.Similarity, _ = strconv.Atoi(str)
+		text := strings.TrimSuffix(strings.TrimSpace(line[len("similarity index "):]), "%")
+		file.Similarity, _ = strconv.Atoi(text)
 	case strings.HasPrefix(line, "rename from "):
 		file.Status = Renamed
 		file.OldPath = unquote(line[len("rename from "):])
@@ -214,24 +214,24 @@ func (parser *parser) headerLine(line string) {
 
 // patchPath extracts the path from a "--- a/x" or "+++ b/x" operand. /dev/null
 // reports ok=false.
-func patchPath(str string) (string, bool) {
-	if strings.HasPrefix(str, `"`) {
-		quoted, err := strconv.QuotedPrefix(str) // git appends a TAB after names containing spaces
+func patchPath(text string) (string, bool) {
+	if strings.HasPrefix(text, `"`) {
+		quoted, err := strconv.QuotedPrefix(text) // git appends a TAB after names containing spaces
 		if err != nil {
 			return "", false // undecodable: keep the path from the diff --git line
 		}
-		str = quoted
-	} else if i := strings.IndexByte(str, '\t'); i >= 0 {
-		str = str[:i] // a tab-separated timestamp or trailing TAB
+		text = quoted
+	} else if i := strings.IndexByte(text, '\t'); i >= 0 {
+		text = text[:i] // a tab-separated timestamp or trailing TAB
 	}
-	str = unquote(str)
-	if str == "/dev/null" || str == "" {
+	text = unquote(text)
+	if text == "/dev/null" || text == "" {
 		return "", false
 	}
-	if len(str) > 2 && (str[:2] == "a/" || str[:2] == "b/") {
-		str = str[2:]
+	if len(text) > 2 && (text[:2] == "a/" || text[:2] == "b/") {
+		text = text[2:]
 	}
-	return str, true
+	return text, true
 }
 
 // splitGitPaths splits the operands of "diff --git a/x b/y". Paths may contain
@@ -240,14 +240,14 @@ func patchPath(str string) (string, bool) {
 func splitGitPaths(rest string) (oldPath, newPath string) {
 	rest = strings.TrimRight(rest, "\r")
 	if strings.HasPrefix(rest, `"`) {
-		if a, b, ok := splitQuoted(rest); ok {
-			return a, b
+		if first, text, ok := splitQuoted(rest); ok {
+			return first, text
 		}
 	}
 	if mid := (len(rest) - 1) / 2; len(rest)%2 == 1 && rest[mid] == ' ' {
-		a, b := rest[:mid], rest[mid+1:]
-		if strings.HasPrefix(a, "a/") && strings.HasPrefix(b, "b/") && a[2:] == b[2:] {
-			return a[2:], b[2:]
+		first, text := rest[:mid], rest[mid+1:]
+		if strings.HasPrefix(first, "a/") && strings.HasPrefix(text, "b/") && first[2:] == text[2:] {
+			return first[2:], text[2:]
 		}
 	}
 	if i := strings.Index(rest, " b/"); i >= 0 {
@@ -270,14 +270,14 @@ func splitQuoted(rest string) (oldPath, newPath string, ok bool) {
 }
 
 // unquote undoes git's C-style quoting of unusual paths.
-func unquote(str string) string {
-	str = strings.TrimRight(str, "\r")
-	if len(str) >= 2 && str[0] == '"' && str[len(str)-1] == '"' {
-		if unquoted, err := strconv.Unquote(str); err == nil {
+func unquote(text string) string {
+	text = strings.TrimRight(text, "\r")
+	if len(text) >= 2 && text[0] == '"' && text[len(text)-1] == '"' {
+		if unquoted, err := strconv.Unquote(text); err == nil {
 			return unquoted
 		}
 	}
-	return str
+	return text
 }
 
 func content(line string) string {

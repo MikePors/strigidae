@@ -13,25 +13,25 @@ import (
 
 // Assert compares got with testdata/<name>.golden. ANSI escapes are stripped
 // first unless keepANSI is set (for tests that are about styling).
-func Assert(t *testing.T, name, got string, keepANSI bool) {
-	t.Helper()
+func Assert(test *testing.T, name, got string, keepANSI bool) {
+	test.Helper()
 	if !keepANSI {
 		got = ansi.Strip(got)
 	}
 	path := filepath.Join("testdata", name+".golden")
 	if os.Getenv("UPDATE_GOLDEN") != "" {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			t.Fatal(err)
+			test.Fatal(err)
 		}
 		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
-			t.Fatal(err)
+			test.Fatal(err)
 		}
 	}
 	want, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatalf("read golden file (run with UPDATE_GOLDEN=1 to create): %v", err)
+		test.Fatalf("read golden file (run with UPDATE_GOLDEN=1 to create): %v", err)
 	}
 	if diff := cmp.Diff(string(want), got); diff != "" {
-		t.Errorf("%s mismatch (-want +got):\n%s", path, diff)
+		test.Errorf("%s mismatch (-want +got):\n%s", path, diff)
 	}
 }

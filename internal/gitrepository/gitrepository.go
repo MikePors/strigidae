@@ -36,15 +36,15 @@ type Remote struct {
 }
 
 // Runner runs git with args in dir and returns its trimmed standard output.
-type Runner func(ctx context.Context, dir string, args ...string) (string, error)
+type Runner func(ctx context.Context, directory string, arguments ...string) (string, error)
 
 // ExecRunner is the Runner that executes the real git binary.
-func ExecRunner(ctx context.Context, dir string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", args...)
-	cmd.Dir = dir
-	out, err := cmd.Output()
+func ExecRunner(ctx context.Context, directory string, arguments ...string) (string, error) {
+	command := exec.CommandContext(ctx, "git", arguments...)
+	command.Dir = directory
+	out, err := command.Output()
 	if err != nil {
-		return "", fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
+		return "", fmt.Errorf("git %s: %w", strings.Join(arguments, " "), err)
 	}
 	return strings.TrimSpace(string(out)), nil
 }
@@ -53,25 +53,25 @@ func ExecRunner(ctx context.Context, dir string, args ...string) (string, error)
 //
 // A remote whose host knownHost rejects is skipped, so a mirror on another
 // forge falls through to the next remote. A nil knownHost accepts every host.
-func Infer(ctx context.Context, run Runner, dir string, knownHost func(host string) bool) (Remote, error) {
-	if _, err := run(ctx, dir, "rev-parse", "--show-toplevel"); err != nil {
+func Infer(ctx context.Context, run Runner, directory string, knownHost func(host string) bool) (Remote, error) {
+	if _, err := run(ctx, directory, "rev-parse", "--show-toplevel"); err != nil {
 		return Remote{}, fmt.Errorf("%w: %w", ErrNotCheckout, err)
 	}
 	var unknown []string
 	for _, name := range remoteNames {
-		raw, err := run(ctx, dir, "remote", "get-url", name)
+		raw, err := run(ctx, directory, "remote", "get-url", name)
 		if err != nil {
 			continue // remote not configured
 		}
-		r, err := ParseURL(raw)
+		remote, err := ParseURL(raw)
 		if err != nil {
 			continue
 		}
-		if knownHost != nil && !knownHost(r.Host) {
-			unknown = append(unknown, r.Host)
+		if knownHost != nil && !knownHost(remote.Host) {
+			unknown = append(unknown, remote.Host)
 			continue
 		}
-		return r, nil
+		return remote, nil
 	}
 	if len(unknown) > 0 {
 		return Remote{}, &UnknownHostError{Hosts: unknown}
@@ -87,17 +87,17 @@ type UnknownHostError struct {
 }
 
 // Error implements error.
-func (e *UnknownHostError) Error() string {
-	return fmt.Sprintf("remote host %s is not a known GitHub host", e.QuotedHosts())
+func (unknownHostError *UnknownHostError) Error() string {
+	return fmt.Sprintf("remote host %s is not a known GitHub host", unknownHostError.QuotedHosts())
 }
 
 // QuotedHosts returns the hosts individually quoted and comma-separated.
-func (e *UnknownHostError) QuotedHosts() string {
-	q := make([]string, len(e.Hosts))
-	for i, h := range e.Hosts {
-		q[i] = strconv.Quote(h)
+func (unknownHostError *UnknownHostError) QuotedHosts() string {
+	queries := make([]string, len(unknownHostError.Hosts))
+	for i, text := range unknownHostError.Hosts {
+		queries[i] = strconv.Quote(text)
 	}
-	return strings.Join(q, ", ")
+	return strings.Join(queries, ", ")
 }
 
 // ParseURL parses a git remote URL into a host and repository. It accepts
@@ -109,34 +109,34 @@ func ParseURL(raw string) (Remote, error) {
 		return Remote{}, fmt.Errorf("parse remote %q: %w", raw, err)
 	}
 	path = strings.TrimSuffix(strings.Trim(path, "/"), ".git")
-	repo, err := github.ParseRepository(path)
+	repository, err := github.ParseRepository(path)
 	if err != nil || host == "" {
 		return Remote{}, fmt.Errorf("parse remote %q: want host and owner/repo", raw)
 	}
-	return Remote{Host: github.NormalizeHost(host), Repository: repo}, nil
+	return Remote{Host: github.NormalizeHost(host), Repository: repository}, nil
 }
 
 func splitURL(raw string) (host, path string, err error) {
 	if !strings.Contains(raw, "://") {
 		// scp-like: [user@]host:path
-		hostPart, p, ok := strings.Cut(raw, ":")
+		hostPart, path, ok := strings.Cut(raw, ":")
 		if !ok || strings.Contains(hostPart, "/") {
 			return "", "", errors.New("unrecognised URL")
 		}
-		if _, h, found := strings.Cut(hostPart, "@"); found {
-			hostPart = h
+		if _, text, found := strings.Cut(hostPart, "@"); found {
+			hostPart = text
 		}
-		return hostPart, p, nil
+		return hostPart, path, nil
 	}
-	u, err := url.Parse(raw)
+	address, err := url.Parse(raw)
 	if err != nil {
 		return "", "", err
 	}
-	switch u.Scheme {
+	switch address.Scheme {
 	case "ssh", "git", "https", "http":
-		host = u.Hostname() // any port is a transport detail, not part of the host
+		host = address.Hostname() // any port is a transport detail, not part of the host
 	default:
-		return "", "", fmt.Errorf("unsupported scheme %q", u.Scheme)
+		return "", "", fmt.Errorf("unsupported scheme %q", address.Scheme)
 	}
-	return host, u.Path, nil
+	return host, address.Path, nil
 }

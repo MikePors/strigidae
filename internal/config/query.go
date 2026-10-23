@@ -10,23 +10,23 @@ import (
 // use: a query that doesn't already select pull requests gets is:pr added. It
 // rejects sort: qualifiers (the sort and order keys own sorting) and any {...}
 // variable other than {user}.
-func normalizeQuery(q string) (string, error) {
-	hasPR := false
-	for _, tok := range strings.Fields(strings.ToLower(q)) {
+func normalizeQuery(query string) (string, error) {
+	hasPullRequest := false
+	for _, token := range strings.Fields(strings.ToLower(query)) {
 		switch {
-		case strings.HasPrefix(tok, "sort:"):
+		case strings.HasPrefix(token, "sort:"):
 			return "", errors.New("query must not contain sort:; use the sort and order keys")
-		case tok == "is:pr" || tok == "type:pr":
-			hasPR = true
+		case token == "is:pr" || token == "type:pr":
+			hasPullRequest = true
 		}
 	}
-	if !hasPR {
-		q = "is:pr " + q
+	if !hasPullRequest {
+		query = "is:pr " + query
 	}
-	for _, ph := range placeholder.FindAllString(q, -1) {
-		if ph != "{user}" {
-			return "", fmt.Errorf("unknown variable %s in query (the only variable is {user})", ph)
+	for _, placeholderMatch := range placeholder.FindAllString(query, -1) {
+		if placeholderMatch != "{user}" {
+			return "", fmt.Errorf("unknown variable %s in query (the only variable is {user})", placeholderMatch)
 		}
 	}
-	return q, nil
+	return query, nil
 }

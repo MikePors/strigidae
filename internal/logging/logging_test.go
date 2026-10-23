@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-func TestPath(t *testing.T) {
+func TestPath(test *testing.T) {
 	home := func() (string, error) { return "/home/u", nil }
 	tests := []struct {
 		name        string
@@ -25,42 +25,42 @@ func TestPath(t *testing.T) {
 		{"relative xdg ignored", map[string]string{"XDG_STATE_HOME": "rel"}, home, "/home/u/.local/state/strig/strig.log", false},
 		{"no home", nil, func() (string, error) { return "", errors.New("none") }, "", true},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := Path(func(k string) string { return tt.environment[k] }, tt.home)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			got, err := Path(func(k string) string { return testCase.environment[k] }, testCase.home)
+			if (err != nil) != testCase.wantErr {
+				test.Fatalf("err = %v, wantErr %v", err, testCase.wantErr)
 			}
-			if got != tt.want {
-				t.Errorf("Path() = %q, want %q", got, tt.want)
+			if got != testCase.want {
+				test.Errorf("Path() = %q, want %q", got, testCase.want)
 			}
 		})
 	}
 }
 
-func TestOpen(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "nested", "strig.log")
-	l, f, err := Open(path)
+func TestOpen(test *testing.T) {
+	path := filepath.Join(test.TempDir(), "nested", "strig.log")
+	logger, file, err := Open(path)
 	if err != nil {
-		t.Fatal(err)
+		test.Fatal(err)
 	}
-	l.Info("hello")
-	if err := f.Close(); err != nil {
-		t.Fatal(err)
+	logger.Info("hello")
+	if err := file.Close(); err != nil {
+		test.Fatal(err)
 	}
-	b, err := os.ReadFile(path)
-	if err != nil || len(b) == 0 {
-		t.Fatalf("log file empty or unreadable: %v", err)
+	bytes, err := os.ReadFile(path)
+	if err != nil || len(bytes) == 0 {
+		test.Fatalf("log file empty or unreadable: %v", err)
 	}
 }
 
-func TestStart(t *testing.T) {
-	dir := t.TempDir()
-	blocker := filepath.Join(dir, "file")
+func TestStart(test *testing.T) {
+	directory := test.TempDir()
+	blocker := filepath.Join(directory, "file")
 	if err := os.WriteFile(blocker, nil, 0o600); err != nil {
-		t.Fatal(err)
+		test.Fatal(err)
 	}
-	home := func() (string, error) { return dir, nil }
+	home := func() (string, error) { return directory, nil }
 	tests := []struct {
 		name        string
 		environment map[string]string
@@ -69,8 +69,8 @@ func TestStart(t *testing.T) {
 		wantErr     string // prefix of the returned error; "" means no error
 	}{
 		{
-			name: "opens the file", environment: map[string]string{"XDG_STATE_HOME": dir}, home: home,
-			wantFile: filepath.Join(dir, "strig", "strig.log"),
+			name: "opens the file", environment: map[string]string{"XDG_STATE_HOME": directory}, home: home,
+			wantFile: filepath.Join(directory, "strig", "strig.log"),
 		},
 		{
 			name: "no home", home: func() (string, error) { return "", errors.New("none") },
@@ -81,51 +81,51 @@ func TestStart(t *testing.T) {
 			wantErr: "create log directory: ",
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
 			// The logger and close must be usable whether or not Start failed.
-			l, closeLog, err := Start(func(k string) string { return tt.environment[k] }, tt.home)
-			l.Info("hello")
+			logger, closeLog, err := Start(func(k string) string { return testCase.environment[k] }, testCase.home)
+			logger.Info("hello")
 			closeLog()
 
 			switch {
-			case tt.wantErr == "" && err != nil:
-				t.Errorf("unexpected error %v", err)
-			case tt.wantErr != "" && (err == nil || !strings.HasPrefix(err.Error(), tt.wantErr)):
-				t.Errorf("err = %v, want prefix %q", err, tt.wantErr)
+			case testCase.wantErr == "" && err != nil:
+				test.Errorf("unexpected error %v", err)
+			case testCase.wantErr != "" && (err == nil || !strings.HasPrefix(err.Error(), testCase.wantErr)):
+				test.Errorf("err = %v, want prefix %q", err, testCase.wantErr)
 			}
-			if tt.wantFile == "" {
+			if testCase.wantFile == "" {
 				return
 			}
-			b, err := os.ReadFile(tt.wantFile)
-			if err != nil || !strings.Contains(string(b), `msg=hello`) {
-				t.Errorf("log file missing line: %q, %v", b, err)
+			bytes, err := os.ReadFile(testCase.wantFile)
+			if err != nil || !strings.Contains(string(bytes), `msg=hello`) {
+				test.Errorf("log file missing line: %q, %v", bytes, err)
 			}
 		})
 	}
 }
 
-func TestInstall(t *testing.T) {
-	prevSlog, prevOut, prevFlags := slog.Default(), log.Writer(), log.Flags()
-	t.Cleanup(func() {
-		slog.SetDefault(prevSlog)
-		log.SetOutput(prevOut)
-		log.SetFlags(prevFlags)
+func TestInstall(test *testing.T) {
+	previousSlog, previousOut, previousFlags := slog.Default(), log.Writer(), log.Flags()
+	test.Cleanup(func() {
+		slog.SetDefault(previousSlog)
+		log.SetOutput(previousOut)
+		log.SetFlags(previousFlags)
 	})
 
-	var buf bytes.Buffer
-	Install(slog.New(slog.NewTextHandler(&buf, nil)))
+	var buffer bytes.Buffer
+	Install(slog.New(slog.NewTextHandler(&buffer, nil)))
 	log.Printf("from std log")
 	slog.Info("from slog")
-	out := buf.String()
+	out := buffer.String()
 	for _, want := range []string{`msg="from std log"`, `msg="from slog"`} {
 		if !strings.Contains(out, want) {
-			t.Errorf("log output missing %s: %q", want, out)
+			test.Errorf("log output missing %s: %q", want, out)
 		}
 	}
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 		if !strings.HasPrefix(line, "time=") || !strings.Contains(line, "level=") {
-			t.Errorf("line lacks timestamp or level: %q", line)
+			test.Errorf("line lacks timestamp or level: %q", line)
 		}
 	}
 }

@@ -8,23 +8,23 @@ import (
 )
 
 // node parses src and returns its root node.
-func node(t *testing.T, src string) *yaml.Node {
-	t.Helper()
-	var doc yaml.Node
-	if err := yaml.Unmarshal([]byte(src), &doc); err != nil {
-		t.Fatal(err)
+func node(test *testing.T, source string) *yaml.Node {
+	test.Helper()
+	var document yaml.Node
+	if err := yaml.Unmarshal([]byte(source), &document); err != nil {
+		test.Fatal(err)
 	}
-	return doc.Content[0]
+	return document.Content[0]
 }
 
-func errText(p *parser) string {
-	if p.err == nil {
+func errText(parser *parser) string {
+	if parser.err == nil {
 		return ""
 	}
-	return p.err.Error()
+	return parser.err.Error()
 }
 
-func TestParserInt(t *testing.T) {
+func TestParserInt(test *testing.T) {
 	tests := []struct {
 		name    string
 		source  string
@@ -41,21 +41,21 @@ func TestParserInt(t *testing.T) {
 		{"text", "many", 0, "c.yml:1: n must be a whole number from 1 to 100"},
 		{"list", "[1]", 0, "c.yml:1: n must be a whole number from 1 to 100"},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := &parser{path: "c.yml"}
-			got := p.int(node(t, tt.source), "n", 1, 100)
-			if got != tt.want {
-				t.Errorf("value = %d, want %d", got, tt.want)
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			nodeParser := &parser{path: "c.yml"}
+			got := nodeParser.int(node(test, testCase.source), "n", 1, 100)
+			if got != testCase.want {
+				test.Errorf("value = %d, want %d", got, testCase.want)
 			}
-			if diff := cmp.Diff(tt.wantErr, errText(p)); diff != "" {
-				t.Errorf("error (-want +got):\n%s", diff)
+			if diff := cmp.Diff(testCase.wantErr, errText(nodeParser)); diff != "" {
+				test.Errorf("error (-want +got):\n%s", diff)
 			}
 		})
 	}
 }
 
-func TestParserOneOf(t *testing.T) {
+func TestParserOneOf(test *testing.T) {
 	allowed := []string{"asc", "desc"}
 	tests := []struct {
 		name    string
@@ -68,25 +68,25 @@ func TestParserOneOf(t *testing.T) {
 		{"empty", "''", "", "c.yml:1: order must be a non-empty text value"},
 		{"not a scalar", "[asc]", "", "c.yml:1: order must be a non-empty text value"},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := &parser{path: "c.yml"}
-			got := p.oneOf(node(t, tt.source), "order", allowed)
-			if got != tt.want {
-				t.Errorf("value = %q, want %q", got, tt.want)
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			nodeParser := &parser{path: "c.yml"}
+			got := nodeParser.oneOf(node(test, testCase.source), "order", allowed)
+			if got != testCase.want {
+				test.Errorf("value = %q, want %q", got, testCase.want)
 			}
-			if diff := cmp.Diff(tt.wantErr, errText(p)); diff != "" {
-				t.Errorf("error (-want +got):\n%s", diff)
+			if diff := cmp.Diff(testCase.wantErr, errText(nodeParser)); diff != "" {
+				test.Errorf("error (-want +got):\n%s", diff)
 			}
 		})
 	}
 }
 
-func TestUniqueList(t *testing.T) {
-	read := func(p *parser) func(*yaml.Node) (string, string) {
-		return func(n *yaml.Node) (string, string) {
-			s := p.str(n, "item")
-			return "<" + s + ">", s
+func TestUniqueList(test *testing.T) {
+	read := func(parser *parser) func(*yaml.Node) (string, string) {
+		return func(node *yaml.Node) (string, string) {
+			text := parser.str(node, "item")
+			return "<" + text + ">", text
 		}
 	}
 	tests := []struct {
@@ -101,15 +101,15 @@ func TestUniqueList(t *testing.T) {
 		{"duplicate", "- a\n- b\n- a\n", nil, `c.yml:3: duplicate thing "a"`},
 		{"item error stops", "- a\n- ''\n- b\n", nil, "c.yml:2: item must be a non-empty text value"},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := &parser{path: "c.yml"}
-			got := uniqueList(p, node(t, tt.source), "things", read(p), "duplicate thing %q")
-			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Errorf("items (-want +got):\n%s", diff)
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			nodeParser := &parser{path: "c.yml"}
+			got := uniqueList(nodeParser, node(test, testCase.source), "things", read(nodeParser), "duplicate thing %q")
+			if diff := cmp.Diff(testCase.want, got); diff != "" {
+				test.Errorf("items (-want +got):\n%s", diff)
 			}
-			if diff := cmp.Diff(tt.wantErr, errText(p)); diff != "" {
-				t.Errorf("error (-want +got):\n%s", diff)
+			if diff := cmp.Diff(testCase.wantErr, errText(nodeParser)); diff != "" {
+				test.Errorf("error (-want +got):\n%s", diff)
 			}
 		})
 	}

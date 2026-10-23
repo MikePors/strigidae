@@ -6,7 +6,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestNormalizeQuery(t *testing.T) {
+func TestNormalizeQuery(test *testing.T) {
 	tests := []struct {
 		name    string
 		in      string
@@ -24,18 +24,18 @@ func TestNormalizeQuery(t *testing.T) {
 		{"unknown variable", "author:{usr}", "", "unknown variable {usr} in query (the only variable is {user})"},
 		{"sort inside a word is fine", "label:resort:x", "is:pr label:resort:x", ""},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := normalizeQuery(tt.in)
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			got, err := normalizeQuery(testCase.in)
 			gotErr := ""
 			if err != nil {
 				gotErr = err.Error()
 			}
-			if diff := cmp.Diff(tt.wantErr, gotErr); diff != "" {
-				t.Fatalf("error (-want +got):\n%s", diff)
+			if diff := cmp.Diff(testCase.wantErr, gotErr); diff != "" {
+				test.Fatalf("error (-want +got):\n%s", diff)
 			}
-			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Errorf("query (-want +got):\n%s", diff)
+			if diff := cmp.Diff(testCase.want, got); diff != "" {
+				test.Errorf("query (-want +got):\n%s", diff)
 			}
 		})
 	}

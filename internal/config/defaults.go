@@ -51,24 +51,24 @@ func defaultSections() []Section {
 // Default is the configuration used when no file exists: one "Me" tab with the
 // default sections.
 func Default() Config {
-	t := Tab{Name: "Me", User: Me, Sections: defaultSections()}
-	t.resolve()
-	return Config{Tabs: []Tab{t}}
+	tab := Tab{Name: "Me", User: Me, Sections: defaultSections()}
+	tab.resolve()
+	return Config{Tabs: []Tab{tab}}
 }
 
 // resolve fills section defaults and substitutes the tab's user into queries.
-func (t *Tab) resolve() {
-	for i := range t.Sections {
-		s := &t.Sections[i]
-		s.Query = strings.ReplaceAll(s.Query, "{user}", t.User)
-		if s.Limit == 0 {
-			s.Limit = DefaultLimit
+func (tab *Tab) resolve() {
+	for i := range tab.Sections {
+		section := &tab.Sections[i]
+		section.Query = strings.ReplaceAll(section.Query, "{user}", tab.User)
+		if section.Limit == 0 {
+			section.Limit = DefaultLimit
 		}
-		if s.Sort == "" {
-			s.Sort = SortUpdated
+		if section.Sort == "" {
+			section.Sort = SortUpdated
 		}
-		if s.Order == "" {
-			s.Order = OrderDescending
+		if section.Order == "" {
+			section.Order = OrderDescending
 		}
 	}
 }

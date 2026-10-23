@@ -24,13 +24,13 @@ type Session struct {
 // command opens it in $VISUAL, then $EDITOR, then vi. getenv looks up
 // environment variables (os.Getenv in production).
 func New(initial string, getenv func(string) string) (*Session, error) {
-	f, err := os.CreateTemp("", "strig-*.md")
+	file, err := os.CreateTemp("", "strig-*.md")
 	if err != nil {
 		return nil, fmt.Errorf("create temporary file: %w", err)
 	}
-	path := f.Name()
-	_, werr := f.WriteString(initial)
-	if err := errors.Join(werr, f.Close()); err != nil {
+	path := file.Name()
+	_, werr := file.WriteString(initial)
+	if err := errors.Join(werr, file.Close()); err != nil {
 		_ = os.Remove(path)
 		return nil, fmt.Errorf("write temporary file: %w", err)
 	}
@@ -38,23 +38,23 @@ func New(initial string, getenv func(string) string) (*Session, error) {
 }
 
 // Cmd is the editor command, ready to run.
-func (s *Session) Command() *exec.Cmd { return s.command }
+func (session *Session) Command() *exec.Cmd { return session.command }
 
 // Path is the temporary file.
-func (s *Session) Path() string { return s.path }
+func (session *Session) Path() string { return session.path }
 
 // Result reads back what the user wrote and removes the file. It must be
 // called once, after the editor exited (also when it failed, to clean up).
-func (s *Session) Result() (string, error) {
-	b, err := os.ReadFile(s.path)
-	rerr := os.Remove(s.path)
+func (session *Session) Result() (string, error) {
+	bytes, err := os.ReadFile(session.path)
+	rerr := os.Remove(session.path)
 	if err != nil {
 		return "", fmt.Errorf("read edited file: %w", err)
 	}
 	if rerr != nil && !errors.Is(rerr, os.ErrNotExist) {
-		return string(b), fmt.Errorf("remove temporary file: %w", rerr)
+		return string(bytes), fmt.Errorf("remove temporary file: %w", rerr)
 	}
-	return string(b), nil
+	return string(bytes), nil
 }
 
 // Command returns the command that opens path in the user's editor. Like
@@ -63,8 +63,8 @@ func (s *Session) Result() (string, error) {
 func Command(path string, getenv func(string) string) *exec.Cmd {
 	editor := fallback
 	for _, name := range []string{"VISUAL", "EDITOR"} {
-		if v := strings.TrimSpace(getenv(name)); v != "" {
-			editor = v
+		if value := strings.TrimSpace(getenv(name)); value != "" {
+			editor = value
 			break
 		}
 	}

@@ -96,11 +96,11 @@ func (hunk Hunk) Header() string {
 	return hunkString
 }
 
-func rng(start, n int) string {
-	if n == 1 {
+func rng(start, count int) string {
+	if count == 1 {
 		return strconv.Itoa(start)
 	}
-	return strconv.Itoa(start) + "," + strconv.Itoa(n)
+	return strconv.Itoa(start) + "," + strconv.Itoa(count)
 }
 
 // File is the diff of a single file.

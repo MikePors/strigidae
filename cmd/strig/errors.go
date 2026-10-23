@@ -14,7 +14,7 @@ import (
 // the flag package has already reported it.
 type usageError struct{ message string }
 
-func (e *usageError) Error() string { return e.message }
+func (usageError *usageError) Error() string { return usageError.message }
 
 // signInError means there are no usable credentials for host ("" for the gh
 // default host).
@@ -23,8 +23,8 @@ type signInError struct {
 	err  error
 }
 
-func (e *signInError) Error() string { return e.err.Error() }
-func (e *signInError) Unwrap() error { return e.err }
+func (signInError *signInError) Error() string { return signInError.err.Error() }
+func (signInError *signInError) Unwrap() error { return signInError.err }
 
 // report writes err to stderr in the form the user should see and returns the
 // process exit code. It is the only place run turns errors into output.
@@ -32,9 +32,9 @@ func report(stderr io.Writer, err error) int {
 	if err == nil || errors.Is(err, flag.ErrHelp) {
 		return 0
 	}
-	msg, code := message(err)
-	if msg != "" {
-		_, _ = fmt.Fprintf(stderr, "strig: %s\n", msg) // best effort: nowhere else to report
+	messageText, code := message(err)
+	if messageText != "" {
+		_, _ = fmt.Fprintf(stderr, "strig: %s\n", messageText) // best effort: nowhere else to report
 	}
 	return code
 }

@@ -22,7 +22,7 @@ func defaultsFor(user string) []Section {
 	}
 }
 
-func TestParseValid(t *testing.T) {
+func TestParseValid(test *testing.T) {
 	tests := []struct {
 		name string
 		yaml string
@@ -84,20 +84,20 @@ func TestParseValid(t *testing.T) {
 			}}}},
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := Parse("c.yml", []byte(tt.yaml))
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			got, err := Parse("c.yml", []byte(testCase.yaml))
 			if err != nil {
-				t.Fatalf("Parse: %v", err)
+				test.Fatalf("Parse: %v", err)
 			}
-			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Errorf("config mismatch (-want +got):\n%s", diff)
+			if diff := cmp.Diff(testCase.want, got); diff != "" {
+				test.Errorf("config mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
 }
 
-func TestParseErrors(t *testing.T) {
+func TestParseErrors(test *testing.T) {
 	tests := []struct {
 		name string
 		yaml string
@@ -136,65 +136,65 @@ func TestParseErrors(t *testing.T) {
 		{"bad order", "tabs:\n  - name: A\n    sections:\n      - {name: S, query: q, order: up}\n", `c.yml:4: order "up" is not one of: asc, desc`},
 		{"unknown variable", "tabs:\n  - name: A\n    sections:\n      - {name: S, query: 'author:{usr}'}\n", "c.yml:4: unknown variable {usr} in query (the only variable is {user})"},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := Parse("c.yml", []byte(tt.yaml))
-			var ce *Error
-			if !errors.As(err, &ce) {
-				t.Fatalf("err = %v, want *Error", err)
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			_, err := Parse("c.yml", []byte(testCase.yaml))
+			var configError *Error
+			if !errors.As(err, &configError) {
+				test.Fatalf("err = %v, want *Error", err)
 			}
-			if diff := cmp.Diff(tt.want, err.Error()); diff != "" {
-				t.Errorf("message mismatch (-want +got):\n%s", diff)
+			if diff := cmp.Diff(testCase.want, err.Error()); diff != "" {
+				test.Errorf("message mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
 }
 
-func TestLoad(t *testing.T) {
-	dir := t.TempDir()
-	good := filepath.Join(dir, "good.yml")
+func TestLoad(test *testing.T) {
+	directory := test.TempDir()
+	good := filepath.Join(directory, "good.yml")
 	if err := os.WriteFile(good, []byte("tabs:\n  - name: Only\n    user: zed\n"), 0o600); err != nil {
-		t.Fatal(err)
+		test.Fatal(err)
 	}
-	missing := filepath.Join(dir, "missing.yml")
+	missing := filepath.Join(directory, "missing.yml")
 
-	t.Run("valid file", func(t *testing.T) {
+	test.Run("valid file", func(test *testing.T) {
 		got, err := Load(good, true)
 		if err != nil {
-			t.Fatal(err)
+			test.Fatal(err)
 		}
 		want := Config{Tabs: []Tab{{Name: "Only", User: "zed", Sections: defaultsFor("zed")}}}
 		if diff := cmp.Diff(want, got); diff != "" {
-			t.Errorf("(-want +got):\n%s", diff)
+			test.Errorf("(-want +got):\n%s", diff)
 		}
 	})
-	t.Run("missing file gives defaults", func(t *testing.T) {
+	test.Run("missing file gives defaults", func(test *testing.T) {
 		got, err := Load(missing, false)
 		if err != nil {
-			t.Fatal(err)
+			test.Fatal(err)
 		}
 		if diff := cmp.Diff(Default(), got); diff != "" {
-			t.Errorf("(-want +got):\n%s", diff)
+			test.Errorf("(-want +got):\n%s", diff)
 		}
 	})
-	t.Run("missing explicit file is an error", func(t *testing.T) {
+	test.Run("missing explicit file is an error", func(test *testing.T) {
 		if _, err := Load(missing, true); !errors.Is(err, os.ErrNotExist) {
-			t.Errorf("err = %v, want ErrNotExist", err)
+			test.Errorf("err = %v, want ErrNotExist", err)
 		}
 	})
 }
 
-func TestExampleParses(t *testing.T) {
+func TestExampleParses(test *testing.T) {
 	got, err := Load(filepath.Join("..", "..", "docs", "config.example.yml"), true)
 	if err != nil {
-		t.Fatal(err)
+		test.Fatal(err)
 	}
 	if len(got.Tabs) != 3 || got.Tabs[1].User != "alice" || len(got.Tabs[2].Sections) != 2 {
-		t.Errorf("unexpected example config: %+v", got)
+		test.Errorf("unexpected example config: %+v", got)
 	}
 }
 
-func TestPath(t *testing.T) {
+func TestPath(test *testing.T) {
 	home := func() (string, error) { return "/home/u", nil }
 	tests := []struct {
 		name        string
@@ -205,14 +205,14 @@ func TestPath(t *testing.T) {
 		{"unset", "", "/home/u/.config/strig/config.yml"},
 		{"relative xdg ignored", "rel", "/home/u/.config/strig/config.yml"},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := Path(func(string) string { return tt.environment }, home)
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			got, err := Path(func(string) string { return testCase.environment }, home)
 			if err != nil {
-				t.Fatal(err)
+				test.Fatal(err)
 			}
-			if got != tt.want {
-				t.Errorf("Path = %q, want %q", got, tt.want)
+			if got != testCase.want {
+				test.Errorf("Path = %q, want %q", got, testCase.want)
 			}
 		})
 	}
