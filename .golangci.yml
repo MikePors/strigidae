@@ -22,31 +22,31 @@ linters:
           files:
             - "$all"
             - "!**/cmd/strig/**"
-            - "!**/internal/github/api/**"
+            - "!**/internal/github/network/**"
           deny:
-            - pkg: github.com/MikePors/strigidae/internal/github/api
+            - pkg: github.com/MikePors/strigidae/internal/github/network
               desc: only cmd/strig constructs the real GitHub client; everything else uses the github.Client interface
-        ui-shell-imports-no-views:
+        user-interface-shell-imports-no-views:
           files:
-            - "**/internal/ui/*.go"
-            - "**/internal/ui/keys/**"
-            - "**/internal/ui/theme/**"
-            - "**/internal/ui/termtext/**"
-            - "**/internal/ui/components/**"
+            - "**/internal/userinterface/*.go"
+            - "**/internal/userinterface/keys/**"
+            - "**/internal/userinterface/theme/**"
+            - "**/internal/userinterface/terminaltext/**"
+            - "**/internal/userinterface/components/**"
           deny:
-            - pkg: github.com/MikePors/strigidae/internal/ui/views
-              desc: the shell and shared UI packages never import views; a view opens another by building it and sending ui.PushMsg
-        core-imports-no-ui:
+            - pkg: github.com/MikePors/strigidae/internal/userinterface/views
+              desc: the shell and shared UI packages never import views; a view opens another by building it and sending userinterface.PushMessage
+        core-imports-no-user-interface:
           files:
             - "**/internal/github/**"
             - "**/internal/diff/**"
             - "**/internal/config/**"
             - "**/internal/editor/**"
-            - "**/internal/gitrepo/**"
+            - "**/internal/gitrepository/**"
             - "**/internal/logging/**"
             - "**/internal/version/**"
           deny:
-            - pkg: github.com/MikePors/strigidae/internal/ui
+            - pkg: github.com/MikePors/strigidae/internal/userinterface
               desc: non-UI packages must not depend on UI packages
         no-charm-v1:
           deny:

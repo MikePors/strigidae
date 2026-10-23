@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/MikePors/strigidae/internal/github"
-	"github.com/MikePors/strigidae/internal/gitrepo"
+	"github.com/MikePors/strigidae/internal/gitrepository"
 )
 
 func TestReport(t *testing.T) {
@@ -32,15 +32,15 @@ func TestReport(t *testing.T) {
 			wantStderr: "strig: not signed in to ghe.example.com: run `gh auth login --hostname ghe.example.com` and try again\n",
 		},
 		{
-			name: "unknown host", err: &gitrepo.UnknownHostError{Hosts: []string{"a", "b"}}, wantCode: 1,
+			name: "unknown host", err: &gitrepository.UnknownHostError{Hosts: []string{"a", "b"}}, wantCode: 1,
 			wantStderr: `strig: remote host "a", "b" isn't a GitHub host gh is signed in to; pass -R owner/repo or run gh auth login --hostname <host>` + "\n",
 		},
 		{
-			name: "not a checkout", err: fmt.Errorf("%w: exit 128", gitrepo.ErrNotCheckout), wantCode: 1,
+			name: "not a checkout", err: fmt.Errorf("%w: exit 128", gitrepository.ErrNotCheckout), wantCode: 1,
 			wantStderr: "strig: run strig inside a GitHub repository checkout, or pass -R owner/repo\n",
 		},
 		{
-			name: "no github remote", err: gitrepo.ErrNoGitHubRemote, wantCode: 1,
+			name: "no github remote", err: gitrepository.ErrNoGitHubRemote, wantCode: 1,
 			wantStderr: "strig: no GitHub remote (upstream or origin) in this checkout; pass -R owner/repo\n",
 		},
 		{name: "anything else", err: errors.New("boom"), wantCode: 1, wantStderr: "strig: boom\n"},

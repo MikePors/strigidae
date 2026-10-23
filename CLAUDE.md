@@ -4,7 +4,7 @@ Guidance for anyone (human or agent) working on **strigidae**, a terminal UI for
 
 Read this file before starting an issue, plus the area guide for the code you'll touch:
 
-- [`internal/ui/CLAUDE.md`](internal/ui/CLAUDE.md): Bubble Tea conventions, keybindings, rendering and golden tests
+- [`internal/userinterface/CLAUDE.md`](internal/userinterface/CLAUDE.md): Bubble Tea conventions, keybindings, rendering and golden tests
 - [`internal/github/CLAUDE.md`](internal/github/CLAUDE.md): the GitHub API boundary, errors, fixtures
 
 If something here is wrong or missing, say so in your PR rather than silently working around it.
@@ -36,46 +36,46 @@ The v1 Charm paths (`github.com/charmbracelet/{bubbletea,bubbles,lipgloss,glamou
 cmd/strig/              main: flag parsing, wiring real dependencies, starting the program
 internal/version/       build version
 internal/github/        domain types, the Client interface, typed errors     (see its CLAUDE.md)
-internal/github/api/    real Client (go-gh); the only package that talks to the network
+internal/github/network/ real Client (go-gh); the only package that talks to the network
 internal/github/fake/   in-memory Client for tests and demos
-internal/gitrepo/       infer the GitHub repo (host + owner/name) from a checkout's remotes
+internal/gitrepository/ infer the GitHub repo (host + owner/name) from a checkout's remotes
 internal/diff/          unified-diff parsing and modelling (pure, no UI)
 internal/config/        config file loading and validation
 internal/editor/        $EDITOR handoff for writing comments
 internal/logging/       log file setup
 internal/golden/        golden-file test helper
-internal/ui/            app shell, View interface, status bar, command line (see its CLAUDE.md)
-internal/ui/keys/       keymap registry and multi-key sequence handling
-internal/ui/theme/      Lip Gloss styles; every colour lives here
-internal/ui/termtext/   sanitising of untrusted text (Clean, CleanBlock); imports no other ui package
-internal/ui/components/ reusable widgets (picker, markdown pane, diff pane, …)
-internal/ui/views/<v>/  one package per screen: prlist, workspace, dashboard, …
+internal/userinterface/            app shell, View interface, status bar, command line (see its CLAUDE.md)
+internal/userinterface/keys/       keymap registry and multi-key sequence handling
+internal/userinterface/theme/      Lip Gloss styles; every colour lives here
+internal/userinterface/terminaltext/   sanitising of untrusted text (Clean, CleanBlock); imports no other userinterface package
+internal/userinterface/components/ reusable widgets (picker, markdown pane, diff pane, …)
+internal/userinterface/views/<v>/  one package per screen: pullrequestlist, workspace, dashboard, …
 ```
 
 Packages that don't exist yet are created by the issue that first needs them. Dependencies point one way, enforced by `depguard` (`make lint` fails on a violation):
 
 ```
-cmd/strig ──► ui/views/* ──► ui/components ──► ui ──► ui/keys, ui/theme
-    │              └──────► github, diff, config, editor, gitrepo   (non-UI)
-    └──► github/api  (the only importer of the real client)
+cmd/strig ──► userinterface/views/* ──► userinterface/components ──► userinterface ──► userinterface/keys, userinterface/theme
+    │              └──────► github, diff, config, editor, gitrepository   (non-UI)
+    └──► github/network  (the only importer of the real client)
 ```
 
-- `internal/ui`, `ui/keys`, `ui/theme` and `ui/components` **never import `ui/views/*`**. Views may import other views, without cycles.
-- Non-UI packages (`github`, `diff`, `config`, `editor`, `gitrepo`, `logging`, `version`) never import UI packages.
-- Only `cmd/strig` imports `internal/github/api`.
+- `internal/userinterface`, `userinterface/keys`, `userinterface/theme` and `userinterface/components` **never import `userinterface/views/*`**. Views may import other views, without cycles.
+- Non-UI packages (`github`, `diff`, `config`, `editor`, `gitrepository`, `logging`, `version`) never import UI packages.
+- Only `cmd/strig` imports `internal/github/network`.
 
 ## Process-wide rules
 
 - **Never write to stdout or stderr while the TUI is running**; it corrupts the screen. Log with `log/slog` to the file under `$XDG_STATE_HOME/strig/` (fallback `~/.local/state/strig/`; `strig --log-path` prints it). Never log tokens, auth headers, or full API response bodies.
 - **No global mutable state** apart from build-time values such as `version.Version` and two startup redirections: `internal/logging` points the standard `log`/`slog` default loggers at the log file (so a dependency that logs can't corrupt the screen), and `cmd/strig` sets `github.com/cli/browser`'s `Stdout`/`Stderr` to `io.Discard` (so `xdg-open` can't either). The one runtime exception is the Chroma style registry: `theme.Theme.ChromaStyleName` registers one generated style per theme (Glamour looks code-block styles up by name there). The registry is a plain map that Glamour reads without a lock, so **registry writes and all Glamour rendering must stay on the UI goroutine** (never in a `tea.Cmd`); a mutex does not make it safe.
 - **Never hardcode `github.com` as the host.** Take it from the git remote, `-R`, or the auth/config, so GitHub Enterprise can work later.
-- **Untrusted text.** Everything from GitHub or git (titles, names, labels, paths, branches, markdown, diff content, error messages) is attacker-controlled and can carry terminal escapes. It goes through `internal/ui/termtext` before reaching the screen; details in `internal/ui/CLAUDE.md`.
+- **Untrusted text.** Everything from GitHub or git (titles, names, labels, paths, branches, markdown, diff content, error messages) is attacker-controlled and can carry terminal escapes. It goes through `internal/userinterface/terminaltext` before reaching the screen; details in `internal/userinterface/CLAUDE.md`.
 
 ## Testing
 
 - `go test ./...` must never touch the network or the real `gh` config. Use `internal/github/fake` or fixtures in a `testdata/` directory next to the test. Scrub tokens and personal data from anything recorded.
 - **Table-driven tests** with the standard `testing` package; compare plain data with `cmp.Diff`. Models have unexported fields (which make `cmp.Diff` panic): test them through behaviour or exported accessors.
-- What must be tested: parsing and mapping logic, keymap/sequence handling, state transitions in `Update`, and each view's main states (see `internal/ui/CLAUDE.md`).
+- What must be tested: parsing and mapping logic, keymap/sequence handling, state transitions in `Update`, and each view's main states (see `internal/userinterface/CLAUDE.md`).
 - No `time.Sleep` in tests. Inject clocks and timers.
 
 ## Code style

@@ -10,8 +10,8 @@ import (
 
 	"github.com/MikePors/strigidae/internal/config"
 	"github.com/MikePors/strigidae/internal/github"
-	"github.com/MikePors/strigidae/internal/github/api"
-	"github.com/MikePors/strigidae/internal/gitrepo"
+	"github.com/MikePors/strigidae/internal/github/network"
+	"github.com/MikePors/strigidae/internal/gitrepository"
 	"github.com/MikePors/strigidae/internal/logging"
 	"github.com/MikePors/strigidae/internal/version"
 )
@@ -23,7 +23,7 @@ type deps struct {
 	getwd  func() (string, error)
 	getenv func(string) string
 	home   func() (string, error)
-	runner gitrepo.Runner
+	runner gitrepository.Runner
 	// knownHost reports whether host is a GitHub host gh can talk to.
 	knownHost func(host string) bool
 	newClient func(host string) (github.Client, error)
@@ -35,10 +35,10 @@ func realDeps() deps {
 		getwd:     os.Getwd,
 		getenv:    os.Getenv,
 		home:      os.UserHomeDir,
-		runner:    gitrepo.ExecRunner,
-		knownHost: api.KnownHost,
+		runner:    gitrepository.ExecRunner,
+		knownHost: network.KnownHost,
 		newClient: func(host string) (github.Client, error) {
-			c, err := api.New(api.Options{Host: host})
+			c, err := network.New(network.Options{Host: host})
 			if err != nil {
 				return nil, err // not c: a nil *Client would be a non-nil interface
 			}

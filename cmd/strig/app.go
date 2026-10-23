@@ -7,8 +7,8 @@ import (
 
 	"github.com/MikePors/strigidae/internal/config"
 	"github.com/MikePors/strigidae/internal/github"
-	"github.com/MikePors/strigidae/internal/gitrepo"
-	"github.com/MikePors/strigidae/internal/ui/theme"
+	"github.com/MikePors/strigidae/internal/gitrepository"
+	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
 // app is everything the TUI needs, resolved before it starts.
@@ -38,18 +38,18 @@ func newApp(repoFlag string, cfg config.Config, d deps) (app, error) {
 
 // resolveTarget decides which repository to show: -R if given, else the
 // current checkout's remote.
-func resolveTarget(repoFlag string, d deps) (gitrepo.Remote, error) {
+func resolveTarget(repoFlag string, d deps) (gitrepository.Remote, error) {
 	if repoFlag != "" {
 		repo, err := github.ParseRepo(repoFlag)
 		if err != nil {
-			return gitrepo.Remote{}, &usageError{fmt.Sprintf("-R: %v", err)}
+			return gitrepository.Remote{}, &usageError{fmt.Sprintf("-R: %v", err)}
 		}
 		// No host: the client uses the gh default (GH_HOST or github.com).
-		return gitrepo.Remote{Repo: repo}, nil
+		return gitrepository.Remote{Repo: repo}, nil
 	}
 	dir, err := d.getwd()
 	if err != nil {
-		return gitrepo.Remote{}, err
+		return gitrepository.Remote{}, err
 	}
-	return gitrepo.Infer(context.Background(), d.runner, dir, d.knownHost)
+	return gitrepository.Infer(context.Background(), d.runner, dir, d.knownHost)
 }
