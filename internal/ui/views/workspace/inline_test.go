@@ -1470,12 +1470,23 @@ func lineDraftKey(side github.DiffSide, line int) string {
 func TestRefusedEditTextGoesToTheThreadOrTheLine(t *testing.T) {
 	replyKey := target{kind: kindReply, threadID: mineID}.draftKey()
 	lineKey := lineDraftKey(github.SideRight, 10)
+	topKey := target{}.draftKey()
 	twoComments := func(c *inliner) github.ReviewThread {
 		th := c.mine(true, true, github.ReviewComment{ID: "c-mine", Body: "published note"})
 		th.Comments = append([]github.ReviewComment{{ID: "c-bob", Author: "bob", Body: "the question"}}, th.Comments...)
 		return th
 	}
 	single := func(c *inliner) github.ReviewThread { return c.mine(true, true) }
+	outdated := func(c *inliner) github.ReviewThread { // no current line: shown below the diff
+		th := c.mine(true, true)
+		th.Line, th.OriginalLine, th.IsOutdated = 0, 10, true
+		return th
+	}
+	offDiff := func(c *inliner) github.ReviewThread { // a line the diff does not show
+		th := c.mine(true, true)
+		th.Line = 900
+		return th
+	}
 	deleteIt := func(c *inliner) {
 		if err := c.client.DeleteReviewComment(t.Context(), "c-mine"); err != nil {
 			t.Fatal(err)
@@ -1498,6 +1509,13 @@ func TestRefusedEditTextGoesToTheThreadOrTheLine(t *testing.T) {
 	}{
 		{"gone, other comments remain", twoComments, deleteIt, replyKey, "your text is kept as a reply draft"},
 		{"gone, it was the only comment", single, deleteIt, lineKey, "your text is kept as a draft for a new comment on " + clientPath + ":10"},
+		{"gone, outdated thread without a line", outdated, deleteIt, topKey, "your text is kept as a draft for a top-level comment"},
+		{"gone, line not in the diff", offDiff, deleteIt, topKey, "your text is kept as a draft for a top-level comment"},
+		{"outdated thread that survives", func(c *inliner) github.ReviewThread {
+			th := outdated(c)
+			th.Comments = append([]github.ReviewComment{{ID: "c-bob", Author: "bob", Body: "the question"}}, th.Comments...)
+			return th
+		}, deleteIt, replyKey, "your text is kept as a reply draft"},
 		{"locked, only comment", single, lock, replyKey, "your text is kept as a reply draft"},
 		{"locked, other comments remain", twoComments, lock, replyKey, "your text is kept as a reply draft"},
 		{"not yours any more", single, notYours, replyKey, "your text is kept as a reply draft"},
@@ -1525,6 +1543,15 @@ func TestRefusedEditTextGoesToTheThreadOrTheLine(t *testing.T) {
 			}
 			if diff := cmp.Diff(map[string]string{tt.wantKey: "my rewrite"}, c.v.drafts); diff != "" {
 				t.Errorf("drafts (-want +got):\n%s", diff)
+			}
+			if tt.wantKey == topKey {
+				// c in the Overview starts from the text.
+				c.press("h", "g g")
+				c.openedOn = nil
+				c.press("c")
+				if diff := cmp.Diff([]string{"my rewrite"}, c.openedOn); diff != "" {
+					t.Errorf("c in the Overview opened on (-want +got):\n%s", diff)
+				}
 			}
 			if tt.wantKey == lineKey {
 				// The thread is gone after the refresh; c on its line starts from the text.
@@ -1807,5 +1834,23 @@ func TestResultsNeverTakeTheCountBelowZero(t *testing.T) {
 	c.press("c") // refused: one write is running
 	if c.v.writes != 1 {
 		t.Errorf("writes = %d, want 1", c.v.writes)
+	}
+}
+
+// A diff reload in flight does not stop an inline comment that was already
+// written: the head check covers it, and nothing is lost.
+func TestInlineSendIgnoresADiffLoadInFlight(t *testing.T) {
+	c := newInliner(t)
+	c.body = "x"
+	c.moveTo(diffview.SideRight, 10)
+	c.v.edit = func(_ string, done func(string, error) tea.Msg) tea.Cmd {
+		return func() tea.Msg {
+			c.v.diffPending = true // a reload of the same head is under way
+			return done("x", nil)
+		}
+	}
+	c.press("c")
+	if len(c.client.AddedThreads()) != 1 {
+		t.Errorf("added %d threads, error %q", len(c.client.AddedThreads()), c.lastError())
 	}
 }
