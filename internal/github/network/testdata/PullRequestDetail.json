@@ -18,6 +18,7 @@
         "author": {"login": "MikePors"},
         "commentCount": {"totalCount": 2},
         "repository": {"nameWithOwner": "MikePors/strigidae"},
+        "viewerDidAuthor": true,
         "body": "Closes #4\n\n## Summary\nAdds the client layer.\n",
         "additions": 120,
         "deletions": 7,

@@ -71,7 +71,7 @@ query ` + operationPullRequestDetail + `($owner: String!, $name: String!, $numbe
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
       ...PullRequestFields
-      body additions deletions
+      body additions deletions viewerDidAuthor
       labels(first: 50) { nodes { name color } }
       reviewRequests(first: 50) {
         nodes { requestedReviewer { __typename %s } }

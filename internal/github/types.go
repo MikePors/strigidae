@@ -126,10 +126,13 @@ type Review struct {
 // PullRequestDetail is a pull request with everything the detail view needs.
 type PullRequestDetail struct {
 	PullRequest
-	Body      string
-	Additions int
-	Deletions int
-	Labels    []Label
+	// ViewerDidAuthor is set when the viewer opened the pull request. GitHub
+	// refuses to approve or request changes on your own pull request.
+	ViewerDidAuthor bool
+	Body            string
+	Additions       int
+	Deletions       int
+	Labels          []Label
 	// ReviewRequests are the reviewers currently asked to review.
 	ReviewRequests []Reviewer
 	Files          []ChangedFile

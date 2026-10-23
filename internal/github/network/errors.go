@@ -109,9 +109,22 @@ func (client *Client) mapGraphQLError(graphqlError *githubapi.GraphQLError) erro
 			return &github.RateLimitError{ResetAt: client.limit.resetFor("graphql"), Err: graphqlError}
 		case "NOT_FOUND":
 			return fmt.Errorf("%w: %w", github.ErrNotFound, graphqlError)
+		case "UNPROCESSABLE":
+			if isOwnPullRequestRefusal(item.Message) {
+				return fmt.Errorf("%w: %w", github.ErrOwnPullRequest, graphqlError)
+			}
 		case "FORBIDDEN", "INSUFFICIENT_SCOPES":
 			return fmt.Errorf("%w: %w", github.ErrForbidden, graphqlError)
 		}
 	}
 	return graphqlError
+}
+
+// isOwnPullRequestRefusal recognises GitHub's refusal to approve or request
+// changes on the viewer's own pull request. The error type UNPROCESSABLE is
+// too broad on its own, so the message text decides.
+func isOwnPullRequestRefusal(message string) bool {
+	message = strings.ToLower(message)
+	return strings.Contains(message, "your own pull request") &&
+		(strings.Contains(message, "approve") || strings.Contains(message, "request changes"))
 }

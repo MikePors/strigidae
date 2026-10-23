@@ -249,8 +249,9 @@ func TestGetPullRequest(test *testing.T) {
 			CreatedAt: mustTime(test, "2026-10-18T09:00:00Z"), UpdatedAt: mustTime(test, "2026-10-19T08:30:00Z"),
 			URL: "https://github.com/MikePors/strigidae/pull/27", HeadBranch: "feat/4-github-client", BaseBranch: "main",
 		},
-		Body:      "Closes #4\n\n## Summary\nAdds the client layer.\n",
-		Additions: 120, Deletions: 7,
+		ViewerDidAuthor: true,
+		Body:            "Closes #4\n\n## Summary\nAdds the client layer.\n",
+		Additions:       120, Deletions: 7,
 		Labels:         []github.Label{{Name: "enhancement", Color: "a2eeef"}},
 		ReviewRequests: []github.Reviewer{{Name: "octocat"}, {Name: "maintainers", IsTeam: true}},
 		Files: []github.ChangedFile{

@@ -18,6 +18,10 @@ var verdicts = []struct {
 	{"Comment", github.ReviewEventComment},
 }
 
+// ownPullRequestText explains why Approve and Request changes are unavailable
+// on the viewer's own pull request, and is shown when GitHub refuses them.
+const ownPullRequestText = "You can't approve or request changes on your own pull request."
+
 // commentSavingText is shown when a review or merge is asked for while a
 // comment is being saved.
 const commentSavingText = "a comment is being saved; try again"
@@ -62,6 +66,9 @@ func submittedText(event github.ReviewEvent, number int) string {
 // submitFailure is the error shown when SubmitReview failed. pending says the
 // call was for a pending review.
 func submitFailure(err error, pending bool) error {
+	if errors.Is(err, github.ErrOwnPullRequest) {
+		return errors.New(ownPullRequestText) //nolint:staticcheck // shown to the user as a sentence
+	}
 	if pending && errors.Is(err, github.ErrNotFound) {
 		return errors.New("your pending review was submitted or deleted elsewhere; refreshing, then try again")
 	}

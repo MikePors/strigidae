@@ -73,7 +73,9 @@ func (client *Client) GetReviewStatus(ctx context.Context, repository github.Rep
 
 // SubmitReview implements github.Client. Like GitHub it refuses an unknown
 // event, and an empty body for a verdict other than approval unless a pending
-// review brings inline comments. A submitted pending review disappears, and
+// review brings inline comments. Also like GitHub, it refuses an approval or a
+// request for changes on a pull request whose detail has ViewerDidAuthor, with
+// ErrOwnPullRequest. A submitted pending review disappears, and
 // the review joins the detail's reviews.
 func (client *Client) SubmitReview(ctx context.Context, in github.SubmitReviewInput) error {
 	client.mutex.Lock()
@@ -94,6 +96,9 @@ func (client *Client) SubmitReview(ctx context.Context, in github.SubmitReviewIn
 	// fake refuses an empty or wrong one.
 	if in.PullRequestIdentifier == "" || in.PullRequestIdentifier != detail.Identifier {
 		return fmt.Errorf("submit review on %s#%d: unknown pull request ID %q", in.Repository, in.Number, in.PullRequestIdentifier)
+	}
+	if detail.ViewerDidAuthor && in.Event != github.ReviewEventComment {
+		return fmt.Errorf("submit review on %s#%d: %w", in.Repository, in.Number, github.ErrOwnPullRequest)
 	}
 	var inline int
 	if in.PendingReviewIdentifier != "" {
