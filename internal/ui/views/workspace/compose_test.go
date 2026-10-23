@@ -201,7 +201,7 @@ func TestStaleComposeResultsIgnored(t *testing.T) {
 	c.onThread()
 	c.body = "x"
 	c.press("r")
-	stale := editedMsg{owner: c.v, repo: testRepo, number: 7, seq: c.v.cseq - 1, tgt: target{threadID: "t-resolved"}, body: "late"}
+	stale := editedMsg{owner: c.v, repo: testRepo, number: 7, seq: c.v.cseq - 1, tgt: target{kind: kindReply, threadID: "t-resolved"}, body: "late"}
 	c.msgs = nil
 	c.send(stale)
 	if _, ok := c.lastConfirm(); ok {
@@ -242,7 +242,7 @@ func TestPostResultAfterNewComposeIsHandled(t *testing.T) {
 
 	// A newer draft for the same target survives the older post.
 	c.drafts(map[string]string{"t-resolved": "newer"})
-	c.send(postedMsg{origin: c.v.origin(), tgt: target{threadID: "t-resolved"}, body: "first"})
+	c.send(postedMsg{origin: c.v.origin(), tgt: target{kind: kindReply, threadID: "t-resolved"}, body: "first"})
 	if c.v.drafts["t-resolved"] != "newer" {
 		t.Errorf("newer draft deleted: %v", c.v.drafts)
 	}
@@ -251,7 +251,7 @@ func TestPostResultAfterNewComposeIsHandled(t *testing.T) {
 	c.client.SetError(fake.MethodReplyToThread, errors.New("boom"))
 	c.drafts(map[string]string{"t-resolved": "first"})
 	c.msgs = nil
-	c.run(c.v.post(target{threadID: "t-resolved"}, "first"))
+	c.run(c.v.post(target{kind: kindReply, threadID: "t-resolved"}, "first"))
 	if err := c.lastErr(); err == nil || !strings.Contains(err.Error(), "post reply: boom") {
 		t.Errorf("error = %v", err)
 	}
