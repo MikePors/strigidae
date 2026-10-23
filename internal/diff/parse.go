@@ -13,31 +13,31 @@ type ParseError struct {
 	Msg  string
 }
 
-func (e *ParseError) Error() string {
-	return fmt.Sprintf("parse diff: line %d: %s", e.Line, e.Msg)
+func (err *ParseError) Error() string {
+	return fmt.Sprintf("parse diff: line %d: %s", err.Line, err.Msg)
 }
 
-var hunkRE = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@ ?(.*)$`)
+var hunkRegex = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@ ?(.*)$`)
 
 // Parse parses a git-format unified diff. Empty input yields an empty Diff and
 // no error. The returned *Diff is never nil; when the error is non-nil it holds
 // the best-effort parse.
 func Parse(text string) (*Diff, error) {
-	p := &parser{d: &Diff{}}
+	parsed := &parser{d: &Diff{}}
 	n := 0
 	for len(text) > 0 {
 		var line string
 		line, text, _ = strings.Cut(text, "\n")
 		n++
-		p.feed(n, line)
+		parsed.feed(n, line)
 	}
-	if p.inBody {
-		p.fail(n, "truncated hunk")
+	if parsed.inBody {
+		parsed.fail(n, "truncated hunk")
 	}
-	if len(p.d.Files) == 0 && p.sawText && p.err == nil {
-		p.err = &ParseError{Line: 1, Msg: "no diff found"}
+	if len(parsed.d.Files) == 0 && parsed.sawText && parsed.err == nil {
+		parsed.err = &ParseError{Line: 1, Msg: "no diff found"}
 	}
-	return p.d, p.err
+	return parsed.d, parsed.err
 }
 
 type parser struct {
@@ -53,91 +53,91 @@ type parser struct {
 	sawText bool
 }
 
-func (p *parser) fail(n int, msg string) {
-	if p.err == nil {
-		p.err = &ParseError{Line: n, Msg: msg}
+func (parsed *parser) fail(n int, message string) {
+	if parsed.err == nil {
+		parsed.err = &ParseError{Line: n, Msg: message}
 	}
 }
 
-func (p *parser) feed(n int, line string) {
+func (parser *parser) feed(n int, line string) {
 	if strings.TrimSpace(line) != "" {
-		p.sawText = true
+		parser.sawText = true
 	}
-	if p.inBody {
-		if p.bodyLine(line) {
+	if parser.inBody {
+		if parser.bodyLine(line) {
 			return
 		}
-		p.fail(n, "hunk ended before its line counts were reached")
-		p.inBody = false
+		parser.fail(n, "hunk ended before its line counts were reached")
+		parser.inBody = false
 	}
 	// A no-newline marker may follow a hunk whose counts are exhausted.
-	if p.hasHunk && strings.HasPrefix(line, `\`) {
-		p.addLine(Line{Kind: NoNewline, Text: markerText(line)})
+	if parser.hasHunk && strings.HasPrefix(line, `\`) {
+		parser.addLine(Line{Kind: NoNewline, Text: markerText(line)})
 		return
 	}
-	if p.hasHunk && line != "" && strings.IndexByte(" +-", line[0]) >= 0 {
+	if parser.hasHunk && line != "" && strings.IndexByte(" +-", line[0]) >= 0 {
 		// Counts are used up but the diff goes on: the header lied.
-		p.fail(n, "diff line beyond the hunk's line counts")
+		parser.fail(n, "diff line beyond the hunk's line counts")
 		return
 	}
 	if rest, ok := strings.CutPrefix(line, "diff --git "); ok {
-		p.startFile(rest)
+		parser.startFile(rest)
 		return
 	}
-	if p.file == nil {
+	if parser.file == nil {
 		return // preamble or garbage before the first file
 	}
-	if m := hunkRE.FindStringSubmatch(line); m != nil && p.startHunk(n, m) {
+	if m := hunkRegex.FindStringSubmatch(line); m != nil && parser.startHunk(n, m) {
 		return
 	}
-	if !p.hasHunk {
-		p.headerLine(line)
+	if !parser.hasHunk {
+		parser.headerLine(line)
 	}
 }
 
 // bodyLine consumes a hunk body line; false means the line does not belong to
 // the hunk (malformed or truncated hunk).
-func (p *parser) bodyLine(line string) bool {
+func (parser *parser) bodyLine(line string) bool {
 	switch {
 	case strings.HasPrefix(line, `\`):
-		p.addLine(Line{Kind: NoNewline, Text: markerText(line)})
+		parser.addLine(Line{Kind: NoNewline, Text: markerText(line)})
 		return true
 	case line == "" || line == "\r" || line[0] == ' ':
-		if p.oldRem == 0 || p.newRem == 0 {
+		if parser.oldRem == 0 || parser.newRem == 0 {
 			return false
 		}
-		p.oldRem--
-		p.newRem--
-		p.addLine(Line{Kind: Context, Old: p.oldNo, New: p.newNo, Text: content(line)})
-		p.oldNo++
-		p.newNo++
+		parser.oldRem--
+		parser.newRem--
+		parser.addLine(Line{Kind: Context, Old: parser.oldNo, New: parser.newNo, Text: content(line)})
+		parser.oldNo++
+		parser.newNo++
 	case line[0] == '+':
-		if p.newRem == 0 {
+		if parser.newRem == 0 {
 			return false
 		}
-		p.newRem--
-		p.addLine(Line{Kind: Add, New: p.newNo, Text: content(line)})
-		p.newNo++
+		parser.newRem--
+		parser.addLine(Line{Kind: Add, New: parser.newNo, Text: content(line)})
+		parser.newNo++
 	case line[0] == '-':
-		if p.oldRem == 0 {
+		if parser.oldRem == 0 {
 			return false
 		}
-		p.oldRem--
-		p.addLine(Line{Kind: Delete, Old: p.oldNo, Text: content(line)})
-		p.oldNo++
+		parser.oldRem--
+		parser.addLine(Line{Kind: Delete, Old: parser.oldNo, Text: content(line)})
+		parser.oldNo++
 	default:
 		return false
 	}
-	p.inBody = p.oldRem > 0 || p.newRem > 0
+	parser.inBody = parser.oldRem > 0 || parser.newRem > 0
 	return true
 }
 
-func (p *parser) addLine(l Line) {
-	h := &p.file.Hunks[len(p.file.Hunks)-1]
+func (parser *parser) addLine(l Line) {
+	h := &parser.file.Hunks[len(parser.file.Hunks)-1]
 	h.Lines = append(h.Lines, l)
 }
 
-func (p *parser) startHunk(n int, m []string) bool {
+func (parser *parser) startHunk(n int, m []string) bool {
 	vals := [4]int{0, 1, 0, 1}
 	for i, idx := range []int{1, 2, 3, 4} {
 		if m[idx] == "" {
@@ -145,93 +145,93 @@ func (p *parser) startHunk(n int, m []string) bool {
 		}
 		v, err := strconv.Atoi(m[idx])
 		if err != nil || v > 1<<30 {
-			p.fail(n, "bad hunk header")
+			parser.fail(n, "bad hunk header")
 			return false
 		}
 		vals[i] = v
 	}
-	p.file.Hunks = append(p.file.Hunks, Hunk{
+	parser.file.Hunks = append(parser.file.Hunks, Hunk{
 		OldStart: vals[0], OldLines: vals[1],
 		NewStart: vals[2], NewLines: vals[3],
 		Section: strings.TrimSpace(m[5]),
 	})
-	p.hasHunk = true
-	p.oldRem, p.newRem = vals[1], vals[3]
-	p.oldNo, p.newNo = vals[0], vals[2]
-	p.inBody = p.oldRem > 0 || p.newRem > 0
+	parser.hasHunk = true
+	parser.oldRem, parser.newRem = vals[1], vals[3]
+	parser.oldNo, parser.newNo = vals[0], vals[2]
+	parser.inBody = parser.oldRem > 0 || parser.newRem > 0
 	return true
 }
 
-func (p *parser) startFile(rest string) {
+func (parser *parser) startFile(rest string) {
 	f := &File{}
 	f.OldPath, f.NewPath = splitGitPaths(rest)
-	p.d.Files = append(p.d.Files, f)
-	p.file, p.hasHunk, p.inBody = f, false, false
+	parser.d.Files = append(parser.d.Files, f)
+	parser.file, parser.hasHunk, parser.inBody = f, false, false
 }
 
-func (p *parser) headerLine(line string) {
-	f := p.file
+func (parser *parser) headerLine(line string) {
+	file := parser.file
 	switch {
 	case strings.HasPrefix(line, "old mode "):
-		f.OldMode = strings.TrimSpace(line[len("old mode "):])
+		file.OldMode = strings.TrimSpace(line[len("old mode "):])
 	case strings.HasPrefix(line, "new mode "):
-		f.NewMode = strings.TrimSpace(line[len("new mode "):])
+		file.NewMode = strings.TrimSpace(line[len("new mode "):])
 	case strings.HasPrefix(line, "new file mode "):
-		f.Status = Added
-		f.NewMode = strings.TrimSpace(line[len("new file mode "):])
-		f.OldPath = ""
+		file.Status = Added
+		file.NewMode = strings.TrimSpace(line[len("new file mode "):])
+		file.OldPath = ""
 	case strings.HasPrefix(line, "deleted file mode "):
-		f.Status = Deleted
-		f.OldMode = strings.TrimSpace(line[len("deleted file mode "):])
-		f.NewPath = ""
+		file.Status = Deleted
+		file.OldMode = strings.TrimSpace(line[len("deleted file mode "):])
+		file.NewPath = ""
 	case strings.HasPrefix(line, "similarity index "):
-		s := strings.TrimSuffix(strings.TrimSpace(line[len("similarity index "):]), "%")
-		f.Similarity, _ = strconv.Atoi(s)
+		str := strings.TrimSuffix(strings.TrimSpace(line[len("similarity index "):]), "%")
+		file.Similarity, _ = strconv.Atoi(str)
 	case strings.HasPrefix(line, "rename from "):
-		f.Status = Renamed
-		f.OldPath = unquote(line[len("rename from "):])
+		file.Status = Renamed
+		file.OldPath = unquote(line[len("rename from "):])
 	case strings.HasPrefix(line, "rename to "):
-		f.Status = Renamed
-		f.NewPath = unquote(line[len("rename to "):])
+		file.Status = Renamed
+		file.NewPath = unquote(line[len("rename to "):])
 	case strings.HasPrefix(line, "copy from "):
-		f.Status = Copied
-		f.OldPath = unquote(line[len("copy from "):])
+		file.Status = Copied
+		file.OldPath = unquote(line[len("copy from "):])
 	case strings.HasPrefix(line, "copy to "):
-		f.Status = Copied
-		f.NewPath = unquote(line[len("copy to "):])
+		file.Status = Copied
+		file.NewPath = unquote(line[len("copy to "):])
 	case strings.HasPrefix(line, "Binary files "), strings.HasPrefix(line, "GIT binary patch"):
-		f.Binary = true
+		file.Binary = true
 	case strings.HasPrefix(line, "--- "):
-		if path, ok := patchPath(line[4:]); ok && f.Status != Added {
-			f.OldPath = path
+		if path, ok := patchPath(line[4:]); ok && file.Status != Added {
+			file.OldPath = path
 		}
 	case strings.HasPrefix(line, "+++ "):
-		if path, ok := patchPath(line[4:]); ok && f.Status != Deleted {
-			f.NewPath = path
+		if path, ok := patchPath(line[4:]); ok && file.Status != Deleted {
+			file.NewPath = path
 		}
 	}
 }
 
 // patchPath extracts the path from a "--- a/x" or "+++ b/x" operand. /dev/null
 // reports ok=false.
-func patchPath(s string) (string, bool) {
-	if strings.HasPrefix(s, `"`) {
-		q, err := strconv.QuotedPrefix(s) // git appends a TAB after names containing spaces
+func patchPath(str string) (string, bool) {
+	if strings.HasPrefix(str, `"`) {
+		quoted, err := strconv.QuotedPrefix(str) // git appends a TAB after names containing spaces
 		if err != nil {
 			return "", false // undecodable: keep the path from the diff --git line
 		}
-		s = q
-	} else if i := strings.IndexByte(s, '\t'); i >= 0 {
-		s = s[:i] // a tab-separated timestamp or trailing TAB
+		str = quoted
+	} else if i := strings.IndexByte(str, '\t'); i >= 0 {
+		str = str[:i] // a tab-separated timestamp or trailing TAB
 	}
-	s = unquote(s)
-	if s == "/dev/null" || s == "" {
+	str = unquote(str)
+	if str == "/dev/null" || str == "" {
 		return "", false
 	}
-	if len(s) > 2 && (s[:2] == "a/" || s[:2] == "b/") {
-		s = s[2:]
+	if len(str) > 2 && (str[:2] == "a/" || str[:2] == "b/") {
+		str = str[2:]
 	}
-	return s, true
+	return str, true
 }
 
 // splitGitPaths splits the operands of "diff --git a/x b/y". Paths may contain
@@ -257,27 +257,27 @@ func splitGitPaths(rest string) (oldPath, newPath string) {
 }
 
 func splitQuoted(rest string) (oldPath, newPath string, ok bool) {
-	q, err := strconv.QuotedPrefix(rest)
+	quoted, err := strconv.QuotedPrefix(rest)
 	if err != nil {
 		return "", "", false
 	}
-	first, err := strconv.Unquote(q)
+	first, err := strconv.Unquote(quoted)
 	if err != nil {
 		return "", "", false
 	}
-	second := unquote(strings.TrimPrefix(rest[len(q):], " "))
+	second := unquote(strings.TrimPrefix(rest[len(quoted):], " "))
 	return strings.TrimPrefix(first, "a/"), strings.TrimPrefix(second, "b/"), true
 }
 
 // unquote undoes git's C-style quoting of unusual paths.
-func unquote(s string) string {
-	s = strings.TrimRight(s, "\r")
-	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
-		if u, err := strconv.Unquote(s); err == nil {
-			return u
+func unquote(str string) string {
+	str = strings.TrimRight(str, "\r")
+	if len(str) >= 2 && str[0] == '"' && str[len(str)-1] == '"' {
+		if unquoted, err := strconv.Unquote(str); err == nil {
+			return unquoted
 		}
 	}
-	return s
+	return str
 }
 
 func content(line string) string {

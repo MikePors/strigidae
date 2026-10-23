@@ -13,8 +13,8 @@ import (
 // copyFilename copies the selected file's path to the clipboard. The Files
 // pane cursor and the diff pane's file are the same selection, so focus does
 // not matter.
-func (v *View) copyFilename() tea.Cmd {
-	path := v.selectedPath()
+func (view *View) copyFilename() tea.Cmd {
+	path := view.selectedPath()
 	if path == "" {
 		return ui.Error(errors.New("no file to copy"))
 	}

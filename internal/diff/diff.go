@@ -21,8 +21,8 @@ const (
 )
 
 // String returns a lower-case name for the status.
-func (s Status) String() string {
-	switch s {
+func (status Status) String() string {
+	switch status {
 	case Modified:
 		return "modified"
 	case Added:
@@ -51,8 +51,8 @@ const (
 )
 
 // String returns a lower-case name for the kind.
-func (k LineKind) String() string {
-	switch k {
+func (kind LineKind) String() string {
+	switch kind {
 	case Context:
 		return "context"
 	case Add:
@@ -88,12 +88,12 @@ type Hunk struct {
 }
 
 // Header reconstructs the hunk header line.
-func (h Hunk) Header() string {
-	s := "@@ -" + rng(h.OldStart, h.OldLines) + " +" + rng(h.NewStart, h.NewLines) + " @@"
-	if h.Section != "" {
-		s += " " + h.Section
+func (hunk Hunk) Header() string {
+	hunkString := "@@ -" + rng(hunk.OldStart, hunk.OldLines) + " +" + rng(hunk.NewStart, hunk.NewLines) + " @@"
+	if hunk.Section != "" {
+		hunkString += " " + hunk.Section
 	}
-	return s
+	return hunkString
 }
 
 func rng(start, n int) string {
@@ -118,16 +118,16 @@ type File struct {
 }
 
 // Path returns the new path, falling back to the old one (deleted files).
-func (f *File) Path() string {
-	if f.NewPath != "" {
-		return f.NewPath
+func (file *File) Path() string {
+	if file.NewPath != "" {
+		return file.NewPath
 	}
-	return f.OldPath
+	return file.OldPath
 }
 
 // ModeChanged reports whether the file's mode changed.
-func (f *File) ModeChanged() bool {
-	return f.OldMode != "" && f.NewMode != "" && f.OldMode != f.NewMode
+func (file *File) ModeChanged() bool {
+	return file.OldMode != "" && file.NewMode != "" && file.OldMode != file.NewMode
 }
 
 // Diff is a whole multi-file diff.
@@ -138,18 +138,18 @@ type Diff struct {
 // File looks a file up by path, matching the new path first and then the old
 // path (so a renamed file is found under either name). It returns nil when
 // there is no match.
-func (d *Diff) File(path string) *File {
+func (diff *Diff) File(path string) *File {
 	if path == "" {
 		return nil
 	}
-	for _, f := range d.Files {
-		if f.NewPath == path {
-			return f
+	for _, file := range diff.Files {
+		if file.NewPath == path {
+			return file
 		}
 	}
-	for _, f := range d.Files {
-		if f.OldPath == path {
-			return f
+	for _, file := range diff.Files {
+		if file.OldPath == path {
+			return file
 		}
 	}
 	return nil
