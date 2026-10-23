@@ -131,14 +131,14 @@ func (view *View) Command(name, arguments string) (tea.Cmd, bool) {
 	return view.review.command(name, view.reviewEnvironment())
 }
 
-func (flow *reviewFlow) command(name string, environment reviewEnvironment) (tea.Cmd, bool) {
+func (currentFlow *reviewFlow) command(name string, environment reviewEnvironment) (tea.Cmd, bool) {
 	switch name {
 	case "approve":
-		return flow.start(environment, github.ReviewEventApprove), true
+		return currentFlow.start(environment, github.ReviewEventApprove), true
 	case "request-changes":
-		return flow.start(environment, github.ReviewEventRequestChanges), true
+		return currentFlow.start(environment, github.ReviewEventRequestChanges), true
 	case "review":
-		return flow.openChooser(environment), true
+		return currentFlow.openChooser(environment), true
 	}
 	return nil, false
 }
@@ -153,39 +153,39 @@ func (currentFlow *reviewFlow) same(environment reviewEnvironment, flow *reviewF
 }
 
 // update handles the flow's messages. handled is false for any other message.
-func (flow *reviewFlow) update(message tea.Msg, environment reviewEnvironment) (command tea.Cmd, handled bool) {
+func (currentFlow *reviewFlow) update(message tea.Msg, environment reviewEnvironment) (command tea.Cmd, handled bool) {
 	switch message := message.(type) {
 	case reviewPendingMessage:
-		if !flow.mine(environment, message.flow, message.repository, message.number, message.sequence) {
+		if !currentFlow.mine(environment, message.flow, message.repository, message.number, message.sequence) {
 			return nil, true
 		}
-		return flow.pendingFetched(message, environment), true
+		return currentFlow.pendingFetched(message, environment), true
 	case reviewEditedMessage:
-		if !flow.mine(environment, message.flow, message.repository, message.number, message.sequence) {
+		if !currentFlow.mine(environment, message.flow, message.repository, message.number, message.sequence) {
 			return nil, true
 		}
-		return flow.edited(message, environment), true
+		return currentFlow.edited(message, environment), true
 	case reviewFreshMessage:
-		if !flow.mine(environment, message.flow, message.repository, message.number, message.sequence) {
+		if !currentFlow.mine(environment, message.flow, message.repository, message.number, message.sequence) {
 			return nil, true
 		}
-		return flow.confirm(message, environment), true
+		return currentFlow.confirm(message, environment), true
 	case reviewSendMessage:
-		if !flow.same(environment, message.flow, message.repository, message.number) {
+		if !currentFlow.same(environment, message.flow, message.repository, message.number) {
 			return nil, true
 		}
 		if environment.commentWriting { // a comment write started since the review did
 			return userinterface.Info(commentSavingText), true
 		}
-		flow.submitting = true
-		return tea.Batch(userinterface.Info("Submitting review…"), flow.submit(environment, message.event, message.body, message.status)), true
+		currentFlow.submitting = true
+		return tea.Batch(userinterface.Info("Submitting review…"), currentFlow.submit(environment, message.event, message.body, message.status)), true
 	case reviewSubmittedMessage:
-		if !flow.same(environment, message.flow, message.repository, message.number) {
+		if !currentFlow.same(environment, message.flow, message.repository, message.number) {
 			return nil, true
 		}
-		return flow.submitted(message, environment), true
+		return currentFlow.submitted(message, environment), true
 	case refreshMessage:
-		if !flow.same(environment, message.flow, message.repository, message.number) {
+		if !currentFlow.same(environment, message.flow, message.repository, message.number) {
 			return nil, true
 		}
 		return environment.reload(), true
@@ -195,9 +195,9 @@ func (flow *reviewFlow) update(message tea.Msg, environment reviewEnvironment) (
 
 // blocked says why a review cannot start now, or returns nil. The diff must
 // be on screen: the review's commit is the one the diff shows.
-func (flow *reviewFlow) blocked(environment reviewEnvironment) tea.Cmd {
+func (currentFlow *reviewFlow) blocked(environment reviewEnvironment) tea.Cmd {
 	switch {
-	case flow.submitting:
+	case currentFlow.submitting:
 		return userinterface.Info("a review is being submitted")
 	case environment.commentWriting:
 		return userinterface.Info(commentSavingText)
@@ -210,27 +210,27 @@ func (flow *reviewFlow) blocked(environment reviewEnvironment) tea.Cmd {
 }
 
 // openChooser shows the verdict chooser.
-func (flow *reviewFlow) openChooser(environment reviewEnvironment) tea.Cmd {
-	if blocked := flow.blocked(environment); blocked != nil {
+func (currentFlow *reviewFlow) openChooser(environment reviewEnvironment) tea.Cmd {
+	if blocked := currentFlow.blocked(environment); blocked != nil {
 		return blocked
 	}
 	items := make([]string, len(verdicts))
 	for i, testCase := range verdicts {
 		items[i] = testCase.label
 	}
-	flow.chooser = picker.New(environment.theme, "Submit review", items)
+	currentFlow.chooser = picker.New(environment.theme, "Submit review", items)
 	return nil
 }
 
 // chooserKey feeds a raw key to the open chooser.
-func (flow *reviewFlow) chooserKey(message tea.KeyPressMsg, environment reviewEnvironment) tea.Cmd {
-	result := flow.chooser.Update(message)
+func (currentFlow *reviewFlow) chooserKey(message tea.KeyPressMsg, environment reviewEnvironment) tea.Cmd {
+	result := currentFlow.chooser.Update(message)
 	switch result.Outcome {
 	case picker.Cancelled:
-		flow.chooser = nil
+		currentFlow.chooser = nil
 	case picker.Chosen:
-		flow.chooser = nil
-		return flow.start(environment, verdicts[result.Index].event)
+		currentFlow.chooser = nil
+		return currentFlow.start(environment, verdicts[result.Index].event)
 	case picker.Open:
 	}
 	return nil
@@ -338,13 +338,13 @@ func (currentFlow *reviewFlow) submit(environment reviewEnvironment, event githu
 	}
 }
 
-func (flow *reviewFlow) submitted(message reviewSubmittedMessage, environment reviewEnvironment) tea.Cmd {
-	flow.submitting = false
+func (currentFlow *reviewFlow) submitted(message reviewSubmittedMessage, environment reviewEnvironment) tea.Cmd {
+	currentFlow.submitting = false
 	if message.err != nil {
 		// The draft stays for the next attempt. Whatever went wrong, the
 		// review may or may not have landed, so show the current state.
 		return environment.reload()
 	}
-	flow.draft = ""
+	currentFlow.draft = ""
 	return tea.Batch(userinterface.Info(submittedText(message.event, environment.number)), environment.reload())
 }

@@ -53,9 +53,9 @@ type parser struct {
 	sawText      bool
 }
 
-func (parsed *parser) fail(count int, message string) {
-	if parsed.err == nil {
-		parsed.err = &ParseError{Line: count, Message: message}
+func (parser *parser) fail(count int, message string) {
+	if parser.err == nil {
+		parser.err = &ParseError{Line: count, Message: message}
 	}
 }
 

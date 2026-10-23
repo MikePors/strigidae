@@ -541,6 +541,7 @@ func (inliner *inliner) seed(extra ...github.ReviewThread) {
 }
 
 func (inliner *inliner) updates() []string { return inliner.methods(fake.MethodUpdateReviewComment) }
+
 func (inliner *inliner) deletes() []string { return inliner.methods(fake.MethodDeleteReviewComment) }
 
 func TestEditPublishedCommentAsksAfterTheEditor(test *testing.T) {

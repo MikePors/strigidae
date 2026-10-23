@@ -5,15 +5,15 @@ Rules for the app shell, components and views. The root `CLAUDE.md` still applie
 ## Bubble Tea conventions
 
 - **No I/O in `Update` or `View`.** Network calls, file I/O, and `$EDITOR` run inside a `tea.Cmd`; results come back as messages.
-- **Result messages are typed and specific**: `prsLoadedMsg{repo, prs, err}` rather than a generic message. Include enough identity (repo, PR number, a request sequence number) to discard stale responses that arrive after the user has moved on.
+- **Result messages are typed and specific**: `pullRequestsLoadedMessage{repository, pullRequests, err}` rather than a generic message. Include enough identity (repo, PR number, a request sequence number) to discard stale responses that arrive after the user has moved on.
 - **GitHub access** goes only through the `github.Client` interface and domain types; never import `internal/github/network`. API errors arrive typed (`errors.Is`/`errors.As`), and the view decides how to show them.
 - **No goroutines** outside of `tea.Cmd`s, and no shared mutable state between the model and commands.
-- **Only the root model is a `tea.Model`.** In Bubble Tea v2, `tea.Model.View()` returns a `tea.View` struct; the root wraps its output in one. Screens implement our own `ui.View` interface (`view.go`): `Update(msg) (View, tea.Cmd)` and `Render(width, height int) string`, plus title and help bindings.
-- **Navigation is message-driven.** Views are composed by the root model's **view stack**. A view opens another by building it and returning a command producing `ui.PushMsg{View: v}` (or `ui.PopMsg`); it never reaches into the stack. `cmd/strig` builds the first view.
+- **Only the root model is a `tea.Model`.** In Bubble Tea v2, `tea.Model.View()` returns a `tea.View` struct; the root wraps its output in one. Screens implement our own `userinterface.View` interface (`view.go`): `Update(msg) (View, tea.Cmd)` and `Render(width, height int) string`, plus title and help bindings.
+- **Navigation is message-driven.** Views are composed by the root model's **view stack**. A view opens another by building it and returning a command producing `userinterface.PushMessage{View: view}` (or `userinterface.PopMessage`); it never reaches into the stack. `cmd/strig` builds the first view.
 - **Message routing.** Keys go only to the top view. Every other message (command results, ticks) goes to every view in the stack, so a view must ignore results that aren't its own (see the identity rule above).
-- **Loading and lifecycle.** A view that loads data implements `ui.Loader`; the status bar spinner follows the top view. A view revealed by `:q` gets `ui.Resumer.Resumed()` and may refresh.
-- **Embedded bubbles components** (viewport, list, …): drive them through their methods (`ScrollDown`, `GotoTop`, …) in response to `keys.Msg`; never forward a `keys.Msg` to their `Update`.
-- **Text inputs capture keys.** A view with a focused text input (filter, command line, reply box) implements `ui.KeyCapturer`; while it captures, it receives every key raw and no global bindings or sequences fire. `esc` must always release capture, and every capturing component needs a test proving it.
+- **Loading and lifecycle.** A view that loads data implements `userinterface.Loader`; the status bar spinner follows the top view. A view revealed by `:q` gets `userinterface.Resumer.Resumed()` and may refresh.
+- **Embedded bubbles components** (viewport, list, …): drive them through their methods (`ScrollDown`, `GotoTop`, …) in response to `keys.Message`; never forward a `keys.Message` to their `Update`.
+- **Text inputs capture keys.** A view with a focused text input (filter, command line, reply box) implements `userinterface.KeyCapturer`; while it captures, it receives every key raw and no global bindings or sequences fire. `esc` must always release capture, and every capturing component needs a test proving it.
 - **Scrolling lists.** Any view or component with a cursor in a scrolling list uses `internal/userinterface/components/scroll.Window` and never re-implements clamping or follow logic.
 - **Sizing**: views receive the space they may draw in and must not draw outside it. Handle `tea.WindowSizeMsg` everywhere.
 - **Untrusted text.** Pass all GitHub/git text through `internal/userinterface/terminaltext` before it reaches the screen: `Clean` for single-line text, `CleanBlock` before markdown rendering. Test with a hostile fixture (escape sequences, C1 controls, bidi overrides, invalid UTF-8).
@@ -68,7 +68,7 @@ Commands (`:` then `enter`):
 | `:copy-filename` | PR workspace: copy the selected file's path to the clipboard (OSC 52; tmux needs `set -g set-clipboard on`) |
 | `:edit-comment`, `:delete-comment` | PR workspace: change your comment at the diff cursor (same as `e` / `D`): the last comment of the focused thread you may change, pending ones first; deleting always asks `y/N`, editing a published comment asks `y/N` after the editor closes |
 
-**View commands.** The table above is static. A view with commands of its own implements `ui.Commander` (`Command(name, args) (tea.Cmd, handled bool)`) and its names are added to `viewCommands` in `command.go`. The root consults only the top view, and only when the static table has no match, so a command never reaches two views the way a broadcast result would. A listed name the top view declines (or a top view that is not a Commander) gives "not available here: name"; any other name gives "not a command: name". List the view's commands in the table above.
+**View commands.** The table above is static. A view with commands of its own implements `userinterface.Commander` (`Command(name, args) (tea.Cmd, handled bool)`) and its names are added to `viewCommands` in `command.go`. The root consults only the top view, and only when the static table has no match, so a command never reaches two views the way a broadcast result would. A listed name the top view declines (or a top view that is not a Commander) gives "not available here: name"; any other name gives "not a command: name". List the view's commands in the table above.
 
 Reserved prefixes:
 
@@ -103,7 +103,7 @@ Rules for you:
 
 - A new UI element uses an existing role. If none fits, add a role with a default derivation from slots (and a line in the role table in `docs/themes.md` once #45 adds it).
 - Never add palette slots, ANSI indices or raw colours to styles, views or components.
-- Caches of rendered output (markdown, highlighting) include `Theme.ID` (a fingerprint of the final roles), or hold theme-independent data (token classes).
+- Caches of rendered output (markdown, highlighting) include `Theme.Identifier` (a fingerprint of the final roles), or hold theme-independent data (token classes).
 - Chroma's style registry is a global map read by Glamour without a lock. Register styles (`ChromaStyleName`) and run Glamour only on the UI goroutine, never in a `tea.Cmd`.
-- Tests that render Markdown or register Chroma styles don't use `t.Parallel` (the registry is unlocked; see the line above).
+- Tests that render Markdown or register Chroma styles don't use `test.Parallel` (the registry is unlocked; see the line above).
 - Bubbles widgets that ship default styles (`textinput`, `help`, `list`, …) get their styles set from the theme. Never keep `DefaultStyles()` or `DefaultDarkStyles()`; the AST check can't see those.

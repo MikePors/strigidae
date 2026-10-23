@@ -33,23 +33,23 @@ The v1 Charm paths (`github.com/charmbracelet/{bubbletea,bubbles,lipgloss,glamou
 ## Layout
 
 ```
-cmd/strig/              main: flag parsing, wiring real dependencies, starting the program
-internal/version/       build version
-internal/github/        domain types, the Client interface, typed errors     (see its CLAUDE.md)
-internal/github/network/ real Client (go-gh); the only package that talks to the network
-internal/github/fake/   in-memory Client for tests and demos
-internal/gitrepository/ infer the GitHub repo (host + owner/name) from a checkout's remotes
-internal/diff/          unified-diff parsing and modelling (pure, no UI)
-internal/config/        config file loading and validation
-internal/editor/        $EDITOR handoff for writing comments
-internal/logging/       log file setup
-internal/golden/        golden-file test helper
-internal/userinterface/            app shell, View interface, status bar, command line (see its CLAUDE.md)
-internal/userinterface/keys/       keymap registry and multi-key sequence handling
-internal/userinterface/theme/      Lip Gloss styles; every colour lives here
-internal/userinterface/terminaltext/   sanitising of untrusted text (Clean, CleanBlock); imports no other userinterface package
-internal/userinterface/components/ reusable widgets (picker, markdown pane, diff pane, …)
-internal/userinterface/views/<v>/  one package per screen: pullrequestlist, workspace, dashboard, …
+cmd/strig/                              main: flag parsing, wiring real dependencies, starting the program
+internal/version/                       build version
+internal/github/                        domain types, the Client interface, typed errors     (see its CLAUDE.md)
+internal/github/network/                real Client (go-gh); the only package that talks to the network
+internal/github/fake/                   in-memory Client for tests and demos
+internal/gitrepository/                 infer the GitHub repository (host + owner/name) from a checkout's remotes
+internal/diff/                          unified-diff parsing and modelling (pure, no user interface)
+internal/config/                        config file loading and validation
+internal/editor/                        $EDITOR handoff for writing comments
+internal/logging/                       log file setup
+internal/golden/                        golden-file test helper
+internal/userinterface/                 app shell, View interface, status bar, command line (see its CLAUDE.md)
+internal/userinterface/keys/            keymap registry and multi-key sequence handling
+internal/userinterface/theme/           Lip Gloss styles; every colour lives here
+internal/userinterface/terminaltext/    sanitising of untrusted text (Clean, CleanBlock); imports no other userinterface package
+internal/userinterface/components/      reusable widgets (picker, markdown pane, diff pane, …)
+internal/userinterface/views/<view>/    one package per screen: pullrequestlist, workspace, dashboard, …
 ```
 
 Packages that don't exist yet are created by the issue that first needs them. Dependencies point one way, enforced by `depguard` (`make lint` fails on a violation):
@@ -82,9 +82,23 @@ cmd/strig ──► userinterface/views/* ──► userinterface/components ─
 
 - `make fmt` (gofumpt + goimports) and `make lint` (golangci-lint) are authoritative. A `//nolint` must name the linter and explain why (`//nolint:errcheck // best-effort write to stderr`).
 - Handle errors from writes. `_, _ = fmt.Fprintln(stderr, ...)` is acceptable only for best-effort output to stderr.
-- Error strings are lower-case with no trailing punctuation. Wrap with context: `fmt.Errorf("load pull request %d: %w", n, err)`.
+- Error strings are lower-case with no trailing punctuation. Wrap with context: `fmt.Errorf("load pull request %d: %w", number, err)`.
 - Doc comments on every exported identifier and every package. Otherwise comment *why*, not *what*; keep comments sparse.
 - Keep functions small and names plain. No `utils`/`helpers`/`common` packages.
+
+## Naming
+
+Every name is spelled out in full English: variables, parameters, struct fields, method receivers, functions, types, constants, exported identifiers, test helpers, package directories and file names. Write `view`, not `v`; `model`, not `m`; `message`, not `msg`; `command`, not `cmd`; `test`, not `t`; `testCase`, not `tt`; `PullRequest`, not `PR`; `Identifier`, not `ID`; `ObjectIdentifier`, not `OID`; `Checks`, not `CI`; `userinterface`, not `ui`.
+
+Exceptions, which keep their short form:
+- the integer loop indices `i`, `j`, `k`;
+- `err`, `ctx`, `ok`, and the `Err` prefix of sentinel errors and `Err` fields;
+- names of formats and protocols: URL, HTTP, JSON, YAML, GraphQL, REST, API, ANSI, SGR, UTF-8, OSC 52, SHA, RGB, OKLCH;
+- the words `diff` (and `diffview`) and `Info`, and the binary name `strig` (so `cmd/strig` stays);
+- anything GitHub or a library defines: GraphQL field names (`headRefOid`) and the structs decoded from them, JSON and YAML tags, config keys, and identifiers from imported packages (`tea.Cmd`, `tea.Msg`, `key.Binding`);
+- user-visible text (keys, commands, messages).
+
+When the full name of a variable would shadow an imported package (`theme`, `config`, `diff`, `color`), pick a more specific name (`activeTheme`, `loadedConfig`, `parsedDiff`, `colour`) rather than an abbreviation or an import alias.
 
 ## Workflow
 

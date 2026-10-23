@@ -1,4 +1,4 @@
-// Package ui is the app shell: the root Bubble Tea model, the view stack,
+// Package userinterface is the app shell: the root Bubble Tea model, the view stack,
 // navigation and status messages, the status bar, and the help overlay.
 //
 // Screens implement View and are composed by the root Model. Views never

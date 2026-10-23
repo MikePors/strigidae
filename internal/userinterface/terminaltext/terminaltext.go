@@ -1,4 +1,4 @@
-// Package termtext sanitises untrusted text (anything that comes from GitHub
+// Package terminaltext sanitises untrusted text (anything that comes from GitHub
 // or git) before it is drawn, so it cannot carry terminal escape sequences or
 // reorder the display with bidirectional controls.
 package terminaltext

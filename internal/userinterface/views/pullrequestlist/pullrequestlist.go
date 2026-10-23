@@ -1,4 +1,4 @@
-// Package prlist is the screen that lists a repository's open pull requests.
+// Package pullrequestlist is the screen that lists a repository's open pull requests.
 package pullrequestlist
 
 import (

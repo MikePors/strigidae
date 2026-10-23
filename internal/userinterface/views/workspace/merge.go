@@ -83,34 +83,34 @@ func (currentFlow *mergeFlow) command(arguments string, environment reviewEnviro
 }
 
 // update handles the flow's messages. handled is false for any other message.
-func (flow *mergeFlow) update(message tea.Msg, environment reviewEnvironment) (command tea.Cmd, handled bool) {
+func (currentFlow *mergeFlow) update(message tea.Msg, environment reviewEnvironment) (command tea.Cmd, handled bool) {
 	switch message := message.(type) {
 	case mergeFreshMessage:
-		if !flow.same(environment, message.flow, message.repository, message.number) || message.sequence != flow.sequence {
+		if !currentFlow.same(environment, message.flow, message.repository, message.number) || message.sequence != currentFlow.sequence {
 			return nil, true
 		}
-		return flow.confirm(message, environment), true
+		return currentFlow.confirm(message, environment), true
 	case mergeSendMessage:
-		if !flow.same(environment, message.flow, message.repository, message.number) {
+		if !currentFlow.same(environment, message.flow, message.repository, message.number) {
 			return nil, true
 		}
 		if environment.commentWriting { // a comment write started since the merge did
 			return userinterface.Info(commentSavingText), true
 		}
-		flow.merging = true
-		return tea.Batch(userinterface.Info("Merging…"), flow.merge(environment, message.method, message.status)), true
+		currentFlow.merging = true
+		return tea.Batch(userinterface.Info("Merging…"), currentFlow.merge(environment, message.method, message.status)), true
 	case mergedMessage:
-		if !flow.same(environment, message.flow, message.repository, message.number) {
+		if !currentFlow.same(environment, message.flow, message.repository, message.number) {
 			return nil, true
 		}
-		flow.merging = false
+		currentFlow.merging = false
 		if message.err != nil {
 			// Whatever went wrong, the merge may or may not have landed.
 			return environment.reload(), true
 		}
 		return tea.Batch(userinterface.Info(mergedText(environment.number, message.method)), environment.reload()), true
 	case mergeRefreshMessage:
-		if !flow.same(environment, message.flow, message.repository, message.number) {
+		if !currentFlow.same(environment, message.flow, message.repository, message.number) {
 			return nil, true
 		}
 		return environment.reload(), true

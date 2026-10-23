@@ -1,4 +1,4 @@
-// Package gitrepo infers which GitHub repository a working directory belongs
+// Package gitrepository infers which GitHub repository a working directory belongs
 // to by reading its git remotes. It has no UI dependencies; git is run through
 // an injectable Runner so tests never need a real checkout.
 package gitrepository

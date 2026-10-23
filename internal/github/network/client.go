@@ -1,4 +1,4 @@
-// Package api implements github.Client on top of go-gh's GraphQL and REST
+// Package network implements github.Client on top of go-gh's GraphQL and REST
 // clients. It is the only package that talks to the network; GraphQL response
 // shapes stay private here and are mapped to the domain types.
 package network
