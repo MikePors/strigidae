@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -116,4 +117,57 @@ func TestGetReviewCommentGone(t *testing.T) {
 	if !errors.Is(err, github.ErrNotFound) {
 		t.Errorf("err = %v, want ErrNotFound", err)
 	}
+}
+
+// jsonServer answers every request with body.
+func jsonServer(body string) *server {
+	return &server{override: func(_ call, w http.ResponseWriter) bool {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+		return true
+	}}
+}
+
+func TestNullPayloads(t *testing.T) {
+	ctx := context.Background()
+	t.Run("a thread GitHub did not create is rejected, naming the line", func(t *testing.T) {
+		c := newTestClient(t, jsonServer(`{"data":{"addPullRequestReviewThread":{"thread":null}}}`))
+		_, err := c.AddReviewThread(ctx, github.AddThreadInput{Repo: repo, Number: 27, PendingReviewID: "R", Path: "a/b.go", Line: 7, Side: github.SideRight, Body: "x"})
+		if !errors.Is(err, github.ErrCommentRejected) || errors.Is(err, github.ErrNotFound) {
+			t.Fatalf("err = %v, want ErrCommentRejected", err)
+		}
+		if !strings.Contains(err.Error(), "a/b.go:7") {
+			t.Errorf("error does not name the line: %v", err)
+		}
+	})
+	t.Run("a null thread mutation payload", func(t *testing.T) {
+		c := newTestClient(t, jsonServer(`{"data":{"addPullRequestReviewThread":null}}`))
+		_, err := c.AddReviewThread(ctx, github.AddThreadInput{Repo: repo, Number: 27, Path: "a.go", Line: 1, Side: github.SideRight})
+		if !errors.Is(err, github.ErrCommentRejected) {
+			t.Errorf("err = %v", err)
+		}
+	})
+	t.Run("no review is started", func(t *testing.T) {
+		c := newTestClient(t, jsonServer(`{"data":{"addPullRequestReview":{"pullRequestReview":null}}}`))
+		_, err := c.StartReview(ctx, github.StartReviewInput{Repo: repo, Number: 27})
+		if !errors.Is(err, github.ErrNotFound) {
+			t.Errorf("err = %v", err)
+		}
+		c = newTestClient(t, jsonServer(`{"data":{"addPullRequestReview":null}}`))
+		if _, err := c.StartReview(ctx, github.StartReviewInput{Repo: repo, Number: 27}); !errors.Is(err, github.ErrNotFound) {
+			t.Errorf("null payload: err = %v", err)
+		}
+	})
+	t.Run("a node of another type is not a comment", func(t *testing.T) {
+		c := newTestClient(t, jsonServer(`{"data":{"node":{}}}`))
+		if _, err := c.GetReviewComment(ctx, "x"); !errors.Is(err, github.ErrNotFound) {
+			t.Errorf("err = %v", err)
+		}
+	})
+	t.Run("update and delete payloads", func(t *testing.T) {
+		c := newTestClient(t, jsonServer(`{"data":{"updatePullRequestReviewComment":null}}`))
+		if _, err := c.UpdateReviewComment(ctx, "x", "y"); !errors.Is(err, github.ErrNotFound) {
+			t.Errorf("err = %v", err)
+		}
+	})
 }

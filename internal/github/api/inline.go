@@ -82,8 +82,11 @@ func (c *Client) AddReviewThread(ctx context.Context, in github.AddThreadInput) 
 	if err := c.query(ctx, addReviewThreadMutation, vars, &resp); err != nil {
 		return github.ReviewThread{}, fmt.Errorf("add review comment on %s#%d: %w", in.Repo, in.Number, err)
 	}
+	// GitHub answers a null thread, without errors, when it does not accept the
+	// position (as far as known: to be confirmed live).
 	if resp.AddPullRequestReviewThread == nil || resp.AddPullRequestReviewThread.Thread == nil {
-		return github.ReviewThread{}, fmt.Errorf("add review comment on %s#%d: %w", in.Repo, in.Number, github.ErrNotFound)
+		return github.ReviewThread{}, fmt.Errorf("add review comment on %s#%d: %w: GitHub did not accept it on %s:%d, which may not be in the diff",
+			in.Repo, in.Number, github.ErrCommentRejected, in.Path, in.Line)
 	}
 	return mapThread(*resp.AddPullRequestReviewThread.Thread), nil
 }

@@ -50,7 +50,8 @@ type Client interface {
 	// AddReviewThread adds an inline comment, as a new thread, to the pending
 	// review in.PendingReviewID and returns the thread. The comment stays
 	// private until the review is submitted. A pending review that no longer
-	// exists yields ErrNotFound.
+	// exists yields ErrNotFound; a position GitHub does not accept (for example
+	// a line outside the diff) yields ErrCommentRejected.
 	AddReviewThread(ctx context.Context, in AddThreadInput) (ReviewThread, error)
 	// GetReviewComment returns one review comment by node ID, with its current
 	// state (Pending) and what the viewer may do with it. A comment that does
