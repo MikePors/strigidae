@@ -50,17 +50,20 @@ func (message Message) String() string { return message.Sequence }
 // Global holds the bindings reserved across the whole app. Views use them
 // through the Msg they receive; the root model itself handles Help and Command.
 type Global struct {
-	Down, Up                 key.Binding
-	Top, Bottom              key.Binding
-	HalfDown, HalfUp         key.Binding
-	PageDown, PageUp         key.Binding
-	Select                   key.Binding
-	Open                     key.Binding
-	Refresh                  key.Binding
-	Search                   key.Binding
-	NextMatch, PreviousMatch key.Binding
-	Cancel                   key.Binding
-	Help                     key.Binding
+	Down, Up         key.Binding
+	Top, Bottom      key.Binding
+	HalfDown, HalfUp key.Binding
+	PageDown, PageUp key.Binding
+	// ScrollCursorTop, ScrollCursorMiddle and ScrollCursorBottom scroll the
+	// view so the cursor row sits at its top, middle or bottom. They take no count.
+	ScrollCursorTop, ScrollCursorMiddle, ScrollCursorBottom key.Binding
+	Select                                                  key.Binding
+	Open                                                    key.Binding
+	Refresh                                                 key.Binding
+	Search                                                  key.Binding
+	NextMatch, PreviousMatch                                key.Binding
+	Cancel                                                  key.Binding
+	Help                                                    key.Binding
 	// Command opens the command line (":q", ":qa"). The root handles it.
 	Command key.Binding
 	// Count documents the count prefix ("11j"). It exists only for the help
@@ -74,24 +77,27 @@ func DefaultGlobal() Global {
 		return key.NewBinding(key.WithKeys(keys), key.WithHelp(helpKey, description))
 	}
 	return Global{
-		Down:          bind("j", "j", "down"),
-		Up:            bind("k", "k", "up"),
-		Top:           bind("g g", "gg", "top"),
-		Bottom:        bind("G", "G", "bottom"),
-		HalfDown:      bind("ctrl+d", "ctrl+d", "half page down"),
-		HalfUp:        bind("ctrl+u", "ctrl+u", "half page up"),
-		PageDown:      bind("ctrl+f", "ctrl+f", "page down"),
-		PageUp:        bind("ctrl+b", "ctrl+b", "page up"),
-		Select:        bind("enter", "enter", "open / select"),
-		Open:          bind("o", "o", "open in browser"),
-		Refresh:       bind("R", "R", "refresh"),
-		Search:        bind("/", "/", "search"),
-		NextMatch:     bind("n", "n", "next match"),
-		PreviousMatch: bind("N", "N", "previous match"),
-		Cancel:        bind("esc", "esc", "cancel / clear"),
-		Help:          bind("?", "?", "toggle help"),
-		Command:       bind(":", ":", "command line (:q close, :qa quit)"),
-		Count:         bind("1", "1-9", "count: 11j, 3], 42G"),
+		Down:               bind("j", "j", "down"),
+		Up:                 bind("k", "k", "up"),
+		Top:                bind("g g", "gg", "top"),
+		Bottom:             bind("G", "G", "bottom"),
+		HalfDown:           bind("ctrl+d", "ctrl+d", "half page down"),
+		HalfUp:             bind("ctrl+u", "ctrl+u", "half page up"),
+		PageDown:           bind("ctrl+f", "ctrl+f", "page down"),
+		PageUp:             bind("ctrl+b", "ctrl+b", "page up"),
+		ScrollCursorTop:    bind("z t", "zt", "cursor line to the top"),
+		ScrollCursorMiddle: bind("z z", "zz", "cursor line to the middle"),
+		ScrollCursorBottom: bind("z b", "zb", "cursor line to the bottom"),
+		Select:             bind("enter", "enter", "open / select"),
+		Open:               bind("o", "o", "open in browser"),
+		Refresh:            bind("R", "R", "refresh"),
+		Search:             bind("/", "/", "search"),
+		NextMatch:          bind("n", "n", "next match"),
+		PreviousMatch:      bind("N", "N", "previous match"),
+		Cancel:             bind("esc", "esc", "cancel / clear"),
+		Help:               bind("?", "?", "toggle help"),
+		Command:            bind(":", ":", "command line (:q close, :qa quit)"),
+		Count:              bind("1", "1-9", "count: 11j, 3], 42G"),
 	}
 }
 
@@ -118,6 +124,7 @@ func (global Global) Bindings() []key.Binding {
 func (global Global) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{global.Down, global.Up, global.Top, global.Bottom, global.HalfDown, global.HalfUp, global.PageDown, global.PageUp},
+		{global.ScrollCursorTop, global.ScrollCursorMiddle, global.ScrollCursorBottom},
 		{global.Select, global.Open, global.Refresh},
 		{global.Cancel, global.Help, global.Command, global.Count},
 	}

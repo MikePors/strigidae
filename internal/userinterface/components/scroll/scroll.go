@@ -127,6 +127,24 @@ func (window *Window) scrollBy(count int) {
 	window.clamp()
 }
 
+// ScrollCursorTop scrolls the view so the cursor row is its first row, as far
+// as the end of the list allows. The cursor does not move.
+func (window *Window) ScrollCursorTop() { window.placeCursor(0) }
+
+// ScrollCursorMiddle scrolls the view so the cursor row is in the middle of
+// it, as far as the ends of the list allow. The cursor does not move.
+func (window *Window) ScrollCursorMiddle() { window.placeCursor((window.height - 1) / 2) }
+
+// ScrollCursorBottom scrolls the view so the cursor row is its last row, as
+// far as the start of the list allows. The cursor does not move.
+func (window *Window) ScrollCursorBottom() { window.placeCursor(window.height - 1) }
+
+// placeCursor puts the cursor offset rows below the top of the view.
+func (window *Window) placeCursor(offset int) {
+	window.top = min(max(window.cursor-max(offset, 0), 0), window.MaximumTop())
+	window.clamp()
+}
+
 // HalfPageDown moves the view and the cursor down half a screen, as in vim.
 func (window *Window) HalfPageDown() { window.shift(max(window.height/2, 1)) }
 
