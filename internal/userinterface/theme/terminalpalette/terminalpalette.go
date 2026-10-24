@@ -27,7 +27,7 @@ const maximumReply = 64 << 10
 
 const ansiCount = 16
 
-// Terminal is the tty Ask talks to. Read returns 0 bytes and no error when
+// Terminal is the controlling terminal Ask talks to. Read returns 0 bytes and no error when
 // nothing arrives within a short wait, so Ask can check its clock.
 type Terminal interface {
 	Read(buffer []byte) (int, error)
@@ -120,7 +120,9 @@ func Parse(data []byte) Reply {
 }
 
 // operatingSystemCommand splits an OSC body (after "ESC ]") from what follows
-// its terminator, BEL or ST (ESC \).
+// its terminator, BEL or ST (ESC \). Any other ESC ends a stray "ESC ]" (an
+// alt+] typed during the wait) without a body, so the answer it starts is
+// still read.
 func operatingSystemCommand(data []byte) (body string, rest []byte, ok bool) {
 	for i, value := range data {
 		switch {
@@ -128,6 +130,8 @@ func operatingSystemCommand(data []byte) (body string, rest []byte, ok bool) {
 			return string(data[:i]), data[i+1:], true
 		case value == '\x1b' && i+1 < len(data) && data[i+1] == '\\':
 			return string(data[:i]), data[i+2:], true
+		case value == '\x1b' && i+1 < len(data):
+			return "", data[i:], true
 		}
 	}
 	return "", nil, false

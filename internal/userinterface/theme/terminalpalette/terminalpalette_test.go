@@ -108,6 +108,14 @@ func TestParseSkipsNoise(test *testing.T) {
 	}
 }
 
+func TestParseStrayIntroducer(test *testing.T) {
+	// alt+] typed during the wait sends "ESC ]" just before the answers.
+	reply := Parse(append([]byte("\x1b]"), readFixture(test, "full-st.reply")...))
+	if diff := cmp.Diff(tokyoNight, summarise(reply)); diff != "" {
+		test.Errorf("reply mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestParseColour(test *testing.T) {
 	tests := []struct {
 		specification string

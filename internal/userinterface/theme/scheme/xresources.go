@@ -20,9 +20,11 @@ func IsXresources(path string) bool {
 // ParseXresources reads a terminal palette from an Xresources file: the
 // foreground, background and color0 to color15 resources, under any class or
 // instance prefix (`*.color0`, `*color0`, `URxvt.color0`). Other resources
-// are ignored, so a whole ~/.Xresources works. Values are "#rrggbb", or the
-// name of a `#define` whose value is. A later line wins over an earlier one.
-// source names the file in errors.
+// are ignored. Values are "#rrggbb", or the name of a `#define` whose value
+// is; a palette resource with any other value is an error, so a file with
+// app-specific colours (`XTerm*background: black`) or conditionals needs
+// trimming to its palette. A later line wins over an earlier one, however
+// specific its prefix. source names the file in errors.
 func ParseXresources(source string, data []byte) (Scheme, error) {
 	if len(data) > MaximumFileSize {
 		return Scheme{}, &Error{Source: source, Message: fmt.Sprintf("theme file is too large (limit %d bytes)", MaximumFileSize)}
@@ -85,6 +87,9 @@ func xresourcesScheme(source string, colours map[string]color.Color) (Scheme, er
 		return Scheme{}, &Error{Source: source, Message: "missing " + strings.Join(missing, ", ")}
 	}
 	name := strings.TrimSuffix(filepath.Base(source), filepath.Ext(source))
+	if name == "" { // ".Xresources": the whole name is the extension
+		name = filepath.Base(source)
+	}
 	palette, err := theme.FromANSI(name, background, foreground, ansi)
 	if err != nil {
 		return Scheme{}, &Error{Source: source, Message: err.Error()}

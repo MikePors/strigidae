@@ -45,12 +45,12 @@ func runTerminalInterface(application application, stderr io.Writer) error {
 // askTerminal asks the controlling terminal for its palette, before the
 // program takes over the terminal.
 func askTerminal() (terminalpalette.Reply, error) {
-	tty, err := terminalpalette.Open()
+	controllingTerminal, err := terminalpalette.Open()
 	if err != nil {
 		return terminalpalette.Reply{}, err
 	}
-	reply, err := terminalpalette.Ask(tty, os.Getenv("TMUX") != "", time.Now)
-	return reply, errors.Join(err, tty.Close())
+	reply, err := terminalpalette.Ask(controllingTerminal, os.Getenv("TMUX") != "", time.Now)
+	return reply, errors.Join(err, controllingTerminal.Close())
 }
 
 // firstView is the dashboard when there is no repository (outside a checkout,

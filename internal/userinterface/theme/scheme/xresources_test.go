@@ -78,6 +78,17 @@ func TestParseXresourcesErrors(test *testing.T) {
 	}
 }
 
+func TestXresourcesNameFromDotFile(test *testing.T) {
+	data, err := os.ReadFile("testdata/tokyo-night.Xresources")
+	if err != nil {
+		test.Fatal(err)
+	}
+	scheme, err := ParseXresources("/home/me/.Xresources", data)
+	if err != nil || scheme.Name != ".Xresources" {
+		test.Errorf("name = %q, %v; want .Xresources", scheme.Name, err)
+	}
+}
+
 func TestResolveXresources(test *testing.T) {
 	directory := test.TempDir()
 	data, err := os.ReadFile("testdata/tokyo-night.Xresources")
