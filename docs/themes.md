@@ -17,12 +17,14 @@ foreground to the theme's `background` and `text` colours while strig runs, so
 a dark theme looks right on a light terminal. The terminal restores its colours
 when strig exits. The built-in theme leaves them alone.
 
-Coming later: `syntax:` (named syntax styles, #82), `:theme` to switch themes
-while strig runs (#83), and `theme: terminal` and Xresources files, which build
-a theme from the terminal's own palette (#84). Until then `theme: terminal`
-is an error saying it is not supported yet, and `syntax:` in a theme file is
-accepted but ignored (strig logs a warning; syntax colours come from the
-palette).
+To try a theme without editing the config, type `:theme` and its name or file
+while strig runs (see [Switching themes while strig runs](#switching-themes-while-strig-runs)).
+
+Coming later: `syntax:` (named syntax styles, #82), and `theme: terminal`
+and Xresources files, which build a theme from the terminal's own palette
+(#84). Until then `theme: terminal` is an error saying it is not supported
+yet, and `syntax:` in a theme file is accepted but ignored (strig logs a
+warning; syntax colours come from the palette).
 
 ## The three layers
 
@@ -170,6 +172,20 @@ which is too faint for comments and borders.
 
 A theme that cannot be found or read stops strig before the screen starts,
 with the file or name and the problem.
+
+## Switching themes while strig runs
+
+`:theme <value>` switches to another theme at once, without restarting:
+
+```
+:theme catppuccin-latte
+:theme ~/themes/gruvbox-dark-hard.yaml
+```
+
+The value is resolved as in the table above, except that a relative path is
+taken from the directory strig was started in rather than the config file's.
+If the theme can't be found or read, the status bar says why and the current
+theme stays. The change lasts until strig exits; the config is not edited.
 
 ## Bundled themes
 
