@@ -85,6 +85,9 @@ type View struct {
 
 	viewedState map[string]*viewedToggle // by path; see viewedToggle
 
+	hunkMarks  *HunkMarks       // hunks marked reviewed; shared with other workspaces by WithHunkMarks
+	hunkPrints hunkFingerprints // fingerprints of the last file asked about
+
 	window   scroll.Window // Files pane: row 0 is Overview, row i is Files[i-1]
 	focus    pane
 	overview overview
@@ -128,12 +131,16 @@ func New(client github.Client, repository github.Repository, number int, options
 	for _, option := range options {
 		option(view)
 	}
+	if view.hunkMarks == nil {
+		view.hunkMarks = NewHunkMarks()
+	}
 	view.markdownRenderer = markdown.New(view.theme)
 	view.overview = newOverview()
 	if view.filePane == nil {
 		view.filePane = newDiffPane(view.theme, func() time.Time { return view.now() })
 	}
 	view.filePane.SetTheme(view.theme)
+	view.filePane.SetHunkReviewed(view.hunkReviewed)
 	return view
 }
 
@@ -171,7 +178,7 @@ func (view *View) ShortHelp() []key.Binding {
 func (view *View) FullHelp() [][]key.Binding {
 	out := [][]key.Binding{
 		{view.bind.PaneLeft, view.bind.PaneRight, view.bind.NextFile, view.bind.PreviousFile, view.bind.FilePicker},
-		{view.bind.NextSection, view.bind.PreviousSection, view.bind.Comment, view.bind.Reply, view.bind.Viewed},
+		{view.bind.NextSection, view.bind.PreviousSection, view.bind.Comment, view.bind.Reply, view.bind.Viewed, view.bind.ReviewHunk},
 		{view.bind.Visual, view.bind.EditComment, view.bind.DeleteComment},
 	}
 	return append(out, view.filePane.FullHelp()...)

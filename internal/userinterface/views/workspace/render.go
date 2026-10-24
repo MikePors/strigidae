@@ -188,7 +188,7 @@ func (view *View) stateBadge() string {
 
 func (view *View) rightTitle() string {
 	if path := view.selectedPath(); path != "" {
-		return terminaltext.Clean(path)
+		return terminaltext.Clean(path) + view.hunkProgress()
 	}
 	return "Overview"
 }
