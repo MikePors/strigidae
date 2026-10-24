@@ -139,7 +139,8 @@ func TestChecksCommandPicker(test *testing.T) {
 		test.Fatal(":checks should open the picker")
 	}
 	out := ansi.Strip(harness.render())
-	for _, want := range []string{"Checks", "✗ CI / check  failed", "and 100 more"} {
+	out = strings.Join(strings.Fields(out), " ")
+	for _, want := range []string{"Checks", "✗ CI / check failed", "and 100 more"} {
 		if !strings.Contains(out, want) {
 			test.Errorf("picker lacks %q:\n%s", want, out)
 		}
@@ -169,6 +170,71 @@ func TestChecksCommandRefusesUnsafeAndMissingLinks(test *testing.T) {
 	}
 	if len(harness.messages) == 0 {
 		test.Error("no notice for a check without a usable link")
+	}
+	// Then a check with no link at all: order is failed, timed out, running, queued (no URL).
+	command, _ = harness.view.Command("checks", "")
+	harness.run(command)
+	harness.messages = nil
+	for range 3 {
+		harness.send(tea.KeyPressMsg{Code: tea.KeyDown})
+	}
+	harness.send(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if len(harness.opened) != 0 {
+		test.Errorf("opened %v for a check with no link", harness.opened)
+	}
+	if len(harness.messages) != 1 {
+		test.Errorf("messages = %v, want one notice", harness.messages)
+	}
+}
+
+func TestCheckRowsAlignAndTruncate(test *testing.T) {
+	long := strings.Repeat("a-very-long-check-name-", 5)
+	harness := checksHarness(test, 60, 30, func(detail *github.PullRequestDetail) {
+		detail.CheckList = []github.Check{
+			{Name: "short", Result: github.CheckFailed},
+			{Name: long, Result: github.CheckPassed},
+			{Name: "mid name", Result: github.CheckRunning},
+		}
+		detail.CheckTotal = 3
+	})
+	harness.press("l", "]")
+	checkColumns := func(out string, words ...string) {
+		test.Helper()
+		column := -1
+		for _, line := range strings.Split(out, "\n") {
+			for _, word := range words {
+				index := strings.Index(line, "  "+word)
+				if index < 0 {
+					continue
+				}
+				got := ansi.StringWidth(line[:index])
+				if column >= 0 && got != column {
+					test.Errorf("state word %q starts at column %d, want %d:\n%s", word, got, column, out)
+				}
+				column = got
+			}
+		}
+		if column < 0 {
+			test.Errorf("no check rows found:\n%s", out)
+		}
+	}
+	out := ansi.Strip(harness.render())
+	checkColumns(out, "failed", "passed", "running")
+	if strings.Contains(out, long) || !strings.Contains(out, "…  passed") {
+		test.Errorf("long name was not truncated with an ellipsis:\n%s", out)
+	}
+	for i, line := range strings.Split(out, "\n") {
+		if ansi.StringWidth(line) > 60 {
+			test.Errorf("line %d is %d cells wide", i, ansi.StringWidth(line))
+		}
+	}
+
+	command, _ := harness.view.Command("checks", "")
+	harness.run(command)
+	picked, _, _ := strings.Cut(ansi.Strip(harness.render()), "╰") // the popup ends at the first bottom border
+	checkColumns(picked, "failed", "passed", "running")
+	if strings.Contains(picked, long) {
+		test.Errorf("picker shows the whole long name:\n%s", picked)
 	}
 }
 
@@ -228,30 +294,75 @@ func TestHeaderMergeState(test *testing.T) {
 
 func TestReviewerEntries(test *testing.T) {
 	at := testNow
-	detail := &github.PullRequestDetail{
-		PullRequest: github.PullRequest{Author: "alice"},
-		ReviewRequests: []github.Reviewer{
-			{Name: "erin"}, {Name: "core", IsTeam: true}, {Name: "bob"},
+	review := func(author string, state github.ReviewState, hours int) github.Review {
+		return github.Review{Author: author, State: state, SubmittedAt: at.Add(time.Duration(hours) * time.Hour)}
+	}
+	tests := []struct {
+		name     string
+		requests []github.Reviewer
+		reviews  []github.Review
+		want     []reviewerEntry
+	}{
+		{
+			"approve then comment stays approved", nil,
+			[]github.Review{review("bob", github.ReviewApproved, 0), review("bob", github.ReviewCommented, 1)},
+			[]reviewerEntry{{"bob", markApproved}},
 		},
-		Reviews: []github.Review{
-			{Author: "bob", State: github.ReviewApproved, SubmittedAt: at},
-			{Author: "carol", State: github.ReviewChangesRequested, SubmittedAt: at},
-			{Author: "carol", State: github.ReviewApproved, SubmittedAt: at.Add(time.Hour)},
-			{Author: "dave", State: github.ReviewCommented, SubmittedAt: at},
-			{Author: "alice", State: github.ReviewCommented, SubmittedAt: at},
-			{Author: "frank", State: github.ReviewDismissed, SubmittedAt: at},
-			{Author: "me", State: github.ReviewPending},
+		{
+			"changes then approve", nil,
+			[]github.Review{review("bob", github.ReviewChangesRequested, 0), review("bob", github.ReviewApproved, 1)},
+			[]reviewerEntry{{"bob", markApproved}},
+		},
+		{
+			"changes then comment stays changes", nil,
+			[]github.Review{review("bob", github.ReviewChangesRequested, 0), review("bob", github.ReviewCommented, 1)},
+			[]reviewerEntry{{"bob", markChangesRequested}},
+		},
+		{
+			"changes then dismissed has no changes mark", nil,
+			[]github.Review{review("bob", github.ReviewChangesRequested, 0), review("bob", github.ReviewDismissed, 1)},
+			nil,
+		},
+		{
+			"changes, comment, then dismissed shows comment", nil,
+			[]github.Review{review("bob", github.ReviewChangesRequested, 0), review("bob", github.ReviewCommented, 1), review("bob", github.ReviewDismissed, 2)},
+			[]reviewerEntry{{"bob", markCommented}},
+		},
+		{
+			"dismissed approval does not fall back", nil,
+			[]github.Review{review("bob", github.ReviewApproved, 0), review("bob", github.ReviewChangesRequested, 1), review("bob", github.ReviewDismissed, 2)},
+			nil,
+		},
+		{
+			"comment only", nil,
+			[]github.Review{review("bob", github.ReviewCommented, 0)},
+			[]reviewerEntry{{"bob", markCommented}},
+		},
+		{
+			"approved then re-requested",
+			[]github.Reviewer{{Name: "bob"}},
+			[]github.Review{review("bob", github.ReviewApproved, 0)},
+			[]reviewerEntry{{"bob", markRequested}},
+		},
+		{
+			"requests first, teams marked",
+			[]github.Reviewer{{Name: "erin"}, {Name: "core", IsTeam: true}},
+			[]github.Review{review("dave", github.ReviewCommented, 0)},
+			[]reviewerEntry{{"erin", markRequested}, {"team core", markRequested}, {"dave", markCommented}},
+		},
+		{
+			"author, pending draft and unsubmitted are ignored", nil,
+			[]github.Review{review("alice", github.ReviewApproved, 0), {Author: "me", State: github.ReviewPending}},
+			nil,
 		},
 	}
-	want := []reviewerEntry{
-		{"erin", markRequested},
-		{"team core", markRequested},
-		{"bob", markRequested},
-		{"carol", markApproved},
-		{"dave", markCommented},
-	}
-	if diff := cmp.Diff(want, reviewerEntries(detail), cmp.AllowUnexported(reviewerEntry{})); diff != "" {
-		test.Errorf("entries (-want +got):\n%s", diff)
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			detail := &github.PullRequestDetail{PullRequest: github.PullRequest{Author: "alice"}, ReviewRequests: testCase.requests, Reviews: testCase.reviews}
+			if diff := cmp.Diff(testCase.want, reviewerEntries(detail), cmp.AllowUnexported(reviewerEntry{})); diff != "" {
+				test.Errorf("entries (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 

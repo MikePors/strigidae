@@ -291,6 +291,9 @@ func mapDetail(node graphqlPullRequestDetail, files []graphqlFile, comments []gr
 	if node.StatusCheckRollup != nil {
 		detail.CheckTotal = node.StatusCheckRollup.Contexts.TotalCount
 		for _, context := range node.StatusCheckRollup.Contexts.Nodes {
+			if context.Typename == "" { // a null node, or a type the query did not ask for
+				continue
+			}
 			detail.CheckList = append(detail.CheckList, mapCheck(context))
 		}
 	}

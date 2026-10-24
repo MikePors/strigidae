@@ -13,6 +13,7 @@
               {"__typename": "CheckRun", "name": "deploy", "status": "IN_PROGRESS", "conclusion": null, "detailsUrl": null, "checkSuite": {"workflowRun": null}},
               {"__typename": "CheckRun", "name": "lint", "status": "QUEUED", "conclusion": null, "detailsUrl": "https://example.test/lint", "checkSuite": null},
               {"__typename": "CheckRun", "name": "docs", "status": "COMPLETED", "conclusion": "SKIPPED", "detailsUrl": "https://example.test/docs", "checkSuite": null},
+              null,
               {"__typename": "StatusContext", "context": "ci/legacy", "state": "ERROR", "targetUrl": "https://ci.example.test/legacy"},
               {"__typename": "StatusContext", "context": "ci/pending", "state": "PENDING", "targetUrl": null}
             ]

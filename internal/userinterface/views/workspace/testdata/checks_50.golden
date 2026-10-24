@@ -2,14 +2,14 @@ open #7 Add retry policy to sync client
 alice · changes requested · main ← feat/retry · […
 ╭─ Overview ─────────────────────────────────────╮
 │ Checks (8)                                     │
-│ ✗ CI / check  failed                           │
-│ ✗ ci/legacy  timed out                         │
-│ ● deploy  running                              │
-│ ○ lint  queued                                 │
-│ ✓ CI / build  passed                           │
+│ ✗ CI / check            failed                 │
+│ ✗ ci/legacy             timed out              │
+│ ● deploy                running                │
+│ ○ lint                  queued                 │
+│ ✓ CI / build            passed                 │
 │ ✓ CI / vulnerabilities  passed                 │
-│ - docs  skipped                                │
-│ - optional  neutral                            │
+│ - docs                  skipped                │
+│ - optional              neutral                │
 │                                                │
 │ Conversation (5)                               │
 │ bob commented · 2d ago                         │

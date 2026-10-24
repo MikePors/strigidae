@@ -17,6 +17,11 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
+// pickerLabelWidth is the widest label that fits the picker's popup in a
+// terminal width cells wide: the popup is at most 64 cells, and its border,
+// cursor and padding take 6.
+func pickerLabelWidth(width int) int { return min(64, width) - 6 }
+
 // sortedChecks orders checks failing first, then running or queued, then
 // passing, then skipped or neutral, alphabetically within each group. It
 // returns a copy.
@@ -50,23 +55,39 @@ func checkGlyph(activeTheme theme.Theme, result github.CheckResult) (string, lip
 	return "-", activeTheme.Muted
 }
 
-// checkLabel is the plain text of a check row: glyph, name and state in
-// words. The picker lists it as is.
-func checkLabel(activeTheme theme.Theme, check github.Check) string {
-	glyph, _ := checkGlyph(activeTheme, check.Result)
-	return glyph + " " + terminaltext.Clean(check.Name) + "  " + check.Result.Word()
+// checkNameWidth is the width every name in rows is padded or cut to: the
+// longest name, but no more than leaves room for the glyph, the longest state
+// word and the gaps within width.
+func checkNameWidth(checks []github.Check, width int) int {
+	longest, longestWord := 0, 0
+	for _, check := range checks {
+		longest = max(longest, ansi.StringWidth(terminaltext.Clean(check.Name)))
+		longestWord = max(longestWord, ansi.StringWidth(check.Result.Word()))
+	}
+	return max(1, min(longest, width-2-2-longestWord))
 }
 
-// checkRow is a styled Overview row that fits width; a long name is cut so
-// the state stays visible.
-func checkRow(activeTheme theme.Theme, check github.Check, width int) string {
-	glyph, style := checkGlyph(activeTheme, check.Result)
-	word := check.Result.Word()
-	name := terminaltext.Clean(check.Name)
-	if room := width - 2 - 2 - ansi.StringWidth(word); ansi.StringWidth(name) > room {
-		name = ansi.Truncate(name, max(room, 1), "…")
+// checkName cleans name and pads or cuts it to exactly width cells.
+func checkName(name string, width int) string {
+	name = terminaltext.Clean(name)
+	if ansi.StringWidth(name) > width {
+		name = ansi.Truncate(name, width, "…")
 	}
-	return style.Render(glyph) + " " + activeTheme.Normal.Render(name) + "  " + style.Render(word)
+	return padRight(name, width)
+}
+
+// checkLabel is the plain text of a check row: glyph, name and state in
+// words, with names padded to nameWidth so the words line up. The picker lists
+// it as is.
+func checkLabel(activeTheme theme.Theme, check github.Check, nameWidth int) string {
+	glyph, _ := checkGlyph(activeTheme, check.Result)
+	return glyph + " " + checkName(check.Name, nameWidth) + "  " + check.Result.Word()
+}
+
+// checkRow is a styled Overview row; see checkLabel.
+func checkRow(activeTheme theme.Theme, check github.Check, nameWidth int) string {
+	glyph, style := checkGlyph(activeTheme, check.Result)
+	return style.Render(glyph) + " " + activeTheme.Normal.Render(checkName(check.Name, nameWidth)) + "  " + style.Render(check.Result.Word())
 }
 
 // checkSectionLines are the Overview's Checks section: heading and rows.
@@ -76,8 +97,9 @@ func checkSectionLines(activeTheme theme.Theme, detail *github.PullRequestDetail
 	if total == 0 {
 		return append(lines, activeTheme.Muted.Render("No checks."))
 	}
+	nameWidth := checkNameWidth(detail.CheckList, width)
 	for _, check := range sortedChecks(detail.CheckList) {
-		lines = append(lines, checkRow(activeTheme, check, width))
+		lines = append(lines, checkRow(activeTheme, check, nameWidth))
 	}
 	if more := total - len(detail.CheckList); more > 0 {
 		lines = append(lines, activeTheme.Muted.Render(fmt.Sprintf("and %d more", more)))
@@ -97,8 +119,9 @@ func (view *View) checksCommand() tea.Cmd {
 	}
 	checks := sortedChecks(view.detail.CheckList)
 	items := make([]string, len(checks))
+	nameWidth := checkNameWidth(checks, pickerLabelWidth(view.width))
 	for i, check := range checks {
-		items[i] = checkLabel(view.theme, check)
+		items[i] = checkLabel(view.theme, check, nameWidth)
 	}
 	view.pickerChecks = checks
 	view.picker = picker.New(view.theme, "Checks", items)
