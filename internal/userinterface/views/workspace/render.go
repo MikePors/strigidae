@@ -148,6 +148,18 @@ func (view *View) renderHeader(width int) []string {
 		parts = append(parts, view.theme.FileModified.Render("review required"))
 	case github.ReviewDecisionNone:
 	}
+	// Only open pull requests show what stands in the way of merging.
+	if detail.State == github.PullRequestStateOpen {
+		switch detail.MergeState {
+		case github.MergeStateConflicts:
+			parts = append(parts, view.theme.FileDeleted.Render("conflicts"))
+		case github.MergeStateBehind:
+			parts = append(parts, view.theme.FileModified.Render("behind base"))
+		case github.MergeStateBlocked:
+			parts = append(parts, view.theme.FileModified.Render("blocked"))
+		case github.MergeStateOther:
+		}
+	}
 	// Branches are the least glanceable part, so they come after the states
 	// and are what truncation eats first.
 	parts = append(parts, view.theme.Muted.Render(terminaltext.Clean(detail.BaseBranch)+" ← "+terminaltext.Clean(detail.HeadBranch)))
@@ -158,15 +170,8 @@ func (view *View) renderHeader(width int) []string {
 		}
 		parts = append(parts, view.theme.Normal.Render(strings.Join(names, " ")))
 	}
-	if len(detail.ReviewRequests) > 0 {
-		names := make([]string, len(detail.ReviewRequests))
-		for i, reviewer := range detail.ReviewRequests {
-			names[i] = terminaltext.Clean(reviewer.Name)
-			if reviewer.IsTeam {
-				names[i] = "team " + names[i]
-			}
-		}
-		parts = append(parts, view.theme.Muted.Render("reviewers: "+strings.Join(names, ", ")))
+	if entries := reviewerEntries(detail); len(entries) > 0 {
+		parts = append(parts, reviewersText(view.theme, entries))
 	}
 	line2 := strings.Join(parts, separator)
 	return []string{ansi.Truncate(line1, width, "…"), ansi.Truncate(line2, width, "…")}

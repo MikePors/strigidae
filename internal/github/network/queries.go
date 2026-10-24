@@ -71,7 +71,12 @@ query ` + operationPullRequestDetail + `($owner: String!, $name: String!, $numbe
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
       ...PullRequestFields
-      body additions deletions viewerDidAuthor
+      body additions deletions viewerDidAuthor mergeStateStatus
+      statusCheckRollup { contexts(first: 100) { totalCount nodes {
+        __typename
+        ... on CheckRun { name status conclusion detailsUrl checkSuite { workflowRun { workflow { name } } } }
+        ... on StatusContext { context state targetUrl }
+      } } }
       labels(first: 50) { nodes { name color } }
       reviewRequests(first: 50) {
         nodes { requestedReviewer { __typename %s } }

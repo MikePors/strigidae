@@ -18,18 +18,23 @@ func (view *View) openPicker() {
 		items[i] = terminaltext.Clean(file.Path)
 		paths[i] = file.Path
 	}
-	view.pickerItems, view.pickerPaths = items, paths
+	view.pickerItems, view.pickerPaths, view.pickerChecks = items, paths, nil
 	view.picker = picker.New(view.theme, "Go to file", items)
 }
 
-// pickerKey feeds a raw key to the open picker.
-func (view *View) pickerKey(message tea.KeyPressMsg) {
+// pickerKey feeds a raw key to the open picker. Choosing a check opens its
+// page in the browser; choosing a file selects it.
+func (view *View) pickerKey(message tea.KeyPressMsg) tea.Cmd {
 	result := view.picker.Update(message)
 	switch result.Outcome {
 	case picker.Cancelled:
-		view.picker = nil
+		view.picker, view.pickerChecks = nil, nil
 	case picker.Chosen:
-		view.picker = nil
+		checks := view.pickerChecks
+		view.picker, view.pickerChecks = nil, nil
+		if checks != nil {
+			return view.openCheck(checks[result.Index])
+		}
 		path := view.pickerPaths[result.Index]
 		for i, file := range view.files() {
 			if file.Path == path {
@@ -38,4 +43,5 @@ func (view *View) pickerKey(message tea.KeyPressMsg) {
 		}
 	case picker.Open:
 	}
+	return nil
 }

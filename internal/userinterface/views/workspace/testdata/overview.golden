@@ -1,5 +1,5 @@
 open #7 Add retry policy to sync client
-alice · changes requested · main ← feat/retry · [enhancement] [sync] · reviewers: bob, team core
+alice · changes requested · main ← feat/retry · [enhancement] [sync] · reviewers: bob ?, team core …
 ╭─ Files 0/5 viewed ─────────╮╭─ Overview ─────────────────────────────────────────────────────────╮
 │> Overview                  ││ Description                                                        │
 │    M …al/sync/client.go +25││   ## Summary                                                       │
@@ -32,9 +32,9 @@ alice · changes requested · main ← feat/retry · [enhancement] [sync] · rev
 │                            ││   2. Then the call sites                                           │
 │                            ││   3. Finally the removed code                                      │
 │                            ││                                                                    │
+│                            ││ Checks (0)                                                         │
+│                            ││ No checks.                                                         │
+│                            ││                                                                    │
 │                            ││ Conversation (5)                                                   │
 │                            ││ bob commented · 2d ago                                             │
-│                            ││   Thanks! Could you add a test for the jitter bounds?              │
-│                            ││                                                                    │
-│                            ││ carol requested changes · 1d ago                                   │
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯

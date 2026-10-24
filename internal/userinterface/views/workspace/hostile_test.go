@@ -59,6 +59,11 @@ func hostileDetail() github.PullRequestDetail {
 	detail.Body = "# body " + hostile + "\n\n[click](http://x)\x1b[31m red\r\n" + hostile + referencesBody
 	detail.Labels = []github.Label{{Name: "label" + hostile}}
 	detail.ReviewRequests = []github.Reviewer{{Name: "rev" + hostile}, {Name: "team" + hostile, IsTeam: true}}
+	detail.CheckList = []github.Check{
+		{Name: "check" + hostile, Result: github.CheckFailed, URL: "https://example.test/" + hostile},
+		{Name: "workflow" + hostile + " / job" + hostile, Result: github.CheckPassed},
+	}
+	detail.CheckTotal = 2
 	detail.Files = append(detail.Files,
 		github.ChangedFile{Path: hostileGoPath, Additions: 1, Deletions: 1, Change: github.FileModified},
 		github.ChangedFile{Path: hostileNewPath, Change: github.FileRenamed})
@@ -132,6 +137,13 @@ func TestHostileTextNeverReachesTheScreen(test *testing.T) {
 	harness.run(harness.view.Init())
 
 	assertTame(test, "overview", harness.render())
+	command, _ := harness.view.Command("checks", "")
+	harness.run(command)
+	assertTame(test, "checks picker", harness.render())
+	if out := ansi.Strip(harness.render()); !strings.Contains(out, "checkevil") {
+		test.Errorf("the hostile check should show, cleaned:\n%s", out)
+	}
+	harness.send(keyEsc())
 	harness.press("l", "G")
 	assertTame(test, "overview conversation", harness.render())
 

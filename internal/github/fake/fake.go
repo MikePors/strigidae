@@ -164,6 +164,7 @@ func cloneDetail(detail github.PullRequestDetail) github.PullRequestDetail {
 	detail.ReviewRequests = slices.Clone(detail.ReviewRequests)
 	detail.Files = slices.Clone(detail.Files)
 	detail.Reviews = slices.Clone(detail.Reviews)
+	detail.CheckList = slices.Clone(detail.CheckList)
 	if detail.Comments != nil {
 		comments := make([]github.IssueComment, len(detail.Comments))
 		for i, comment := range detail.Comments {

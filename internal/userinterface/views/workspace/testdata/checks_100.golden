@@ -1,0 +1,30 @@
+open #7 Add retry policy to sync client
+alice · changes requested · main ← feat/retry · [enhancement] [sync] · reviewers: bob ?, team core …
+╭─ Files 0/5 viewed ─────────╮╭─ Overview ─────────────────────────────────────────────────────────╮
+│> Overview                  ││ Checks (8)                                                         │
+│    M …al/sync/client.go +25││ ✗ CI / check  failed                                               │
+│    A …al/sync/retry.go +214││ ✗ ci/legacy  timed out                                             │
+│    D …al/sync/legacy.go -90││ ● deploy  running                                                  │
+│    R …and-backoff.md +12 -3││ ○ lint  queued                                                     │
+│    M README.md        +2 -1││ ✓ CI / build  passed                                               │
+│                            ││ ✓ CI / vulnerabilities  passed                                     │
+│                            ││ - docs  skipped                                                    │
+│                            ││ - optional  neutral                                                │
+│                            ││                                                                    │
+│                            ││ Conversation (5)                                                   │
+│                            ││ bob commented · 2d ago                                             │
+│                            ││   Thanks! Could you add a test for the jitter bounds?              │
+│                            ││                                                                    │
+│                            ││ carol requested changes · 1d ago                                   │
+│                            ││   The cap should be configurable.                                  │
+│                            ││                                                                    │
+│                            ││ alice commented · 1d ago                                           │
+│                            ││   Done in the latest push.                                         │
+│                            ││                                                                    │
+│                            ││ bob approved · 1h ago                                              │
+│                            ││                                                                    │
+│                            ││ me PENDING review (draft, not submitted)                           │
+│                            ││   Draft: looks good overall, nit on naming.                        │
+│                            ││                                                                    │
+│                            ││ Review threads (0)                                                 │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯

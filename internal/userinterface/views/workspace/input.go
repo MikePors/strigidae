@@ -117,7 +117,12 @@ func (view *View) openBrowser() tea.Cmd {
 	if view.detail == nil || view.detail.URL == "" {
 		return userinterface.Info("pull request not loaded yet")
 	}
-	url, open := view.detail.URL, view.open
+	return view.openAddress(view.detail.URL)
+}
+
+// openAddress opens url in the browser through the injected opener.
+func (view *View) openAddress(url string) tea.Cmd {
+	open := view.open
 	return func() tea.Msg {
 		if err := open(url); err != nil {
 			return userinterface.ErrorMessage{Err: terminaltext.SafeError(fmt.Errorf("open %s in browser: %w", terminaltext.Clean(url), err))}

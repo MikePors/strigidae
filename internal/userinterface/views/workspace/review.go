@@ -125,6 +125,8 @@ func (view *View) Command(name, arguments string) (tea.Cmd, bool) {
 	switch name {
 	case "copy-filename":
 		return view.copyFilename(), true
+	case "checks":
+		return view.checksCommand(), true
 	case "merge":
 		return view.merge.command(arguments, view.reviewEnvironment()), true
 	case "edit-comment":
