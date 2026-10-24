@@ -56,6 +56,9 @@ type View struct {
 	globalKeys keys.Global
 	now        func() time.Time
 	open       func(url string) error
+	// hunkMarks keeps the hunks marked reviewed in every workspace opened
+	// from here, so they survive closing and reopening a pull request.
+	hunkMarks *workspace.HunkMarks
 
 	pullRequests []github.PullRequest
 	next         string // cursor of the next page, empty when all are loaded
@@ -91,6 +94,7 @@ func New(client github.Client, repository github.Repository, activeTheme theme.T
 		open:       options.Open,
 		sequence:   1,
 		loading:    true,
+		hunkMarks:  workspace.NewHunkMarks(),
 	}
 }
 
@@ -272,6 +276,7 @@ func (view *View) openSelected() tea.Cmd {
 		workspace.WithTheme(view.theme),
 		workspace.WithClock(view.now),
 		workspace.WithOpener(view.open),
+		workspace.WithHunkMarks(view.hunkMarks),
 	))
 }
 

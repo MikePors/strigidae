@@ -13,11 +13,11 @@ func TestFilePaneFollowsSelection(test *testing.T) {
 	if !strings.Contains(ansi.Strip(harness.render()), "func (c *Client) Sync") {
 		test.Error("selecting a file should show its diff")
 	}
-	if got := harness.view.rightTitle(); got != "internal/sync/client.go" {
+	if got := harness.view.rightTitle(200); got != "internal/sync/client.go" {
 		test.Errorf("right pane title = %q", got)
 	}
 	harness.press("g g")
-	if got := harness.view.rightTitle(); got != "Overview" {
+	if got := harness.view.rightTitle(200); got != "Overview" {
 		test.Errorf("right pane title = %q", got)
 	}
 }
