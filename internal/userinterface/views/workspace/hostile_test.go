@@ -142,8 +142,8 @@ func TestHostileTextNeverReachesTheScreen(test *testing.T) {
 	}
 	harness.press("k") // the hostile modified file, with hostile hunk content
 	assertTame(test, "file selected", harness.render())
-	if !strings.Contains(harness.view.rightTitle(), "dir/evil") {
-		test.Errorf("hostile path was dropped, not cleaned: %q", harness.view.rightTitle())
+	if !strings.Contains(harness.view.rightTitle(200), "dir/evil") {
+		test.Errorf("hostile path was dropped, not cleaned: %q", harness.view.rightTitle(200))
 	}
 	if out := ansi.Strip(harness.render()); !strings.Contains(out, "old evil") || !strings.Contains(out, "new evil") {
 		test.Errorf("hostile code lines should show, cleaned:\n%s", out)

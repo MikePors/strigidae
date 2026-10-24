@@ -25,6 +25,15 @@ func hunkHarness(test *testing.T) *harness {
 	return harness
 }
 
+func (harness *harness) lastInfo() string {
+	for i := len(harness.messages) - 1; i >= 0; i-- {
+		if info, ok := harness.messages[i].(userinterface.InfoMessage); ok {
+			return info.Text
+		}
+	}
+	return ""
+}
+
 func (harness *harness) screen() string { return ansi.Strip(harness.render()) }
 
 // reviewedHeaders lists the hunk headers on screen that carry the reviewed
@@ -54,6 +63,10 @@ func TestMarkHunkReviewed(test *testing.T) {
 		test.Errorf("title lacks the count:\n%s", screen)
 	}
 
+	if got := harness.lastInfo(); got != "hunk 1/2 reviewed" {
+		test.Errorf("status = %q, want hunk 1/2 reviewed", got)
+	}
+
 	harness.press("]", "j", "m") // from a line inside the second hunk
 	if got := harness.reviewedHeaders(); len(got) != 2 {
 		test.Errorf("marked headers = %q, want both", got)
@@ -63,6 +76,9 @@ func TestMarkHunkReviewed(test *testing.T) {
 	}
 
 	harness.press("m")
+	if got := harness.lastInfo(); got != "hunk 2/2 not reviewed" {
+		test.Errorf("status = %q, want hunk 2/2 not reviewed", got)
+	}
 	if got := harness.reviewedHeaders(); len(got) != 1 || got[0] != firstHunkHeader {
 		test.Errorf("after unmarking, marked headers = %q, want the first hunk", got)
 	}
@@ -125,9 +141,9 @@ func TestHunkMarksFollowContent(test *testing.T) {
 }
 
 func TestIdenticalHunksHaveSeparateMarks(test *testing.T) {
-	var prints hunkFingerprints
+	var cache fingerprintCache
 	file := parseOne(test, "diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1,1 +1,1 @@\n-a\n+b\n@@ -9,1 +9,1 @@\n-a\n+b\n")
-	got := prints.fingerprintsOf(file)
+	got := cache.fingerprintsOf(file)
 	if len(got) != 2 || got[0] == got[1] {
 		test.Errorf("fingerprints = %q, want two different ones", got)
 	}
@@ -167,4 +183,46 @@ func TestHunkMarkKeyInHelp(test *testing.T) {
 		}
 	}
 	test.Error("m is not in the help")
+}
+
+// TestMarkHunkWhileDiffHidden: in a narrow terminal with the files pane
+// focused the diff is hidden, so the status message is the only feedback.
+func TestMarkHunkWhileDiffHidden(test *testing.T) {
+	harness := loaded(test, 60, 20)
+	harness.press("j", "m")
+	if strings.Contains(harness.screen(), "@@") {
+		test.Fatal("setup: the diff is on screen")
+	}
+	if got := harness.lastInfo(); got != "hunk 1/2 reviewed" {
+		test.Errorf("status = %q, want hunk 1/2 reviewed", got)
+	}
+}
+
+// TestHunkProgressSurvivesLongPath: the title shortens a long path from the
+// left so the progress stays visible.
+func TestHunkProgressSurvivesLongPath(test *testing.T) {
+	harness := loaded(test, 100, 30)
+	harness.press("j", "j", "j", "j", "l", "m") // the renamed file with the long path
+	title := strings.SplitN(harness.screen(), "\n", 4)[2]
+	if !strings.Contains(title, "· 1/1 hunks reviewed") || !strings.Contains(title, "…") || !strings.Contains(title, "retry-policy-and-backoff.md") {
+		test.Errorf("title row = %q, want a left-shortened path and the progress", title)
+	}
+	if got := harness.view.rightTitle(30); ansi.StringWidth(got) > 30 || !strings.HasPrefix(got, "…") || !strings.HasSuffix(got, " · 1/1 hunks reviewed") {
+		test.Errorf("rightTitle(30) = %q (%d cells), want the path shortened to fit the progress", got, ansi.StringWidth(got))
+	}
+}
+
+func TestFingerprintsCachedPerFile(test *testing.T) {
+	harness := hunkHarness(test)
+	harness.press("m")
+	harness.render()
+	harness.render()
+	if got := harness.view.hunkFingerprints.computed; got != 1 {
+		test.Errorf("hashed %d times for one file, want once", got)
+	}
+	harness.press("{", "}", "}") // another file, then back
+	harness.render()
+	if got := harness.view.hunkFingerprints.computed; got < 2 {
+		test.Errorf("hashed %d times after changing file, want a fresh hash", got)
+	}
 }

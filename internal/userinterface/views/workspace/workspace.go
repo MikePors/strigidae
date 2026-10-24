@@ -85,8 +85,8 @@ type View struct {
 
 	viewedState map[string]*viewedToggle // by path; see viewedToggle
 
-	hunkMarks  *HunkMarks       // hunks marked reviewed; shared with other workspaces by WithHunkMarks
-	hunkPrints hunkFingerprints // fingerprints of the last file asked about
+	hunkMarks        *HunkMarks       // hunks marked reviewed; shared with other workspaces by WithHunkMarks
+	hunkFingerprints fingerprintCache // fingerprints of the last file asked about
 
 	window   scroll.Window // Files pane: row 0 is Overview, row i is Files[i-1]
 	focus    pane

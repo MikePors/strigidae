@@ -17,6 +17,7 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
+	"github.com/MikePors/strigidae/internal/userinterface/views/workspace"
 )
 
 var (
@@ -538,5 +539,22 @@ func TestPagingNearTheEndLoadsMore(test *testing.T) {
 				test.Errorf("G after append: cursor = %d, want 44 (window must know the new row count)", got)
 			}
 		})
+	}
+}
+
+// TestWorkspacesShareHunkMarks proves the list hands every workspace it opens
+// the same hunk marks, so marks survive closing and reopening a pull request.
+func TestWorkspacesShareHunkMarks(test *testing.T) {
+	view := loadedView(test, fakeWith(makePullRequests(3)), nil)
+	opened := func() *workspace.HunkMarks {
+		push, ok := press(view, "enter")().(userinterface.PushMessage)
+		if !ok {
+			test.Fatal("enter should push a view")
+		}
+		return push.View.(*workspace.View).HunkMarks()
+	}
+	first, second := opened(), opened()
+	if first == nil || first != second || first != view.hunkMarks {
+		test.Error("two workspaces opened from the list do not share the list's hunk marks")
 	}
 }
