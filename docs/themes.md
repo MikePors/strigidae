@@ -265,6 +265,10 @@ taken from the directory strig was started in rather than the config file's.
 If the theme can't be found or read, the status bar says why and the current
 theme stays. The change lasts until strig exits; the config is not edited.
 
+`:theme terminal` is not available: strig asks the terminal for its colours
+only when it starts, so `theme: terminal` can be set only in the config. An
+Xresources file works, for example `:theme ~/themes/tokyo-night.Xresources`.
+
 ## Bundled themes
 
 | Name | Variant | Source |

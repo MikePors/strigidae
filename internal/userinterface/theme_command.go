@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -43,6 +44,11 @@ type themeLoadedMessage struct {
 func themeCommand(arguments string) tea.Cmd {
 	if arguments == "" {
 		return Error(errors.New("usage: :theme <name or file>"))
+	}
+	if strings.EqualFold(arguments, scheme.Terminal) {
+		// The terminal is asked only before the screen appears, so there is
+		// nothing to load while strig runs.
+		return Info("theme terminal can only be set in the config (it's read when strig starts)")
 	}
 	return messageCommand(themeRequestedMessage{value: arguments})
 }

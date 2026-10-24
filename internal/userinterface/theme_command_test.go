@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -164,5 +165,43 @@ func TestLoadThemeFromWorkingDirectory(test *testing.T) {
 	}
 	if _, err := LoadThemeFromWorkingDirectory("gone.yaml"); !errors.Is(err, os.ErrNotExist) {
 		test.Error("a missing file is not an error")
+	}
+}
+
+func TestThemeCommandTerminalOnlyInConfig(test *testing.T) {
+	model, asked := themeModel(newFake("v"), func(string) (scheme.Scheme, error) { return scheme.Scheme{}, nil })
+	model.Update(tea.WindowSizeMsg{Width: 200, Height: 12})
+	before := model.theme.Identifier
+
+	drive(model, parseCommand("theme Terminal", model.top()))
+
+	if len(*asked) != 0 {
+		test.Error("the loader ran for :theme terminal")
+	}
+	if model.theme.Identifier != before {
+		test.Error(":theme terminal changed the theme")
+	}
+	if row := ansi.Strip(model.bottomRow()); !strings.Contains(row, "theme terminal can only be set in the config") {
+		test.Errorf("status row = %q, want the explanation", row)
+	}
+}
+
+func TestThemeCommandXresourcesFile(test *testing.T) {
+	directory := test.TempDir()
+	var file strings.Builder
+	file.WriteString("*.background: #101010\n*.foreground: #e0e0e0\n")
+	for i := range 16 {
+		file.WriteString("*.color" + strconv.Itoa(i) + ": #" + strings.Repeat(strconv.FormatInt(int64(i), 16), 6) + "\n")
+	}
+	path := filepath.Join(directory, "mine.Xresources")
+	if err := os.WriteFile(path, []byte(file.String()), 0o600); err != nil {
+		test.Fatal(err)
+	}
+	model, _ := themeModel(newFake("v"), LoadThemeFromWorkingDirectory)
+
+	drive(model, parseCommand("theme "+path, model.top()))
+
+	if !model.theme.Chosen {
+		test.Errorf("the Xresources theme was not applied; status row = %q", ansi.Strip(model.bottomRow()))
 	}
 }
