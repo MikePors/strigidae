@@ -1,28 +1,28 @@
 # Themes
 
 strig draws with a built-in theme that follows your terminal: dark or light,
-whichever the terminal reports. To use other colours, name a bundled theme or
-a Base16 or Base24 scheme file in the config:
+whichever the terminal reports. To use other colours, name a bundled theme,
+a Base16 or Base24 scheme file, an Xresources file, or the terminal's own
+palette in the config:
 
 ```yaml
 theme: tokyo-night            # a bundled theme
 # theme: ~/themes/gruvbox.yaml   # or any Base16/Base24 scheme file
+# theme: ~/themes/tokyo-night.Xresources  # or a terminal palette in Xresources format
+# theme: terminal                # or the colours your terminal is using
 ```
 
-`strig --list-themes` prints the bundled themes, one per line. Currently:
-`catppuccin-latte` (light) and `tokyo-night`.
+`strig --list-themes` prints the bundled themes and `terminal`, one per line.
+Currently: `catppuccin-latte` (light), `tokyo-night` and `terminal`.
 
-A bundled theme or theme file also sets the terminal's own background and
-foreground to the theme's `background` and `text` colours while strig runs, so
-a dark theme looks right on a light terminal. The terminal restores its colours
+A bundled theme or theme file (including an Xresources file) also sets the
+terminal's own background and foreground to the theme's `background` and
+`text` colours while strig runs, so a dark theme looks right on a light
+terminal. The terminal restores its colours
 when strig exits. The built-in theme leaves them alone.
 
 To try a theme without editing the config, type `:theme` and its name or file
 while strig runs (see [Switching themes while strig runs](#switching-themes-while-strig-runs)).
-
-Coming later: `theme: terminal` and Xresources files, which build a theme from
-the terminal's own palette (#84). Until then `theme: terminal` is an error
-saying it is not supported yet.
 
 ## The three layers
 
@@ -186,13 +186,67 @@ Some useful ones: `tokyonight-night`, `catppuccin-mocha`, `catppuccin-latte`,
 `dracula`, `gruvbox`, `nord`, `monokai`, `github`, `github-dark` and
 `solarized-dark`.
 
+## The terminal's own palette
+
+`theme: terminal` builds the theme from the colours your terminal is using.
+When strig starts, before the screen appears, it asks the terminal for its
+foreground, background and 16 ANSI colours, and waits about 200 ms for the
+answers. The background and foreground become `base00` and `base05`, the
+normal ANSI colours the accents, the bright ones `base12` to `base17`, and
+bright black the muted colour (`base03`) unless it is too close to the
+background or foreground to tell apart. The shades in between are blended from
+the background and foreground, and orange from red and yellow. The
+terminal's colours are left alone: they already match.
+
+If the terminal doesn't answer, or reports only some of the colours, strig
+uses the built-in theme and says why in the status bar and the log.
+
+Under tmux, tmux itself answers the foreground and background questions, but
+the 16 ANSI colours come from your terminal and reach it only with passthrough
+on. Add this to `~/.tmux.conf`:
+
+```
+set -g allow-passthrough on
+```
+
+## Using an Xresources file
+
+A terminal palette in Xresources format works too, for when you have one but
+your terminal can't be asked (or you want the colours without that terminal).
+The file name must end in `.Xresources` or `.xresources`:
+
+```yaml
+theme: ~/themes/tokyo-night.Xresources
+```
+
+strig reads `foreground`, `background` and `color0` to `color15`, under any
+prefix (`*.color0`, `*color0`, `URxvt.color0`), and ignores every other
+resource. Colours are `#rrggbb`, or the name of a `#define` that is one:
+
+```
+#define bg #1a1b26
+*.background: bg
+*.foreground: #c0caf5
+*.color0:     #15161e
+! ... color1 to color15
+```
+
+`!` starts a comment. Other preprocessor lines (`#include`, `#ifdef`), `/* */`
+comments, and any other kind of value for those resources (a colour name such
+as `black`, or urxvt's `[90]#1a1b26`) are errors naming the line, as is a
+missing colour. The prefix doesn't matter, so `XTerm*background: black` counts
+as `background`. If several lines set the same colour, the last one wins. A
+full `~/.Xresources` often has such lines, so copy its palette into a file of
+its own. The palette is built as for `theme: terminal`.
+
 ## How `theme:` is resolved
 
 | Value | Meaning |
 |---|---|
 | unset | The built-in theme, dark or light to match the terminal |
+| `terminal` | The terminal's own palette, asked for when strig starts |
+| ends in `.Xresources` or `.xresources` | An Xresources file. Paths work as for theme files |
 | contains `/`, or ends in `.yaml` or `.yml` | A theme file. `~` is expanded to your home directory, and a relative path is taken from the directory of the config file |
-| `terminal` | Reserved; not supported yet (#84) |
 | anything else | A bundled theme's name, lower-case and hyphenated, as `strig --list-themes` prints it |
 
 A theme that cannot be found or read stops strig before the screen starts,
@@ -211,6 +265,10 @@ The value is resolved as in the table above, except that a relative path is
 taken from the directory strig was started in rather than the config file's.
 If the theme can't be found or read, the status bar says why and the current
 theme stays. The change lasts until strig exits; the config is not edited.
+
+`:theme terminal` is not available: strig asks the terminal for its colours
+only when it starts, so `theme: terminal` can be set only in the config. An
+Xresources file works, for example `:theme ~/themes/tokyo-night.Xresources`.
 
 ## Bundled themes
 

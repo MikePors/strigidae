@@ -32,8 +32,10 @@ func TestLocate(test *testing.T) {
 		{value: "~/themes/mine.yaml", want: Location{Path: "/home/me/themes/mine.yaml"}},
 		{value: "~", want: Location{Slug: "~"}},
 		{value: "~mine", want: Location{Slug: "~mine"}},
-		{value: "terminal", wantErr: "not supported yet"},
-		{value: "~/x.Xresources", wantErr: "not supported yet"},
+		{value: "terminal", want: Location{Terminal: true}},
+		{value: "Terminal", want: Location{Terminal: true}},
+		{value: "~/.Xresources", want: Location{Path: "/home/me/.Xresources"}},
+		{value: "tokyo.xresources", want: Location{Path: "/config/tokyo.xresources"}},
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.value, func(test *testing.T) {

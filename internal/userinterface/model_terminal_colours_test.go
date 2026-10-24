@@ -2,9 +2,11 @@ package userinterface
 
 import (
 	"image/color"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
@@ -56,5 +58,35 @@ func TestTerminalColours(test *testing.T) {
 	builtIn := newModel(newFake("v")).View()
 	if builtIn.BackgroundColor != nil || builtIn.ForegroundColor != nil {
 		test.Error("a built-in theme sets the terminal colours")
+	}
+}
+
+func TestTerminalPaletteThemeLeavesTerminalColours(test *testing.T) {
+	fromTerminal := chosenTheme()
+	fromTerminal.FromTerminal = true
+	model := New(newFake("v"), fromTerminal, Options{Tick: instantTick})
+	model.Update(tea.WindowSizeMsg{Width: 60, Height: 12})
+	if view := model.View(); view.BackgroundColor != nil || view.ForegroundColor != nil {
+		test.Error("a theme built from the terminal's palette sets the terminal colours")
+	}
+	identifier := model.theme.Identifier
+	model.Update(tea.BackgroundColorMsg{Color: color.Black})
+	if model.theme.Identifier != identifier {
+		test.Error("a background reply replaced the theme built from the terminal's palette")
+	}
+}
+
+func TestStartupNoticeShown(test *testing.T) {
+	model := New(newFake("v"), theme.Default(), Options{Tick: instantTick, Notice: "theme terminal: no answer from the terminal"})
+	model.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
+	batch, ok := model.Init()().(tea.BatchMsg)
+	if !ok {
+		test.Fatal("Init did not return a batch")
+	}
+	for _, command := range batch {
+		run(model, command)
+	}
+	if row := ansi.Strip(model.bottomRow()); !strings.Contains(row, "theme terminal: no answer from the terminal") {
+		test.Errorf("status row = %q, want the notice", row)
 	}
 }
