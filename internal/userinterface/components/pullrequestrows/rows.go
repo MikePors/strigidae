@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/userinterface/components/search"
 	"github.com/MikePors/strigidae/internal/userinterface/terminaltext"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
@@ -155,9 +156,31 @@ func (layout Layout) row(repository, number, title, author, age, checks, review,
 	return strings.Join(cells, gap)
 }
 
+// SearchText is the clean text a search looks in for a pull request: title,
+// author, owner/name and #number.
+func SearchText(pullRequest github.PullRequest) string {
+	return strings.Join([]string{
+		terminaltext.Clean(pullRequest.Title),
+		terminaltext.Clean(pullRequest.Author),
+		terminaltext.Clean(pullRequest.Repository.String()),
+		fmt.Sprintf("#%d", pullRequest.Number),
+	}, " ")
+}
+
+// SearchItems turns pull requests into search rows: their SearchText, and the
+// identity the caller gives each one.
+func SearchItems(pullRequests []github.PullRequest, identity func(index int, pullRequest github.PullRequest) string) []search.Item {
+	items := make([]search.Item, len(pullRequests))
+	for i, pullRequest := range pullRequests {
+		items[i] = search.Item{Text: SearchText(pullRequest), Identity: identity(i, pullRequest)}
+	}
+	return items
+}
+
 // Row draws one pull request, padded to width. The selected row is
-// highlighted and carries a marker.
-func (table Table) Row(layout Layout, pullRequest github.PullRequest, selected bool, width int) string {
+// highlighted and carries a marker; a row that matches the search carries the
+// search marker unless it is selected.
+func (table Table) Row(layout Layout, pullRequest github.PullRequest, selected, matched bool, width int) string {
 	title := terminaltext.Clean(pullRequest.Title)
 	if pullRequest.Draft {
 		title = draftPrefix + title
@@ -172,7 +195,13 @@ func (table Table) Row(layout Layout, pullRequest github.PullRequest, selected b
 	comments := commentText(pullRequest.CommentCount)
 
 	if selected {
-		return table.theme.PullRequestList.Selected.Render(pad(marker+layout.row(repository, number, title, author, age, checksMark, reviewMark, comments), width))
+		// A selected row that matches the search shows the match glyph next to
+		// the cursor, in the row's own style, which is readable on its background.
+		lead := marker
+		if matched {
+			lead = search.SelectedGlyph
+		}
+		return table.theme.PullRequestList.Selected.Render(pad(lead+layout.row(repository, number, title, author, age, checksMark, reviewMark, comments), width))
 	}
 
 	styles := table.theme.PullRequestList
@@ -201,5 +230,9 @@ func (table Table) Row(layout Layout, pullRequest github.PullRequest, selected b
 	if layout.comments > 0 {
 		out = append(out, styles.Comments.Render(padLeft(comments, layout.comments)))
 	}
-	return noMarker + strings.Join(out, gap)
+	lead := noMarker
+	if matched {
+		lead = table.theme.SearchMarker.Render(search.Glyph) + " "
+	}
+	return lead + strings.Join(out, gap)
 }

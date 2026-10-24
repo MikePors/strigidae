@@ -463,7 +463,7 @@ func TestHelpListsTheDashboardKeys(test *testing.T) {
 			got = append(got, binding.Help().Key)
 		}
 	}
-	if diff := cmp.Diff([]string{"gt", "gT", "]", "["}, got); diff != "" {
+	if diff := cmp.Diff([]string{"gt", "gT", "]", "[", "/", "n", "N"}, got); diff != "" {
 		test.Errorf("help keys (-want +got):\n%s", diff)
 	}
 }

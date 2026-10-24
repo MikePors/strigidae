@@ -85,7 +85,7 @@ func DefaultGlobal() Global {
 		Select:        bind("enter", "enter", "open / select"),
 		Open:          bind("o", "o", "open in browser"),
 		Refresh:       bind("R", "R", "refresh"),
-		Search:        bind("/", "/", "filter / search"),
+		Search:        bind("/", "/", "search"),
 		NextMatch:     bind("n", "n", "next match"),
 		PreviousMatch: bind("N", "N", "previous match"),
 		Cancel:        bind("esc", "esc", "cancel / clear"),
@@ -97,7 +97,10 @@ func DefaultGlobal() Global {
 
 // Bindings returns every global binding as a flat list, for sequence matching.
 func (global Global) Bindings() []key.Binding {
-	var out []key.Binding
+	// Search, NextMatch and PreviousMatch are bindings of every view that
+	// searches, but they stay reserved here so the matcher and the reserved-key
+	// test always know them.
+	out := []key.Binding{global.Search, global.NextMatch, global.PreviousMatch}
 	for _, bindings := range global.FullHelp() {
 		for _, binding := range bindings {
 			// Count is documentation only; a bare digit is never a binding.
@@ -109,11 +112,13 @@ func (global Global) Bindings() []key.Binding {
 	return out
 }
 
-// FullHelp groups the global bindings for the help overlay.
+// FullHelp groups the global bindings for the help overlay. Search, NextMatch
+// and PreviousMatch are left out: only views that support searching list them
+// in their own FullHelp.
 func (global Global) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{global.Down, global.Up, global.Top, global.Bottom, global.HalfDown, global.HalfUp, global.PageDown, global.PageUp},
-		{global.Select, global.Open, global.Refresh, global.Search, global.NextMatch, global.PreviousMatch},
+		{global.Select, global.Open, global.Refresh},
 		{global.Cancel, global.Help, global.Command, global.Count},
 	}
 }

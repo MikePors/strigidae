@@ -236,6 +236,11 @@ func TestGlobalBindings(test *testing.T) {
 			seen[pressed] = true
 		}
 	}
+	for _, pressed := range []string{"/", "n", "N"} {
+		if !seen[pressed] {
+			test.Errorf("%q is missing from the global bindings", pressed)
+		}
+	}
 	for _, pressed := range []string{"r", "c", "q", "ctrl+c", "tab", "ctrl+o", "ctrl+i"} {
 		if seen[pressed] {
 			test.Errorf("%q is reserved and must not be bound globally", pressed)

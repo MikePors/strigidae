@@ -89,6 +89,7 @@ type Theme struct {
 	Pending          lipgloss.Style // pending (draft) review marker
 	ErrorText        lipgloss.Style // inline error messages in content areas
 	SectionHeading   lipgloss.Style // "Description" / "Conversation" headings
+	SearchMarker     lipgloss.Style // the mark in the left column of rows that match the search
 	OverlayBorder    lipgloss.Style // title text on the frame of popups such as the file picker
 	OverlayBox       lipgloss.Style // rounded frame around a popup
 	StrongText       lipgloss.Style // bold body text, e.g. a PR title
@@ -199,6 +200,7 @@ func newTheme(palette Palette, roles Roles, syntax string, overridden map[string
 		Pending:          bold(roles.Warning),
 		ErrorText:        bold(roles.Error),
 		SectionHeading:   bold(roles.Accent),
+		SearchMarker:     bold(roles.Accent),
 		OverlayBorder:    foreground(roles.Accent),
 		OverlayBox:       lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(roles.Accent),
 		StrongText:       lipgloss.NewStyle().Bold(true),

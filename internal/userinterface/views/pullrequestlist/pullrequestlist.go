@@ -14,6 +14,7 @@ import (
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/components/scroll"
+	"github.com/MikePors/strigidae/internal/userinterface/components/search"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
 	"github.com/MikePors/strigidae/internal/userinterface/terminaltext"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
@@ -69,12 +70,14 @@ type View struct {
 	moreFailed   bool   // the last next-page load failed; no auto-retry until R
 
 	window        scroll.Window // cursor and top row over prs
+	search        search.State
 	width, height int
 }
 
 var (
-	_ userinterface.View   = (*View)(nil)
-	_ userinterface.Loader = (*View)(nil)
+	_ userinterface.View     = (*View)(nil)
+	_ userinterface.Loader   = (*View)(nil)
+	_ userinterface.Prompter = (*View)(nil)
 )
 
 // New returns the PR list for repository. It starts loading when pushed (Init).
@@ -119,9 +122,11 @@ func (view *View) ShortHelp() []key.Binding {
 	return []key.Binding{view.globalKeys.Select, view.globalKeys.Open, view.globalKeys.Refresh}
 }
 
-// FullHelp implements userinterface.View. Every binding here is a global one the root
-// already lists.
-func (view *View) FullHelp() [][]key.Binding { return nil }
+// FullHelp implements userinterface.View. The search keys are global ones that
+// only views with a list to search list.
+func (view *View) FullHelp() [][]key.Binding {
+	return [][]key.Binding{{view.globalKeys.Search, view.globalKeys.NextMatch, view.globalKeys.PreviousMatch}}
+}
 
 // Init implements userinterface.View.
 func (view *View) Init() tea.Cmd { return view.fetch(github.PageRequest{}, false) }
@@ -149,6 +154,8 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		view.theme = message.Theme
 	case pullRequestsLoadedMessage:
 		return view, view.loaded(message)
+	case userinterface.PromptResultMessage:
+		return view, view.search.Prompt(message, view.searchList())
 	case keys.Message:
 		return view, view.handleKey(message)
 	}
@@ -178,6 +185,7 @@ func (view *View) loaded(message pullRequestsLoadedMessage) tea.Cmd {
 		view.replace(message.page.Items)
 	}
 	view.window.SetRows(len(view.pullRequests))
+	view.search.Refresh(view.searchList())
 	return view.maybeLoadMore()
 }
 
@@ -228,6 +236,14 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 		message.Each(view.window.Cursor, view.window.PageDown)
 	case key.Matches(message, view.globalKeys.PageUp):
 		message.Each(view.window.Cursor, view.window.PageUp)
+	case key.Matches(message, view.globalKeys.Search):
+		return view.search.Start(view.searchList())
+	case key.Matches(message, view.globalKeys.NextMatch):
+		return view.search.Step(message, true, view.searchList())
+	case key.Matches(message, view.globalKeys.PreviousMatch):
+		return view.search.Step(message, false, view.searchList())
+	case key.Matches(message, view.globalKeys.Cancel):
+		view.search.Clear()
 	case key.Matches(message, view.globalKeys.Select):
 		return view.openSelected()
 	case key.Matches(message, view.globalKeys.Open):

@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/userinterface/components/search"
 	"github.com/MikePors/strigidae/internal/userinterface/terminaltext"
 )
 
@@ -216,7 +217,7 @@ func (view *View) fileRows(width, height int) []string {
 			rows = append(rows, view.overviewRow(selected))
 			continue
 		}
-		rows = append(rows, view.fileRow(files[i-1], width, selected))
+		rows = append(rows, view.fileRow(files[i-1], width, selected, view.search.Marked(i)))
 	}
 	return rows
 }
@@ -228,7 +229,7 @@ func (view *View) overviewRow(selected bool) string {
 	return view.theme.Normal.Render("  Overview")
 }
 
-func (view *View) fileRow(file github.ChangedFile, width int, selected bool) string {
+func (view *View) fileRow(file github.ChangedFile, width int, selected, matched bool) string {
 	counts := ""
 	if file.Additions > 0 {
 		counts += fmt.Sprintf("+%d", file.Additions)
@@ -246,7 +247,11 @@ func (view *View) fileRow(file github.ChangedFile, width int, selected bool) str
 	marker := changeMarker(file.Change)
 
 	if selected {
-		return view.theme.Selected.Render("> " + viewedGlyph(file.Viewed) + " " + marker + " " + path + " " + counts)
+		cursor := "> "
+		if matched {
+			cursor = search.SelectedGlyph
+		}
+		return view.theme.Selected.Render(cursor + viewedGlyph(file.Viewed) + " " + marker + " " + path + " " + counts)
 	}
 	modifiedStyle := view.theme.FileModified
 	switch file.Change {
@@ -273,7 +278,11 @@ func (view *View) fileRow(file github.ChangedFile, width int, selected bool) str
 		glyph = view.theme.FileModified.Render(viewedGlyph(file.Viewed))
 	case github.FileUnviewed:
 	}
-	return "  " + glyph + " " + modifiedStyle.Render(marker) + " " + pathStyle.Render(path) + " " + strings.Join(names, " ")
+	lead := "  "
+	if matched {
+		lead = view.theme.SearchMarker.Render(search.Glyph) + " "
+	}
+	return lead + glyph + " " + modifiedStyle.Render(marker) + " " + pathStyle.Render(path) + " " + strings.Join(names, " ")
 }
 
 // viewedGlyph is the one-cell mark of a file's viewed state.

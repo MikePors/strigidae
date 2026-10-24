@@ -56,7 +56,7 @@ Reserved globally:
 | `enter` | open / select |
 | `esc` | cancel or clear state inside the view (filter, selection, pending keys, popups). **Never navigates.** |
 | `?` | help overlay |
-| `/`, `n` / `N` | filter or search, next / previous match |
+| `/`, `n` / `N` | search the list (Files pane, PR lists), next / previous match; `/` opens the search prompt in the bottom line through `userinterface.Prompter` (the shell opens it in the same update as the key; the view hears `PromptResultMessage` on every change, paste included, on `enter` and on `esc`; currently every row stays and matching rows are marked) |
 | `o` | open the current item in the browser |
 | `R` | refresh |
 | `c` | new comment (top-level, or on the cursor line / visual selection in a diff) |
@@ -68,7 +68,7 @@ Reserved globally:
 
 There is deliberately **no single-key back or quit**: `q` and `ctrl+c` are unbound. `ctrl+o` / `ctrl+i` (back / forward through views) and `tab` are reserved for later; terminals send the same byte for `tab` and `ctrl+i`.
 
-**Counts.** Digits `1`-`9` start a count and `0` continues it (`11j`, `3]`, `42G`), capped at 9999. The sequence matcher parses it and delivers it as `keys.Message.Count` (0 means none; `Repeat()` gives at least 1). A view applies it only to `j`/`k`, `]`/`[`, `}`/`{`, `)`/`(`, `ctrl+d`/`ctrl+u`/`ctrl+f`/`ctrl+b`, `z h`/`z l`, and `G` (with a count: go to line N, which in a diff is the new-side line number, or the nearest shown one; row N in lists); every other key ignores it and acts once. The count clears on any other key, `esc`, and the sequence timeout. While a view captures keys, digits are plain input.
+**Counts.** Digits `1`-`9` start a count and `0` continues it (`11j`, `3]`, `42G`), capped at 9999. The sequence matcher parses it and delivers it as `keys.Message.Count` (0 means none; `Repeat()` gives at least 1). A view applies it only to `j`/`k`, `]`/`[`, `}`/`{`, `)`/`(`, `ctrl+d`/`ctrl+u`/`ctrl+f`/`ctrl+b`, `z h`/`z l`, `n`/`N` (the count-th match), and `G` (with a count: go to line N, which in a diff is the new-side line number, or the nearest shown one; row N in lists); every other key ignores it and acts once. The count clears on any other key, `esc`, and the sequence timeout. While a view captures keys, digits are plain input.
 
 Commands (`:` then `enter`):
 
