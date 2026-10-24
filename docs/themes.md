@@ -201,8 +201,9 @@ terminal's colours are left alone: they already match.
 If the terminal doesn't answer, or reports only some of the colours, strig
 uses the built-in theme and says why in the status bar and the log.
 
-Under tmux, the questions reach your terminal only with passthrough on. Add
-this to `~/.tmux.conf`:
+Under tmux, tmux itself answers the foreground and background questions, but
+the 16 ANSI colours come from your terminal and reach it only with passthrough
+on. Add this to `~/.tmux.conf`:
 
 ```
 set -g allow-passthrough on

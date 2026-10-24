@@ -68,6 +68,7 @@ func TestParseRecorded(test *testing.T) {
 		{"partial.reply", partial, "reported only 2 of 18 colours"},
 		{"da1-only.reply", summary{ANSI: empty, Finished: true}, "does not report its colours"},
 		{"none.reply", summary{ANSI: empty}, "no answer from the terminal"},
+		{"tmux-passthrough.reply", tokyoNight, ""},
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.fixture, func(test *testing.T) {
@@ -149,12 +150,22 @@ func TestQueries(test *testing.T) {
 		test.Errorf("%d OSC 4 queries, want 16", count)
 	}
 
-	wrapped := string(Queries(true))
-	if count := strings.Count(wrapped, "\x1bPtmux;"); count != 19 {
-		test.Errorf("%d passthrough wrappers, want 19 (18 colours and DA1)", count)
+	// Inside tmux, tmux answers OSC 10 and 11 itself, so they go unwrapped;
+	// the OSC 4 queries and DA1 are wrapped for the outer terminal.
+	inside := string(Queries(true))
+	foregroundAndBackground := "\x1b]10;?\x1b\\\x1b]11;?\x1b\\"
+	if !strings.HasPrefix(inside, foregroundAndBackground) {
+		test.Fatalf("tmux queries = %q, want unwrapped OSC 10 and 11 first", inside)
 	}
-	if !strings.HasPrefix(wrapped, "\x1bPtmux;\x1b\x1b]10;?\x1b\x1b\\\x1b\\") || !strings.HasSuffix(wrapped, "\x1bPtmux;\x1b\x1b[c\x1b\\") {
-		test.Errorf("wrapped queries = %q", wrapped)
+	wrappedPart := strings.TrimPrefix(inside, foregroundAndBackground)
+	if count := strings.Count(wrappedPart, "\x1bPtmux;"); count != 17 {
+		test.Errorf("%d passthrough wrappers, want 17 (16 ANSI colours and DA1)", count)
+	}
+	if !strings.HasPrefix(wrappedPart, "\x1bPtmux;\x1b\x1b]4;0;?\x1b\x1b\\\x1b\\") || !strings.HasSuffix(wrappedPart, "\x1bPtmux;\x1b\x1b[c\x1b\\") {
+		test.Errorf("wrapped queries = %q", wrappedPart)
+	}
+	if strings.Contains(wrappedPart, "\x1b\x1b]10;") || strings.Contains(wrappedPart, "\x1b\x1b]11;") {
+		test.Errorf("OSC 10 or 11 is wrapped: %q", wrappedPart)
 	}
 }
 
@@ -238,6 +249,21 @@ func TestAsk(test *testing.T) {
 			want:         summary{ANSI: make([]string, 16)},
 			wantMaxReads: 2,
 			wantErr:      "allow-passthrough on",
+		},
+		{
+			name:         "tmux with passthrough gives a full theme",
+			insideTmux:   true,
+			chunks:       []string{string(readFixture(test, "tmux-passthrough.reply"))},
+			want:         tokyoNight,
+			wantMaxReads: 1,
+		},
+		{
+			name:         "tmux without passthrough answers only the foreground and background",
+			insideTmux:   true,
+			chunks:       []string{string(readFixture(test, "tmux-no-passthrough.reply"))},
+			want:         summary{Foreground: "#c0caf5", Background: "#1a1b26", ANSI: make([]string, 16)},
+			wantMaxReads: 2,
+			wantErr:      "reported only 2 of 18 colours (under tmux, set -g allow-passthrough on)",
 		},
 		{
 			name:         "a trickle of noise does not extend the timeout",

@@ -8,3 +8,5 @@ The colours are Tokyo Night's.
 - partial.reply: foreground and background only, then DA1.
 - da1-only.reply: a terminal that ignores the colour queries.
 - none.reply: no answer at all.
+- tmux-passthrough.reply: inside tmux with `allow-passthrough on`: tmux answers the foreground and background itself, then the outer terminal answers the 16 ANSI colours and DA1. It reads the same as full-st.reply.
+- tmux-no-passthrough.reply: inside tmux with passthrough off: only tmux's own foreground and background answers; the wrapped queries are dropped, so no ANSI colours and no DA1 arrive.

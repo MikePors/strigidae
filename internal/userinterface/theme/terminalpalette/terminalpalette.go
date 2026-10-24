@@ -45,20 +45,25 @@ type Reply struct {
 	ANSI       [ansiCount]color.Color
 	// Finished is set when the DA1 answer arrived, so no more answers follow.
 	Finished bool
-	// insideTmux adds the passthrough hint when nothing came back.
+	// insideTmux adds the passthrough hint when no ANSI colour came back.
 	insideTmux bool
 }
 
 // Queries returns the bytes to write: the colour queries, then DA1. Inside
-// tmux each is wrapped in a passthrough sequence so it reaches the outer
-// terminal; tmux forwards these only with `allow-passthrough on`.
+// tmux, OSC 10 and 11 are sent as they are, because tmux answers them itself
+// (with the outer terminal's colours) and swallows the outer terminal's
+// answers. The OSC 4 queries and DA1 are wrapped in a passthrough sequence so
+// they reach the outer terminal, which answers them in order, so its DA1 answer
+// still ends the wait. DA1 stays wrapped because tmux answers an unwrapped one
+// at once. tmux forwards wrapped sequences only with `allow-passthrough on`.
 func Queries(insideTmux bool) []byte {
-	queries := []string{"\x1b]10;?\x1b\\", "\x1b]11;?\x1b\\"}
+	var out strings.Builder
+	out.WriteString("\x1b]10;?\x1b\\\x1b]11;?\x1b\\")
+	queries := make([]string, 0, ansiCount+1)
 	for i := range ansiCount {
 		queries = append(queries, fmt.Sprintf("\x1b]4;%d;?\x1b\\", i))
 	}
 	queries = append(queries, "\x1b[c")
-	var out strings.Builder
 	for _, query := range queries {
 		if insideTmux {
 			query = "\x1bPtmux;" + strings.ReplaceAll(query, "\x1b", "\x1b\x1b") + "\x1b\\"
@@ -216,6 +221,16 @@ func (reply Reply) reported() int {
 	return count
 }
 
+// hasANSI reports whether the terminal answered any of the 16 ANSI colours.
+func (reply Reply) hasANSI() bool {
+	for _, colour := range reply.ANSI {
+		if colour != nil {
+			return true
+		}
+	}
+	return false
+}
+
 // Theme builds the theme from a complete reply. It is Chosen, so a terminal
 // background report doesn't replace it, and FromTerminal, so it leaves the
 // terminal's colours alone. A missing or partial reply is an error saying why.
@@ -227,6 +242,8 @@ func (reply Reply) Theme() (theme.Theme, error) {
 		return theme.Theme{}, errors.New("no answer from the terminal")
 	case reported == 0:
 		return theme.Theme{}, errors.New("the terminal does not report its colours")
+	case reported < ansiCount+2 && reply.insideTmux && !reply.hasANSI():
+		return theme.Theme{}, fmt.Errorf("the terminal reported only %d of %d colours (under tmux, set -g allow-passthrough on)", reported, ansiCount+2)
 	case reported < ansiCount+2:
 		return theme.Theme{}, fmt.Errorf("the terminal reported only %d of %d colours", reported, ansiCount+2)
 	}
