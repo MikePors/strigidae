@@ -64,9 +64,10 @@ type Theme struct {
 	Chosen bool
 	// IsDark reports whether the palette is the dark variant.
 	IsDark bool
-	// Identifier fingerprints the final roles, the variant and the named
-	// syntax style, so any change to a role (including an override) or to the
-	// syntax style changes it. Renderer caches include it.
+	// Identifier fingerprints the final roles, the variant, the named syntax
+	// style and, with a named style, which syn-* roles the theme overrides, so
+	// any change to a role (including an override) or to the syntax style
+	// changes it. Renderer caches include it.
 	Identifier string
 	// Roles are the colours the styles were built from. Renderers with their
 	// own style systems (Markdown) read them; views use the named styles.

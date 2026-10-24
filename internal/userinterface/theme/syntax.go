@@ -198,6 +198,7 @@ func standardTypes() []chroma.TokenType {
 			types = append(types, tokenType)
 		}
 	}
+	slices.Sort(types) // a stable order keeps the guard's warnings in order
 	return types
 }
 
@@ -240,28 +241,34 @@ func chromaMarkup(roles Roles) map[chroma.TokenType]tokenStyle {
 // namedTokens takes every token type's foreground and attributes from a named
 // style, resolved through Chroma's inheritance; the style's backgrounds are
 // ignored. A syn-<class> role the theme overrides recolours every token type
-// in that class, exactly as written. Any other foreground that is unreadable
-// on the theme's background is nudged and logged, like a derived role.
+// in that class, exactly as written. A token the style gives no colour, not
+// even through its Text or Background entry, keeps the pane's own colour (the
+// text role). Any other foreground that is unreadable on the theme's
+// background is nudged and logged, like a derived role.
 func namedTokens(name string, named *chroma.Style, roles Roles, overridden map[string]bool) map[chroma.TokenType]tokenStyle {
 	tokens := map[chroma.TokenType]tokenStyle{}
 	warned := map[string]bool{}
 	for _, tokenType := range standardTypes() {
 		entry := named.Get(tokenType)
 		token := tokenStyle{
-			colour:    roles.Text,
 			bold:      entry.Bold == chroma.Yes,
 			italic:    entry.Italic == chroma.Yes,
 			underline: entry.Underline == chroma.Yes,
 		}
-		if entry.Colour.IsSet() {
+		if entry.Colour.IsSet() { // else the pane's own colour, like the text role
 			token.colour = mustParseHex(entry.Colour.String())
 		}
-		if class := ClassOf(tokenType); class != ClassPlain && overridden[syntaxRoleNames[class]] {
+		class := ClassOf(tokenType)
+		switch {
+		case class != ClassPlain && overridden[syntaxRoleNames[class]]:
 			token.colour = roles.syntaxColour(class) // exactly as written, never guarded
-		} else if ratio := contrast(token.colour, roles.Background); ratio < minimumAccentContrast {
+		case token.colour == nil:
+			// the text role, already guarded (or the theme's exact override)
+		case contrast(token.colour, roles.Background) < minimumAccentContrast:
 			hex := HexString(token.colour)
 			if !warned[hex] {
 				warned[hex] = true
+				ratio := contrast(token.colour, roles.Background)
 				slog.Warn("syntax style colour is hard to read", "syntax", name, "colour", hex,
 					"contrast", math.Round(ratio*100)/100, "want", minimumAccentContrast)
 			}

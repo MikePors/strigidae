@@ -605,7 +605,7 @@ func TestDiffPaneMatchesChromaStyle(test *testing.T) {
 			if got := entry.Colour.String(); got != diffForeground {
 				test.Errorf("%q: token %v: chroma colour %s, diff colour %s", theme.Syntax.Name(), token, got, diffForeground)
 			}
-			if original := bundledChromaStyles[theme.Syntax.Name()]; original != nil {
+			if original := bundledChromaStyles[theme.Syntax.Name()]; original != nil && original.Get(token).Colour.IsSet() {
 				want := original.Get(token).Colour.String()
 				readable := contrast(mustParseHex(want), theme.Roles.Background) >= minimumAccentContrast
 				if readable && diffForeground != want {
@@ -816,5 +816,59 @@ func TestUnknownSyntaxStyle(test *testing.T) {
 	}
 	if slices.ContainsFunc(SyntaxStyleNames(), func(name string) bool { return strings.HasPrefix(name, "strig-") }) {
 		test.Error("SyntaxStyleNames lists a style strig generated")
+	}
+}
+
+// TestNamedStyleWarningsAreStable proves a style that logs several warnings
+// logs them in the same order every time, so goldens that record them hold.
+func TestNamedStyleWarningsAreStable(test *testing.T) {
+	var buffer bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buffer, &slog.HandlerOptions{ReplaceAttr: func(_ []string, attribute slog.Attr) slog.Attr {
+		if attribute.Key == slog.TimeKey {
+			return slog.Attr{}
+		}
+		return attribute
+	}})))
+	test.Cleanup(func() { slog.SetDefault(previous) })
+
+	build := func() string {
+		buffer.Reset()
+		namedTheme(test, builtinLight, Roles{}, "tokyonight-night")
+		return buffer.String()
+	}
+	first := build()
+	if strings.Count(first, "syntax style colour is hard to read") < 3 {
+		test.Fatalf("setup: want several warnings, got %s", first)
+	}
+	for range 20 {
+		if again := build(); again != first {
+			test.Fatalf("warnings changed order:\n%s\nthen\n%s", first, again)
+		}
+	}
+}
+
+// TestNamedStyleWithoutTextColour uses a style that gives plain code no
+// colour: plain tokens keep the pane's own colour (the text role, here an
+// exact override that is hard to read), and nothing blames the style for it.
+func TestNamedStyleWithoutTextColour(test *testing.T) {
+	var buffer bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buffer, nil)))
+	test.Cleanup(func() { slog.SetDefault(previous) })
+
+	const faint = "#565f89"
+	if bundledChromaStyles["github"].Get(chroma.Text).Colour.IsSet() {
+		test.Fatal("setup: github now colours plain text")
+	}
+	built := namedTheme(test, builtinDark, Roles{Text: hex(faint)}, "github")
+	if foreground := styleColors(built.Syntax.For(chroma.Text))[0]; foreground != "" {
+		test.Errorf("plain text has foreground %s in the diff, want the pane's own", foreground)
+	}
+	if got := built.Syntax.chroma.Get(chroma.Text).Colour.String(); got != faint {
+		test.Errorf("plain text is %s in Chroma, want the text role %s", got, faint)
+	}
+	if logged := buffer.String(); strings.Contains(logged, faint) && strings.Contains(logged, "syntax style colour") {
+		test.Errorf("the style was blamed for the text role: %s", logged)
 	}
 }
