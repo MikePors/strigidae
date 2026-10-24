@@ -208,3 +208,40 @@ func TestSubmitJumpsToTheFirstMatchAtOrAfterTheOrigin(test *testing.T) {
 		test.Errorf("selected %s", got)
 	}
 }
+
+func TestEnterOnAnEmptyPromptRepeatsTheLastSearch(test *testing.T) {
+	view, _ := loadedView(test)
+	press(view, "/")
+	promptResult(view, "", userinterface.PromptSubmitted)
+	if view.tabs[0].search.Active() {
+		test.Fatal("an empty prompt with no previous search started one")
+	}
+	press(view, "/")
+	promptResult(view, "tidy", userinterface.PromptSubmitted)
+	press(view, "esc")
+	press(view, "g g")
+	press(view, "/")
+	promptResult(view, "", userinterface.PromptSubmitted)
+	if view.tabs[0].search.Query() != "tidy" || !view.tabs[0].search.Marked(2) {
+		test.Errorf("query = %q", view.tabs[0].search.Query())
+	}
+	if got := selectedKey(test, view); got != "rivka/dotfiles#3" {
+		test.Errorf("selected %s", got)
+	}
+}
+
+func TestSelectedMatchingRowShowsTheCursorAndTheMatch(test *testing.T) {
+	view, _ := loadedView(test)
+	press(view, "/")
+	promptResult(view, "acme", userinterface.PromptSubmitted) // cursor on row 0, a match
+	lines := strings.Split(ansi.Strip(view.Render(80, 16)), "\n")
+	found := false
+	for _, line := range lines {
+		if strings.HasPrefix(line, search.SelectedGlyph) {
+			found = true
+		}
+	}
+	if !found {
+		test.Errorf("no row starts with %q:\n%s", search.SelectedGlyph, strings.Join(lines, "\n"))
+	}
+}

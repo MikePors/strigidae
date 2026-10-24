@@ -102,7 +102,7 @@ func (state *State) restore(list List) tea.Cmd {
 
 // Prompt applies what the shell reports about the search prompt. Typing moves
 // the cursor live; enter keeps the search; esc puts back the cursor and the
-// previous search. Results for other prompts are ignored.
+// previous search; enter on an empty prompt repeats the last search. Results for other prompts are ignored.
 func (state *State) Prompt(result userinterface.PromptResultMessage, list List) tea.Cmd {
 	if result.Prefix != Prefix {
 		return nil
@@ -120,9 +120,13 @@ func (state *State) Prompt(result userinterface.PromptResultMessage, list List) 
 		return state.restore(list)
 	case userinterface.PromptSubmitted:
 		if query == "" {
+			query = state.last // enter on an empty prompt repeats the last search
+		}
+		if query == "" {
 			state.Clear()
 			return state.restore(list)
 		}
+		state.last = query
 		row, ok := state.Type(query, list.texts(), state.origin(list))
 		if !ok {
 			return tea.Batch(state.restore(list), userinterface.Info("no match: "+terminaltext.Clean(query)))

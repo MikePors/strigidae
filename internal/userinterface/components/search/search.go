@@ -13,6 +13,10 @@ import "strings"
 // SearchMarker style.
 const Glyph = "•"
 
+// SelectedGlyph is the left column of the cursor row when it also matches: the
+// cursor and the match glyph side by side, drawn in the row's own style.
+const SelectedGlyph = ">" + Glyph
+
 // Match returns the indices of the rows whose text matches query. Currently a
 // row matches when every space-separated word of the query appears in its
 // text, ignoring case. An empty query matches nothing.
@@ -47,7 +51,8 @@ type State struct {
 	originRow     int
 	originKey     string
 	previousQuery string
-	requested     bool // a view asked for the prompt and the shell has not opened it yet
+	last          string // the last search submitted; enter on an empty prompt repeats it
+	requested     bool   // a view asked for the prompt and the shell has not opened it yet
 }
 
 // Begin starts typing a new search with the cursor on row, which holds the

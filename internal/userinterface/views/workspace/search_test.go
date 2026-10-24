@@ -153,8 +153,11 @@ func TestMarksAndEscInTheFilesPane(test *testing.T) {
 	if !strings.HasPrefix(rows[4], marker) {
 		test.Errorf("row 4 = %q, want the styled marker first", rows[4])
 	}
-	if !strings.HasPrefix(ansi.Strip(rows[2]), "> ") {
-		test.Errorf("selected row = %q", ansi.Strip(rows[2]))
+	if !strings.HasPrefix(ansi.Strip(rows[2]), search.SelectedGlyph) {
+		test.Errorf("selected matching row = %q, want the cursor and the match glyph", ansi.Strip(rows[2]))
+	}
+	if strings.Contains(rows[2], marker) {
+		test.Error("the selected row draws the marker in the accent colour")
 	}
 	harness.press("esc")
 	if strings.Contains(ansi.Strip(strings.Join(harness.view.fileRows(40, 10), "\n")), search.Glyph) {
@@ -183,5 +186,25 @@ func TestHelpListsTheSearchKeys(test *testing.T) {
 	}
 	if !strings.Contains(strings.Join(got, " "), "/ n N") {
 		test.Errorf("help keys = %q", got)
+	}
+}
+
+func TestEnterOnAnEmptyPromptRepeatsTheLastSearchInTheFilesPane(test *testing.T) {
+	harness := loaded(test, 100, 30)
+	harness.press("/")
+	harness.searchFor("", userinterface.PromptSubmitted)
+	if harness.view.search.Active() {
+		test.Fatal("an empty prompt with no previous search started one")
+	}
+	harness.startSearch("retry")
+	harness.searchFor("retry", userinterface.PromptSubmitted)
+	harness.press("esc", "g g")
+	harness.press("/")
+	harness.searchFor("", userinterface.PromptSubmitted)
+	if harness.view.search.Query() != "retry" || !harness.view.search.Marked(4) {
+		test.Errorf("query = %q", harness.view.search.Query())
+	}
+	if got := harness.view.selection(); got != 2 {
+		test.Errorf("selection = %d, want 2", got)
 	}
 }

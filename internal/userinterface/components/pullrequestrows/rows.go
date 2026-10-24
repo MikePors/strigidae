@@ -195,7 +195,13 @@ func (table Table) Row(layout Layout, pullRequest github.PullRequest, selected, 
 	comments := commentText(pullRequest.CommentCount)
 
 	if selected {
-		return table.theme.PullRequestList.Selected.Render(pad(marker+layout.row(repository, number, title, author, age, checksMark, reviewMark, comments), width))
+		// A selected row that matches the search shows the match glyph next to
+		// the cursor, in the row's own style, which is readable on its background.
+		lead := marker
+		if matched {
+			lead = search.SelectedGlyph
+		}
+		return table.theme.PullRequestList.Selected.Render(pad(lead+layout.row(repository, number, title, author, age, checksMark, reviewMark, comments), width))
 	}
 
 	styles := table.theme.PullRequestList

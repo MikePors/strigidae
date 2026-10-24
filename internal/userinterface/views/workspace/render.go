@@ -242,7 +242,11 @@ func (view *View) fileRow(file github.ChangedFile, width int, selected, matched 
 	marker := changeMarker(file.Change)
 
 	if selected {
-		return view.theme.Selected.Render("> " + viewedGlyph(file.Viewed) + " " + marker + " " + path + " " + counts)
+		cursor := "> "
+		if matched {
+			cursor = search.SelectedGlyph
+		}
+		return view.theme.Selected.Render(cursor + viewedGlyph(file.Viewed) + " " + marker + " " + path + " " + counts)
 	}
 	modifiedStyle := view.theme.FileModified
 	switch file.Change {

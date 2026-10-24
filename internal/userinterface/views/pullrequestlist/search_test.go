@@ -194,9 +194,17 @@ func TestMatchingRowsCarryTheMarker(test *testing.T) {
 	if strings.Contains(lines[1], search.Glyph) || strings.Contains(lines[3], search.Glyph) {
 		test.Error("rows that do not match carry the marker")
 	}
-	if !strings.HasPrefix(ansi.Strip(lines[2]), "> ") {
-		test.Errorf("selected row = %q", ansi.Strip(lines[2]))
+	if !strings.HasPrefix(ansi.Strip(lines[2]), search.SelectedGlyph) {
+		test.Errorf("selected matching row = %q, want the cursor and the match glyph", ansi.Strip(lines[2]))
 	}
+	if strings.Contains(lines[2], marker) {
+		test.Error("the selected row draws the marker in the accent colour, which vanishes on its background")
+	}
+	press(view, "j") // row 2 does not match
+	if line := ansi.Strip(strings.Split(view.Render(80, 12), "\n")[3]); !strings.HasPrefix(line, "> ") {
+		test.Errorf("selected row without a match = %q", line)
+	}
+	press(view, "k")
 	press(view, "esc")
 	if strings.Contains(ansi.Strip(view.Render(80, 12)), search.Glyph) {
 		test.Error("marks survive esc")
@@ -256,5 +264,26 @@ func TestWhitespaceQueryIsNoSearch(test *testing.T) {
 		if _, ok := message.(userinterface.InfoMessage); ok {
 			test.Errorf("blank query produced %v", message)
 		}
+	}
+}
+
+func TestEnterOnAnEmptyPromptRepeatsTheLastSearch(test *testing.T) {
+	view := searchView(test)
+	finishSearch(view, "", userinterface.PromptSubmitted)
+	if view.search.Active() {
+		test.Fatal("an empty prompt with no previous search started one")
+	}
+	press(view, "/")
+	typeSearch(view, "fix")
+	finishSearch(view, "fix", userinterface.PromptSubmitted) // row 1
+	press(view, "esc")
+	press(view, "j") // row 2
+	press(view, "/")
+	finishSearch(view, "", userinterface.PromptSubmitted)
+	if view.search.Query() != "fix" || !view.search.Marked(3) {
+		test.Errorf("query = %q, marks not restored", view.search.Query())
+	}
+	if got := view.window.Cursor(); got != 3 {
+		test.Errorf("cursor = %d, want the first match at or after row 2", got)
 	}
 }
