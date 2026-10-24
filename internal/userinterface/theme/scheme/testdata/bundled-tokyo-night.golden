@@ -1,4 +1,5 @@
 variant dark=true
+syntax tokyonight-night
 background #1a1b26
 surface #16161e
 text #c0caf5
@@ -23,14 +24,14 @@ hunk-tint #1f2231
 hunk-cursor-tint #2e3f62
 syn-keyword #bb9af7
 syn-string #9ece6a
-syn-comment #565f89
-syn-number #ff9e64
-syn-function #7aa2f7
-syn-type #2ac3de
-syn-operator #89ddff
+syn-comment #606680
+syn-number #a9b1d6
+syn-function #2ac3de
+syn-type #0db9d7
+syn-operator #b4f9f8
 syn-variable #c0caf5
 syn-escape #b4f9f8
 
 warnings:
 level=WARN msg="theme role is hard to read" role=muted contrast=2.76 want=3
-level=WARN msg="theme role is hard to read" role=syn-comment contrast=2.76 want=3
+level=WARN msg="syntax style colour is hard to read" syntax=tokyonight-night colour=#414868 contrast=1.91 want=3

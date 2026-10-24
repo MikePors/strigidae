@@ -74,7 +74,7 @@ func styleConfig(activeTheme theme.Theme) ansi.StyleConfig {
 				StylePrimitive: ansi.StylePrimitive{Color: text},
 				Margin:         pointer(uint(2)),
 			},
-			// The same generated style the diff's token colours come from.
+			// The theme's syntax style, which the diff's token colours come from too.
 			Theme: activeTheme.ChromaStyleName(),
 		},
 		DefinitionDescription: ansi.StylePrimitive{BlockPrefix: "\n🠶 "},

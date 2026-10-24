@@ -14,6 +14,10 @@
 # giving #243e4a, removed is red1 #db4b4b giving #4a272f, and the hunk tint is
 # its change colour #1f2231.
 #
+# syntax: Chroma's bundled tokyonight-night style, which draws code in the
+# diff and in Markdown code blocks. It replaces the syn-* roles, so this file
+# sets none of them.
+#
 # border uses tokyonight.nvim's fg_gutter (#3b4261) on purpose, for
 # visibility: Tokyo Night's own border colour, #15161e, is nearly invisible
 # on this background.
@@ -21,6 +25,7 @@ system: "base24"
 name: "Tokyo Night"
 author: "Michaël Ball, based on Tokyo Night by enkia"
 variant: "dark"
+syntax: "tokyonight-night"
 palette:
   base00: "#1a1b26"
   base01: "#16161e"
@@ -62,12 +67,3 @@ roles:
   added-tint: "#243e4a"
   removed-tint: "#4a272f"
   hunk-tint: "#1f2231"
-  syn-keyword: "#bb9af7"
-  syn-string: "#9ece6a"
-  syn-comment: "#565f89"
-  syn-number: "#ff9e64"
-  syn-function: "#7aa2f7"
-  syn-type: "#2ac3de"
-  syn-operator: "#89ddff"
-  syn-variable: "#c0caf5"
-  syn-escape: "#b4f9f8"

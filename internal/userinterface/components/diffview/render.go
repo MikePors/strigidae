@@ -1,18 +1,21 @@
 package diffview
 
 import (
+	"math"
 	"strconv"
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/alecthomas/chroma/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MikePors/strigidae/internal/diff"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
-// classNoNewline styles the text of "\ No newline" marker rows.
-const classNoNewline = Class(numberClasses)
+// tokenNoNewline styles the text of "\ No newline" marker rows. It is no
+// Chroma token type, so no highlighter reports it.
+const tokenNoNewline = chroma.TokenType(math.MinInt32)
 
 // Line-kind indexes into the style set.
 const (
@@ -24,8 +27,8 @@ const (
 
 // variant is the set of styles for one (kind, cursor) combination.
 type variant struct {
-	code   [numberClasses + 1]lipgloss.Style
-	fill   lipgloss.Style // pads the code area to full width
+	code   map[chroma.TokenType]lipgloss.Style // every standard token type, and tokenNoNewline
+	fill   lipgloss.Style                      // pads the code area to full width
 	gutter lipgloss.Style
 	thread [2]lipgloss.Style // gutter marker: [0] quiet thread, [1] open thread
 }
@@ -42,12 +45,10 @@ func newStyleSet(activeTheme theme.Theme) styleSet {
 	cursorBackground := activeTheme.DiffCursor.GetBackground()
 	bases := [numberKinds]lipgloss.Style{activeTheme.DiffContext, activeTheme.DiffAdd, activeTheme.DiffDelete}
 	gutters := [numberKinds]lipgloss.Style{activeTheme.DiffGutter, activeTheme.DiffGutterAdd, activeTheme.DiffGutterDelete}
-	var foreground [numberClasses + 1]lipgloss.Style
-	for class := range Class(numberClasses) {
-		foreground[class] = activeTheme.Syntax.For(class)
+	foreground := map[chroma.TokenType]lipgloss.Style{tokenNoNewline: activeTheme.DiffNoNewline}
+	for _, tokenType := range activeTheme.Syntax.TokenTypes() {
+		foreground[tokenType] = activeTheme.Syntax.For(tokenType)
 	}
-	foreground[ClassPlain] = lipgloss.NewStyle()
-	foreground[classNoNewline] = activeTheme.DiffNoNewline
 	for current := range 2 {
 		for k := range numberKinds {
 			base, gutter := bases[k], gutters[k]
@@ -57,8 +58,9 @@ func newStyleSet(activeTheme theme.Theme) styleSet {
 			variantStyles := variant{fill: base, gutter: gutter}
 			variantStyles.thread[0] = activeTheme.Muted.Background(gutter.GetBackground())
 			variantStyles.thread[1] = activeTheme.ThreadMarker.Background(gutter.GetBackground())
-			for i := range variantStyles.code {
-				variantStyles.code[i] = foreground[i].Background(base.GetBackground())
+			variantStyles.code = make(map[chroma.TokenType]lipgloss.Style, len(foreground))
+			for tokenType, style := range foreground {
+				variantStyles.code[tokenType] = style.Background(base.GetBackground())
 			}
 			style.variants[current][k] = variantStyles
 		}
@@ -66,6 +68,15 @@ func newStyleSet(activeTheme theme.Theme) styleSet {
 	style.hunk[0] = activeTheme.DiffHunk
 	style.hunk[1] = activeTheme.DiffHunkCursor
 	return style
+}
+
+// codeStyle returns the style for a token type, or the plain one for a type
+// the table lacks (a custom Highlighter may report any type).
+func (variantStyles *variant) codeStyle(tokenType chroma.TokenType) lipgloss.Style {
+	if style, ok := variantStyles.code[tokenType]; ok {
+		return style
+	}
+	return variantStyles.code[chroma.Text]
 }
 
 func (model *Model) renderRow(i int) string {
@@ -111,14 +122,14 @@ func (model *Model) renderRow(i int) string {
 
 	spans := model.spansFor(i)
 	if row.line.Kind == diff.NoNewline {
-		spans = []Span{{Text: row.text, Class: classNoNewline}}
+		spans = []Span{{Text: row.text, Token: tokenNoNewline}}
 	}
 	visible, used := window(spans, model.window.HorizontalOffset(), codeWidth)
 
 	var builder strings.Builder
 	builder.WriteString(gutter)
 	for _, span := range visible {
-		builder.WriteString(variantStyles.code[span.Class].Render(span.Text))
+		builder.WriteString(variantStyles.codeStyle(span.Token).Render(span.Text))
 	}
 	if pad := codeWidth - used; pad > 0 {
 		builder.WriteString(variantStyles.fill.Render(spaces(pad)))

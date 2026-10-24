@@ -125,7 +125,7 @@ func window(spans []Span, startColumn, width int) ([]Span, int) {
 			text, column, done = windowSlow(span.Text, column, startColumn, end)
 		}
 		if text != "" {
-			out = append(out, Span{Text: text, Class: span.Class})
+			out = append(out, Span{Text: text, Token: span.Token})
 		}
 		if done || column >= end {
 			break

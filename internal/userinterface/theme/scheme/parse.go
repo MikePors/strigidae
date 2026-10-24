@@ -220,7 +220,11 @@ func (reader *reader) scheme(root *yaml.Node) Scheme {
 	scheme := Scheme{Name: name, Palette: palette}
 	if node := top.nodes["syntax"]; node != nil {
 		scheme.Syntax = reader.text(node, "syntax")
-		scheme.Warnings = append(scheme.Warnings, fmt.Sprintf("syntax %q is ignored: named syntax styles are not supported yet, so syntax colours come from the palette", scheme.Syntax))
+		if reader.err == nil {
+			if err := theme.CheckSyntaxStyle(scheme.Syntax); err != nil {
+				reader.fail(node, "%v", err)
+			}
+		}
 	}
 	scheme.Overrides = reader.roles(top.nodes["roles"])
 	if reader.err != nil {
