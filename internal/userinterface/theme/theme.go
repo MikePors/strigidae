@@ -16,7 +16,8 @@
 // Theme and use its named styles. To add a style, add a field here and build
 // it from an existing role; if no role fits, add one with a default
 // derivation. Syntax highlighting colours follow the same path: a Chroma
-// style is generated from the syntax roles.
+// style is generated from the syntax roles, unless the theme names a bundled
+// Chroma style (see Syntax).
 package theme
 
 import (
@@ -61,8 +62,9 @@ type Theme struct {
 	Chosen bool
 	// IsDark reports whether the palette is the dark variant.
 	IsDark bool
-	// Identifier fingerprints the final roles and the variant, so any change to a
-	// role, including an override, changes it. Renderer caches include it.
+	// Identifier fingerprints the final roles, the variant and the named
+	// syntax style, so any change to a role (including an override) or to the
+	// syntax style changes it. Renderer caches include it.
 	Identifier string
 	// Roles are the colours the styles were built from. Renderers with their
 	// own style systems (Markdown) read them; views use the named styles.
@@ -102,7 +104,7 @@ type Theme struct {
 	DiffHunk         lipgloss.Style // "@@ ... @@" header rows
 	DiffHunkCursor   lipgloss.Style // header row under the cursor
 	DiffNoNewline    lipgloss.Style // "\ No newline at end of file" rows
-	Syntax           Syntax         // foreground-only token styles
+	Syntax           Syntax         // token styles, for the diff pane and Markdown code blocks
 	ThreadMarker     lipgloss.Style // gutter marker and header of an open review thread
 	ThreadBar        lipgloss.Style // left bar of a thread's comment lines
 	// --- end diff pane ---
@@ -128,10 +130,24 @@ func FromPalette(palette Palette) Theme { return FromPaletteWithOverrides(palett
 // FromPaletteWithOverrides builds a theme from a palette, replacing every
 // role that overrides sets (non-nil fields) with its exact colour.
 func FromPaletteWithOverrides(palette Palette, overrides Roles) Theme {
-	return newTheme(palette, deriveRoles(palette, overrides))
+	return newTheme(palette, deriveRoles(palette, overrides), "", overrides.set())
 }
 
-func newTheme(palette Palette, roles Roles) Theme {
+// FromPaletteWithSyntax is FromPaletteWithOverrides with syntax colours from
+// the named bundled Chroma style instead of the syntax roles; a syn-<class>
+// override still recolours its class. An empty name generates the style from
+// the palette. An unknown name is an error that lists the bundled styles.
+func FromPaletteWithSyntax(palette Palette, overrides Roles, syntax string) (Theme, error) {
+	if syntax != "" {
+		if err := CheckSyntaxStyle(syntax); err != nil {
+			return Theme{}, err
+		}
+	}
+	return newTheme(palette, deriveRoles(palette, overrides), syntax, overrides.set()), nil
+}
+
+func newTheme(palette Palette, roles Roles, syntax string, overridden map[string]bool) Theme {
+	identifier := roles.fingerprint(palette.Variant, syntax)
 	bar := lipgloss.NewStyle().Background(roles.Surface).Foreground(roles.Text)
 	foreground := func(colour color.Color) lipgloss.Style { return lipgloss.NewStyle().Foreground(colour) }
 	bold := func(colour color.Color) lipgloss.Style { return foreground(colour).Bold(true) }
@@ -161,7 +177,7 @@ func newTheme(palette Palette, roles Roles) Theme {
 		Muted:      foreground(roles.Muted),
 		Selected:   bold(roles.AccentStrong),
 		IsDark:     palette.Variant == Dark,
-		Identifier: roles.fingerprint(palette.Variant, ""),
+		Identifier: identifier,
 		Roles:      roles,
 
 		// --- PR workspace ---
@@ -198,7 +214,7 @@ func newTheme(palette Palette, roles Roles) Theme {
 		DiffHunk:         foreground(roles.Info).Background(roles.HunkTint),
 		DiffHunkCursor:   bold(roles.Info).Background(roles.HunkCursorTint),
 		DiffNoNewline:    foreground(roles.Muted).Italic(true),
-		Syntax:           newSyntax(roles),
+		Syntax:           newSyntax(syntax, generatedPrefix+identifier, roles, overridden),
 		ThreadMarker:     bold(roles.Warning),
 		ThreadBar:        foreground(roles.Info),
 		// --- end diff pane ---

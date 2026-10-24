@@ -5,37 +5,17 @@ import (
 
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/lexers"
-
-	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
-// Class is a coarse token category (the theme's SyntaxClass). Highlighters
-// report classes rather than colours, so cached results stay valid when the
-// theme changes.
-type Class = theme.SyntaxClass
-
-// Token classes.
-const (
-	ClassPlain    = theme.ClassPlain
-	ClassKeyword  = theme.ClassKeyword
-	ClassString   = theme.ClassString
-	ClassComment  = theme.ClassComment
-	ClassNumber   = theme.ClassNumber
-	ClassFunction = theme.ClassFunction
-	ClassType     = theme.ClassType
-	ClassOperator = theme.ClassOperator
-	ClassVariable = theme.ClassVariable
-	ClassEscape   = theme.ClassEscape
-	numberClasses = int(theme.NumberSyntaxClasses)
-)
-
-// Span is a run of text with one token class.
+// Span is a run of text with one Chroma token type. Highlighters report
+// token types rather than colours, so cached results stay valid when the
+// theme changes; the theme gives each type its style.
 type Span struct {
 	Text  string
-	Class Class
+	Token chroma.TokenType
 }
 
-// Highlighter splits one line of code into classed spans. path selects the
+// Highlighter splits one line of code into typed spans. path selects the
 // language (by file name). The concatenated span text must equal text.
 //
 // Lines are highlighted independently, so constructs spanning lines (block
@@ -76,7 +56,7 @@ func ChromaHighlighter() Highlighter {
 			if value == "" {
 				continue
 			}
-			spans = append(spans, Span{Text: value, Class: classify(token.Type)})
+			spans = append(spans, Span{Text: value, Token: standard(token.Type)})
 		}
 		if joined(spans) != text {
 			return plain(text) // lexer altered the text; never show wrong code
@@ -97,9 +77,16 @@ func plain(text string) []Span {
 	if text == "" {
 		return nil
 	}
-	return []Span{{Text: text}}
+	return []Span{{Text: text, Token: chroma.Text}}
 }
 
-// classify maps a token type to a class through the theme's mapping, the same
-// one Markdown code blocks use, so both panes colour code identically.
-func classify(tokenType chroma.TokenType) Class { return theme.ClassOf(tokenType) }
+// standard returns tokenType if it is a standard Chroma token type, or else
+// the nearest standard one it inherits from, so every span has a style.
+func standard(tokenType chroma.TokenType) chroma.TokenType {
+	for _, key := range []chroma.TokenType{tokenType, tokenType.SubCategory(), tokenType.Category()} {
+		if _, ok := chroma.StandardTypes[key]; ok {
+			return key
+		}
+	}
+	return chroma.Text
+}

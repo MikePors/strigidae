@@ -132,13 +132,34 @@ func TestParseRoles(test *testing.T) {
 	}
 }
 
-func TestParseSyntaxWarns(test *testing.T) {
+func TestParseSyntax(test *testing.T) {
 	scheme, err := Parse("syntax.yaml", []byte(grey16("101010")+"syntax: tokyonight-night\n"))
 	if err != nil {
 		test.Fatal(err)
 	}
-	if len(scheme.Warnings) != 1 || !strings.Contains(scheme.Warnings[0], "tokyonight-night") {
-		test.Errorf("warnings = %q, want one naming the syntax style", scheme.Warnings)
+	if scheme.Syntax != "tokyonight-night" || len(scheme.Warnings) != 0 {
+		test.Errorf("syntax = %q, warnings = %q; want the style and no warnings", scheme.Syntax, scheme.Warnings)
+	}
+	if name := scheme.Theme().Syntax.Name(); name != "tokyonight-night" {
+		test.Errorf("theme syntax = %q, want tokyonight-night", name)
+	}
+}
+
+// TestParseUnknownSyntaxListsBundledStyles proves the list leaves out the
+// styles strig generates and registers itself.
+func TestParseUnknownSyntaxListsBundledStyles(test *testing.T) {
+	registered := theme.Default().ChromaStyleName()
+	_, err := Parse("t.yaml", []byte(grey16("101010")+"syntax: nope\n"))
+	if err == nil {
+		test.Fatal("no error")
+	}
+	for _, want := range []string{"t.yaml:18:", `unknown syntax style "nope"`, "bundled styles:", "monokai", "tokyonight-night"} {
+		if !strings.Contains(err.Error(), want) {
+			test.Errorf("error %q lacks %q", err, want)
+		}
+	}
+	if strings.Contains(err.Error(), "strig-") {
+		test.Errorf("error %q lists %s, a style strig generated", err, registered)
 	}
 }
 

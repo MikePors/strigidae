@@ -1,4 +1,5 @@
 variant dark=false
+syntax (generated)
 background #eff1f5
 surface #e6e9ef
 text #4c4f69

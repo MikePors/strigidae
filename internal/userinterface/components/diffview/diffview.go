@@ -154,7 +154,7 @@ func New(activeTheme theme.Theme, options ...Option) *Model {
 	return model
 }
 
-// SetTheme swaps the theme. The highlight cache holds token classes, not
+// SetTheme swaps the theme. The highlight cache holds token types, not
 // colours, so it stays valid.
 func (model *Model) SetTheme(activeTheme theme.Theme) {
 	model.theme = activeTheme

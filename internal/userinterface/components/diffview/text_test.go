@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/alecthomas/chroma/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -30,7 +31,7 @@ func TestDisplayText(test *testing.T) {
 }
 
 func TestWindow(test *testing.T) {
-	spans := []Span{{"ab", ClassKeyword}, {"日本語", ClassString}, {"cd", ClassPlain}}
+	spans := []Span{{"ab", chroma.Keyword}, {"日本語", chroma.LiteralString}, {"cd", chroma.Text}}
 	join := func(span []Span) string {
 		var builder strings.Builder
 		for _, piece := range span {
@@ -52,7 +53,7 @@ func TestWindow(test *testing.T) {
 		{10, 5, ""},
 		{8, 5, "cd"},
 	}
-	emoji := []Span{{"❤️❤️a", ClassPlain}}
+	emoji := []Span{{"❤️❤️a", chroma.Text}}
 	for _, testCase := range []struct {
 		startColumn, width int
 		want               string
@@ -79,31 +80,36 @@ func TestWindow(test *testing.T) {
 	}
 }
 
-func TestClassifyAndChroma(test *testing.T) {
+func TestChromaHighlighter(test *testing.T) {
 	highlighter := ChromaHighlighter()
 	spans := highlighter("x.go", "func main() { return 42 } // hi")
 	if joined(spans) != "func main() { return 42 } // hi" {
 		test.Fatalf("text altered: %v", spans)
 	}
-	has := func(class Class) bool {
+	has := func(category chroma.TokenType) bool {
 		for _, span := range spans {
-			if span.Class == class {
+			if span.Token.Category() == category {
 				return true
 			}
 		}
 		return false
 	}
-	if !has(ClassKeyword) || !has(ClassNumber) || !has(ClassComment) {
+	if !has(chroma.Keyword) || !has(chroma.Literal) || !has(chroma.Comment) {
 		test.Errorf("expected keyword, number and comment spans, got %+v", spans)
 	}
-	if got := highlighter("notes.unknownext", "just text"); len(got) != 1 || got[0].Class != ClassPlain {
+	for _, span := range spans {
+		if _, ok := chroma.StandardTypes[span.Token]; !ok {
+			test.Errorf("span %q has non-standard token type %v", span.Text, span.Token)
+		}
+	}
+	if got := highlighter("notes.unknownext", "just text"); len(got) != 1 || got[0].Token != chroma.Text {
 		test.Errorf("unknown extension should be plain: %+v", got)
 	}
 	if got := highlighter("x.go", ""); got != nil {
 		test.Errorf("empty line: %+v", got)
 	}
 	long := strings.Repeat("x", maximumHighlightLength+1)
-	if got := highlighter("x.go", long); len(got) != 1 || got[0].Class != ClassPlain {
+	if got := highlighter("x.go", long); len(got) != 1 || got[0].Token != chroma.Text {
 		test.Error("very long lines should skip lexing")
 	}
 }
