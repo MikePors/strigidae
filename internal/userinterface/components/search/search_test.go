@@ -43,28 +43,28 @@ func TestMatch(test *testing.T) {
 func TestStateMovement(test *testing.T) {
 	rows := []string{"a", "x1", "b", "x2", "c", "x3"}
 	var state State
-	state.Begin(2)
-	row, ok := state.Type("x", rows)
+	state.Begin(2, "")
+	row, ok := state.Type("x", rows, 2)
 	if !ok || row != 3 {
 		test.Fatalf("typing from row 2 went to %d, %v; want 3", row, ok)
 	}
 	if !state.Marked(1) || !state.Marked(5) || state.Marked(0) {
 		test.Error("marks do not follow the matches")
 	}
-	state.Begin(4)
-	if row, _ := state.Type("x", rows); row != 5 {
+	state.Begin(4, "")
+	if row, _ := state.Type("x", rows, 4); row != 5 {
 		test.Errorf("from row 4 went to %d, want 5", row)
 	}
-	state.Begin(5)
-	if row, _ := state.Type("x", rows); row != 5 {
+	state.Begin(5, "")
+	if row, _ := state.Type("x", rows, 5); row != 5 {
 		test.Errorf("on a match stayed at %d, want 5", row)
 	}
-	state.Begin(4)
-	if row, _ := state.Type("x1", rows); row != 1 {
+	state.Begin(4, "")
+	if row, _ := state.Type("x1", rows, 4); row != 1 {
 		test.Errorf("past the last match wrapped to %d, want 1", row)
 	}
-	state.Begin(2)
-	state.Type("x", rows)
+	state.Begin(2, "")
+	state.Type("x", rows, 2)
 
 	moves := []struct {
 		name   string
@@ -99,12 +99,20 @@ func TestStateMovement(test *testing.T) {
 func TestCancelGoesBackToThePreviousSearch(test *testing.T) {
 	rows := []string{"a", "b"}
 	var state State
-	state.Begin(0)
-	state.Type("a", rows)
-	state.Begin(0)
-	state.Type("b", rows)
+	state.Begin(0, "")
+	state.Type("a", rows, 0)
+	state.Begin(0, "")
+	state.Type("b", rows, 0)
 	state.Cancel(rows)
 	if state.Query() != "a" || !state.Marked(0) || state.Marked(1) {
 		test.Errorf("cancel left query %q", state.Query())
+	}
+}
+
+func TestWhitespaceQueryIsNoSearch(test *testing.T) {
+	var state State
+	state.Begin(0, "")
+	if _, ok := state.Type("   ", []string{"a b"}, 0); ok || state.Active() {
+		test.Error("a blank query started a search")
 	}
 }

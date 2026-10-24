@@ -8,7 +8,6 @@ import (
 
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/components/search"
-	"github.com/MikePors/strigidae/internal/userinterface/keys"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
@@ -29,20 +28,49 @@ func (harness *harness) startSearch(text string) {
 
 func TestSlashInTheFilesPaneAsksForThePrompt(test *testing.T) {
 	harness := loaded(test, 100, 30)
-	var prompts []userinterface.PromptMessage
-	_, command := harness.view.Update(keys.Message{Sequence: "/"})
-	for _, message := range messages(command) {
-		if prompt, ok := message.(userinterface.PromptMessage); ok {
-			prompts = append(prompts, prompt)
+	harness.press("/")
+	if prefix, ok := harness.view.PromptRequest(); !ok || prefix != "/" {
+		test.Errorf("after / the request is %q, %v", prefix, ok)
+	}
+	harness.press("l", "/")
+	if _, ok := harness.view.PromptRequest(); ok {
+		test.Error("/ in the right pane asked for a prompt")
+	}
+}
+
+func TestRestoreFollowsTheFileWhenFilesChange(test *testing.T) {
+	harness := loaded(test, 100, 30)
+	harness.press("j", "j") // retry.go
+	harness.press("/")
+	harness.searchFor("zzz", userinterface.PromptChanged)
+	detail := testDetail()
+	detail.Files = append(detail.Files[:0:0], detail.Files[1:]...) // client.go is gone
+	harness.send(pullRequestLoadedMessage{owner: harness.view, repository: testRepository, number: 7, sequence: harness.view.sequence, detail: detail})
+	harness.searchFor("zzz", userinterface.PromptCancelled)
+	if got := harness.view.selectedPath(); got != "internal/sync/retry.go" {
+		test.Errorf("esc restored %q", got)
+	}
+}
+
+func TestSubmitJumpsToTheFirstMatchAtOrAfterTheOriginInTheFilesPane(test *testing.T) {
+	harness := loaded(test, 100, 30)
+	harness.press("j", "j", "j") // legacy.go
+	harness.press("/")
+	harness.searchFor("retry", userinterface.PromptSubmitted)
+	if got := harness.view.selection(); got != 4 {
+		test.Errorf("selection = %d, want 4", got)
+	}
+}
+
+func TestHelpSaysTheSearchKeysSearchTheFilesPane(test *testing.T) {
+	var descriptions []string
+	for _, group := range loaded(test, 100, 30).view.searchHelp() {
+		descriptions = append(descriptions, group.Help().Desc)
+	}
+	for _, description := range descriptions {
+		if !strings.Contains(description, "Files pane") {
+			test.Errorf("help %q does not say what is searched", description)
 		}
-	}
-	if len(prompts) != 1 || prompts[0].Prefix != "/" {
-		test.Errorf("prompts = %v", prompts)
-	}
-	harness.press("l")
-	_, command = harness.view.Update(keys.Message{Sequence: "/"})
-	if len(messages(command)) != 0 {
-		test.Error("/ in the right pane opened a prompt")
 	}
 }
 

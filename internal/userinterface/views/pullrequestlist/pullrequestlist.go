@@ -75,8 +75,9 @@ type View struct {
 }
 
 var (
-	_ userinterface.View   = (*View)(nil)
-	_ userinterface.Loader = (*View)(nil)
+	_ userinterface.View     = (*View)(nil)
+	_ userinterface.Loader   = (*View)(nil)
+	_ userinterface.Prompter = (*View)(nil)
 )
 
 // New returns the PR list for repository. It starts loading when pushed (Init).

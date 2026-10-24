@@ -41,25 +41,36 @@ type State struct {
 	matches []int // ascending row indices
 	marked  map[int]bool
 
-	// While typing: where the cursor was, and the search to go back to.
-	origin        int
+	// While typing: where the cursor was (the row, and the identity of the
+	// item on it, because rows can load or change meanwhile), and the search
+	// to go back to.
+	originRow     int
+	originKey     string
 	previousQuery string
+	requested     bool // a view asked for the prompt and the shell has not opened it yet
 }
 
-// Begin starts typing a new search with the cursor at cursor.
-func (state *State) Begin(cursor int) {
-	state.origin, state.previousQuery = cursor, state.query
+// Begin starts typing a new search with the cursor on row, which holds the
+// item with identity key. An empty key means the cursor was never moved.
+func (state *State) Begin(row int, key string) {
+	state.originRow, state.originKey, state.previousQuery = row, key, state.query
+	state.requested = true
 }
 
-// Origin is the row the cursor was on when Begin was called.
-func (state *State) Origin() int { return state.origin }
+// TakeRequest reports whether a prompt was asked for since the last call, and
+// forgets it.
+func (state *State) TakeRequest() bool {
+	requested := state.requested
+	state.requested = false
+	return requested
+}
 
 // Type sets the query being typed and returns the row the cursor should go
-// to: the first match at or after the origin, wrapping to the first match.
-// ok is false when nothing matches; the caller puts the cursor back on Origin.
-func (state *State) Type(query string, rows []string) (row int, ok bool) {
+// to: the first match at or after origin, wrapping to the first match. ok is
+// false when nothing matches; the caller puts the cursor back on the origin.
+func (state *State) Type(query string, rows []string, origin int) (row int, ok bool) {
 	state.set(query, rows)
-	return state.following(state.origin - 1)
+	return state.following(origin - 1)
 }
 
 // Cancel abandons the search being typed and goes back to the one before it.
@@ -104,8 +115,8 @@ func (state *State) Previous(cursor, count int) (row int, ok bool) {
 }
 
 func (state *State) set(query string, rows []string) {
-	state.query = query
-	state.matches = Match(query, rows)
+	state.query = strings.TrimSpace(query)
+	state.matches = Match(state.query, rows)
 	state.marked = make(map[int]bool, len(state.matches))
 	for _, row := range state.matches {
 		state.marked[row] = true

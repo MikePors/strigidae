@@ -53,12 +53,15 @@ func finishSearch(view *View, text string, state userinterface.PromptState) []te
 
 func TestSlashAsksForThePrompt(test *testing.T) {
 	view := searchView(test)
-	command := press(view, "/")
-	if command == nil {
-		test.Fatal("/ returned no command")
+	if _, ok := view.PromptRequest(); ok {
+		test.Fatal("a prompt is requested before /")
 	}
-	if message, ok := command().(userinterface.PromptMessage); !ok || message.Prefix != "/" {
-		test.Errorf("/ produced %v", message)
+	press(view, "/")
+	if prefix, ok := view.PromptRequest(); !ok || prefix != "/" {
+		test.Errorf("after / the request is %q, %v", prefix, ok)
+	}
+	if _, ok := view.PromptRequest(); ok {
+		test.Error("the request was not cleared")
 	}
 }
 
@@ -209,5 +212,49 @@ func TestHelpListsTheSearchKeys(test *testing.T) {
 	}
 	if strings.Join(got, " ") != "/ n N" {
 		test.Errorf("help keys = %q", got)
+	}
+}
+
+func TestRestoreFollowsThePullRequestWhenRowsChange(test *testing.T) {
+	client := fakeWith(searchRows())
+	view := loadedView(test, client, nil)
+	press(view, "j")
+	press(view, "j") // row 2, "Tidy docs" (number 4)
+	press(view, "/")
+	typeSearch(view, "fix")
+	// A new pull request arrives on top while the prompt is open.
+	fresh := append([]github.PullRequest{{Repository: testRepository, Number: 99, Title: "New", Author: "al"}}, searchRows()...)
+	client.SetPullRequests(testRepository, fresh)
+	deliver(test, view, press(view, "R"))
+	finishSearch(view, "fix", userinterface.PromptCancelled)
+	if pullRequest, _ := view.selected(); pullRequest.Title != "Tidy docs" {
+		test.Errorf("esc restored %q, want Tidy docs", pullRequest.Title)
+	}
+}
+
+func TestSubmitJumpsToTheFirstMatchAtOrAfterTheOrigin(test *testing.T) {
+	view := searchView(test)
+	press(view, "j")
+	press(view, "j") // row 2
+	press(view, "/")
+	// A paste is reported as one change; nothing moved the cursor yet.
+	finishSearch(view, "fix", userinterface.PromptSubmitted)
+	if got := view.window.Cursor(); got != 3 {
+		test.Errorf("cursor = %d, want 3", got)
+	}
+}
+
+func TestWhitespaceQueryIsNoSearch(test *testing.T) {
+	view := searchView(test)
+	press(view, "/")
+	typeSearch(view, "  ")
+	messages := finishSearch(view, "  ", userinterface.PromptSubmitted)
+	if view.search.Active() {
+		test.Error("a blank query is an active search")
+	}
+	for _, message := range messages {
+		if _, ok := message.(userinterface.InfoMessage); ok {
+			test.Errorf("blank query produced %v", message)
+		}
 	}
 }

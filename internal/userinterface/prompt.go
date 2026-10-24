@@ -14,21 +14,25 @@ const (
 	PromptCancelled                    // esc, or backspace on an empty line: the prompt is closed
 )
 
-// PromptMessage asks the shell to open the bottom line, where ":" commands are
-// typed, as a prompt that starts with Prefix. The shell owns the input and the
-// key capture; the top view hears about it through PromptResultMessage.
-type PromptMessage struct{ Prefix string }
+// Prompter is optionally implemented by views that ask the shell for a prompt
+// in the bottom line, where ":" commands are typed. After forwarding a key to
+// the top view the shell calls PromptRequest; when it reports ok, the shell
+// opens the prompt starting with prefix in that same update, so no key typed
+// next can reach the view first. The view then hears about the prompt through
+// PromptResultMessage. A request made while the command line is open is
+// ignored.
+type Prompter interface {
+	PromptRequest() (prefix string, ok bool)
+}
 
 // PromptResultMessage reports a prompt to the top view: on every change of the
-// text, on enter and on esc. Prefix tells the view which prompt it is.
+// text (typing or pasting), on enter and on esc. Prefix tells the view which
+// prompt it is.
 type PromptResultMessage struct {
 	Prefix string
 	Text   string
 	State  PromptState
 }
-
-// Prompt returns a command that opens a prompt in the bottom line.
-func Prompt(prefix string) tea.Cmd { return messageCommand(PromptMessage{Prefix: prefix}) }
 
 // openPrompt turns the command line into a prompt that starts with prefix.
 func (commandLine *commandLine) openPrompt(prefix string) tea.Cmd {
@@ -36,6 +40,20 @@ func (commandLine *commandLine) openPrompt(prefix string) tea.Cmd {
 	commandLine.input.Prompt = prefix
 	commandLine.prompt = prefix
 	return command
+}
+
+// withRequestedPrompt opens the prompt the top view asked for while handling
+// a key, alongside command.
+func (model *Model) withRequestedPrompt(command tea.Cmd) tea.Cmd {
+	prompter, ok := model.top().(Prompter)
+	if !ok {
+		return command
+	}
+	prefix, requested := prompter.PromptRequest()
+	if !requested || model.commandLine.active {
+		return command
+	}
+	return tea.Batch(command, model.commandLine.openPrompt(prefix))
 }
 
 // promptKey handles one key while the command line is a prompt, reporting to
@@ -58,9 +76,16 @@ func (model *Model) promptKey(message tea.KeyPressMsg) tea.Cmd {
 			return finish(PromptCancelled)
 		}
 	}
-	blink := model.commandLine.update(message)
+	return model.promptInput(message)
+}
+
+// promptInput gives a key or a paste to the input and reports a change of its
+// text to the top view.
+func (model *Model) promptInput(message tea.Msg) tea.Cmd {
+	prefix, before := model.commandLine.prompt, model.commandLine.input.Value()
+	command := model.commandLine.update(message)
 	if after := model.commandLine.input.Value(); after != before {
-		return tea.Batch(blink, model.forward(PromptResultMessage{Prefix: prefix, Text: after, State: PromptChanged}))
+		return tea.Batch(command, model.forward(PromptResultMessage{Prefix: prefix, Text: after, State: PromptChanged}))
 	}
-	return blink
+	return command
 }

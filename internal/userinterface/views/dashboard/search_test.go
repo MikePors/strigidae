@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/github/fake"
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/components/search"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
@@ -24,12 +25,12 @@ func promptResult(view *View, text string, state userinterface.PromptState) []te
 
 func TestSlashAsksForThePrompt(test *testing.T) {
 	view, _ := loadedView(test)
-	got := messages(press(view, "/"))
-	if len(got) != 1 {
-		test.Fatalf("/ produced %v", got)
+	press(view, "/")
+	if prefix, ok := view.PromptRequest(); !ok || prefix != "/" {
+		test.Errorf("after / the request is %q, %v", prefix, ok)
 	}
-	if message, ok := got[0].(userinterface.PromptMessage); !ok || message.Prefix != "/" {
-		test.Errorf("/ produced %v", got[0])
+	if _, ok := view.PromptRequest(); ok {
+		test.Error("the request was not cleared")
 	}
 }
 
@@ -165,5 +166,45 @@ func TestHelpListsTheSearchKeys(test *testing.T) {
 	}
 	if !strings.Contains(strings.Join(got, " "), "/ n N") {
 		test.Errorf("help keys = %q", got)
+	}
+}
+
+func TestEscKeepsAnUnmovedCursorFollowingTheFirstRow(test *testing.T) {
+	tabs := testTabs(test)
+	client := fake.New()
+	seed(test, client, tabs)
+	// The first section is empty at first; the user has not moved the cursor.
+	client.SetSearchResults(searchQuery(tabs[0].Sections[0]), nil)
+	view := newView(client, tabs, nil)
+	settle(view, view.Init())
+	press(view, "/")
+	promptResult(view, "zzz", userinterface.PromptChanged)
+	promptResult(view, "zzz", userinterface.PromptCancelled)
+	if view.tabs[0].anchor != nil {
+		test.Error("cancelling a search anchored a cursor the user never moved")
+	}
+}
+
+func TestRestoreFollowsThePullRequestWhenRowsChange(test *testing.T) {
+	view, client := loadedView(test)
+	press(view, "j") // acme/gadgets#7
+	press(view, "/")
+	promptResult(view, "dotfiles", userinterface.PromptChanged)
+	tabs := testTabs(test)
+	first := pullRequest("acme/new", 1, "Brand new", 0)
+	client.SetSearchResults(searchQuery(tabs[0].Sections[0]), []github.PullRequest{first, pullRequest("acme/widgets", 12, "Cache the parsed diff", 0), pullRequest("acme/gadgets", 7, "Fix", 0)})
+	settle(view, press(view, "R"))
+	promptResult(view, "dotfiles", userinterface.PromptCancelled)
+	if got := selectedKey(test, view); got != "acme/gadgets#7" {
+		test.Errorf("esc restored %s, want acme/gadgets#7", got)
+	}
+}
+
+func TestSubmitJumpsToTheFirstMatchAtOrAfterTheOrigin(test *testing.T) {
+	view, _ := loadedView(test)
+	press(view, "/")
+	promptResult(view, "dotfiles", userinterface.PromptSubmitted) // no change was reported, as after a paste
+	if got := selectedKey(test, view); got != "rivka/dotfiles#3" {
+		test.Errorf("selected %s", got)
 	}
 }

@@ -133,9 +133,6 @@ func (model *Model) update(message tea.Msg) tea.Cmd {
 		return model.pop()
 	case QuitMessage:
 		return tea.Quit
-	case PromptMessage:
-		model.resetKeys()
-		return model.commandLine.openPrompt(message.Prefix)
 	case ConfirmMessage:
 		model.resetKeys()
 		model.confirm = newConfirmPrompt(message)
@@ -188,6 +185,9 @@ func (model *Model) broadcast(message tea.Msg) tea.Cmd {
 // broadcastOther sends a message the root does not consume to every view (and
 // to the command line, for cursor blink).
 func (model *Model) broadcastOther(message tea.Msg) tea.Cmd {
+	if model.commandLine.active && model.commandLine.prompt != "" {
+		return tea.Batch(model.promptInput(message), model.broadcast(message))
+	}
 	if model.commandLine.active {
 		return tea.Batch(model.commandLine.update(message), model.broadcast(message))
 	}
@@ -325,7 +325,7 @@ func (model *Model) dispatch(sequence string, count int) tea.Cmd {
 	case key.Matches(keyMessage, model.keys.Command):
 		return model.commandLine.open()
 	}
-	return model.forward(keyMessage)
+	return model.withRequestedPrompt(model.forward(keyMessage))
 }
 
 // View implements tea.Model.

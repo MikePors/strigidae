@@ -97,7 +97,10 @@ func DefaultGlobal() Global {
 
 // Bindings returns every global binding as a flat list, for sequence matching.
 func (global Global) Bindings() []key.Binding {
-	var out []key.Binding
+	// Search, NextMatch and PreviousMatch are bindings of every view that
+	// searches, but they stay reserved here so the matcher and the reserved-key
+	// test always know them.
+	out := []key.Binding{global.Search, global.NextMatch, global.PreviousMatch}
 	for _, bindings := range global.FullHelp() {
 		for _, binding := range bindings {
 			// Count is documentation only; a bare digit is never a binding.

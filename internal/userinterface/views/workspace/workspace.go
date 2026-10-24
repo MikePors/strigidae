@@ -112,6 +112,7 @@ var (
 	_ userinterface.Loader      = (*View)(nil)
 	_ userinterface.KeyCapturer = (*View)(nil)
 	_ userinterface.Commander   = (*View)(nil)
+	_ userinterface.Prompter    = (*View)(nil)
 )
 
 // New returns the workspace for pull request number in repository.
@@ -182,7 +183,7 @@ func (view *View) FullHelp() [][]key.Binding {
 		{view.bind.PaneLeft, view.bind.PaneRight, view.bind.NextFile, view.bind.PreviousFile, view.bind.FilePicker},
 		{view.bind.NextSection, view.bind.PreviousSection, view.bind.Comment, view.bind.Reply, view.bind.Viewed, view.bind.ReviewHunk},
 		{view.bind.Visual, view.bind.EditComment, view.bind.DeleteComment},
-		{view.globalKeys.Search, view.globalKeys.NextMatch, view.globalKeys.PreviousMatch},
+		view.searchHelp(),
 	}
 	return append(out, view.filePane.FullHelp()...)
 }

@@ -276,8 +276,8 @@ func TestCapturersReleaseOnEsc(test *testing.T) {
 			return model, model.commandLine.CapturesKeys
 		}},
 		{"view prompt", func() (*Model, func() bool) {
-			model := newModel(newFake("v"))
-			run(model, Prompt("/"))
+			model := newModel(newPrompting())
+			press(model, "/")
 			press(model, "x")
 			return model, model.commandLine.CapturesKeys
 		}},

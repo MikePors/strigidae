@@ -98,8 +98,9 @@ type bindings struct {
 }
 
 var (
-	_ userinterface.View   = (*View)(nil)
-	_ userinterface.Loader = (*View)(nil)
+	_ userinterface.View     = (*View)(nil)
+	_ userinterface.Loader   = (*View)(nil)
+	_ userinterface.Prompter = (*View)(nil)
 )
 
 // New returns a dashboard of tabs. It loads the first tab when pushed (Init).
@@ -167,6 +168,14 @@ func (view *View) Loading() bool {
 
 // Title implements userinterface.View.
 func (view *View) Title() string { return "Dashboard" }
+
+// PromptRequest implements userinterface.Prompter.
+func (view *View) PromptRequest() (prefix string, ok bool) {
+	if len(view.tabs) == 0 {
+		return "", false
+	}
+	return search.Prefix, view.tabs[view.active].search.TakeRequest()
+}
 
 // ShortHelp implements userinterface.View.
 func (view *View) ShortHelp() []key.Binding {
