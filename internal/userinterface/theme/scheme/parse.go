@@ -53,6 +53,10 @@ func Parse(source string, data []byte) (Scheme, error) {
 		return Scheme{}, failure
 	}
 	reader := &reader{source: source}
+	reader.rejectAliases(root)
+	if reader.err != nil {
+		return Scheme{}, reader.err
+	}
 	scheme := reader.scheme(root)
 	if reader.err != nil {
 		return Scheme{}, reader.err
@@ -91,6 +95,20 @@ func (reader *reader) fail(node *yaml.Node, format string, arguments ...any) {
 	}
 }
 
+// rejectAliases fails on anchors, aliases and merge keys anywhere in node.
+func (reader *reader) rejectAliases(node *yaml.Node) {
+	if reader.err != nil {
+		return
+	}
+	if node.Kind == yaml.AliasNode || node.Anchor != "" || node.Tag == "!!merge" {
+		reader.fail(node, "YAML aliases and merge keys are not supported")
+		return
+	}
+	for _, child := range node.Content {
+		reader.rejectAliases(child)
+	}
+}
+
 // table is a mapping's values by key, in file order.
 type table struct {
 	keys  []string
@@ -109,8 +127,8 @@ func (reader *reader) mapping(node *yaml.Node, what, noun string, allowed []stri
 	for index := 0; index+1 < len(node.Content); index += 2 {
 		keyNode, valueNode := node.Content[index], node.Content[index+1]
 		switch {
-		case keyNode.Kind != yaml.ScalarNode || keyNode.Anchor != "" || valueNode.Anchor != "" || valueNode.Kind == yaml.AliasNode:
-			reader.fail(keyNode, "YAML aliases and complex keys are not supported in %s", what)
+		case keyNode.Kind != yaml.ScalarNode:
+			reader.fail(keyNode, "keys in %s must be plain text", what)
 		case !slices.Contains(allowed, keyNode.Value):
 			reader.fail(keyNode, "unknown %s %q in %s (valid %ss: %s)", noun, keyNode.Value, what, noun, strings.Join(allowed, ", "))
 		case found.nodes[keyNode.Value] != nil:
@@ -152,11 +170,12 @@ func (reader *reader) colour(node *yaml.Node, what string) color.Color {
 	return colour
 }
 
-// isCurrentLayout reports whether the file has a palette mapping, which only
-// the current tinted-theming layout has.
+// isCurrentLayout reports whether the file is in the current tinted-theming
+// layout: it has a palette or a system, which the flat layout never has. A
+// misspelled palette is then reported as an unknown key, not blamed on system.
 func isCurrentLayout(root *yaml.Node) bool {
 	for index := 0; root.Kind == yaml.MappingNode && index+1 < len(root.Content); index += 2 {
-		if root.Content[index].Value == "palette" {
+		if key := root.Content[index].Value; key == "palette" || key == "system" {
 			return true
 		}
 	}
@@ -171,6 +190,9 @@ func (reader *reader) scheme(root *yaml.Node) Scheme {
 	}
 	top := reader.mapping(root, "the theme file", "key", allowed)
 	colourTable, where, system := top, "the theme file", ""
+	if current && reader.err == nil && top.nodes["palette"] == nil {
+		reader.fail(root, "the theme file is missing palette")
+	}
 	if current && reader.err == nil {
 		colourTable = reader.mapping(top.nodes["palette"], "the palette", "key", slotNames)
 		where = "the palette"

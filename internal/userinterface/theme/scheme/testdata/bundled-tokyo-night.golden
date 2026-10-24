@@ -15,9 +15,9 @@ error #f7768e
 success #9ece6a
 added #9ece6a
 removed #f7768e
-added-tint #20303b
+added-tint #243e4a
 added-gutter-tint #253315
-removed-tint #37222c
+removed-tint #4a272f
 removed-gutter-tint #441d24
 hunk-tint #1f2231
 hunk-cursor-tint #2e3f62

@@ -1,8 +1,9 @@
 # Catppuccin Latte (light).
 #
 # Palette: the Base24 scheme "Catppuccin Latte" from
-# https://github.com/tinted-theming/schemes (base24/catppuccin-latte.yaml,
-# MIT licence), based on Catppuccin (https://github.com/catppuccin/catppuccin, MIT).
+# https://github.com/tinted-theming/schemes (base24/catppuccin-latte.yaml),
+# copied unchanged. That repository is Copyright (c) 2022 Tinted Theming, MIT
+# licence. Based on Catppuccin (https://github.com/catppuccin/catppuccin, MIT).
 #
 # roles: Latte's own subtext0 for muted text and overlay0 for borders; the
 # palette's base03 is a surface colour, too faint for either.

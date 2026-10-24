@@ -130,6 +130,8 @@ line and the key):
   (Base16) or `base00` to `base17` (Base24);
 - both layouts: `syntax` and `roles` (strig's extensions, below).
 
+strig is stricter than the tinted-theming spec in two ways: the flat layout takes `scheme` (not `name`/`slug`/`description`), and `variant` must be `dark` or `light`. Real scheme files already conform.
+
 Every colour is six hex digits, with or without a leading `#`. Quote a colour
 that starts with `#`, or YAML reads it as a comment.
 

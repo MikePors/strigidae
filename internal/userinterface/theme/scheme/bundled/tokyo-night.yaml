@@ -1,17 +1,25 @@
 # Tokyo Night (night).
 #
-# Palette: the Base24 scheme "Tokyo Night Dark" by Michael Ball, based on Tokyo
+# Palette: the Base24 scheme "Tokyo Night Dark" by Michaël Ball, based on Tokyo
 # Night by enkia (MIT), from https://github.com/tinted-theming/schemes
-# (base24/tokyo-night-dark.yaml, MIT licence).
+# (base24/tokyo-night-dark.yaml), copied unchanged. That repository is
+# Copyright (c) 2022 Tinted Theming, MIT licence.
 #
-# roles: exact colours from Tokyo Night's own night palette as used by
-# https://github.com/folke/tokyonight.nvim (Apache-2.0), wherever the role
-# derived from the Base24 slots differs from the colour Tokyo Night uses for
-# that purpose: text, comments and muted text, borders, selection, status
-# colours, diff tints and syntax.
+# roles: exact colours from Tokyo Night's night palette as used by
+# https://github.com/folke/tokyonight.nvim (Apache-2.0), from
+# lua/tokyonight/colors/night.lua, wherever the role derived from the Base24
+# slots differs from the colour Tokyo Night uses for that purpose. The diff
+# tints are tokyonight.nvim's own: blend(colour, 0.25) over bg #1a1b26, where
+# blend(colour, alpha) = colour*alpha + bg*(1-alpha): added is green2 #41a6b5
+# giving #243e4a, removed is red1 #db4b4b giving #4a272f, and the hunk tint is
+# its change colour #1f2231.
+#
+# border uses tokyonight.nvim's fg_gutter (#3b4261) on purpose, for
+# visibility: Tokyo Night's own border colour, #15161e, is nearly invisible
+# on this background.
 system: "base24"
 name: "Tokyo Night"
-author: "Michael Ball, based on Tokyo Night by enkia"
+author: "Michaël Ball, based on Tokyo Night by enkia"
 variant: "dark"
 palette:
   base00: "#1a1b26"
@@ -51,8 +59,8 @@ roles:
   success: "#9ece6a"
   added: "#9ece6a"
   removed: "#f7768e"
-  added-tint: "#20303b"
-  removed-tint: "#37222c"
+  added-tint: "#243e4a"
+  removed-tint: "#4a272f"
   hunk-tint: "#1f2231"
   syn-keyword: "#bb9af7"
   syn-string: "#9ece6a"
