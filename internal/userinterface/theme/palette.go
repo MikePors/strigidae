@@ -99,6 +99,25 @@ func FromBase16(name string, variant Variant, base16 [16]color.Color) (Palette, 
 	return palette, nil
 }
 
+// FromBase24 builds a palette from all 24 Base24 colours (base00 to base17, in
+// order). It returns an error naming the first missing (nil) slot.
+func FromBase24(name string, variant Variant, base24 [24]color.Color) (Palette, error) {
+	palette := Palette{Name: name, Variant: variant, colors: base24}
+	if err := palette.check(); err != nil {
+		return Palette{}, err
+	}
+	return palette, nil
+}
+
+// VariantOf says which variant a palette with this background colour (base00)
+// is: Dark when white text reads better on it than black.
+func VariantOf(background color.Color) Variant {
+	if extreme(background) == color.Color(color.Black) {
+		return Light
+	}
+	return Dark
+}
+
 // minimumDistinctContrast is how far a colour must be from the background and the
 // foreground (as a WCAG contrast ratio) to count as a distinct shade.
 const minimumDistinctContrast = 1.1
@@ -122,10 +141,7 @@ func FromANSI(name string, background, foreground color.Color, ansi [16]color.Co
 			return Palette{}, fmt.Errorf("palette %q: missing ANSI colour %d", name, i)
 		}
 	}
-	variant := Dark
-	if extreme(background) == color.Color(color.Black) {
-		variant = Light
-	}
+	variant := VariantOf(background)
 	// The ANSI black or white furthest from the background supplies the
 	// brightest foreground (base07).
 	colour := ansi[15]

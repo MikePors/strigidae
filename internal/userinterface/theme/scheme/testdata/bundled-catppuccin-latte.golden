@@ -1,0 +1,34 @@
+variant dark=false
+background #eff1f5
+surface #e6e9ef
+text #4c4f69
+muted #6c6f85
+border #9ca0b0
+selection #ccd0da
+accent #8839ef
+accent-strong #7f58f5
+on-accent #eff1f5
+info #1e66f5
+link #179299
+warning #e55a0a
+error #d20f39
+success #3d9829
+added #3d9829
+removed #d20f39
+added-tint #ddf0d9
+added-gutter-tint #c7f8bd
+removed-tint #ffdddc
+removed-gutter-tint #ffc8c7
+hunk-tint #cfe6ff
+hunk-cursor-tint #b8d8ff
+syn-keyword #8839ef
+syn-string #3d9829
+syn-comment #84868f
+syn-number #e55a0a
+syn-function #1e66f5
+syn-type #be7919
+syn-operator #179299
+syn-variable #d20f39
+syn-escape #179299
+
+warnings:

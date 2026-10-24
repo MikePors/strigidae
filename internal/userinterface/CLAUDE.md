@@ -112,7 +112,7 @@ What `theme/enforce_test.go` checks (over every non-test file in `internal/useri
 
 Rules for you:
 
-- A new UI element uses an existing role. If none fits, add a role with a default derivation from slots (and a line in the role table in `docs/themes.md` once #45 adds it).
+- A new UI element uses an existing role. If none fits, add a role with a default derivation from slots (and a line in the role table in `docs/themes.md`).
 - Never add palette slots, ANSI indices or raw colours to styles, views or components.
 - Caches of rendered output (markdown, highlighting) include `Theme.Identifier` (a fingerprint of the final roles), or hold theme-independent data (token classes).
 - Chroma's style registry is a global map read by Glamour without a lock. Register styles (`ChromaStyleName`) and run Glamour only on the UI goroutine, never in a `tea.Cmd`.

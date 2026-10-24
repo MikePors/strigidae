@@ -1,0 +1,36 @@
+variant dark=true
+background #1a1b26
+surface #16161e
+text #c0caf5
+muted #565f89
+border #3b4261
+selection #283457
+accent #bb9af7
+accent-strong #c5b2ec
+on-accent #1a1b26
+info #7aa2f7
+link #7dcfff
+warning #e0af68
+error #f7768e
+success #9ece6a
+added #9ece6a
+removed #f7768e
+added-tint #243e4a
+added-gutter-tint #253315
+removed-tint #4a272f
+removed-gutter-tint #441d24
+hunk-tint #1f2231
+hunk-cursor-tint #2e3f62
+syn-keyword #bb9af7
+syn-string #9ece6a
+syn-comment #565f89
+syn-number #ff9e64
+syn-function #7aa2f7
+syn-type #2ac3de
+syn-operator #89ddff
+syn-variable #c0caf5
+syn-escape #b4f9f8
+
+warnings:
+level=WARN msg="theme role is hard to read" role=muted contrast=2.76 want=3
+level=WARN msg="theme role is hard to read" role=syn-comment contrast=2.76 want=3

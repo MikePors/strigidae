@@ -14,7 +14,8 @@ const MaximumFileSize = 1 << 20
 // feature adding a key (a theme, merge defaults) adds an entry here and a
 // field on Config.
 var topLevel = map[string]func(nodeParser *parser, node *yaml.Node, config *Config){
-	"tabs": (*parser).tabs,
+	"tabs":  (*parser).tabs,
+	"theme": (*parser).theme,
 }
 
 var (
@@ -51,6 +52,12 @@ func Parse(path string, data []byte) (Config, error) {
 		config.Tabs = Default().Tabs
 	}
 	return config, nil
+}
+
+// theme stores the value as written. Resolving it (bundled theme or file)
+// needs the user interface's theme packages, so the main package does that.
+func (parser *parser) theme(node *yaml.Node, config *Config) {
+	config.Theme = parser.stringValue(node, "theme")
 }
 
 func (parser *parser) tabs(node *yaml.Node, config *Config) {

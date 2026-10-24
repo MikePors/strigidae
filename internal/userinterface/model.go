@@ -116,6 +116,11 @@ func (model *Model) update(message tea.Msg) tea.Cmd {
 		model.commandLine.input.SetWidth(max(1, message.Width-2)) // room for the prompt and cursor
 		return model.broadcast(model.sizeMessage())
 	case tea.BackgroundColorMsg:
+		// The reply picks a built-in variant only. A theme the user chose is
+		// never replaced, however late the terminal answers.
+		if model.theme.Chosen {
+			return nil
+		}
 		model.theme = theme.New(message.IsDark())
 		model.commandLine.setTheme(model.theme)
 		model.spin.Style = model.theme.Spinner
@@ -324,6 +329,11 @@ func (model *Model) View() tea.View {
 		view = tea.NewView(model.content() + "\n" + model.bottomRow())
 	}
 	view.AltScreen = true
+	if model.theme.Chosen {
+		// The terminal restores its own colours when strig exits.
+		view.BackgroundColor = model.theme.Roles.Background
+		view.ForegroundColor = model.theme.Roles.Text
+	}
 	return view
 }
 

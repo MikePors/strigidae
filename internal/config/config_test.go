@@ -60,6 +60,16 @@ func TestParseValid(test *testing.T) {
 			Config{Tabs: []Tab{{Name: "2024", User: "12345", Sections: defaultsFor("12345")}}},
 		},
 		{
+			"theme alone keeps the default tabs",
+			"theme: tokyo-night\n",
+			func() Config { configuration := Default(); configuration.Theme = "tokyo-night"; return configuration }(),
+		},
+		{
+			"theme is stored as written",
+			"theme: ~/themes/mine.yaml\ntabs:\n  - name: Me\n",
+			Config{Theme: "~/themes/mine.yaml", Tabs: []Tab{{Name: "Me", User: "@me", Sections: defaultsFor("@me")}}},
+		},
+		{
 			"names are trimmed",
 			"tabs:\n  - name: '  Me  '\n",
 			Config{Tabs: []Tab{{Name: "Me", User: "@me", Sections: defaultsFor("@me")}}},
@@ -120,7 +130,8 @@ func TestParseErrors(test *testing.T) {
 		{"sort in query", "tabs:\n  - name: A\n    sections:\n      - {name: S, query: 'is:pr Sort:created-asc'}\n", "c.yml:4: query must not contain sort:; use the sort and order keys"},
 		{"unclosed bracket", "tabs: [\n", "c.yml:1: invalid YAML: did not find expected node content"},
 		{"not a mapping", "- a\n", "c.yml:1: the config file must be a mapping of keys to values"},
-		{"unknown top-level key", "tabz: []\n", `c.yml:1: unknown key "tabz" in the config file (valid keys: tabs)`},
+		{"empty theme", "theme:\n", "c.yml:1: theme must be a non-empty text value"},
+		{"unknown top-level key", "tabz: []\n", `c.yml:1: unknown key "tabz" in the config file (valid keys: tabs, theme)`},
 		{"unknown tab key", "tabs:\n  - name: Me\n    usr: a\n", `c.yml:3: unknown key "usr" in a tab (valid keys: name, user, sections)`},
 		{"unknown section key", "tabs:\n  - name: Me\n    sections:\n      - name: A\n        query: q\n        limt: 3\n", `c.yml:6: unknown key "limt" in a section (valid keys: name, query, limit, sort, order)`},
 		{"duplicate key", "tabs:\n  - name: A\ntabs: []\n", `c.yml:3: duplicate key "tabs" in the config file`},

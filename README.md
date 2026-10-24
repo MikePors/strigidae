@@ -34,7 +34,7 @@ Run `strig` outside a git checkout, or in one with no GitHub remote (and without
 
 ## Configuration
 
-strig reads an optional YAML config (tabs and the search queries behind their sections) from `$XDG_CONFIG_HOME/strig/config.yml` (default `~/.config/strig/config.yml`); `--config <path>` overrides it and `strig --config-path` prints the location in use. See [docs/config.md](docs/config.md) and [docs/config.example.yml](docs/config.example.yml).
+strig reads an optional YAML config (tabs and the search queries behind their sections) from `$XDG_CONFIG_HOME/strig/config.yml` (default `~/.config/strig/config.yml`); `--config <path>` overrides it and `strig --config-path` prints the location in use. See [docs/config.md](docs/config.md) and [docs/config.example.yml](docs/config.example.yml). Colour themes (bundled ones, or any Base16/Base24 scheme file; `strig --list-themes`) are described in [docs/themes.md](docs/themes.md).
 
 ## License
 

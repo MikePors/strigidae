@@ -7,12 +7,15 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/MikePors/strigidae/internal/config"
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/github/network"
 	"github.com/MikePors/strigidae/internal/gitrepository"
 	"github.com/MikePors/strigidae/internal/logging"
+	"github.com/MikePors/strigidae/internal/userinterface/theme/scheme"
 	"github.com/MikePors/strigidae/internal/version"
 )
 
@@ -62,6 +65,7 @@ func execute(arguments []string, stdout, stderr io.Writer, dependencies dependen
 	showVersion := flags.Bool("version", false, "print version and exit")
 	showLogPath := flags.Bool("log-path", false, "print the log file path and exit")
 	showConfigPath := flags.Bool("config-path", false, "print the config file path and exit")
+	listThemes := flags.Bool("list-themes", false, "print the bundled theme names and exit")
 	configFlag := flags.String("config", "", "config file `path` (default: $XDG_CONFIG_HOME/strig/config.yml)")
 	repositoryFlag := flags.String("R", "", "repository to show as `owner/repo` (default: the current checkout's upstream or origin remote)")
 	if err := flags.Parse(arguments); err != nil {
@@ -85,6 +89,8 @@ func execute(arguments []string, stdout, stderr io.Writer, dependencies dependen
 			return err
 		}
 		return printLine(stdout, path)
+	case *listThemes:
+		return printLine(stdout, strings.Join(scheme.Bundled(), "\n"))
 	case *showConfigPath:
 		if configErr != nil {
 			return configErr
@@ -99,11 +105,30 @@ func execute(arguments []string, stdout, stderr io.Writer, dependencies dependen
 	if err != nil {
 		return err
 	}
+	chosen, err := resolveTheme(configuration.Theme, filepath.Dir(configPath), dependencies)
+	if err != nil {
+		return err
+	}
 	application, err := newApplication(*repositoryFlag, configuration, dependencies)
 	if err != nil {
 		return err
 	}
+	application.scheme = chosen
 	return dependencies.start(application, stderr)
+}
+
+// resolveTheme loads the theme the config names, or returns nil for the
+// built-in one. A theme that can't be loaded stops strig before the screen
+// starts.
+func resolveTheme(value, configDirectory string, dependencies dependencies) (*scheme.Scheme, error) {
+	if value == "" {
+		return nil, nil
+	}
+	loaded, err := scheme.Resolve(value, configDirectory, dependencies.home)
+	if err != nil {
+		return nil, fmt.Errorf("theme %q: %w", value, err)
+	}
+	return &loaded, nil
 }
 
 // configLocation is the --config path if given, else the default location.

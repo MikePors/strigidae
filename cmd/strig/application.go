@@ -4,18 +4,24 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/MikePors/strigidae/internal/config"
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/gitrepository"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
+	"github.com/MikePors/strigidae/internal/userinterface/theme/scheme"
 )
 
 // application is everything the TUI needs, resolved before it starts.
 type application struct {
 	client     github.Client
 	repository github.Repository
-	theme      theme.Theme
+	// scheme is the theme the config chose, or nil for the built-in one.
+	scheme *scheme.Scheme
+	// theme is built from scheme when the terminal interface starts, after
+	// logging is set up, because building a theme can log contrast warnings.
+	theme theme.Theme
 	// dashboard is set when strig runs without -R outside a checkout, or in one
 	// with no GitHub remote: there is no repository to list, so the first view
 	// is the dashboard of config.
@@ -69,4 +75,16 @@ func resolveTarget(repositoryFlag string, dependencies dependencies) (gitreposit
 		return gitrepository.Remote{}, err
 	}
 	return gitrepository.Infer(context.Background(), dependencies.runner, directory, dependencies.knownHost)
+}
+
+// buildTheme makes the theme to draw with. Problems that don't stop a theme
+// loading are logged here.
+func (application application) buildTheme(logger *slog.Logger) theme.Theme {
+	if application.scheme == nil {
+		return theme.Default()
+	}
+	for _, warning := range application.scheme.Warnings {
+		logger.Warn("theme", "name", application.scheme.Name, "warning", warning)
+	}
+	return application.scheme.Theme()
 }
