@@ -30,6 +30,9 @@ type Options struct {
 	SequenceTimeout time.Duration // how long a pending key sequence waits
 	MessageLifetime time.Duration // how long info/error messages stay
 	Tick            TickFunction
+	// Notice, if set, is shown in the status bar when strig starts, for
+	// example why the configured theme could not be used.
+	Notice string
 }
 
 // Internal timer messages. The id/gen fields discard timers that were
@@ -49,6 +52,7 @@ type Model struct {
 	tick            TickFunction
 	sequenceWait    time.Duration
 	messageLifetime time.Duration
+	notice          string
 
 	width, height      int
 	matcher            keys.Matcher
@@ -88,15 +92,21 @@ func New(root View, activeTheme theme.Theme, options Options) *Model {
 		tick:            options.Tick,
 		sequenceWait:    options.SequenceTimeout,
 		messageLifetime: options.MessageLifetime,
+		notice:          options.Notice,
 		commandLine:     newCommandLine(activeTheme),
 		spin:            spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(activeTheme.Spinner)),
 	}
 }
 
-// Init starts the root view and asks the terminal for its background colour so
-// the theme can match light and dark terminals.
+// Init starts the root view, shows the startup notice if any, and asks the
+// terminal for its background colour so the theme can match light and dark
+// terminals.
 func (model *Model) Init() tea.Cmd {
-	return tea.Batch(model.top().Init(), tea.RequestBackgroundColor)
+	commands := []tea.Cmd{model.top().Init(), tea.RequestBackgroundColor}
+	if model.notice != "" {
+		commands = append(commands, Info(model.notice))
+	}
+	return tea.Batch(commands...)
 }
 
 func (model *Model) top() View { return model.stack[len(model.stack)-1] }
@@ -329,7 +339,7 @@ func (model *Model) View() tea.View {
 		view = tea.NewView(model.content() + "\n" + model.bottomRow())
 	}
 	view.AltScreen = true
-	if model.theme.Chosen {
+	if model.theme.Chosen && !model.theme.FromTerminal {
 		// The terminal restores its own colours when strig exits.
 		view.BackgroundColor = model.theme.Roles.Background
 		view.ForegroundColor = model.theme.Roles.Text

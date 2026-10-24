@@ -54,11 +54,15 @@ type Theme struct {
 	Muted    lipgloss.Style // de-emphasised text
 	Selected lipgloss.Style // the highlighted row in a list
 
-	// Chosen is set for a theme the user picked (a bundled theme or a theme
-	// file), as opposed to a built-in one. A chosen theme also sets the
-	// terminal's own background and foreground, and a terminal's reported
-	// background no longer replaces it.
+	// Chosen is set for a theme the user picked (a bundled theme, a theme
+	// file or the terminal's palette), as opposed to a built-in one. A
+	// terminal's reported background never replaces a chosen theme, and one
+	// that isn't FromTerminal also sets the terminal's own background and
+	// foreground.
 	Chosen bool
+	// FromTerminal is set for a theme built from the terminal's own palette
+	// (`theme: terminal`), which already matches the terminal's colours.
+	FromTerminal bool
 	// IsDark reports whether the palette is the dark variant.
 	IsDark bool
 	// Identifier fingerprints the final roles and the variant, so any change to a
