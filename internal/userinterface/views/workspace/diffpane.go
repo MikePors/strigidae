@@ -108,29 +108,33 @@ func (pane *diffPane) Update(message keys.Message) tea.Cmd {
 	diffView := pane.diffView
 	switch {
 	case key.Matches(message, pane.globalKeys.Down):
-		diffView.CursorDown(1)
+		diffView.CursorDown(message.Repeat())
 	case key.Matches(message, pane.globalKeys.Up):
-		diffView.CursorUp(1)
+		diffView.CursorUp(message.Repeat())
 	case key.Matches(message, pane.globalKeys.Top):
 		diffView.GotoTop()
 	case key.Matches(message, pane.globalKeys.Bottom):
-		diffView.GotoBottom()
+		if message.Count > 0 {
+			diffView.GotoLine(message.Count)
+		} else {
+			diffView.GotoBottom()
+		}
 	case key.Matches(message, pane.globalKeys.HalfDown):
-		diffView.HalfPageDown()
+		repeat(message, diffView.HalfPageDown)
 	case key.Matches(message, pane.globalKeys.HalfUp):
-		diffView.HalfPageUp()
+		repeat(message, diffView.HalfPageUp)
 	case key.Matches(message, pane.globalKeys.PageDown):
-		diffView.PageDown()
+		repeat(message, diffView.PageDown)
 	case key.Matches(message, pane.globalKeys.PageUp):
-		diffView.PageUp()
+		repeat(message, diffView.PageUp)
 	case key.Matches(message, pane.bind.NextHunk):
-		diffView.NextHunk()
+		repeat(message, diffView.NextHunk)
 	case key.Matches(message, pane.bind.PreviousHunk):
-		diffView.PreviousHunk()
+		repeat(message, diffView.PreviousHunk)
 	case key.Matches(message, pane.bind.NextThread):
-		diffView.NextThread()
+		repeat(message, diffView.NextThread)
 	case key.Matches(message, pane.bind.PreviousThread):
-		diffView.PreviousThread()
+		repeat(message, diffView.PreviousThread)
 	case key.Matches(message, pane.bind.ToggleThread), key.Matches(message, pane.globalKeys.Select):
 		diffView.ToggleThread()
 	case key.Matches(message, pane.bind.OpenThread):
@@ -138,9 +142,9 @@ func (pane *diffPane) Update(message keys.Message) tea.Cmd {
 	case key.Matches(message, pane.bind.CloseThread):
 		diffView.CloseThread()
 	case key.Matches(message, pane.bind.ScrollLeft):
-		diffView.ScrollLeft(horizontalScrollStep)
+		diffView.ScrollLeft(message.Repeat() * horizontalScrollStep)
 	case key.Matches(message, pane.bind.ScrollRight):
-		diffView.ScrollRight(horizontalScrollStep)
+		diffView.ScrollRight(message.Repeat() * horizontalScrollStep)
 	case key.Matches(message, pane.bind.HalfScrollLeft):
 		diffView.HalfScrollLeft()
 	case key.Matches(message, pane.bind.HalfScrollRight):

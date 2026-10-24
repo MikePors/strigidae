@@ -202,24 +202,35 @@ func (view *View) selected() (github.PullRequest, bool) {
 	return view.pullRequests[view.window.Cursor()], true
 }
 
+// repeat runs step as many times as the key's count asks for.
+func repeat(message keys.Message, step func()) {
+	for range message.Repeat() {
+		step()
+	}
+}
+
 func (view *View) handleKey(message keys.Message) tea.Cmd {
 	switch {
 	case key.Matches(message, view.globalKeys.Down):
-		view.window.Down(1)
+		view.window.Down(message.Repeat())
 	case key.Matches(message, view.globalKeys.Up):
-		view.window.Up(1)
+		view.window.Up(message.Repeat())
 	case key.Matches(message, view.globalKeys.Top):
 		view.window.GotoTop()
 	case key.Matches(message, view.globalKeys.Bottom):
-		view.window.GotoBottom()
+		if message.Count > 0 {
+			view.window.GotoRow(message.Count - 1)
+		} else {
+			view.window.GotoBottom()
+		}
 	case key.Matches(message, view.globalKeys.HalfDown):
-		view.window.HalfPageDown()
+		repeat(message, view.window.HalfPageDown)
 	case key.Matches(message, view.globalKeys.HalfUp):
-		view.window.HalfPageUp()
+		repeat(message, view.window.HalfPageUp)
 	case key.Matches(message, view.globalKeys.PageDown):
-		view.window.PageDown()
+		repeat(message, view.window.PageDown)
 	case key.Matches(message, view.globalKeys.PageUp):
-		view.window.PageUp()
+		repeat(message, view.window.PageUp)
 	case key.Matches(message, view.globalKeys.Select):
 		return view.openSelected()
 	case key.Matches(message, view.globalKeys.Open):

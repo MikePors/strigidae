@@ -404,6 +404,10 @@ func (model *Model) GotoTop() { model.window.GotoTop() }
 // GotoBottom moves the cursor to the last row.
 func (model *Model) GotoBottom() { model.window.GotoBottom() }
 
+// GotoLine moves the cursor to the given 1-based row of the rendered diff,
+// clamping to the rows there are.
+func (model *Model) GotoLine(line int) { model.window.GotoRow(line - 1) }
+
 // --- viewport movement: view and cursor move together, as in vim ---
 
 // ScrollDown scrolls the view down n rows without moving the cursor, unless
