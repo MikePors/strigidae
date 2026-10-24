@@ -29,17 +29,23 @@ func TestScreenPositioningInTheDiffPane(test *testing.T) {
 }
 
 func TestScreenPositioningInTheFilesPane(test *testing.T) {
-	harness := loaded(test, 100, 9)
-	harness.press("G")
-	harness.view.Render(100, 9)
-	cursor := harness.view.selection()
-	for _, key := range []string{"z t", "z z", "z b"} {
-		harness.press(key)
-		if got := harness.view.selection(); got != cursor {
-			test.Errorf("%s moved the selection from %d to %d", key, cursor, got)
+	harness := loaded(test, 100, headerRows+2+3) // a three-row Files list over Overview and five files
+	harness.view.Render(100, headerRows+2+3)
+	if got, want := harness.view.window.Height(), 3; got != want {
+		test.Fatalf("Files list height = %d, want %d", got, want)
+	}
+	harness.press("j", "j", "j") // the cursor is on row 3 of 6
+	tests := []struct {
+		key     string
+		wantTop int
+	}{{"z t", 3}, {"z z", 2}, {"z b", 1}}
+	for _, testCase := range tests {
+		harness.press(testCase.key)
+		if got := harness.view.window.Cursor(); got != 3 {
+			test.Errorf("%s moved the cursor to %d", testCase.key, got)
 		}
-		if got := harness.view.window.Cursor(); got != cursor {
-			test.Errorf("%s moved the cursor to %d", key, got)
+		if got := harness.view.window.Top(); got != testCase.wantTop {
+			test.Errorf("%s: top = %d, want %d", testCase.key, got, testCase.wantTop)
 		}
 	}
 }
