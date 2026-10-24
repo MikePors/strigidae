@@ -5,6 +5,7 @@ package terminalpalette
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -16,10 +17,11 @@ import (
 type ControllingTerminal struct {
 	descriptor int
 	saved      unix.Termios
+	raw        unix.Termios // the settings in effect while asking
 }
 
 // Open opens the controlling terminal with echo, line buffering and signal
-// keys off, and reads that give up after a tenth of a second. Close restores
+// keys off, and reads that give up after a timeout (see Read). Close restores
 // it. Signal keys are off so that ctrl+c during the wait can't kill strig
 // before Close has restored the settings.
 func Open() (*ControllingTerminal, error) {
@@ -40,12 +42,25 @@ func Open() (*ControllingTerminal, error) {
 		_ = unix.Close(descriptor) // nothing was changed
 		return nil, fmt.Errorf("set terminal settings: %w", err)
 	}
-	return &ControllingTerminal{descriptor: descriptor, saved: *saved}, nil
+	return &ControllingTerminal{descriptor: descriptor, saved: *saved, raw: raw}, nil
+}
+
+// readTimeout converts wait to the terminal's read timeout (VTIME), in tenths
+// of a second, rounded up and at least one.
+func readTimeout(wait time.Duration) uint8 {
+	tenths := (wait + 99*time.Millisecond) / (100 * time.Millisecond)
+	return uint8(min(max(tenths, 1), 255))
 }
 
 // Read reads what the terminal sent, returning 0 bytes when nothing arrived
-// within a tenth of a second.
-func (terminal *ControllingTerminal) Read(buffer []byte) (int, error) {
+// within wait (rounded up to a tenth of a second).
+func (terminal *ControllingTerminal) Read(buffer []byte, wait time.Duration) (int, error) {
+	if timeout := readTimeout(wait); terminal.raw.Cc[unix.VTIME] != timeout {
+		terminal.raw.Cc[unix.VTIME] = timeout
+		if err := unix.IoctlSetTermios(terminal.descriptor, setTermios, &terminal.raw); err != nil {
+			return 0, fmt.Errorf("set read timeout: %w", err)
+		}
+	}
 	for {
 		count, err := unix.Read(terminal.descriptor, buffer)
 		if errors.Is(err, unix.EINTR) {
@@ -71,9 +86,11 @@ func (terminal *ControllingTerminal) Write(data []byte) (int, error) {
 	return written, nil
 }
 
-// Close restores the terminal's settings and closes it.
+// Close restores the terminal's settings and closes it. The restore discards
+// input that has not been read yet, such as half of a slow reply, so it
+// doesn't reach the program as key presses.
 func (terminal *ControllingTerminal) Close() error {
-	restoreErr := unix.IoctlSetTermios(terminal.descriptor, setTermios, &terminal.saved)
+	restoreErr := unix.IoctlSetTermios(terminal.descriptor, restoreTermios, &terminal.saved)
 	closeErr := unix.Close(terminal.descriptor)
 	return errors.Join(restoreErr, closeErr)
 }

@@ -166,6 +166,7 @@ type fakeTerminal struct {
 	step    time.Duration
 	written strings.Builder
 	reads   int
+	waits   []time.Duration
 	readErr error
 }
 
@@ -173,9 +174,10 @@ func (terminal *fakeTerminal) Write(data []byte) (int, error) {
 	return terminal.written.Write(data)
 }
 
-func (terminal *fakeTerminal) Read(buffer []byte) (int, error) {
+func (terminal *fakeTerminal) Read(buffer []byte, wait time.Duration) (int, error) {
 	terminal.reads++
-	terminal.clock.now = terminal.clock.now.Add(terminal.step)
+	terminal.waits = append(terminal.waits, wait)
+	terminal.clock.now = terminal.clock.now.Add(min(terminal.step, wait))
 	if terminal.readErr != nil {
 		return 0, terminal.readErr
 	}
@@ -223,6 +225,14 @@ func TestAsk(test *testing.T) {
 			wantErr:      "no answer from the terminal",
 		},
 		{
+			name:         "the last read is cut short to fit the timeout",
+			step:         ReadWait,
+			chunks:       []string{"", "x", ""}, // 100ms + 30ms of reads, then 70ms left
+			want:         summary{ANSI: make([]string, 16)},
+			wantMaxReads: 3,
+			wantErr:      "no answer",
+		},
+		{
 			name:         "no answer inside tmux suggests passthrough",
 			insideTmux:   true,
 			want:         summary{ANSI: make([]string, 16)},
@@ -254,6 +264,14 @@ func TestAsk(test *testing.T) {
 			}
 			if diff := cmp.Diff(testCase.want, summarise(reply)); diff != "" {
 				test.Errorf("reply mismatch (-want +got):\n%s", diff)
+			}
+			for _, wait := range terminal.waits {
+				if wait <= 0 || wait > ReadWait {
+					test.Errorf("a read waited %v, want 0 < wait <= %v", wait, ReadWait)
+				}
+			}
+			if elapsed := clock.now.Sub(time.Unix(1000, 0)); elapsed > Timeout {
+				test.Errorf("asking took %v, want at most %v", elapsed, Timeout)
 			}
 			if terminal.reads > testCase.wantMaxReads {
 				test.Errorf("%d reads, want at most %d", terminal.reads, testCase.wantMaxReads)

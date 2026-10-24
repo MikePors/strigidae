@@ -2,7 +2,10 @@
 
 package terminalpalette
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 // ControllingTerminal is the controlling terminal; this platform has no
 // support for asking it.
@@ -14,7 +17,7 @@ func Open() (*ControllingTerminal, error) {
 }
 
 // Read never reads.
-func (*ControllingTerminal) Read([]byte) (int, error) { return 0, errors.ErrUnsupported }
+func (*ControllingTerminal) Read([]byte, time.Duration) (int, error) { return 0, errors.ErrUnsupported }
 
 // Write never writes.
 func (*ControllingTerminal) Write([]byte) (int, error) { return 0, errors.ErrUnsupported }

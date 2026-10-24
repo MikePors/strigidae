@@ -21,16 +21,20 @@ import (
 // Timeout is how long Ask waits for the terminal's answers.
 const Timeout = 200 * time.Millisecond
 
+// ReadWait is the longest a single Read waits for input.
+const ReadWait = 100 * time.Millisecond
+
 // maximumReply bounds how much Ask reads, in case the terminal (or something
 // typed during the wait) floods the input.
 const maximumReply = 64 << 10
 
 const ansiCount = 16
 
-// Terminal is the controlling terminal Ask talks to. Read returns 0 bytes and no error when
-// nothing arrives within a short wait, so Ask can check its clock.
+// Terminal is the controlling terminal Ask talks to. Read waits up to wait
+// (terminals time reads in tenths of a second, so it may round up) and returns
+// 0 bytes and no error when nothing arrived, so Ask can check its clock.
 type Terminal interface {
-	Read(buffer []byte) (int, error)
+	Read(buffer []byte, wait time.Duration) (int, error)
 	Write(data []byte) (int, error)
 }
 
@@ -76,10 +80,11 @@ func Ask(terminal Terminal, insideTmux bool, now func() time.Time) (Reply, error
 	for {
 		reply := Parse(received)
 		reply.insideTmux = insideTmux
-		if reply.Finished || !now().Before(deadline) || len(received) >= maximumReply {
+		remaining := deadline.Sub(now())
+		if reply.Finished || remaining <= 0 || len(received) >= maximumReply {
 			return reply, nil
 		}
-		count, err := terminal.Read(buffer)
+		count, err := terminal.Read(buffer, min(ReadWait, remaining))
 		received = append(received, buffer[:count]...)
 		if err != nil {
 			return reply, fmt.Errorf("read colour replies: %w", err)
