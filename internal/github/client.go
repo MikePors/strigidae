@@ -66,4 +66,9 @@ type Client interface {
 	// the same permissions (see ReviewComment.ViewerCanDelete).
 	// Deleting a thread's only comment removes the thread.
 	DeleteReviewComment(ctx context.Context, commentIdentifier string) error
+	// ResolveReviewThread marks the thread resolved and returns its new state.
+	// A thread that does not exist yields ErrNotFound.
+	ResolveReviewThread(ctx context.Context, threadIdentifier string) (ThreadResolution, error)
+	// UnresolveReviewThread marks the thread unresolved and returns its new state.
+	UnresolveReviewThread(ctx context.Context, threadIdentifier string) (ThreadResolution, error)
 }

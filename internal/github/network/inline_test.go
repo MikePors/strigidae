@@ -92,6 +92,34 @@ func TestUpdateAndDeleteReviewComment(test *testing.T) {
 	}
 }
 
+func TestResolveAndUnresolveReviewThread(test *testing.T) {
+	testServer := &server{}
+	client := newTestClient(test, testServer)
+	resolved, err := client.ResolveReviewThread(context.Background(), "PRRT_kwDOExample01")
+	if err != nil {
+		test.Fatal(err)
+	}
+	if diff := cmp.Diff(github.ThreadResolution{Identifier: "PRRT_kwDOExample01", IsResolved: true, ResolvedBy: "reviewer-one"}, resolved); diff != "" {
+		test.Errorf("resolved (-want +got):\n%s", diff)
+	}
+	unresolved, err := client.UnresolveReviewThread(context.Background(), "PRRT_kwDOExample01")
+	if err != nil {
+		test.Fatal(err)
+	}
+	if diff := cmp.Diff(github.ThreadResolution{Identifier: "PRRT_kwDOExample01"}, unresolved); diff != "" {
+		test.Errorf("unresolved (-want +got):\n%s", diff)
+	}
+	calls := testServer.Calls()
+	if calls[0].Operation != operationResolveReviewThread || calls[1].Operation != operationUnresolveReviewThread {
+		test.Errorf("ops = %q, %q", calls[0].Operation, calls[1].Operation)
+	}
+	for _, recorded := range calls {
+		if recorded.Variables["threadId"] != "PRRT_kwDOExample01" {
+			test.Errorf("vars = %v", recorded.Variables)
+		}
+	}
+}
+
 func TestGetReviewComment(test *testing.T) {
 	testServer := &server{}
 	client := newTestClient(test, testServer)
