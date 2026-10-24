@@ -145,7 +145,7 @@ func TestCountOnAKeyThatIgnoresItActsOnce(test *testing.T) {
 }
 
 func TestCountsInTheOverview(test *testing.T) {
-	// The Overview has sections at 0, 31 and 46; at this height the last one
+	// The Overview has sections at 0, 31, 46 and 49; at this height the last one
 	// is clamped, so each case is compared with the same keys typed plainly.
 	tests := []struct {
 		name  string

@@ -62,6 +62,12 @@ func (overview *overview) ensure(activeTheme theme.Theme, markdownRenderer *mark
 	add("")
 
 	overview.sections = append(overview.sections, line)
+	for _, checkLine := range checkSectionLines(activeTheme, detail, width) {
+		add(checkLine)
+	}
+	add("")
+
+	overview.sections = append(overview.sections, line)
 	items := conversation(detail)
 	add(activeTheme.SectionHeading.Render(fmt.Sprintf("Conversation (%d)", len(items))))
 	if len(items) == 0 {

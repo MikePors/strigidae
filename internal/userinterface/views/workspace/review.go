@@ -120,11 +120,13 @@ func (view *View) reviewEnvironment() reviewEnvironment {
 }
 
 // Command implements userinterface.Commander: :approve, :request-changes, :review,
-// :merge, :copy-filename, :edit-comment and :delete-comment.
+// :checks, :merge, :copy-filename, :edit-comment and :delete-comment.
 func (view *View) Command(name, arguments string) (tea.Cmd, bool) {
 	switch name {
 	case "copy-filename":
 		return view.copyFilename(), true
+	case "checks":
+		return view.checksCommand(), true
 	case "merge":
 		return view.merge.command(arguments, view.reviewEnvironment()), true
 	case "edit-comment":

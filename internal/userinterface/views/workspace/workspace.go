@@ -97,10 +97,14 @@ type View struct {
 	// pickerItems are the paths the picker was built from; a choice is
 	// resolved by path because a refresh may replace the file list meanwhile.
 	pickerItems []string
-	pickerPaths []string           // raw paths, parallel to pickerItems
-	paneFile    github.ChangedFile // last value given to filePane.SetFile
-	paneWidth   int                // size last given to filePane.SetSize
-	paneHeight  int
+	pickerPaths []string // raw paths, parallel to pickerItems
+	// pickerChecks is non-nil while the picker lists checks (:checks) rather
+	// than files; it is the sorted list the picker's rows came from.
+	pickerChecks []github.Check
+
+	paneFile   github.ChangedFile // last value given to filePane.SetFile
+	paneWidth  int                // size last given to filePane.SetSize
+	paneHeight int
 
 	width, height int
 }
@@ -268,7 +272,7 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 			return view, view.review.chooserKey(message, view.reviewEnvironment())
 		}
 		if view.picker != nil {
-			view.pickerKey(message)
+			return view, view.pickerKey(message)
 		}
 	}
 	return view, nil

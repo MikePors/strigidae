@@ -49,10 +49,50 @@ type graphqlPullRequest struct {
 	BaseRefName       string
 	HeadRefName       string
 	HeadRefOid        string
-	StatusCheckRollup *struct{ State string }
+	StatusCheckRollup *graphqlRollup
+	MergeStateStatus  string
 	Author            *graphqlActor
 	CommentCount      struct{ TotalCount int }
 	Repository        struct{ NameWithOwner string }
+}
+
+// graphqlRollup is the head commit's check rollup. Contexts is only selected
+// by the detail query.
+type graphqlRollup struct {
+	State    string
+	Contexts graphqlConnection[graphqlCheckContext]
+}
+
+// graphqlCheckContext is a CheckRun or a StatusContext, told apart by Typename.
+type graphqlCheckContext struct {
+	Typename string `json:"__typename"`
+
+	// CheckRun
+	Name       string
+	Status     string
+	Conclusion string
+	DetailsURL string `json:"detailsUrl"`
+	CheckSuite *struct {
+		WorkflowRun *struct {
+			Workflow struct{ Name string }
+		}
+	}
+
+	// StatusContext
+	Context   string
+	State     string
+	TargetURL string `json:"targetUrl"`
+}
+
+func mapCheck(node graphqlCheckContext) github.Check {
+	if node.Typename == "StatusContext" {
+		return github.Check{Name: node.Context, Result: github.CheckResultFromStatus(node.State), URL: node.TargetURL}
+	}
+	name := node.Name
+	if node.CheckSuite != nil && node.CheckSuite.WorkflowRun != nil && node.CheckSuite.WorkflowRun.Workflow.Name != "" {
+		name = node.CheckSuite.WorkflowRun.Workflow.Name + " / " + name
+	}
+	return github.Check{Name: name, Result: github.CheckResultFromRun(node.Status, node.Conclusion), URL: node.DetailsURL}
 }
 
 type graphqlReactionGroup struct {
@@ -246,6 +286,16 @@ func mapDetail(node graphqlPullRequestDetail, files []graphqlFile, comments []gr
 		Body:            node.Body,
 		Additions:       node.Additions,
 		Deletions:       node.Deletions,
+	}
+	detail.MergeState = github.MergeStateFromStatus(node.MergeStateStatus)
+	if node.StatusCheckRollup != nil {
+		detail.CheckTotal = node.StatusCheckRollup.Contexts.TotalCount
+		for _, context := range node.StatusCheckRollup.Contexts.Nodes {
+			if context.Typename == "" { // a null node, or a type the query did not ask for
+				continue
+			}
+			detail.CheckList = append(detail.CheckList, mapCheck(context))
+		}
 	}
 	for _, label := range node.Labels.Nodes {
 		detail.Labels = append(detail.Labels, github.Label{Name: label.Name, Color: label.Color})

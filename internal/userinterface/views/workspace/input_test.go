@@ -82,9 +82,9 @@ func TestSectionJumps(test *testing.T) {
 		test.Fatal("overview should start at the top")
 	}
 	harness.press("]")
-	conversation := harness.view.overview.sections[1]
-	if got := harness.view.overview.viewport.YOffset(); got != conversation {
-		test.Errorf("]: offset = %d, want %d", got, conversation)
+	checks := harness.view.overview.sections[1]
+	if got := harness.view.overview.viewport.YOffset(); got != checks {
+		test.Errorf("]: offset = %d, want %d", got, checks)
 	}
 	harness.press("[")
 	if got := harness.view.overview.viewport.YOffset(); got != 0 {
@@ -92,8 +92,8 @@ func TestSectionJumps(test *testing.T) {
 	}
 	// Works from the Files pane as well.
 	harness.press("h", "]")
-	if got := harness.view.overview.viewport.YOffset(); got != conversation {
-		test.Errorf("] from files: offset = %d, want %d", got, conversation)
+	if got := harness.view.overview.viewport.YOffset(); got != checks {
+		test.Errorf("] from files: offset = %d, want %d", got, checks)
 	}
 	// Ignored while a file is selected.
 	harness.press("j", "[")
