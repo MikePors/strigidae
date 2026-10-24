@@ -70,6 +70,15 @@ func newStyleSet(activeTheme theme.Theme) styleSet {
 	return style
 }
 
+// codeStyle returns the style for a token type, or the plain one for a type
+// the table lacks (a custom Highlighter may report any type).
+func (variantStyles *variant) codeStyle(tokenType chroma.TokenType) lipgloss.Style {
+	if style, ok := variantStyles.code[tokenType]; ok {
+		return style
+	}
+	return variantStyles.code[chroma.Text]
+}
+
 func (model *Model) renderRow(i int) string {
 	row := model.rows[i]
 	current := 0
@@ -116,7 +125,7 @@ func (model *Model) renderRow(i int) string {
 	var builder strings.Builder
 	builder.WriteString(gutter)
 	for _, span := range visible {
-		builder.WriteString(variantStyles.code[span.Token].Render(span.Text))
+		builder.WriteString(variantStyles.codeStyle(span.Token).Render(span.Text))
 	}
 	if pad := codeWidth - used; pad > 0 {
 		builder.WriteString(variantStyles.fill.Render(spaces(pad)))

@@ -169,14 +169,17 @@ syntax: tokyonight-night
 The diff and Markdown code blocks both use it, with the style's colours, bold,
 italic and underline. Some things differ from the style as published:
 
-- Its background colours are ignored; code sits on the theme's `background`.
+- Its background colours are ignored. Code keeps strig's own backgrounds: the
+  theme's `background`, and in the diff the added and removed line tints.
 - A colour that is hard to read on the theme's `background` is made lighter
   or darker until it reads, and the change is logged (see `strig --log-path`).
 - A `syn-` role in `roles:` still recolours its whole class of tokens, as
-  written. For example, `syn-comment: "#565f89"` colours every kind of comment
-  that colour.
+  written, even if it is hard to read. For example, `syn-comment: "#565f89"`
+  colours every comment token that colour. The classes are those in the role
+  table above, so preprocessor lines follow `syn-operator`, not `syn-comment`.
 
-A name that is not a bundled style is an error that lists the bundled ones.
+The name is not case-sensitive. A name that is not a bundled style is an error
+that lists the bundled ones.
 Some useful ones: `tokyonight-night`, `catppuccin-mocha`, `catppuccin-latte`,
 `dracula`, `gruvbox`, `nord`, `monokai`, `github`, `github-dark` and
 `solarized-dark`.

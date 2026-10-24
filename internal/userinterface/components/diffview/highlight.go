@@ -82,7 +82,14 @@ func plain(text string) []Span {
 
 // standard returns tokenType if it is a standard Chroma token type, or else
 // the nearest standard one it inherits from, so every span has a style.
+// Error is plain: lexing one line at a time, a lexer reports ordinary text as
+// an error (an apostrophe in a block comment's middle line, a raw string's
+// closing backtick), and colouring it would scatter error colour through
+// comments.
 func standard(tokenType chroma.TokenType) chroma.TokenType {
+	if tokenType == chroma.Error {
+		return chroma.Text
+	}
 	for _, key := range []chroma.TokenType{tokenType, tokenType.SubCategory(), tokenType.Category()} {
 		if _, ok := chroma.StandardTypes[key]; ok {
 			return key

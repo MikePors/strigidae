@@ -188,11 +188,13 @@ func trilean(on bool) chroma.Trilean {
 }
 
 // standardTypes lists the token types a theme resolves: every standard one
-// except Background, whose page colour strig never takes from a style.
+// except the meta types, from Background down to CodeLine. Those style HTML
+// output (the page, line numbers, line wrappers), which neither the diff pane
+// nor Glamour draws, and strig never takes its page colour from a style.
 func standardTypes() []chroma.TokenType {
 	var types []chroma.TokenType
 	for tokenType := range chroma.StandardTypes {
-		if tokenType != chroma.Background {
+		if tokenType > chroma.Background || tokenType < chroma.CodeLine {
 			types = append(types, tokenType)
 		}
 	}
@@ -237,10 +239,9 @@ func chromaMarkup(roles Roles) map[chroma.TokenType]tokenStyle {
 
 // namedTokens takes every token type's foreground and attributes from a named
 // style, resolved through Chroma's inheritance; the style's backgrounds are
-// ignored. A foreground that is unreadable on the theme's background is
-// nudged and logged, like a derived role. A syn-<class> role the theme
-// overrides then recolours every token type in that class, exactly as
-// written.
+// ignored. A syn-<class> role the theme overrides recolours every token type
+// in that class, exactly as written. Any other foreground that is unreadable
+// on the theme's background is nudged and logged, like a derived role.
 func namedTokens(name string, named *chroma.Style, roles Roles, overridden map[string]bool) map[chroma.TokenType]tokenStyle {
 	tokens := map[chroma.TokenType]tokenStyle{}
 	warned := map[string]bool{}
@@ -255,7 +256,9 @@ func namedTokens(name string, named *chroma.Style, roles Roles, overridden map[s
 		if entry.Colour.IsSet() {
 			token.colour = mustParseHex(entry.Colour.String())
 		}
-		if ratio := contrast(token.colour, roles.Background); ratio < minimumAccentContrast {
+		if class := ClassOf(tokenType); class != ClassPlain && overridden[syntaxRoleNames[class]] {
+			token.colour = roles.syntaxColour(class) // exactly as written, never guarded
+		} else if ratio := contrast(token.colour, roles.Background); ratio < minimumAccentContrast {
 			hex := HexString(token.colour)
 			if !warned[hex] {
 				warned[hex] = true
@@ -263,9 +266,6 @@ func namedTokens(name string, named *chroma.Style, roles Roles, overridden map[s
 					"contrast", math.Round(ratio*100)/100, "want", minimumAccentContrast)
 			}
 			token.colour = nudge(token.colour, roles.Background, minimumAccentContrast)
-		}
-		if class := ClassOf(tokenType); class != ClassPlain && overridden[syntaxRoleNames[class]] {
-			token.colour = roles.syntaxColour(class)
 		}
 		tokens[tokenType] = token
 	}
@@ -313,10 +313,11 @@ func SyntaxStyleNames() []string {
 	return names
 }
 
-// CheckSyntaxStyle reports whether name is a bundled Chroma style. An unknown
-// name is an error that lists the bundled ones.
+// CheckSyntaxStyle reports whether name is a bundled Chroma style, ignoring
+// case as Chroma does. An unknown name is an error that lists the bundled
+// ones.
 func CheckSyntaxStyle(name string) error {
-	if bundledChromaStyles[name] == nil {
+	if bundledChromaStyles[strings.ToLower(name)] == nil {
 		return fmt.Errorf("unknown syntax style %q (bundled styles: %s)", name, strings.Join(SyntaxStyleNames(), ", "))
 	}
 	return nil

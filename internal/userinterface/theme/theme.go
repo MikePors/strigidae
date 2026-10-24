@@ -22,6 +22,8 @@ package theme
 
 import (
 	"image/color"
+	"slices"
+	"strings"
 
 	"charm.land/lipgloss/v2"
 )
@@ -143,11 +145,11 @@ func FromPaletteWithSyntax(palette Palette, overrides Roles, syntax string) (The
 			return Theme{}, err
 		}
 	}
-	return newTheme(palette, deriveRoles(palette, overrides), syntax, overrides.set()), nil
+	return newTheme(palette, deriveRoles(palette, overrides), strings.ToLower(syntax), overrides.set()), nil
 }
 
 func newTheme(palette Palette, roles Roles, syntax string, overridden map[string]bool) Theme {
-	identifier := roles.fingerprint(palette.Variant, syntax)
+	identifier := roles.fingerprint(palette.Variant, syntaxIdentity(syntax, overridden))
 	bar := lipgloss.NewStyle().Background(roles.Surface).Foreground(roles.Text)
 	foreground := func(colour color.Color) lipgloss.Style { return lipgloss.NewStyle().Foreground(colour) }
 	bold := func(colour color.Color) lipgloss.Style { return foreground(colour).Bold(true) }
@@ -222,4 +224,22 @@ func newTheme(palette Palette, roles Roles, syntax string, overridden map[string
 		PullRequestList: newPullRequestListStyles(roles),
 		Dashboard:       newDashboardStyles(roles),
 	}
+}
+
+// syntaxIdentity is what the syntax style adds to Theme.Identifier: its name
+// and, for a named style, which syn-* roles the theme overrides. Overriding a
+// role with the colour it already had changes nothing in the roles, but it
+// recolours that whole class of the named style.
+func syntaxIdentity(syntax string, overridden map[string]bool) string {
+	if syntax == "" {
+		return ""
+	}
+	names := []string{syntax}
+	for name := range overridden {
+		if strings.HasPrefix(name, "syn-") {
+			names = append(names, name)
+		}
+	}
+	slices.Sort(names[1:])
+	return strings.Join(names, "|")
 }

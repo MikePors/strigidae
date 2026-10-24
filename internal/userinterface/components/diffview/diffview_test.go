@@ -408,3 +408,19 @@ func TestRenderUsesTokenTypeStyles(test *testing.T) {
 		}
 	}
 }
+
+// TestRenderUnknownTokenKeepsRowBackground proves a span whose token type the
+// theme has no style for (a custom Highlighter may report any) is drawn plain
+// on the row's background.
+func TestRenderUnknownTokenKeepsRowBackground(test *testing.T) {
+	model := New(theme.New(true), WithHighlighter(func(_, text string) []Span {
+		return []Span{{Text: text}} // token type 0 has no style
+	}))
+	model.SetFile(bigFile(5))
+	model.SetSize(80, 8)
+	out := model.Render(80, 8)
+	want := model.styles.variants[0][kindAdd].code[chroma.Text].Render("\tx := 4 // new")
+	if !strings.Contains(out, want) {
+		test.Errorf("the added line is not drawn plain on its background:\n%q", out)
+	}
+}

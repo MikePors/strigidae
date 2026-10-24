@@ -113,3 +113,21 @@ func TestChromaHighlighter(test *testing.T) {
 		test.Error("very long lines should skip lexing")
 	}
 }
+
+// TestHighlighterHasNoErrorSpans proves text a lexer only calls an error
+// because it sees one line at a time stays plain.
+func TestHighlighterHasNoErrorSpans(test *testing.T) {
+	highlighter := ChromaHighlighter()
+	for _, testCase := range []struct{ path, text string }{
+		{"x.c", "  * it's a block comment line"},
+		{"x.js", "don't do this */"},
+		{"x.go", "raw string end`"},
+	} {
+		spans := highlighter(testCase.path, testCase.text)
+		for _, span := range spans {
+			if span.Token == chroma.Error {
+				test.Errorf("%s %q: span %q is an error token", testCase.path, testCase.text, span.Text)
+			}
+		}
+	}
+}
