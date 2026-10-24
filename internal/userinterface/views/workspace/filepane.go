@@ -99,4 +99,10 @@ type FilePane interface {
 	Render(width, height int) string
 	// FullHelp lists the pane's bindings for the help overlay and sequence matching.
 	FullHelp() [][]key.Binding
+	// SetHunkReviewed is called once with how to tell whether a hunk is
+	// marked reviewed; panes that show hunks mark their headers.
+	SetHunkReviewed(reviewed func(file *diff.File, hunk int) bool)
+	// CursorHunk returns the file and hunk index at the pane's cursor. ok is
+	// false off any hunk; panes without hunks return false.
+	CursorHunk() (file *diff.File, hunk int, ok bool)
 }

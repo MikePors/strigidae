@@ -102,12 +102,16 @@ func TestBuildTheme(test *testing.T) {
 	if err != nil {
 		test.Fatal(err)
 	}
+	loaded.Warnings = []string{"something odd"}
 	built := (application{scheme: &loaded}).buildTheme(logger)
 	if !built.Chosen {
 		test.Error("a configured theme is not marked Chosen")
 	}
-	if !strings.Contains(logged.String(), "tokyonight-night") {
-		test.Errorf("the ignored syntax: was not logged: %q", logged.String())
+	if name := built.Syntax.Name(); name != "tokyonight-night" {
+		test.Errorf("syntax style = %q, want tokyonight-night", name)
+	}
+	if !strings.Contains(logged.String(), "something odd") {
+		test.Errorf("the scheme's warning was not logged: %q", logged.String())
 	}
 }
 

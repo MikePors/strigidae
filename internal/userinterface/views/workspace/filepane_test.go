@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/MikePors/strigidae/internal/diff"
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/github/fake"
 	"github.com/MikePors/strigidae/internal/userinterface"
@@ -31,6 +32,9 @@ func (pane *stubPane) VisualMove(int) error            { return nil }
 func (pane *stubPane) VisualEnd()                      {}
 
 func (pane *stubPane) SetDiff(DiffState) {}
+
+func (pane *stubPane) SetHunkReviewed(func(*diff.File, int) bool) {}
+func (pane *stubPane) CursorHunk() (*diff.File, int, bool)        { return nil, 0, false }
 
 func (pane *stubPane) SetThreads([]github.ReviewThread)      {}
 func (pane *stubPane) FocusedThreads() []github.ReviewThread { return nil }

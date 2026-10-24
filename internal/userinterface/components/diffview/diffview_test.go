@@ -8,12 +8,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/alecthomas/chroma/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MikePors/strigidae/internal/diff"
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/golden"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
+	"github.com/MikePors/strigidae/internal/userinterface/theme/scheme"
 )
 
 func fixture(test testing.TB, path string) *diff.File {
@@ -379,5 +381,46 @@ func BenchmarkSetFile5k(benchmark *testing.B) {
 	for range benchmark.N {
 		model.SetFile(nil)
 		model.SetFile(file)
+	}
+}
+
+// TestRenderUsesTokenTypeStyles proves the diff draws each token type with
+// the theme's style for that type, not one per class: under tokyonight-night
+// a declaration keyword ("func") and a plain keyword ("return") differ.
+func TestRenderUsesTokenTypeStyles(test *testing.T) {
+	tokyoNight, err := scheme.LoadBundled("tokyo-night")
+	if err != nil || tokyoNight.Syntax != "tokyonight-night" {
+		test.Fatalf("setup: %v, syntax %q", err, tokyoNight.Syntax)
+	}
+	activeTheme := tokyoNight.Theme()
+	declaration, keyword := activeTheme.Syntax.For(chroma.KeywordDeclaration), activeTheme.Syntax.For(chroma.Keyword)
+	if declaration.GetForeground() == keyword.GetForeground() {
+		test.Fatal("setup: the style gives both keywords one colour")
+	}
+	model := New(activeTheme)
+	model.SetFile(bigFile(3))
+	model.SetSize(80, 4)
+	model.GotoBottom() // keep the cursor's background off the first code row
+	out := model.Render(80, 4)
+	for _, want := range []string{declaration.Render("func"), keyword.Render("return")} {
+		if !strings.Contains(out, want) {
+			test.Errorf("render lacks %q:\n%q", want, out)
+		}
+	}
+}
+
+// TestRenderUnknownTokenKeepsRowBackground proves a span whose token type the
+// theme has no style for (a custom Highlighter may report any) is drawn plain
+// on the row's background.
+func TestRenderUnknownTokenKeepsRowBackground(test *testing.T) {
+	model := New(theme.New(true), WithHighlighter(func(_, text string) []Span {
+		return []Span{{Text: text}} // token type 0 has no style
+	}))
+	model.SetFile(bigFile(5))
+	model.SetSize(80, 8)
+	out := model.Render(80, 8)
+	want := model.styles.variants[0][kindAdd].code[chroma.Text].Render("\tx := 4 // new")
+	if !strings.Contains(out, want) {
+		test.Errorf("the added line is not drawn plain on its background:\n%q", out)
 	}
 }

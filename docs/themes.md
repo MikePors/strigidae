@@ -20,11 +20,9 @@ when strig exits. The built-in theme leaves them alone.
 To try a theme without editing the config, type `:theme` and its name or file
 while strig runs (see [Switching themes while strig runs](#switching-themes-while-strig-runs)).
 
-Coming later: `syntax:` (named syntax styles, #82), and `theme: terminal`
-and Xresources files, which build a theme from the terminal's own palette
-(#84). Until then `theme: terminal` is an error saying it is not supported
-yet, and `syntax:` in a theme file is accepted but ignored (strig logs a
-warning; syntax colours come from the palette).
+Coming later: `theme: terminal` and Xresources files, which build a theme from
+the terminal's own palette (#84). Until then `theme: terminal` is an error
+saying it is not supported yet.
 
 ## The three layers
 
@@ -86,7 +84,8 @@ kept), at fixed strengths that differ for dark and light themes.
 | `syn-variable` | `base08` | Variables and tags |
 | `syn-escape` | `base0C` | String escapes and regular expressions |
 
-The syntax roles colour code in the diff and in Markdown code blocks alike.
+The syntax roles colour code in the diff and in Markdown code blocks alike,
+unless the theme names a syntax style (see [Syntax styles](#syntax-styles)).
 Overriding `added` or `removed` also recolours the tints derived from them,
 unless you set the tints too.
 
@@ -158,8 +157,34 @@ Use this where a scheme's slot does not hold the colour your editor theme uses
 for that purpose. For example, many schemes put a surface colour in `base03`,
 which is too faint for comments and borders.
 
-`syntax:` names a syntax style for code. It is accepted, but ignored for now
-(#82).
+## Syntax styles
+
+By default code is coloured from the syntax roles above, one colour per kind
+of token. `syntax:` instead names one of the syntax styles bundled with
+[Chroma](https://github.com/alecthomas/chroma), strig's syntax highlighter,
+which colour each kind of token individually:
+
+```yaml
+syntax: tokyonight-night
+```
+
+The diff and Markdown code blocks both use it, with the style's colours, bold,
+italic and underline. Some things differ from the style as published:
+
+- Its background colours are ignored. Code keeps strig's own backgrounds: the
+  theme's `background`, and in the diff the added and removed line tints.
+- A colour that is hard to read on the theme's `background` is made lighter
+  or darker until it reads, and the change is logged (see `strig --log-path`).
+- A `syn-` role in `roles:` still recolours its whole class of tokens, as
+  written, even if it is hard to read. For example, `syn-comment: "#565f89"`
+  colours every comment token that colour. The classes are those in the role
+  table above, so preprocessor lines follow `syn-operator`, not `syn-comment`.
+
+The name is not case-sensitive. A name that is not a bundled style is an error
+that lists the bundled ones.
+Some useful ones: `tokyonight-night`, `catppuccin-mocha`, `catppuccin-latte`,
+`dracula`, `gruvbox`, `nord`, `monokai`, `github`, `github-dark` and
+`solarized-dark`.
 
 ## How `theme:` is resolved
 
@@ -191,7 +216,7 @@ theme stays. The change lasts until strig exits; the config is not edited.
 
 | Name | Variant | Source |
 |---|---|---|
-| `tokyo-night` | dark | Palette from the Base24 scheme "Tokyo Night Dark" in tinted-theming/schemes (MIT), based on Tokyo Night by enkia (MIT). Role overrides use the colours of Tokyo Night's night palette as used by folke/tokyonight.nvim (Apache-2.0) for text, comments, borders, selection, status colours, diff tints and syntax |
+| `tokyo-night` | dark | Palette from the Base24 scheme "Tokyo Night Dark" in tinted-theming/schemes (MIT), based on Tokyo Night by enkia (MIT). Role overrides use the colours of Tokyo Night's night palette as used by folke/tokyonight.nvim (Apache-2.0) for text, comments, borders, selection, status colours and diff tints. Code uses Chroma's `tokyonight-night` style |
 | `catppuccin-latte` | light | Palette from the Base24 scheme "Catppuccin Latte" in tinted-theming/schemes (MIT), based on Catppuccin (MIT). Muted text and borders use Latte's own subtext and overlay colours |
 
 Each theme file under `internal/userinterface/theme/scheme/bundled/` records
