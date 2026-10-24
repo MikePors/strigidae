@@ -11,6 +11,7 @@ import (
 	"github.com/MikePors/strigidae/internal/gitrepository"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 	"github.com/MikePors/strigidae/internal/userinterface/theme/scheme"
+	"github.com/MikePors/strigidae/internal/userinterface/theme/terminalpalette"
 )
 
 // application is everything the TUI needs, resolved before it starts.
@@ -19,6 +20,9 @@ type application struct {
 	repository github.Repository
 	// scheme is the theme the config chose, or nil for the built-in one.
 	scheme *scheme.Scheme
+	// terminalTheme is set for `theme: terminal`: the palette is asked of
+	// the terminal when the terminal interface starts.
+	terminalTheme bool
 	// theme is built from scheme when the terminal interface starts, after
 	// logging is set up, because building a theme can log contrast warnings.
 	theme theme.Theme
@@ -78,13 +82,31 @@ func resolveTarget(repositoryFlag string, dependencies dependencies) (gitreposit
 }
 
 // buildTheme makes the theme to draw with. Problems that don't stop a theme
-// loading are logged here.
-func (application application) buildTheme(logger *slog.Logger) theme.Theme {
+// loading are logged here. For `theme: terminal` it asks the terminal for its
+// palette; when that fails it falls back to the built-in theme and returns a
+// notice for the status bar saying why.
+func (application application) buildTheme(logger *slog.Logger, askTerminal func() (terminalpalette.Reply, error)) (built theme.Theme, notice string) {
+	if application.terminalTheme {
+		built, err := terminalTheme(askTerminal)
+		if err != nil {
+			logger.Warn("theme terminal: using the built-in theme", "err", err)
+			return theme.Default(), "theme terminal: " + err.Error() + "; using the built-in theme"
+		}
+		return built, ""
+	}
 	if application.scheme == nil {
-		return theme.Default()
+		return theme.Default(), ""
 	}
 	for _, warning := range application.scheme.Warnings {
 		logger.Warn("theme", "name", application.scheme.Name, "warning", warning)
 	}
-	return application.scheme.Theme()
+	return application.scheme.Theme(), ""
+}
+
+func terminalTheme(askTerminal func() (terminalpalette.Reply, error)) (theme.Theme, error) {
+	reply, err := askTerminal()
+	if err != nil {
+		return theme.Theme{}, err
+	}
+	return reply.Theme()
 }

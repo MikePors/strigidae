@@ -29,24 +29,29 @@ func Bundled() []string {
 	return slugs
 }
 
-// Location says where a theme value points: a bundled theme (Slug) or a file (Path).
+// Terminal is the `theme:` value that builds the theme from the terminal's
+// own palette, asked for when strig starts.
+const Terminal = "terminal"
+
+// Location says where a theme value points: the terminal's palette
+// (Terminal), a bundled theme (Slug) or a file (Path).
 type Location struct {
-	Slug string
-	Path string
+	Terminal bool
+	Slug     string
+	Path     string
 }
 
-// Locate decides what a `theme:` config value names. A value containing "/"
-// or ending in .yaml or .yml is a file: "~" is expanded to the home
-// directory and a relative path is taken from configDirectory. Anything else
-// is a bundled theme's slug. home is called only when a "~" needs expanding.
+// Locate decides what a `theme:` config value names. "terminal" is the
+// terminal's own palette. A value containing "/" or ending in .yaml, .yml or
+// .Xresources is a file: "~" is expanded to the home directory and a relative
+// path is taken from configDirectory. Anything else is a bundled theme's
+// slug. home is called only when a "~" needs expanding.
 func Locate(value, configDirectory string, home func() (string, error)) (Location, error) {
 	lower := strings.ToLower(value)
 	switch {
-	case lower == "terminal":
-		return Location{}, errors.New(`theme "terminal" is not supported yet`)
-	case strings.HasSuffix(lower, ".xresources"):
-		return Location{}, errors.New("theme files in Xresources format are not supported yet")
-	case !strings.Contains(value, "/") && !strings.HasSuffix(lower, ".yaml") && !strings.HasSuffix(lower, ".yml"):
+	case lower == Terminal:
+		return Location{Terminal: true}, nil
+	case !strings.Contains(value, "/") && !strings.HasSuffix(lower, ".yaml") && !strings.HasSuffix(lower, ".yml") && !IsXresources(value):
 		return Location{Slug: value}, nil
 	}
 	path := value
@@ -63,9 +68,13 @@ func Locate(value, configDirectory string, home func() (string, error)) (Locatio
 	return Location{Path: path}, nil
 }
 
-// Load reads the theme at location.
+// Load reads the theme at location. The terminal's palette is not a file:
+// asking for it is the caller's job.
 func Load(location Location) (Scheme, error) {
-	if location.Path == "" {
+	switch {
+	case location.Terminal:
+		return Scheme{}, errors.New(`theme "terminal" is read from the terminal, not loaded`)
+	case location.Path == "":
 		return LoadBundled(location.Slug)
 	}
 	file, err := os.Open(location.Path)
@@ -77,6 +86,9 @@ func Load(location Location) (Scheme, error) {
 	data, err := io.ReadAll(io.LimitReader(file, MaximumFileSize+1))
 	if err != nil {
 		return Scheme{}, fmt.Errorf("read theme %s: %w", location.Path, err)
+	}
+	if IsXresources(location.Path) {
+		return ParseXresources(location.Path, data)
 	}
 	return Parse(location.Path, data)
 }

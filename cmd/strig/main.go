@@ -90,7 +90,7 @@ func execute(arguments []string, stdout, stderr io.Writer, dependencies dependen
 		}
 		return printLine(stdout, path)
 	case *listThemes:
-		return printLine(stdout, strings.Join(scheme.Bundled(), "\n"))
+		return printLine(stdout, strings.Join(append(scheme.Bundled(), scheme.Terminal), "\n"))
 	case *showConfigPath:
 		if configErr != nil {
 			return configErr
@@ -105,7 +105,7 @@ func execute(arguments []string, stdout, stderr io.Writer, dependencies dependen
 	if err != nil {
 		return err
 	}
-	chosen, err := resolveTheme(configuration.Theme, filepath.Dir(configPath), dependencies)
+	chosen, terminalTheme, err := resolveTheme(configuration.Theme, filepath.Dir(configPath), dependencies)
 	if err != nil {
 		return err
 	}
@@ -114,21 +114,30 @@ func execute(arguments []string, stdout, stderr io.Writer, dependencies dependen
 		return err
 	}
 	application.scheme = chosen
+	application.terminalTheme = terminalTheme
 	return dependencies.start(application, stderr)
 }
 
 // resolveTheme loads the theme the config names, or returns nil for the
-// built-in one. A theme that can't be loaded stops strig before the screen
-// starts.
-func resolveTheme(value, configDirectory string, dependencies dependencies) (*scheme.Scheme, error) {
+// built-in one. terminal is set for `theme: terminal`, whose palette is asked
+// for when the terminal interface starts. A theme that can't be loaded stops
+// strig before the screen starts.
+func resolveTheme(value, configDirectory string, dependencies dependencies) (loaded *scheme.Scheme, terminal bool, err error) {
 	if value == "" {
-		return nil, nil
+		return nil, false, nil
 	}
-	loaded, err := scheme.Resolve(value, configDirectory, dependencies.home)
+	location, err := scheme.Locate(value, configDirectory, dependencies.home)
 	if err != nil {
-		return nil, fmt.Errorf("theme %q: %w", value, err)
+		return nil, false, fmt.Errorf("theme %q: %w", value, err)
 	}
-	return &loaded, nil
+	if location.Terminal {
+		return nil, true, nil
+	}
+	result, err := scheme.Load(location)
+	if err != nil {
+		return nil, false, fmt.Errorf("theme %q: %w", value, err)
+	}
+	return &result, false, nil
 }
 
 // configLocation is the --config path if given, else the default location.

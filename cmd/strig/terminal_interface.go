@@ -1,15 +1,18 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	cliBrowser "github.com/cli/browser"
 
 	"github.com/MikePors/strigidae/internal/logging"
 	"github.com/MikePors/strigidae/internal/userinterface"
+	"github.com/MikePors/strigidae/internal/userinterface/theme/terminalpalette"
 	"github.com/MikePors/strigidae/internal/userinterface/views/dashboard"
 	"github.com/MikePors/strigidae/internal/userinterface/views/pullrequestlist"
 	"github.com/MikePors/strigidae/internal/version"
@@ -28,14 +31,26 @@ func runTerminalInterface(application application, stderr io.Writer) error {
 	silenceBrowser()
 	logger.Info("starting", "version", version.String(), "repo", application.repository.String())
 
-	application.theme = application.buildTheme(logger)
-	model := userinterface.New(firstView(application), application.theme, userinterface.Options{Logger: logger})
+	built, notice := application.buildTheme(logger, askTerminal)
+	application.theme = built
+	model := userinterface.New(firstView(application), application.theme, userinterface.Options{Logger: logger, Notice: notice})
 	if _, err := tea.NewProgram(model).Run(); err != nil {
 		logger.Error("program failed", "err", err)
 		return fmt.Errorf("run: %w", err)
 	}
 	logger.Info("exiting")
 	return nil
+}
+
+// askTerminal asks the controlling terminal for its palette, before the
+// program takes over the terminal.
+func askTerminal() (terminalpalette.Reply, error) {
+	tty, err := terminalpalette.Open()
+	if err != nil {
+		return terminalpalette.Reply{}, err
+	}
+	reply, err := terminalpalette.Ask(tty, os.Getenv("TMUX") != "", time.Now)
+	return reply, errors.Join(err, tty.Close())
 }
 
 // firstView is the dashboard when there is no repository (outside a checkout,

@@ -1,0 +1,28 @@
+! Tokyo Night as a terminal palette, written by hand for the Xresources
+! parser tests (colours from Tokyo Night by enkia, MIT).
+#define bg #1a1b26
+#define fg #c0caf5
+
+*.foreground: fg
+*.background: bg
+*.cursorColor: fg
+URxvt.font: xft:monospace:size=11
+
+*.color0:  #15161e
+*.color1:  #f7768e
+*.color2:  #9ece6a
+*.color3:  #e0af68
+*.color4:  #7aa2f7
+*.color5:  #bb9af7
+*.color6:  #7dcfff
+*.color7:  #a9b1d6
+*color8:   #414868
+*color9:   #ff899d
+*color10:  #b9f27c
+*color11:  #ff9e64
+XTerm*vt100.color12: #7da6ff
+URxvt.color13: #c0a3ff
+URxvt.color14: #b4f9f8
+URxvt.color15: #000000
+! a later line wins
+*.color15: #c0caf5
