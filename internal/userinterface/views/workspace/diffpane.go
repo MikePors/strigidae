@@ -134,6 +134,12 @@ func (pane *diffPane) Update(message keys.Message) tea.Cmd {
 		message.Each(diffView.CursorRow, diffView.PageDown)
 	case key.Matches(message, pane.globalKeys.PageUp):
 		message.Each(diffView.CursorRow, diffView.PageUp)
+	case key.Matches(message, pane.globalKeys.ScrollCursorTop):
+		diffView.ScrollCursorTop()
+	case key.Matches(message, pane.globalKeys.ScrollCursorMiddle):
+		diffView.ScrollCursorMiddle()
+	case key.Matches(message, pane.globalKeys.ScrollCursorBottom):
+		diffView.ScrollCursorBottom()
 	case key.Matches(message, pane.bind.NextHunk):
 		message.Each(diffView.CursorRow, diffView.NextHunk)
 	case key.Matches(message, pane.bind.PreviousHunk):

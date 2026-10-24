@@ -12,6 +12,7 @@
 //	] / [          NextHunk() / PreviousHunk()
 //	z h / z l      ScrollLeft(4) / ScrollRight(4)
 //	z H / z L      HalfScrollLeft() / HalfScrollRight()
+//	z t / z z / z b  ScrollCursorTop() / ScrollCursorMiddle() / ScrollCursorBottom()
 //	z a / z o / z c  ToggleThread() / OpenThread() / CloseThread()
 //	) / (          NextThread() / PreviousThread()
 //
@@ -448,6 +449,15 @@ func (model *Model) ScrollDown(count int) { model.window.ScrollDown(count) }
 
 // ScrollUp is the opposite of ScrollDown.
 func (model *Model) ScrollUp(count int) { model.window.ScrollUp(count) }
+
+// ScrollCursorTop scrolls so the cursor row is the first visible row.
+func (model *Model) ScrollCursorTop() { model.window.ScrollCursorTop() }
+
+// ScrollCursorMiddle scrolls so the cursor row is in the middle of the view.
+func (model *Model) ScrollCursorMiddle() { model.window.ScrollCursorMiddle() }
+
+// ScrollCursorBottom scrolls so the cursor row is the last visible row.
+func (model *Model) ScrollCursorBottom() { model.window.ScrollCursorBottom() }
 
 // HalfPageDown moves the view and the cursor down half a screen.
 func (model *Model) HalfPageDown() { model.window.HalfPageDown() }

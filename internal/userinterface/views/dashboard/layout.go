@@ -1,5 +1,7 @@
 package dashboard
 
+import "github.com/MikePors/strigidae/internal/userinterface/components/scroll"
+
 type lineKind int
 
 const (
@@ -63,4 +65,17 @@ func (current *tab) follow(lines []line, selectedIndex, selectedLine, height int
 		current.window.GotoRow(selectedLine - 1)
 	}
 	current.window.GotoRow(selectedLine)
+}
+
+// scrollCursor moves the tab's view with place (one of scroll.Window's
+// ScrollCursor methods) so the selected line sits at the top, middle or bottom.
+// The window's cursor is only updated when the tab is drawn, so it is put on
+// the selected line first.
+func (current *tab) scrollCursor(place func(*scroll.Window), height int) {
+	selectedIndex := current.selectedIndex()
+	lines, selectedLine := current.lines(selectedIndex)
+	current.window.SetRows(len(lines))
+	current.window.SetSize(height)
+	current.window.Restore(selectedLine, current.window.Top(), 0)
+	place(&current.window)
 }

@@ -236,6 +236,12 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 		message.Each(view.window.Cursor, view.window.PageDown)
 	case key.Matches(message, view.globalKeys.PageUp):
 		message.Each(view.window.Cursor, view.window.PageUp)
+	case key.Matches(message, view.globalKeys.ScrollCursorTop):
+		view.window.ScrollCursorTop()
+	case key.Matches(message, view.globalKeys.ScrollCursorMiddle):
+		view.window.ScrollCursorMiddle()
+	case key.Matches(message, view.globalKeys.ScrollCursorBottom):
+		view.window.ScrollCursorBottom()
 	case key.Matches(message, view.globalKeys.Search):
 		return view.search.Start(view.searchList())
 	case key.Matches(message, view.globalKeys.NextMatch):

@@ -10,6 +10,10 @@ ctrl+u   half page up
 ctrl+f   page down                                                  
 ctrl+b   page up                                                    
                                                                     
+zt       cursor line to the top                                     
+zz       cursor line to the middle                                  
+zb       cursor line to the bottom                                  
+                                                                    
 enter    open / select                                              
 o        open in browser                                            
 R        refresh                                                    
@@ -18,10 +22,6 @@ esc      cancel / clear
 ?        toggle help                                                
 :        command line (:q close, :qa quit)                          
 1-9      count: 11j, 3], 42G                                        
-
-
-
-
 
 
 
