@@ -38,6 +38,9 @@ func ParseXresources(source string, data []byte) (Scheme, error) {
 		if line == "" || strings.HasPrefix(line, "!") {
 			continue
 		}
+		if strings.HasPrefix(line, "/*") {
+			return Scheme{}, &Error{Source: source, Line: number, Message: fmt.Sprintf("/* */ comments are not supported (use ! to comment), got %q", line)}
+		}
 		if directive, ok := strings.CutPrefix(line, "#"); ok {
 			fields := strings.Fields(directive)
 			if len(fields) != 3 || fields[0] != "define" {

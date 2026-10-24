@@ -57,6 +57,8 @@ func TestParseXresourcesErrors(test *testing.T) {
 		{"missing colours are named", "*.foreground: #c0caf5\n*.color3: #101010\n", "missing background, color0, color1, color2, color4"},
 		{"malformed colour names the line", full + "*.color4: blue\n", "a.Xresources:19: color4"},
 		{"undefined name", full + "*.color4: nope\n", "invalid colour \"nope\""},
+		{"comment line without a colon", "/* about colours */\n" + full, "a.Xresources:1: /* */ comments are not supported"},
+		{"comment line with a colon", "/* note: about colours */\n" + full, "a.Xresources:1: /* */ comments are not supported"},
 		{"other preprocessor lines", "#include \"x\"\n" + full, "a.Xresources:1: unsupported preprocessor line"},
 		{"line without a colon", full + "junk\n", "a.Xresources:19: expected"},
 		{"colour16 is not a palette resource", full + "*.color16: blue\n", ""},
