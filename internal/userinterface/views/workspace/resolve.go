@@ -156,9 +156,11 @@ func (view *View) threadResolved(message threadResolvedMessage) tea.Cmd {
 	if message.resolve {
 		text = "Resolved thread on " + message.location
 	}
+	// The fold is recorded first so that a reload honours it too.
+	view.filePane.SetThreadExpanded(message.threadIdentifier, !message.resolution.IsResolved)
 	// A reload started since the thread was picked may have read it before the
 	// write, so it is read again rather than patched.
-	if message.sequence != view.sequence || !view.applyResolution(message.resolution) {
+	if message.sequence != view.sequence || !view.applyResolution(message.threadIdentifier, message.resolution) {
 		return tea.Batch(userinterface.Info(text), view.reloadThreads())
 	}
 	return userinterface.Info(text)
@@ -166,15 +168,18 @@ func (view *View) threadResolved(message threadResolvedMessage) tea.Cmd {
 
 // applyResolution updates the thread in place and folds it closed when it is
 // resolved, open when it is not. It reports false when the thread is not shown.
-func (view *View) applyResolution(resolution github.ThreadResolution) bool {
-	index := slices.IndexFunc(view.threads, func(thread github.ReviewThread) bool { return thread.Identifier == resolution.Identifier })
+func (view *View) applyResolution(identifier string, resolution github.ThreadResolution) bool {
+	index := slices.IndexFunc(view.threads, func(thread github.ReviewThread) bool { return thread.Identifier == identifier })
 	if index < 0 {
 		return false
 	}
 	// A fresh slice, so the one handed to the file pane earlier is never written to.
 	view.threads = slices.Clone(view.threads)
 	view.threads[index].IsResolved, view.threads[index].ResolvedBy = resolution.IsResolved, resolution.ResolvedBy
-	view.filePane.SetThreadExpanded(resolution.Identifier, !resolution.IsResolved)
+	// An older thread load may still be in flight and hold the state from
+	// before the write; it is discarded.
+	view.threadGeneration++
+	view.threadPending = false
 	view.filePane.SetThreads(view.threads)
 	view.overview.invalidate()
 	view.layout()

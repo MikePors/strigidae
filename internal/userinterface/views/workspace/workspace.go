@@ -68,6 +68,7 @@ type View struct {
 	pullRequestPending bool
 	diffPending        bool
 	threadPending      bool
+	threadGeneration   int                   // latest thread load or in-place change; older thread loads are stale
 	threadLoaded       bool                  // a thread load has succeeded
 	threadErr          error                 // why the last thread load failed; cleared when a load starts
 	threads            []github.ReviewThread // sorted by file and line
@@ -225,7 +226,7 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		}
 		return view, view.diffLoaded(message)
 	case threadsLoadedMessage:
-		if !view.mine(message.owner, message.repository, message.number, message.sequence) {
+		if !view.mine(message.owner, message.repository, message.number, message.sequence) || message.generation != view.threadGeneration {
 			return view, nil
 		}
 		return view, view.threadsLoaded(message)

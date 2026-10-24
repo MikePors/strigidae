@@ -49,6 +49,9 @@ type (
 		repository github.Repository
 		number     int
 		sequence   int
+		// generation is the view's threadGeneration when the load started; a
+		// later reload, or a resolution applied in place, supersedes it.
+		generation int
 		threads    []github.ReviewThread
 		err        error
 	}
@@ -124,10 +127,11 @@ func (view *View) fetchPullRequest(thenDiff bool) tea.Cmd {
 // sequence; after posting a reply it refreshes just the threads.
 func (view *View) reloadThreads() tea.Cmd {
 	view.threadPending, view.threadErr = true, nil
-	client, repository, number, sequence, owner := view.client, view.repository, view.number, view.sequence, view
+	view.threadGeneration++
+	client, repository, number, sequence, owner, generation := view.client, view.repository, view.number, view.sequence, view, view.threadGeneration
 	return func() tea.Msg {
 		threads, err := loadThreads(context.Background(), client, repository, number)
-		return threadsLoadedMessage{owner: owner, repository: repository, number: number, sequence: sequence, threads: threads, err: err}
+		return threadsLoadedMessage{owner: owner, repository: repository, number: number, sequence: sequence, generation: generation, threads: threads, err: err}
 	}
 }
 
