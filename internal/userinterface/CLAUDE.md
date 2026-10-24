@@ -104,7 +104,7 @@ Colour flows through three layers, each built only from the one below (details i
 
 1. **Palette**: the 24 Base24 slots plus a light/dark variant (`theme/palette.go`; built-ins in `theme/palettes.go`). The only place colour values exist. The slots are unexported; only `roles.go` reads them.
 2. **Roles**: what strig means by a colour (`text`, `muted`, `accent`, `added`, diff tints, syntax tokens, …), derived from slots in `theme/roles.go`. A theme may override any role with an exact colour; overrides are used as written, and only derived roles go through the contrast guard (a failing override is logged).
-3. **Styles**: the named Lip Gloss styles on `theme.Theme`, built from roles only. Markdown (Glamour) and code (Chroma) styles are generated from the same roles, and the diff and Markdown share one token-to-role mapping (`theme.ClassOf`).
+3. **Styles**: the named Lip Gloss styles on `theme.Theme`, built from roles only. Markdown (Glamour) styles are generated from the same roles. Code has one Chroma style per theme (`Theme.Syntax`): generated from the syntax roles through one token-to-role mapping (`theme.ClassOf`), or a bundled Chroma style the theme names with `syntax:`. The diff pane and Markdown code blocks both draw from it, per token type.
 
 What `theme/enforce_test.go` checks (over every non-test file in `internal/userinterface`, with the rules proven on snippets):
 
@@ -116,7 +116,7 @@ Rules for you:
 
 - A new UI element uses an existing role. If none fits, add a role with a default derivation from slots (and a line in the role table in `docs/themes.md`).
 - Never add palette slots, ANSI indices or raw colours to styles, views or components.
-- Caches of rendered output (markdown, highlighting) include `Theme.Identifier` (a fingerprint of the final roles), or hold theme-independent data (token classes).
+- Caches of rendered output (markdown, highlighting) include `Theme.Identifier` (a fingerprint of the final roles and the syntax style), or hold theme-independent data (token types).
 - Chroma's style registry is a global map read by Glamour without a lock. Register styles (`ChromaStyleName`) and run Glamour only on the UI goroutine, never in a `tea.Cmd`.
 - Tests that render Markdown or register Chroma styles don't use `test.Parallel` (the registry is unlocked; see the line above).
 - Bubbles widgets that ship default styles (`textinput`, `help`, `list`, …) get their styles set from the theme. Never keep `DefaultStyles()` or `DefaultDarkStyles()`; the AST check can't see those.
