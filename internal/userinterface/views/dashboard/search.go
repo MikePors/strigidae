@@ -14,22 +14,14 @@ import (
 // across all sections.
 func (current *tab) searchList() search.List {
 	return search.List{
-		Rows: func() []string {
-			pullRequests := current.pullRequests()
-			rows := make([]string, len(pullRequests))
-			for i, pullRequest := range pullRequests {
-				rows[i] = pullrequestrows.SearchText(pullRequest)
-			}
-			return rows
-		},
-		Identities: func() []string {
-			identities := make([]string, 0, current.total())
+		Items: func() []search.Item {
+			var items []search.Item
 			for i, target := range current.sections {
-				for _, pullRequest := range target.pullRequests {
-					identities = append(identities, rowKey(i, pullRequest))
-				}
+				items = append(items, pullrequestrows.SearchItems(target.pullRequests, func(_ int, pullRequest github.PullRequest) string {
+					return rowKey(i, pullRequest)
+				})...)
 			}
-			return identities
+			return items
 		},
 		Cursor: current.selectedIndex,
 		CursorKey: func() string {
@@ -61,11 +53,4 @@ func (current *tab) searchList() search.List {
 // one pull request often appears in several sections.
 func rowKey(section int, pullRequest github.PullRequest) string {
 	return fmt.Sprintf("%d/%s#%d", section, pullRequest.Repository, pullRequest.Number)
-}
-
-// refreshSearch recomputes the marks after the rows changed.
-func (current *tab) refreshSearch() {
-	if current.search.Active() {
-		current.search.Refresh(current.searchList().Rows())
-	}
 }

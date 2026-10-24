@@ -267,7 +267,7 @@ func (view *View) loaded(message sectionLoadedMessage) {
 		return // keep the rows from the last good load
 	}
 	target.pullRequests = message.page.Items
-	current.refreshSearch()
+	current.search.Refresh(current.searchList())
 	if current.total() == 0 {
 		current.anchor = nil // start from the top when rows come back
 	}

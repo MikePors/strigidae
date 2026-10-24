@@ -79,9 +79,6 @@ func (state *State) Cancel(rows []string) { state.set(state.previousQuery, rows)
 // Clear drops the search and its marks.
 func (state *State) Clear() { state.set("", nil) }
 
-// Refresh recomputes the matches for rows that changed, keeping the query.
-func (state *State) Refresh(rows []string) { state.set(state.query, rows) }
-
 // Active reports whether there is a search, with or without matches.
 func (state *State) Active() bool { return state.query != "" }
 

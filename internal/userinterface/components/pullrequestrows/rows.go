@@ -167,6 +167,16 @@ func SearchText(pullRequest github.PullRequest) string {
 	}, " ")
 }
 
+// SearchItems turns pull requests into search rows: their SearchText, and the
+// identity the caller gives each one.
+func SearchItems(pullRequests []github.PullRequest, identity func(index int, pullRequest github.PullRequest) string) []search.Item {
+	items := make([]search.Item, len(pullRequests))
+	for i, pullRequest := range pullRequests {
+		items[i] = search.Item{Text: SearchText(pullRequest), Identity: identity(i, pullRequest)}
+	}
+	return items
+}
+
 // Row draws one pull request, padded to width. The selected row is
 // highlighted and carries a marker; a row that matches the search carries the
 // search marker unless it is selected.

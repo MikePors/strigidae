@@ -86,7 +86,7 @@ func TestStateMovement(test *testing.T) {
 		}
 	}
 
-	state.Refresh([]string{"x only"})
+	state.Refresh(List{Items: func() []Item { return []Item{{Text: "x only"}} }})
 	if !state.Marked(0) || state.Marked(1) {
 		test.Error("refresh did not recompute the marks")
 	}
@@ -114,5 +114,36 @@ func TestWhitespaceQueryIsNoSearch(test *testing.T) {
 	state.Begin(0, "")
 	if _, ok := state.Type("   ", []string{"a b"}, 0); ok || state.Active() {
 		test.Error("a blank query started a search")
+	}
+}
+
+func TestRefreshWithoutASearchDoesNothing(test *testing.T) {
+	var state State
+	state.Refresh(List{Items: func() []Item { return []Item{{Text: "a"}} }})
+	if state.Active() || state.Marked(0) {
+		test.Error("refresh made a search")
+	}
+}
+
+func TestCursorKeyDefaultsToTheItemUnderTheCursor(test *testing.T) {
+	items := []Item{{Text: "a", Identity: "ka"}, {Text: "b", Identity: "kb"}}
+	list := List{Items: func() []Item { return items }}
+	tests := []struct {
+		name   string
+		cursor int
+		want   string
+	}{{"first", 0, "ka"}, {"second", 1, "kb"}, {"past the end", 5, ""}, {"before the start", -1, ""}}
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			list.Cursor = func() int { return testCase.cursor }
+			if got := list.cursorKey(); got != testCase.want {
+				test.Errorf("cursorKey = %q, want %q", got, testCase.want)
+			}
+		})
+	}
+	list.Cursor = func() int { return 0 }
+	list.CursorKey = func() string { return "override" }
+	if got := list.cursorKey(); got != "override" {
+		test.Errorf("cursorKey = %q, want the override", got)
 	}
 }

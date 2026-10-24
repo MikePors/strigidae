@@ -185,7 +185,7 @@ func (view *View) loaded(message pullRequestsLoadedMessage) tea.Cmd {
 		view.replace(message.page.Items)
 	}
 	view.window.SetRows(len(view.pullRequests))
-	view.refreshSearch()
+	view.search.Refresh(view.searchList())
 	return view.maybeLoadMore()
 }
 

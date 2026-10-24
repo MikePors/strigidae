@@ -34,28 +34,14 @@ func (view *View) searchHelp() []key.Binding {
 // Overview, which has no text to match.
 func (view *View) searchList() search.List {
 	return search.List{
-		Rows: func() []string {
-			rows := make([]string, view.entries())
-			for i, file := range view.files() {
-				rows[i+1] = terminaltext.Clean(file.Path)
+		Items: func() []search.Item {
+			items := []search.Item{{Identity: overviewKey}}
+			for _, file := range view.files() {
+				items = append(items, search.Item{Text: terminaltext.Clean(file.Path), Identity: fileKeyPrefix + file.Path})
 			}
-			return rows
-		},
-		Identities: func() []string {
-			identities := make([]string, view.entries())
-			identities[0] = overviewKey
-			for i, file := range view.files() {
-				identities[i+1] = fileKeyPrefix + file.Path
-			}
-			return identities
+			return items
 		},
 		Cursor: view.window.Cursor,
-		CursorKey: func() string {
-			if view.selection() == 0 || view.selection() > len(view.files()) {
-				return overviewKey
-			}
-			return fileKeyPrefix + view.files()[view.selection()-1].Path
-		},
 		GoTo: func(row int) tea.Cmd {
 			previous := view.selection()
 			view.window.GotoRow(row)
@@ -65,12 +51,5 @@ func (view *View) searchList() search.List {
 			view.layout()
 			return nil
 		},
-	}
-}
-
-// refreshSearch recomputes the marks after the files changed.
-func (view *View) refreshSearch() {
-	if view.search.Active() {
-		view.search.Refresh(view.searchList().Rows())
 	}
 }
