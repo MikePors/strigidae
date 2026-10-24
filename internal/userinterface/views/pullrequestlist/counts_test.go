@@ -33,7 +33,6 @@ func TestCounts(test *testing.T) {
 		{"2ctrl+d repeats the half page", nil, "ctrl+d", 2, 10},
 		{"2ctrl+f repeats the page", nil, "ctrl+f", 2, 22},
 		{"2ctrl+u repeats the half page up", []string{"G"}, "ctrl+u", 2, 14},
-		{"a count on a key that ignores it acts once", nil, "g g", 5, 0},
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
@@ -50,14 +49,32 @@ func TestCounts(test *testing.T) {
 }
 
 func TestCountOnRefreshActsOnce(test *testing.T) {
-	client := fakeWith(makePullRequests(25))
-	view := loadedView(test, client, nil)
+	view := loadedView(test, fakeWith(makePullRequests(25)), nil)
 	press(view, "j")
-	command := pressCounted(view, "R", 5)
-	if command == nil {
+	before := view.sequence
+	if command := pressCounted(view, "R", 5); command == nil {
 		test.Fatal("R with a count should still refresh")
+	}
+	if got := view.sequence - before; got != 1 {
+		test.Errorf("5R started %d refreshes, want 1", got)
 	}
 	if view.window.Cursor() != 1 {
 		test.Errorf("cursor = %d, want 1", view.window.Cursor())
+	}
+}
+
+func TestCountOnOpenActsOnce(test *testing.T) {
+	var opened []string
+	view := loadedView(test, fakeWith(makePullRequests(3)), func(address string) error {
+		opened = append(opened, address)
+		return nil
+	})
+	command := pressCounted(view, "o", 5)
+	if command == nil {
+		test.Fatal("o should produce a command")
+	}
+	command()
+	if len(opened) != 1 {
+		test.Errorf("5o opened the browser %d times, want 1", len(opened))
 	}
 }
