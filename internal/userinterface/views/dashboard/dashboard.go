@@ -18,6 +18,7 @@ import (
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/components/scroll"
+	"github.com/MikePors/strigidae/internal/userinterface/components/search"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
 	"github.com/MikePors/strigidae/internal/userinterface/terminaltext"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
@@ -67,6 +68,7 @@ type tab struct {
 
 	anchor *anchor // nil until the user moves the cursor
 	window scroll.Window
+	search search.State // each tab keeps its own search
 }
 
 // View shows the tabs.
@@ -176,6 +178,7 @@ func (view *View) ShortHelp() []key.Binding {
 func (view *View) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{view.bindings.nextTab, view.bindings.previousTab, view.bindings.nextSection, view.bindings.previousSection},
+		{view.globalKeys.Search, view.globalKeys.NextMatch, view.globalKeys.PreviousMatch},
 	}
 }
 
@@ -229,6 +232,11 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		view.theme = message.Theme
 	case sectionLoadedMessage:
 		view.loaded(message)
+	case userinterface.PromptResultMessage:
+		if len(view.tabs) > 0 {
+			current := &view.tabs[view.active]
+			return view, current.search.Prompt(message, current.searchList())
+		}
 	case keys.Message:
 		return view, view.handleKey(message)
 	}
@@ -250,6 +258,7 @@ func (view *View) loaded(message sectionLoadedMessage) {
 		return // keep the rows from the last good load
 	}
 	target.pullRequests = message.page.Items
+	current.refreshSearch()
 	if current.total() == 0 {
 		current.anchor = nil // start from the top when rows come back
 	}
@@ -294,6 +303,14 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 		current.move(message.Repeat() * max(view.listHeight(), 1))
 	case key.Matches(message, view.globalKeys.PageUp):
 		current.move(-message.Repeat() * max(view.listHeight(), 1))
+	case key.Matches(message, view.globalKeys.Search):
+		return current.search.Start(current.searchList())
+	case key.Matches(message, view.globalKeys.NextMatch):
+		return current.search.Step(message, true, current.searchList())
+	case key.Matches(message, view.globalKeys.PreviousMatch):
+		return current.search.Step(message, false, current.searchList())
+	case key.Matches(message, view.globalKeys.Cancel):
+		current.search.Clear()
 	case key.Matches(message, view.globalKeys.Select):
 		return view.openSelected()
 	case key.Matches(message, view.globalKeys.Open):

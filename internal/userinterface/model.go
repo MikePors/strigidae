@@ -133,6 +133,9 @@ func (model *Model) update(message tea.Msg) tea.Cmd {
 		return model.pop()
 	case QuitMessage:
 		return tea.Quit
+	case PromptMessage:
+		model.resetKeys()
+		return model.commandLine.openPrompt(message.Prefix)
 	case ConfirmMessage:
 		model.resetKeys()
 		model.confirm = newConfirmPrompt(message)
@@ -265,6 +268,9 @@ func (model *Model) handleKey(message tea.KeyPressMsg) tea.Cmd {
 	if confirmPrompt := model.confirm; confirmPrompt.CapturesKeys() {
 		model.confirm = nil
 		return confirmPrompt.answer(message)
+	}
+	if model.commandLine.active && model.commandLine.prompt != "" {
+		return model.promptKey(message)
 	}
 	if model.commandLine.active {
 		line, ok, command := model.commandLine.handleKey(message)

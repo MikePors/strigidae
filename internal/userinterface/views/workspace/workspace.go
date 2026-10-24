@@ -16,6 +16,7 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/components/markdown"
 	"github.com/MikePors/strigidae/internal/userinterface/components/picker"
 	"github.com/MikePors/strigidae/internal/userinterface/components/scroll"
+	"github.com/MikePors/strigidae/internal/userinterface/components/search"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
@@ -89,6 +90,7 @@ type View struct {
 	hunkFingerprints fingerprintCache // fingerprints of the last file asked about
 
 	window   scroll.Window // Files pane: row 0 is Overview, row i is Files[i-1]
+	search   search.State  // over the same rows; Overview never matches
 	focus    pane
 	overview overview
 	picker   *picker.Model // non-nil while the file picker is open
@@ -180,6 +182,7 @@ func (view *View) FullHelp() [][]key.Binding {
 		{view.bind.PaneLeft, view.bind.PaneRight, view.bind.NextFile, view.bind.PreviousFile, view.bind.FilePicker},
 		{view.bind.NextSection, view.bind.PreviousSection, view.bind.Comment, view.bind.Reply, view.bind.Viewed, view.bind.ReviewHunk},
 		{view.bind.Visual, view.bind.EditComment, view.bind.DeleteComment},
+		{view.globalKeys.Search, view.globalKeys.NextMatch, view.globalKeys.PreviousMatch},
 	}
 	return append(out, view.filePane.FullHelp()...)
 }
@@ -258,6 +261,8 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 			return view, nil
 		}
 		return view, view.commentRead(message)
+	case userinterface.PromptResultMessage:
+		return view, view.search.Prompt(message, view.searchList())
 	case keys.Message:
 		return view, view.handleKey(message)
 	case tea.KeyPressMsg:

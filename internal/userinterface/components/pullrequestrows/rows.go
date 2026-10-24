@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/userinterface/components/search"
 	"github.com/MikePors/strigidae/internal/userinterface/terminaltext"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
@@ -155,9 +156,21 @@ func (layout Layout) row(repository, number, title, author, age, checks, review,
 	return strings.Join(cells, gap)
 }
 
+// SearchText is the clean text a search looks in for a pull request: title,
+// author, owner/name and #number.
+func SearchText(pullRequest github.PullRequest) string {
+	return strings.Join([]string{
+		terminaltext.Clean(pullRequest.Title),
+		terminaltext.Clean(pullRequest.Author),
+		terminaltext.Clean(pullRequest.Repository.String()),
+		fmt.Sprintf("#%d", pullRequest.Number),
+	}, " ")
+}
+
 // Row draws one pull request, padded to width. The selected row is
-// highlighted and carries a marker.
-func (table Table) Row(layout Layout, pullRequest github.PullRequest, selected bool, width int) string {
+// highlighted and carries a marker; a row that matches the search carries the
+// search marker unless it is selected.
+func (table Table) Row(layout Layout, pullRequest github.PullRequest, selected, matched bool, width int) string {
 	title := terminaltext.Clean(pullRequest.Title)
 	if pullRequest.Draft {
 		title = draftPrefix + title
@@ -201,5 +214,9 @@ func (table Table) Row(layout Layout, pullRequest github.PullRequest, selected b
 	if layout.comments > 0 {
 		out = append(out, styles.Comments.Render(padLeft(comments, layout.comments)))
 	}
-	return noMarker + strings.Join(out, gap)
+	lead := noMarker
+	if matched {
+		lead = table.theme.SearchMarker.Render(search.Glyph) + " "
+	}
+	return lead + strings.Join(out, gap)
 }

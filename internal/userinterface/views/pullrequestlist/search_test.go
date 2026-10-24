@@ -1,0 +1,213 @@
+package pullrequestlist
+
+import (
+	"strings"
+	"testing"
+
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
+
+	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/userinterface"
+	"github.com/MikePors/strigidae/internal/userinterface/components/search"
+	"github.com/MikePors/strigidae/internal/userinterface/keys"
+	"github.com/MikePors/strigidae/internal/userinterface/theme"
+)
+
+// searchRows has "fix" in rows 1, 3 and 5.
+func searchRows() []github.PullRequest {
+	titles := []string{"Add cache", "Fix parser", "Tidy docs", "Fix lexer", "Rename flag", "Fix prompt"}
+	rows := makePullRequests(len(titles))
+	for i := range rows {
+		rows[i].Title = titles[i]
+	}
+	return rows
+}
+
+func searchView(test *testing.T) *View {
+	test.Helper()
+	return loadedView(test, fakeWith(searchRows()), nil)
+}
+
+func typeSearch(view *View, text string) {
+	view.Update(userinterface.PromptResultMessage{Prefix: "/", Text: text, State: userinterface.PromptChanged})
+}
+
+func finishSearch(view *View, text string, state userinterface.PromptState) []tea.Msg {
+	_, command := view.Update(userinterface.PromptResultMessage{Prefix: "/", Text: text, State: state})
+	if command == nil {
+		return nil
+	}
+	message := command()
+	if batch, ok := message.(tea.BatchMsg); ok {
+		var out []tea.Msg
+		for _, inner := range batch {
+			if inner != nil {
+				out = append(out, inner())
+			}
+		}
+		return out
+	}
+	return []tea.Msg{message}
+}
+
+func TestSlashAsksForThePrompt(test *testing.T) {
+	view := searchView(test)
+	command := press(view, "/")
+	if command == nil {
+		test.Fatal("/ returned no command")
+	}
+	if message, ok := command().(userinterface.PromptMessage); !ok || message.Prefix != "/" {
+		test.Errorf("/ produced %v", message)
+	}
+}
+
+func TestTypingMovesTheCursorLive(test *testing.T) {
+	view := searchView(test)
+	press(view, "j") // row 1
+	press(view, "j") // row 2
+	press(view, "/")
+	typeSearch(view, "fix")
+	if got := view.window.Cursor(); got != 3 {
+		test.Errorf("cursor = %d, want the first match after row 2 (3)", got)
+	}
+	typeSearch(view, "fix p") // narrows to row 1 and 5; from row 2 the next is 5
+	if got := view.window.Cursor(); got != 5 {
+		test.Errorf("cursor = %d, want 5", got)
+	}
+	typeSearch(view, "zzz")
+	if got := view.window.Cursor(); got != 2 {
+		test.Errorf("cursor = %d with no match, want it back on 2", got)
+	}
+}
+
+func TestEscWhileTypingRestoresTheCursor(test *testing.T) {
+	view := searchView(test)
+	press(view, "j")
+	press(view, "/")
+	typeSearch(view, "fix l")
+	finishSearch(view, "fix l", userinterface.PromptCancelled)
+	if got := view.window.Cursor(); got != 1 {
+		test.Errorf("cursor = %d, want 1", got)
+	}
+	if view.search.Active() {
+		test.Error("a cancelled search is still active")
+	}
+}
+
+func TestEnterKeepsTheSearchAndEscClearsIt(test *testing.T) {
+	view := searchView(test)
+	press(view, "/")
+	typeSearch(view, "fix")
+	finishSearch(view, "fix", userinterface.PromptSubmitted)
+	if !view.search.Marked(1) || !view.search.Marked(3) || !view.search.Marked(5) || view.search.Marked(0) {
+		test.Error("enter did not keep the marks")
+	}
+	press(view, "esc")
+	if view.search.Active() || view.search.Marked(1) {
+		test.Error("esc in the list did not clear the search")
+	}
+}
+
+func TestNextAndPreviousWrapAndTakeACount(test *testing.T) {
+	view := searchView(test)
+	press(view, "/")
+	typeSearch(view, "fix")
+	finishSearch(view, "fix", userinterface.PromptSubmitted) // cursor on 1
+	press(view, "n")
+	if got := view.window.Cursor(); got != 3 {
+		test.Errorf("n: cursor = %d, want 3", got)
+	}
+	press(view, "n")
+	press(view, "n") // wraps
+	if got := view.window.Cursor(); got != 1 {
+		test.Errorf("n wrap: cursor = %d, want 1", got)
+	}
+	press(view, "N") // wraps back
+	if got := view.window.Cursor(); got != 5 {
+		test.Errorf("N wrap: cursor = %d, want 5", got)
+	}
+	view.Update(keys.Message{Sequence: "n", Count: 3})
+	if got := view.window.Cursor(); got != 5 {
+		test.Errorf("3n: cursor = %d, want 5 (three matches round the ring)", got)
+	}
+	view.Update(keys.Message{Sequence: "n", Count: 2})
+	if got := view.window.Cursor(); got != 3 {
+		test.Errorf("2n: cursor = %d, want 3", got)
+	}
+}
+
+func TestNoMatchSaysSoAndKeepsTheCursor(test *testing.T) {
+	view := searchView(test)
+	press(view, "j")
+	press(view, "/")
+	typeSearch(view, "zzz")
+	messages := finishSearch(view, "zzz", userinterface.PromptSubmitted)
+	var info []string
+	for _, message := range messages {
+		if text, ok := message.(userinterface.InfoMessage); ok {
+			info = append(info, text.Text)
+		}
+	}
+	if len(info) != 1 || info[0] != "no match: zzz" {
+		test.Errorf("info = %q, want [no match: zzz]", info)
+	}
+	if got := view.window.Cursor(); got != 1 {
+		test.Errorf("cursor = %d, want 1", got)
+	}
+}
+
+func TestRefreshKeepsTheSearchAndRecomputesTheMarks(test *testing.T) {
+	client := fakeWith(searchRows())
+	view := loadedView(test, client, nil)
+	press(view, "/")
+	typeSearch(view, "fix")
+	finishSearch(view, "fix", userinterface.PromptSubmitted)
+
+	fresh := searchRows()
+	fresh[0].Title = "Fix cache" // now matches
+	fresh[3].Title = "Lexer"     // no longer matches
+	client.SetPullRequests(testRepository, fresh)
+	deliver(test, view, press(view, "R"))
+	if !view.search.Marked(0) || view.search.Marked(3) || !view.search.Marked(1) {
+		test.Error("marks were not recomputed after the refresh")
+	}
+	if view.search.Query() != "fix" {
+		test.Errorf("query = %q", view.search.Query())
+	}
+}
+
+func TestMatchingRowsCarryTheMarker(test *testing.T) {
+	view := searchView(test)
+	press(view, "/")
+	typeSearch(view, "fix")
+	finishSearch(view, "fix", userinterface.PromptSubmitted) // cursor on row 1
+	marker := theme.Default().SearchMarker.Render(search.Glyph)
+	lines := strings.Split(view.Render(80, 12), "\n")
+	// Header, then rows 0.. : row 3 is a match that is not selected.
+	if !strings.HasPrefix(lines[4], marker) {
+		test.Errorf("row 3 = %q, want it to start with the styled marker %q", lines[4], marker)
+	}
+	if strings.Contains(lines[1], search.Glyph) || strings.Contains(lines[3], search.Glyph) {
+		test.Error("rows that do not match carry the marker")
+	}
+	if !strings.HasPrefix(ansi.Strip(lines[2]), "> ") {
+		test.Errorf("selected row = %q", ansi.Strip(lines[2]))
+	}
+	press(view, "esc")
+	if strings.Contains(ansi.Strip(view.Render(80, 12)), search.Glyph) {
+		test.Error("marks survive esc")
+	}
+}
+
+func TestHelpListsTheSearchKeys(test *testing.T) {
+	var got []string
+	for _, group := range searchView(test).FullHelp() {
+		for _, binding := range group {
+			got = append(got, binding.Help().Key)
+		}
+	}
+	if strings.Join(got, " ") != "/ n N" {
+		test.Errorf("help keys = %q", got)
+	}
+}

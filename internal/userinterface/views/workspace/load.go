@@ -160,6 +160,7 @@ func (view *View) pullRequestLoaded(message pullRequestLoadedMessage) tea.Cmd {
 	view.window.Restore(selection, top, 0) // a refresh must not scroll the Files list
 	view.overview.invalidate()
 	view.selectionChanged()
+	view.refreshSearch()
 	view.layout()
 	return nil
 }

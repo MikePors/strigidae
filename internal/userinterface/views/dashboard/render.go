@@ -43,7 +43,7 @@ func (view *View) drawLine(table pullrequestrows.Table, layout pullrequestrows.L
 	case noteLine:
 		return view.note(target, width)
 	default:
-		return table.Row(layout, target.pullRequests[entry.row], entry.index == selectedIndex, width)
+		return table.Row(layout, target.pullRequests[entry.row], entry.index == selectedIndex, current.search.Marked(entry.index), width)
 	}
 }
 

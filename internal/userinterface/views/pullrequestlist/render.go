@@ -58,7 +58,7 @@ func (view *View) table(width, height int) string {
 
 	end := min(len(view.pullRequests), view.window.Top()+view.listHeight())
 	for i := view.window.Top(); i < end; i++ {
-		lines = append(lines, table.Row(layout, view.pullRequests[i], i == view.window.Cursor(), width))
+		lines = append(lines, table.Row(layout, view.pullRequests[i], i == view.window.Cursor(), view.search.Marked(i), width))
 	}
 	return strings.Join(lines, "\n")
 }

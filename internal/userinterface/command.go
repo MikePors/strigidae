@@ -67,6 +67,9 @@ var viewCommands = []string{"approve", "copy-filename", "delete-comment", "edit-
 type commandLine struct {
 	input  textinput.Model
 	active bool
+	// prompt is the prefix of the view prompt the line is serving (see
+	// prompt.go), or empty when it takes a ":" command.
+	prompt string
 }
 
 var _ KeyCapturer = (*commandLine)(nil)
@@ -106,6 +109,7 @@ func (commandLine *commandLine) open() tea.Cmd {
 
 func (commandLine *commandLine) close() {
 	commandLine.active = false
+	commandLine.prompt, commandLine.input.Prompt = "", ":"
 	commandLine.input.Blur()
 	commandLine.input.Reset()
 }

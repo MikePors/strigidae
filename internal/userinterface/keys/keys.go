@@ -85,7 +85,7 @@ func DefaultGlobal() Global {
 		Select:        bind("enter", "enter", "open / select"),
 		Open:          bind("o", "o", "open in browser"),
 		Refresh:       bind("R", "R", "refresh"),
-		Search:        bind("/", "/", "filter / search"),
+		Search:        bind("/", "/", "search"),
 		NextMatch:     bind("n", "n", "next match"),
 		PreviousMatch: bind("N", "N", "previous match"),
 		Cancel:        bind("esc", "esc", "cancel / clear"),
@@ -109,11 +109,13 @@ func (global Global) Bindings() []key.Binding {
 	return out
 }
 
-// FullHelp groups the global bindings for the help overlay.
+// FullHelp groups the global bindings for the help overlay. Search, NextMatch
+// and PreviousMatch are left out: only views that support searching list them
+// in their own FullHelp.
 func (global Global) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{global.Down, global.Up, global.Top, global.Bottom, global.HalfDown, global.HalfUp, global.PageDown, global.PageUp},
-		{global.Select, global.Open, global.Refresh, global.Search, global.NextMatch, global.PreviousMatch},
+		{global.Select, global.Open, global.Refresh},
 		{global.Cancel, global.Help, global.Command, global.Count},
 	}
 }

@@ -13,14 +13,14 @@ ctrl+b   page up
 enter    open / select                                              
 o        open in browser                                            
 R        refresh                                                    
-/        filter / search                                            
-n        next match                                                 
-N        previous match                                             
                                                                     
 esc      cancel / clear                                             
 ?        toggle help                                                
 :        command line (:q close, :qa quit)                          
 1-9      count: 11j, 3], 42G                                        
+
+
+
 
 
 
