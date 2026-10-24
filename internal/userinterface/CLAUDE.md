@@ -76,6 +76,7 @@ Commands (`:` then `enter`):
 |---|---|
 | `:q`, `:quit` | close the current view; quits strig on the root view |
 | `:qa`, `:qall`, `:quitall` | quit strig |
+| `:theme <value>` | switch the colour theme: a bundled theme's name or a theme file, resolved like the config's `theme:` but with relative paths taken from the current directory. The file is read in a `tea.Cmd`; on failure the error shows and the theme stays |
 | `:approve`, `:request-changes`, `:review` | PR workspace: submit a review verdict (`:review` opens the chooser) |
 | `:merge [merge\|squash\|rebase]` | PR workspace: merge the pull request after a `y/N` confirmation; no argument uses the first method the repo allows (merge commit, squash, rebase) |
 | `:copy-filename` | PR workspace: copy the selected file's path to the clipboard (OSC 52; tmux needs `set -g set-clipboard on`) |
