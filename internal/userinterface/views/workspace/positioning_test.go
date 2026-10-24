@@ -1,30 +1,45 @@
 package workspace
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"github.com/charmbracelet/x/ansi"
+)
 
 func TestScreenPositioningInTheDiffPane(test *testing.T) {
-	harness := openClientDiff(test, 100, 14)
-	harness.press("j", "j", "j", "j", "j", "j", "j", "j", "j", "j")
-	harness.view.Render(100, 14)
+	harness := threadHarness(test, 100, 14)
+	harness.press("}", "l", ")", "z o") // an expanded thread: its rows are rows of the view
+	if !strings.Contains(ansi.Strip(harness.view.Render(100, 14)), "Nit: unused import.") {
+		test.Fatal("the thread did not expand")
+	}
 	pane := harness.pane()
+	harness.press("g g")
+	for range 16 {
+		harness.press("j")
+	}
+	for range 4 {
+		harness.press("k")
+	}
+	height := harness.view.window.Height() // the Files list and the diff pane are equally tall
+	harness.view.Render(100, 14)
 	cursor := pane.CursorRow()
-	check := func(key string) int {
-		harness.press(key)
+	if above := cursor - pane.Top(); above != height/2 {
+		test.Fatalf("start: %d rows above the cursor, want %d (cursor %d, top %d)", above, height/2, cursor, pane.Top())
+	}
+	tests := []struct {
+		key       string
+		wantAbove int
+	}{{"z b", height - 1}, {"z z", (height - 1) / 2}, {"z t", 0}}
+	for _, testCase := range tests {
+		harness.press(testCase.key)
 		harness.view.Render(100, 14)
 		if got := pane.CursorRow(); got != cursor {
-			test.Errorf("%s moved the cursor from %d to %d", key, cursor, got)
+			test.Errorf("%s moved the cursor from %d to %d", testCase.key, cursor, got)
 		}
-		return cursor - pane.Top() // rows above the cursor in the view
-	}
-	height := check("z b") + 1
-	if height < 3 || height > cursor+1 {
-		test.Fatalf("z b put the cursor %d rows from the top; the view looks unscrolled", height-1)
-	}
-	if got, want := check("z z"), (height-1)/2; got != want {
-		test.Errorf("z z: %d rows above the cursor, want %d", got, want)
-	}
-	if got := check("z t"); got != 0 {
-		test.Errorf("z t: %d rows above the cursor, want 0", got)
+		if got := cursor - pane.Top(); got != testCase.wantAbove {
+			test.Errorf("%s: %d rows above the cursor, want %d", testCase.key, got, testCase.wantAbove)
+		}
 	}
 }
 

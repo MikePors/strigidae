@@ -76,6 +76,6 @@ func (current *tab) scrollCursor(place func(*scroll.Window), height int) {
 	lines, selectedLine := current.lines(selectedIndex)
 	current.window.SetRows(len(lines))
 	current.window.SetSize(height)
-	current.window.Restore(selectedLine, current.window.Top(), 0)
+	current.window.Restore(selectedLine, current.window.Top(), current.window.HorizontalOffset())
 	place(&current.window)
 }
