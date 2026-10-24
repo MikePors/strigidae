@@ -77,6 +77,9 @@ type View struct {
 	bindings   bindings
 	now        func() time.Time
 	open       func(url string) error
+	// hunkMarks keeps the hunks marked reviewed in every workspace opened
+	// from here, so they survive closing and reopening a pull request.
+	hunkMarks *workspace.HunkMarks
 
 	notice string // shown once as an info message when the view starts
 
@@ -115,9 +118,10 @@ func New(client github.Client, tabs []config.Tab, activeTheme theme.Theme, optio
 			nextSection:     key.NewBinding(key.WithKeys("]"), key.WithHelp("]", "next section")),
 			previousSection: key.NewBinding(key.WithKeys("["), key.WithHelp("[", "previous section")),
 		},
-		now:    options.Now,
-		open:   options.Open,
-		notice: options.Notice,
+		now:       options.Now,
+		open:      options.Open,
+		notice:    options.Notice,
+		hunkMarks: workspace.NewHunkMarks(),
 	}
 	for _, configured := range tabs {
 		current := tab{name: configured.Name}
@@ -329,6 +333,7 @@ func (view *View) openSelected() tea.Cmd {
 		workspace.WithTheme(view.theme),
 		workspace.WithClock(view.now),
 		workspace.WithOpener(view.open),
+		workspace.WithHunkMarks(view.hunkMarks),
 	))
 }
 

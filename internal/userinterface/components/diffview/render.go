@@ -81,7 +81,11 @@ func (model *Model) renderRow(i int) string {
 		return model.renderNoticeRow(i, row)
 	}
 	if row.line == nil {
-		return model.renderHunk(model.file.Hunks[row.hunk].Header(), current)
+		header := model.file.Hunks[row.hunk].Header()
+		if model.hunkReviewed != nil && model.hunkReviewed(model.file, row.hunk) {
+			header = markerReviewed + " " + header
+		}
+		return model.renderHunk(header, current)
 	}
 	var kind int
 	switch row.line.Kind {

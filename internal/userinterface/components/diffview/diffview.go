@@ -132,6 +132,8 @@ type Model struct {
 	numberWidth      int // width of one line-number column
 	maximumWidth     int // widest code line, in cells
 
+	hunkReviewed func(file *diff.File, hunk int) bool // see SetHunkReviewed; nil: none are
+
 	cache map[int][]Span // highlighted rows, by base row index; reset per file
 	saved *position      // position kept while a message replaces the file
 

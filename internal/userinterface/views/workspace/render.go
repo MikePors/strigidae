@@ -85,7 +85,7 @@ func (view *View) Render(width, height int) string {
 		left = drawPane(view, view.filesTitle(), view.fileRows(filesWidth-2, lineHeight-2), filesWidth, lineHeight, view.focus == paneFiles)
 	}
 	if rightWidth > 0 {
-		right = drawPane(view, view.rightTitle(), view.rightRows(rightWidth-2, lineHeight-2), rightWidth, lineHeight, view.focus == paneRight)
+		right = drawPane(view, view.rightTitle(rightWidth-5), view.rightRows(rightWidth-2, lineHeight-2), rightWidth, lineHeight, view.focus == paneRight)
 	}
 	rows := make([]string, 0, height)
 	rows = append(rows, view.renderHeader(width)...)
@@ -186,9 +186,16 @@ func (view *View) stateBadge() string {
 	}
 }
 
-func (view *View) rightTitle() string {
+// rightTitle is the right pane's title in at most width cells (drawPane
+// truncates anything longer). A long path is shortened from the left, so the
+// hunk progress after it stays visible.
+func (view *View) rightTitle(width int) string {
 	if path := view.selectedPath(); path != "" {
-		return terminaltext.Clean(path)
+		path, progress := terminaltext.Clean(path), view.hunkProgress()
+		if over := ansi.StringWidth(path) + ansi.StringWidth(progress) - width; over > 0 && progress != "" {
+			path = ansi.TruncateLeft(path, over+1, "…") // +1: the ellipsis takes a cell
+		}
+		return path + progress
 	}
 	return "Overview"
 }
