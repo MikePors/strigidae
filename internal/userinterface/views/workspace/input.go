@@ -57,13 +57,6 @@ func openInBrowser(url string) error {
 	return browser.New("", io.Discard, io.Discard).Browse(url)
 }
 
-// repeat runs step as many times as the key's count asks for.
-func repeat(message keys.Message, step func()) {
-	for range message.Repeat() {
-		step()
-	}
-}
-
 func (view *View) handleKey(message keys.Message) tea.Cmd {
 	switch {
 	case key.Matches(message, view.bind.PaneLeft):
@@ -77,9 +70,9 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 	case key.Matches(message, view.bind.FilePicker):
 		view.openPicker()
 	case view.selection() == 0 && key.Matches(message, view.bind.NextSection):
-		repeat(message, func() { view.jumpSection(1) })
+		message.Each(view.overview.viewport.YOffset, func() { view.jumpSection(1) })
 	case view.selection() == 0 && key.Matches(message, view.bind.PreviousSection):
-		repeat(message, func() { view.jumpSection(-1) })
+		message.Each(view.overview.viewport.YOffset, func() { view.jumpSection(-1) })
 	case key.Matches(message, view.bind.Comment):
 		return view.comment()
 	case key.Matches(message, view.bind.Viewed):
@@ -146,13 +139,13 @@ func (view *View) filesKey(message keys.Message) {
 			view.window.GotoBottom()
 		}
 	case key.Matches(message, view.globalKeys.HalfDown):
-		repeat(message, view.window.HalfPageDown)
+		message.Each(view.window.Cursor, view.window.HalfPageDown)
 	case key.Matches(message, view.globalKeys.HalfUp):
-		repeat(message, view.window.HalfPageUp)
+		message.Each(view.window.Cursor, view.window.HalfPageUp)
 	case key.Matches(message, view.globalKeys.PageDown):
-		repeat(message, view.window.PageDown)
+		message.Each(view.window.Cursor, view.window.PageDown)
 	case key.Matches(message, view.globalKeys.PageUp):
-		repeat(message, view.window.PageUp)
+		message.Each(view.window.Cursor, view.window.PageUp)
 	case key.Matches(message, view.globalKeys.Select):
 		view.focus = paneRight
 	}
@@ -181,13 +174,13 @@ func (view *View) rightKey(message keys.Message) tea.Cmd {
 			viewport.GotoBottom()
 		}
 	case key.Matches(message, view.globalKeys.HalfDown):
-		repeat(message, viewport.HalfPageDown)
+		message.Each(viewport.YOffset, viewport.HalfPageDown)
 	case key.Matches(message, view.globalKeys.HalfUp):
-		repeat(message, viewport.HalfPageUp)
+		message.Each(viewport.YOffset, viewport.HalfPageUp)
 	case key.Matches(message, view.globalKeys.PageDown):
-		repeat(message, viewport.PageDown)
+		message.Each(viewport.YOffset, viewport.PageDown)
 	case key.Matches(message, view.globalKeys.PageUp):
-		repeat(message, viewport.PageUp)
+		message.Each(viewport.YOffset, viewport.PageUp)
 	}
 	return nil
 }

@@ -202,13 +202,6 @@ func (view *View) selected() (github.PullRequest, bool) {
 	return view.pullRequests[view.window.Cursor()], true
 }
 
-// repeat runs step as many times as the key's count asks for.
-func repeat(message keys.Message, step func()) {
-	for range message.Repeat() {
-		step()
-	}
-}
-
 func (view *View) handleKey(message keys.Message) tea.Cmd {
 	switch {
 	case key.Matches(message, view.globalKeys.Down):
@@ -224,13 +217,13 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 			view.window.GotoBottom()
 		}
 	case key.Matches(message, view.globalKeys.HalfDown):
-		repeat(message, view.window.HalfPageDown)
+		message.Each(view.window.Cursor, view.window.HalfPageDown)
 	case key.Matches(message, view.globalKeys.HalfUp):
-		repeat(message, view.window.HalfPageUp)
+		message.Each(view.window.Cursor, view.window.HalfPageUp)
 	case key.Matches(message, view.globalKeys.PageDown):
-		repeat(message, view.window.PageDown)
+		message.Each(view.window.Cursor, view.window.PageDown)
 	case key.Matches(message, view.globalKeys.PageUp):
-		repeat(message, view.window.PageUp)
+		message.Each(view.window.Cursor, view.window.PageUp)
 	case key.Matches(message, view.globalKeys.Select):
 		return view.openSelected()
 	case key.Matches(message, view.globalKeys.Open):

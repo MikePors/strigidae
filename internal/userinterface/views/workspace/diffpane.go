@@ -120,21 +120,21 @@ func (pane *diffPane) Update(message keys.Message) tea.Cmd {
 			diffView.GotoBottom()
 		}
 	case key.Matches(message, pane.globalKeys.HalfDown):
-		repeat(message, diffView.HalfPageDown)
+		message.Each(diffView.CursorRow, diffView.HalfPageDown)
 	case key.Matches(message, pane.globalKeys.HalfUp):
-		repeat(message, diffView.HalfPageUp)
+		message.Each(diffView.CursorRow, diffView.HalfPageUp)
 	case key.Matches(message, pane.globalKeys.PageDown):
-		repeat(message, diffView.PageDown)
+		message.Each(diffView.CursorRow, diffView.PageDown)
 	case key.Matches(message, pane.globalKeys.PageUp):
-		repeat(message, diffView.PageUp)
+		message.Each(diffView.CursorRow, diffView.PageUp)
 	case key.Matches(message, pane.bind.NextHunk):
-		repeat(message, diffView.NextHunk)
+		message.Each(diffView.CursorRow, diffView.NextHunk)
 	case key.Matches(message, pane.bind.PreviousHunk):
-		repeat(message, diffView.PreviousHunk)
+		message.Each(diffView.CursorRow, diffView.PreviousHunk)
 	case key.Matches(message, pane.bind.NextThread):
-		repeat(message, diffView.NextThread)
+		message.Each(diffView.CursorRow, diffView.NextThread)
 	case key.Matches(message, pane.bind.PreviousThread):
-		repeat(message, diffView.PreviousThread)
+		message.Each(diffView.CursorRow, diffView.PreviousThread)
 	case key.Matches(message, pane.bind.ToggleThread), key.Matches(message, pane.globalKeys.Select):
 		diffView.ToggleThread()
 	case key.Matches(message, pane.bind.OpenThread):

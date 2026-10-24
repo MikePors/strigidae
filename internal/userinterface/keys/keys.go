@@ -28,6 +28,19 @@ type Message struct {
 	Count    int
 }
 
+// Each runs step once per count (once without a count). It stops early when a
+// step leaves position() unchanged, so a count of 9999 against the end of a
+// list costs one step, not 9999.
+func (message Message) Each(position func() int, step func()) {
+	for range message.Repeat() {
+		before := position()
+		step()
+		if position() == before {
+			return
+		}
+	}
+}
+
 // Repeat returns how many times the key should act: the count, or 1 without one.
 func (message Message) Repeat() int { return max(message.Count, 1) }
 

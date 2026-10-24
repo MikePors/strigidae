@@ -135,6 +135,7 @@ func TestMatcherCounts(test *testing.T) {
 		{"esc clears the count", []string{"3", "esc", "j"}, []Result{typing, count(3, "esc"), count(0, "j")}},
 		{"count is kept through a sequence", []string{"3", "z", "z"}, []Result{typing, {Kind: Pending, Sequence: "z"}, count(3, "z z")}},
 		{"count survives a broken sequence", []string{"3", "z", "j"}, []Result{typing, {Kind: Pending, Sequence: "z"}, count(3, "j")}},
+		{"count does not join across a broken prefix", []string{"3", "z", "5", "j"}, []Result{typing, {Kind: Pending, Sequence: "z"}, typing, count(5, "j")}},
 		{"digit after a prefix restarts a count", []string{"z", "5", "j"}, []Result{{Kind: Pending, Sequence: "z"}, typing, count(5, "j")}},
 	}
 	for _, testCase := range tests {

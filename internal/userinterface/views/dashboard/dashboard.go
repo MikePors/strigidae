@@ -256,13 +256,6 @@ func (view *View) loaded(message sectionLoadedMessage) {
 	}
 }
 
-// repeat runs step as many times as the key's count asks for.
-func repeat(message keys.Message, step func()) {
-	for range message.Repeat() {
-		step()
-	}
-}
-
 func (view *View) handleKey(message keys.Message) tea.Cmd {
 	if len(view.tabs) == 0 {
 		return nil
@@ -274,9 +267,9 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 	case key.Matches(message, view.bindings.previousTab):
 		return view.switchTab(-1)
 	case key.Matches(message, view.bindings.nextSection):
-		repeat(message, func() { current.moveSection(1) })
+		message.Each(current.selectedIndex, func() { current.moveSection(1) })
 	case key.Matches(message, view.bindings.previousSection):
-		repeat(message, func() { current.moveSection(-1) })
+		message.Each(current.selectedIndex, func() { current.moveSection(-1) })
 	case key.Matches(message, view.globalKeys.Down):
 		current.move(message.Repeat())
 	case key.Matches(message, view.globalKeys.Up):

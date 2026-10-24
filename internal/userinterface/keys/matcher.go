@@ -71,6 +71,9 @@ func (matcher *Matcher) Feed(pressed string, bindings []key.Binding) Result {
 		return Result{Kind: Matched, Sequence: sequence, Count: count}
 	case found:
 		matcher.pending = nil
+		if len(pressed) == 1 && pressed[0] >= '0' && pressed[0] <= '9' {
+			matcher.count = 0 // the broken prefix ends the old count
+		}
 		return matcher.Feed(pressed, bindings)
 	default:
 		matcher.Reset()
