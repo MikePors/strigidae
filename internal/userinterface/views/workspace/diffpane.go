@@ -6,6 +6,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/MikePors/strigidae/internal/diff"
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/userinterface/components/diffview"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
@@ -64,6 +65,12 @@ func newDiffPane(activeTheme theme.Theme, now func() time.Time) *diffPane {
 }
 
 func (pane *diffPane) SetTheme(activeTheme theme.Theme) { pane.diffView.SetTheme(activeTheme) }
+
+func (pane *diffPane) SetHunkReviewed(reviewed func(file *diff.File, hunk int) bool) {
+	pane.diffView.SetHunkReviewed(reviewed)
+}
+
+func (pane *diffPane) CursorHunk() (*diff.File, int, bool) { return pane.diffView.CursorHunk() }
 
 func (pane *diffPane) SetThreads(threads []github.ReviewThread) { pane.diffView.SetThreads(threads) }
 

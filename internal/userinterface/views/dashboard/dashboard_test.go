@@ -18,6 +18,7 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
+	"github.com/MikePors/strigidae/internal/userinterface/views/workspace"
 )
 
 var testNow = time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
@@ -570,4 +571,22 @@ func narrowView(test *testing.T) *View {
 	view, _ := loadedView(test)
 	press(view, "]")
 	return view
+}
+
+// TestWorkspacesShareHunkMarks proves the dashboard hands every workspace it
+// opens the same hunk marks, so marks survive closing and reopening a pull
+// request.
+func TestWorkspacesShareHunkMarks(test *testing.T) {
+	view, _ := loadedView(test)
+	opened := func() *workspace.HunkMarks {
+		push, ok := press(view, "enter")().(userinterface.PushMessage)
+		if !ok {
+			test.Fatal("enter should push a view")
+		}
+		return push.View.(*workspace.View).HunkMarks()
+	}
+	first, second := opened(), opened()
+	if first == nil || first != second || first != view.hunkMarks {
+		test.Error("two workspaces opened from the dashboard do not share its hunk marks")
+	}
 }

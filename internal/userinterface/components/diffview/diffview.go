@@ -132,6 +132,8 @@ type Model struct {
 	numberWidth      int // width of one line-number column
 	maximumWidth     int // widest code line, in cells
 
+	hunkReviewed func(file *diff.File, hunk int) bool // see SetHunkReviewed; nil: none are
+
 	cache map[int][]Span // highlighted rows, by base row index; reset per file
 	saved *position      // position kept while a message replaces the file
 
@@ -154,7 +156,7 @@ func New(activeTheme theme.Theme, options ...Option) *Model {
 	return model
 }
 
-// SetTheme swaps the theme. The highlight cache holds token classes, not
+// SetTheme swaps the theme. The highlight cache holds token types, not
 // colours, so it stays valid.
 func (model *Model) SetTheme(activeTheme theme.Theme) {
 	model.theme = activeTheme

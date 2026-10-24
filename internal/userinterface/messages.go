@@ -21,8 +21,8 @@ type InfoMessage struct{ Text string }
 // ErrorMessage shows a transient error in the status bar and logs it.
 type ErrorMessage struct{ Err error }
 
-// ThemeMessage tells views the theme changed (for example after the terminal
-// background was detected).
+// ThemeMessage tells views the theme changed (after the terminal background
+// was detected, or `:theme`).
 type ThemeMessage struct{ Theme theme.Theme }
 
 // Push returns a command that pushes view.

@@ -85,6 +85,9 @@ type View struct {
 
 	viewedState map[string]*viewedToggle // by path; see viewedToggle
 
+	hunkMarks        *HunkMarks       // hunks marked reviewed; shared with other workspaces by WithHunkMarks
+	hunkFingerprints fingerprintCache // fingerprints of the last file asked about
+
 	window   scroll.Window // Files pane: row 0 is Overview, row i is Files[i-1]
 	focus    pane
 	overview overview
@@ -94,10 +97,14 @@ type View struct {
 	// pickerItems are the paths the picker was built from; a choice is
 	// resolved by path because a refresh may replace the file list meanwhile.
 	pickerItems []string
-	pickerPaths []string           // raw paths, parallel to pickerItems
-	paneFile    github.ChangedFile // last value given to filePane.SetFile
-	paneWidth   int                // size last given to filePane.SetSize
-	paneHeight  int
+	pickerPaths []string // raw paths, parallel to pickerItems
+	// pickerChecks is non-nil while the picker lists checks (:checks) rather
+	// than files; it is the sorted list the picker's rows came from.
+	pickerChecks []github.Check
+
+	paneFile   github.ChangedFile // last value given to filePane.SetFile
+	paneWidth  int                // size last given to filePane.SetSize
+	paneHeight int
 
 	width, height int
 }
@@ -128,12 +135,16 @@ func New(client github.Client, repository github.Repository, number int, options
 	for _, option := range options {
 		option(view)
 	}
+	if view.hunkMarks == nil {
+		view.hunkMarks = NewHunkMarks()
+	}
 	view.markdownRenderer = markdown.New(view.theme)
 	view.overview = newOverview()
 	if view.filePane == nil {
 		view.filePane = newDiffPane(view.theme, func() time.Time { return view.now() })
 	}
 	view.filePane.SetTheme(view.theme)
+	view.filePane.SetHunkReviewed(view.hunkReviewed)
 	return view
 }
 
@@ -171,7 +182,7 @@ func (view *View) ShortHelp() []key.Binding {
 func (view *View) FullHelp() [][]key.Binding {
 	out := [][]key.Binding{
 		{view.bind.PaneLeft, view.bind.PaneRight, view.bind.NextFile, view.bind.PreviousFile, view.bind.FilePicker},
-		{view.bind.NextSection, view.bind.PreviousSection, view.bind.Comment, view.bind.Reply, view.bind.Viewed},
+		{view.bind.NextSection, view.bind.PreviousSection, view.bind.Comment, view.bind.Reply, view.bind.Viewed, view.bind.ReviewHunk},
 		{view.bind.Visual, view.bind.EditComment, view.bind.DeleteComment},
 	}
 	return append(out, view.filePane.FullHelp()...)
@@ -261,7 +272,7 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 			return view, view.review.chooserKey(message, view.reviewEnvironment())
 		}
 		if view.picker != nil {
-			view.pickerKey(message)
+			return view, view.pickerKey(message)
 		}
 	}
 	return view, nil

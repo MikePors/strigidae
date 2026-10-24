@@ -76,7 +76,9 @@ Commands (`:` then `enter`):
 |---|---|
 | `:q`, `:quit` | close the current view; quits strig on the root view |
 | `:qa`, `:qall`, `:quitall` | quit strig |
+| `:theme <value>` | switch the colour theme: a bundled theme's name or a theme file, resolved like the config's `theme:` but with relative paths taken from the current directory; on failure the error shows and the theme stays |
 | `:approve`, `:request-changes`, `:review` | PR workspace: submit a review verdict (`:review` opens the chooser) |
+| `:checks` | PR workspace: list the head commit's checks (failing first); `enter` opens the selected check's page in the browser |
 | `:merge [merge\|squash\|rebase]` | PR workspace: merge the pull request after a `y/N` confirmation; no argument uses the first method the repo allows (merge commit, squash, rebase) |
 | `:copy-filename` | PR workspace: copy the selected file's path to the clipboard (OSC 52; tmux needs `set -g set-clipboard on`) |
 | `:edit-comment`, `:delete-comment` | PR workspace: change your comment at the diff cursor (same as `e` / `D`): the last comment of the focused thread you may change, pending ones first; deleting always asks `y/N`, editing a published comment asks `y/N` after the editor closes |
@@ -104,7 +106,7 @@ Colour flows through three layers, each built only from the one below (details i
 
 1. **Palette**: the 24 Base24 slots plus a light/dark variant (`theme/palette.go`; built-ins in `theme/palettes.go`). The only place colour values exist. The slots are unexported; only `roles.go` reads them.
 2. **Roles**: what strig means by a colour (`text`, `muted`, `accent`, `added`, diff tints, syntax tokens, …), derived from slots in `theme/roles.go`. A theme may override any role with an exact colour; overrides are used as written, and only derived roles go through the contrast guard (a failing override is logged).
-3. **Styles**: the named Lip Gloss styles on `theme.Theme`, built from roles only. Markdown (Glamour) and code (Chroma) styles are generated from the same roles, and the diff and Markdown share one token-to-role mapping (`theme.ClassOf`).
+3. **Styles**: the named Lip Gloss styles on `theme.Theme`, built from roles only. Markdown (Glamour) styles are generated from the same roles. Code has one Chroma style per theme (`Theme.Syntax`): generated from the syntax roles through one token-to-role mapping (`theme.ClassOf`), or a bundled Chroma style the theme names with `syntax:`. The diff pane and Markdown code blocks both draw from it, per token type.
 
 What `theme/enforce_test.go` checks (over every non-test file in `internal/userinterface`, with the rules proven on snippets):
 
@@ -116,7 +118,7 @@ Rules for you:
 
 - A new UI element uses an existing role. If none fits, add a role with a default derivation from slots (and a line in the role table in `docs/themes.md`).
 - Never add palette slots, ANSI indices or raw colours to styles, views or components.
-- Caches of rendered output (markdown, highlighting) include `Theme.Identifier` (a fingerprint of the final roles), or hold theme-independent data (token classes).
+- Caches of rendered output (markdown, highlighting) include `Theme.Identifier` (a fingerprint of the final roles and the syntax style), or hold theme-independent data (token types).
 - Chroma's style registry is a global map read by Glamour without a lock. Register styles (`ChromaStyleName`) and run Glamour only on the UI goroutine, never in a `tea.Cmd`.
 - Tests that render Markdown or register Chroma styles don't use `test.Parallel` (the registry is unlocked; see the line above).
 - Bubbles widgets that ship default styles (`textinput`, `help`, `list`, …) get their styles set from the theme. Never keep `DefaultStyles()` or `DefaultDarkStyles()`; the AST check can't see those.

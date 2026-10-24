@@ -33,6 +33,9 @@ type Options struct {
 	// Notice, if set, is shown in the status bar when strig starts, for
 	// example why the configured theme could not be used.
 	Notice string
+	// LoadTheme loads the theme `:theme` names; LoadThemeFromWorkingDirectory
+	// by default.
+	LoadTheme ThemeLoader
 }
 
 // Internal timer messages. The id/gen fields discard timers that were
@@ -53,6 +56,8 @@ type Model struct {
 	sequenceWait    time.Duration
 	messageLifetime time.Duration
 	notice          string
+	themeLoader     ThemeLoader
+	themeSequence   int // the latest `:theme` load; older results are ignored
 
 	width, height      int
 	matcher            keys.Matcher
@@ -81,6 +86,9 @@ func New(root View, activeTheme theme.Theme, options Options) *Model {
 	if options.Tick == nil {
 		options.Tick = tea.Tick
 	}
+	if options.LoadTheme == nil {
+		options.LoadTheme = LoadThemeFromWorkingDirectory
+	}
 	if options.Logger == nil {
 		options.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
@@ -93,6 +101,7 @@ func New(root View, activeTheme theme.Theme, options Options) *Model {
 		sequenceWait:    options.SequenceTimeout,
 		messageLifetime: options.MessageLifetime,
 		notice:          options.Notice,
+		themeLoader:     options.LoadTheme,
 		commandLine:     newCommandLine(activeTheme),
 		spin:            spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(activeTheme.Spinner)),
 	}
@@ -131,10 +140,11 @@ func (model *Model) update(message tea.Msg) tea.Cmd {
 		if model.theme.Chosen {
 			return nil
 		}
-		model.theme = theme.New(message.IsDark())
-		model.commandLine.setTheme(model.theme)
-		model.spin.Style = model.theme.Spinner
-		return model.broadcast(ThemeMessage{Theme: model.theme})
+		return model.setTheme(theme.New(message.IsDark()))
+	case themeRequestedMessage:
+		return model.loadTheme(message.value)
+	case themeLoadedMessage:
+		return model.themeLoaded(message)
 	case tea.KeyPressMsg:
 		return model.handleKey(message)
 	case PushMessage:

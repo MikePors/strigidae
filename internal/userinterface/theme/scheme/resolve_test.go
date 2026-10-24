@@ -101,7 +101,7 @@ func TestBundledListed(test *testing.T) {
 }
 
 // TestBundledThemesGolden proves every bundled theme parses, and records its
-// final roles and any contrast warnings as plain text.
+// final roles, its syntax style and any contrast warnings as plain text.
 func TestBundledThemesGolden(test *testing.T) {
 	for _, slug := range Bundled() {
 		test.Run(slug, func(test *testing.T) {
@@ -118,8 +118,12 @@ func TestBundledThemesGolden(test *testing.T) {
 			if !built.Chosen {
 				test.Error("bundled theme is not marked Chosen")
 			}
+			syntax := built.Syntax.Name()
+			if syntax == "" {
+				syntax = "(generated)"
+			}
 			text := "variant dark=" + map[bool]string{true: "true", false: "false"}[built.IsDark] + "\n" +
-				built.Roles.Listing() + "\nwarnings:\n" + logged.String()
+				"syntax " + syntax + "\n" + built.Roles.Listing() + "\nwarnings:\n" + logged.String()
 			golden.Assert(test, "bundled-"+slug, text, false)
 		})
 	}

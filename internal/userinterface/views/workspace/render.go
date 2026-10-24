@@ -85,7 +85,7 @@ func (view *View) Render(width, height int) string {
 		left = drawPane(view, view.filesTitle(), view.fileRows(filesWidth-2, lineHeight-2), filesWidth, lineHeight, view.focus == paneFiles)
 	}
 	if rightWidth > 0 {
-		right = drawPane(view, view.rightTitle(), view.rightRows(rightWidth-2, lineHeight-2), rightWidth, lineHeight, view.focus == paneRight)
+		right = drawPane(view, view.rightTitle(rightWidth-5), view.rightRows(rightWidth-2, lineHeight-2), rightWidth, lineHeight, view.focus == paneRight)
 	}
 	rows := make([]string, 0, height)
 	rows = append(rows, view.renderHeader(width)...)
@@ -148,6 +148,18 @@ func (view *View) renderHeader(width int) []string {
 		parts = append(parts, view.theme.FileModified.Render("review required"))
 	case github.ReviewDecisionNone:
 	}
+	// Only open pull requests show what stands in the way of merging.
+	if detail.State == github.PullRequestStateOpen {
+		switch detail.MergeState {
+		case github.MergeStateConflicts:
+			parts = append(parts, view.theme.FileDeleted.Render("conflicts"))
+		case github.MergeStateBehind:
+			parts = append(parts, view.theme.FileModified.Render("behind base"))
+		case github.MergeStateBlocked:
+			parts = append(parts, view.theme.FileModified.Render("blocked"))
+		case github.MergeStateOther:
+		}
+	}
 	// Branches are the least glanceable part, so they come after the states
 	// and are what truncation eats first.
 	parts = append(parts, view.theme.Muted.Render(terminaltext.Clean(detail.BaseBranch)+" ← "+terminaltext.Clean(detail.HeadBranch)))
@@ -158,15 +170,8 @@ func (view *View) renderHeader(width int) []string {
 		}
 		parts = append(parts, view.theme.Normal.Render(strings.Join(names, " ")))
 	}
-	if len(detail.ReviewRequests) > 0 {
-		names := make([]string, len(detail.ReviewRequests))
-		for i, reviewer := range detail.ReviewRequests {
-			names[i] = terminaltext.Clean(reviewer.Name)
-			if reviewer.IsTeam {
-				names[i] = "team " + names[i]
-			}
-		}
-		parts = append(parts, view.theme.Muted.Render("reviewers: "+strings.Join(names, ", ")))
+	if entries := reviewerEntries(detail); len(entries) > 0 {
+		parts = append(parts, reviewersText(view.theme, entries))
 	}
 	line2 := strings.Join(parts, separator)
 	return []string{ansi.Truncate(line1, width, "…"), ansi.Truncate(line2, width, "…")}
@@ -186,9 +191,16 @@ func (view *View) stateBadge() string {
 	}
 }
 
-func (view *View) rightTitle() string {
+// rightTitle is the right pane's title in at most width cells (drawPane
+// truncates anything longer). A long path is shortened from the left, so the
+// hunk progress after it stays visible.
+func (view *View) rightTitle(width int) string {
 	if path := view.selectedPath(); path != "" {
-		return terminaltext.Clean(path)
+		path, progress := terminaltext.Clean(path), view.hunkProgress()
+		if over := ansi.StringWidth(path) + ansi.StringWidth(progress) - width; over > 0 && progress != "" {
+			path = ansi.TruncateLeft(path, over+1, "…") // +1: the ellipsis takes a cell
+		}
+		return path + progress
 	}
 	return "Overview"
 }

@@ -140,6 +140,13 @@ type PullRequestDetail struct {
 	Comments []IssueComment
 	// Reviews are submitted review summaries, oldest first.
 	Reviews []Review
+	// CheckList holds the first 100 checks of the head commit, in GitHub's
+	// order; CheckTotal is how many there are in all.
+	CheckList  []Check
+	CheckTotal int
+	// MergeState says whether conflicts, a stale branch or branch protection
+	// stand in the way of merging.
+	MergeState MergeState
 }
 
 // ReactionContent is a kind of emoji reaction.

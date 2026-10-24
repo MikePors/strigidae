@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"math"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -431,7 +432,7 @@ func TestOverrideChangesIdentity(test *testing.T) {
 	if base.ChromaStyleName() == over.ChromaStyleName() {
 		test.Fatal("a role override did not change the Chroma style name")
 	}
-	got := newChromaStyle(over.ChromaStyleName(), over.Roles).Get(chroma.LiteralString).Colour.String()
+	got := over.Syntax.chroma.Get(chroma.LiteralString).Colour.String()
 	if got != "#ff00ff" {
 		test.Errorf("string colour in the overridden Chroma style = %s, want #ff00ff", got)
 	}
@@ -533,16 +534,19 @@ func TestNothingIsHardcoded(test *testing.T) {
 		test.Errorf("only %d colours compared; the walk is missing styles", checked)
 	}
 
-	// Syntax holds its styles privately, one per class.
-	for class := ClassKeyword; class < NumberSyntaxClasses; class++ {
-		actual, second := styleColors(first.Syntax.For(class)), styleColors(theme.Syntax.For(class))
+	// Syntax holds its styles privately, one per token type.
+	for _, token := range first.Syntax.TokenTypes() {
+		if ClassOf(token) == ClassPlain {
+			continue // the pane's own text colour
+		}
+		actual, second := styleColors(first.Syntax.For(token)), styleColors(theme.Syntax.For(token))
 		if actual[0] == "" || actual[0] == second[0] {
-			test.Errorf("syntax class %d colour %q / %q", class, actual[0], second[0])
+			test.Errorf("syntax token %v colour %q / %q", token, actual[0], second[0])
 		}
 	}
 
-	// Every token type the generated Chroma style colours.
-	firstStyle, secondStyle := newChromaStyle("a", first.Roles), newChromaStyle("b", theme.Roles)
+	// Every token type the Chroma style colours.
+	firstStyle, secondStyle := first.Syntax.chroma, theme.Syntax.chroma
 	for _, token := range firstStyle.Types() {
 		first, second := firstStyle.Get(token).Colour, secondStyle.Get(token).Colour
 		if first.IsSet() && first == second {
@@ -551,37 +555,75 @@ func TestNothingIsHardcoded(test *testing.T) {
 	}
 }
 
-// TestChromaStyleFollowsClasses proves the diff and Markdown share one
-// mapping for every Chroma token type, not just the listed ones: Chroma's own
-// inheritance must never decide a colour. Plain tokens are the text role in
-// the Chroma style and unset in the diff (the pane's own colour). The few
-// markup entries (errors, diff markup) are the only exceptions, and no token
-// has a background.
-func TestChromaStyleFollowsClasses(test *testing.T) {
+// TestGeneratedStyleFollowsClasses proves the generated style colours every
+// Chroma token type by its class, not just the listed ones: Chroma's own
+// inheritance must never decide a colour. The few markup entries (errors,
+// diff markup) are the only exceptions.
+func TestGeneratedStyleFollowsClasses(test *testing.T) {
 	for _, theme := range []Theme{New(true), New(false)} {
-		style := newChromaStyle("t", theme.Roles)
 		markup := chromaMarkup(theme.Roles)
 		checked := 0
-		for token := range chroma.StandardTypes {
-			entry := style.Get(token)
-			if entry.Background.IsSet() {
-				test.Errorf("%s: token %v has a background %s", theme.Identifier, token, entry.Background)
-			}
-			if _, ok := markup[token]; ok || token == chroma.Background {
+		for _, token := range standardTypes() {
+			if _, ok := markup[token]; ok {
 				continue
 			}
 			class := ClassOf(token)
 			want := HexString(theme.Roles.syntaxColour(class))
-			if got := entry.Colour.String(); got != want {
+			if got := theme.Syntax.chroma.Get(token).Colour.String(); got != want {
 				test.Errorf("%s: token %v (class %d): chroma colour %s, want %s", theme.Identifier, token, class, got, want)
 			}
-			diffForeground := styleColors(theme.Syntax.For(class))[0]
-			if class == ClassPlain {
-				if diffForeground != "" {
-					test.Errorf("token %v is plain but its diff style sets %s", token, diffForeground)
+			checked++
+		}
+		if checked < 50 {
+			test.Errorf("only %d token types checked", checked)
+		}
+	}
+}
+
+// TestDiffPaneMatchesChromaStyle proves the diff pane and Markdown code
+// blocks draw every standard token type alike, for a generated and a named
+// style: the same colour, bold, italic and underline, and never a background.
+// A token the diff leaves at the pane's own colour is the text role in Chroma.
+// For the named style, the colour is also the bundled style's own, unless that
+// is unreadable on the page and was nudged.
+func TestDiffPaneMatchesChromaStyle(test *testing.T) {
+	named, err := FromPaletteWithSyntax(builtinDark, Roles{}, "tokyonight-night")
+	if err != nil {
+		test.Fatal(err)
+	}
+	for _, theme := range []Theme{New(true), New(false), named} {
+		checked := 0
+		for _, token := range standardTypes() {
+			entry, diffStyle := theme.Syntax.chroma.Get(token), theme.Syntax.For(token)
+			if entry.Background.IsSet() || styleColors(diffStyle)[1] != "" {
+				test.Errorf("%q: token %v has a background", theme.Syntax.Name(), token)
+			}
+			diffForeground := styleColors(diffStyle)[0]
+			if diffForeground == "" {
+				diffForeground = HexString(theme.Roles.Text)
+			}
+			if got := entry.Colour.String(); got != diffForeground {
+				test.Errorf("%q: token %v: chroma colour %s, diff colour %s", theme.Syntax.Name(), token, got, diffForeground)
+			}
+			if original := bundledChromaStyles[theme.Syntax.Name()]; original != nil && original.Get(token).Colour.IsSet() {
+				want := original.Get(token).Colour.String()
+				readable := contrast(mustParseHex(want), theme.Roles.Background) >= minimumAccentContrast
+				if readable && diffForeground != want {
+					test.Errorf("%q: token %v: diff colour %s, the style's own is %s", theme.Syntax.Name(), token, diffForeground, want)
 				}
-			} else if diffForeground != want {
-				test.Errorf("%s: token %v (class %d): diff colour %s, want %s", theme.Identifier, token, class, diffForeground, want)
+			}
+			for _, attribute := range []struct {
+				name   string
+				chroma chroma.Trilean
+				diff   bool
+			}{
+				{"bold", entry.Bold, diffStyle.GetBold()},
+				{"italic", entry.Italic, diffStyle.GetItalic()},
+				{"underline", entry.Underline, diffStyle.GetUnderline()},
+			} {
+				if (attribute.chroma == chroma.Yes) != attribute.diff {
+					test.Errorf("%q: token %v: %s is %v in chroma, %v in the diff", theme.Syntax.Name(), token, attribute.name, attribute.chroma, attribute.diff)
+				}
 			}
 			checked++
 		}
@@ -611,5 +653,222 @@ func TestClassOfInherits(test *testing.T) {
 		if got := ClassOf(testCase.token); got != testCase.want {
 			test.Errorf("ClassOf(%v) = %d, want %d", testCase.token, got, testCase.want)
 		}
+	}
+}
+
+func namedTheme(test *testing.T, palette Palette, overrides Roles, syntax string) Theme {
+	test.Helper()
+	built, err := FromPaletteWithSyntax(palette, overrides, syntax)
+	if err != nil {
+		test.Fatal(err)
+	}
+	return built
+}
+
+// TestSyntaxOverrideRecoloursClass proves a syn-<class> role recolours every
+// standard token type in its class, over a generated and a named style, and
+// leaves the other classes alone.
+func TestSyntaxOverrideRecoloursClass(test *testing.T) {
+	const want = "#ff00ff"
+	for _, syntax := range []string{"", "tokyonight-night", "monokai"} {
+		before := namedTheme(test, builtinDark, Roles{}, syntax)
+		after := namedTheme(test, builtinDark, Roles{SyntaxString: hex(want)}, syntax)
+		checked := 0
+		for _, token := range standardTypes() {
+			got := styleColors(after.Syntax.For(token))[0]
+			if ClassOf(token) == ClassString {
+				checked++
+				if got != want {
+					test.Errorf("%q: string token %v is %s, want the override %s", syntax, token, got, want)
+				}
+				continue
+			}
+			if previous := styleColors(before.Syntax.For(token))[0]; got != previous {
+				test.Errorf("%q: non-string token %v changed from %s to %s", syntax, token, previous, got)
+			}
+		}
+		if checked < 10 {
+			test.Errorf("%q: only %d string token types checked", syntax, checked)
+		}
+	}
+}
+
+// TestNamedStyleIsGuarded puts a dark style on a light page: every colour it
+// draws must still be readable, and the unreadable ones are logged once each.
+func TestNamedStyleIsGuarded(test *testing.T) {
+	var buffer bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buffer, nil)))
+	test.Cleanup(func() { slog.SetDefault(previous) })
+
+	light := namedTheme(test, builtinLight, Roles{}, "tokyonight-night")
+	for _, token := range standardTypes() {
+		foreground := light.Syntax.For(token).GetForeground()
+		if ratio := contrast(foreground, light.Roles.Background); ratio < minimumAccentContrast {
+			test.Errorf("token %v: %s has contrast %.2f on the page", token, HexString(foreground), ratio)
+		}
+	}
+	logged := buffer.String()
+	if !strings.Contains(logged, "syntax style colour is hard to read") || !strings.Contains(logged, "colour=#c0caf5") {
+		test.Errorf("no warning for tokyonight-night's text colour: %s", logged)
+	}
+	if count := strings.Count(logged, "colour=#c0caf5"); count != 1 {
+		test.Errorf("#c0caf5 was logged %d times, want once", count)
+	}
+}
+
+// TestNamedStyleOverrideIsExact proves a syn-* override is used as written
+// even when it is hard to read, and that the style colour it replaces is
+// neither nudged nor logged.
+func TestNamedStyleOverrideIsExact(test *testing.T) {
+	var buffer bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buffer, nil)))
+	test.Cleanup(func() { slog.SetDefault(previous) })
+
+	page := builtinDark
+	page.colors[Base00] = hex("#1a1b26")
+	const faint = "#565f89" // 2.76:1 on #1a1b26
+	// tokyonight-night draws comments, doc strings and preprocessor lines
+	// (operator class) #414868; override all three.
+	built := namedTheme(test, page, Roles{SyntaxComment: hex(faint), SyntaxString: hex("#9ece6a"), SyntaxOperator: hex("#89ddff")}, "tokyonight-night")
+	for _, token := range standardTypes() {
+		if ClassOf(token) != ClassComment {
+			continue
+		}
+		if got := HexString(built.Syntax.For(token).GetForeground()); got != faint {
+			test.Errorf("comment token %v is %s, want the override %s as written", token, got, faint)
+		}
+	}
+	if logged := buffer.String(); strings.Contains(logged, "#414868") {
+		test.Errorf("the replaced comment colour was logged: %s", logged)
+	}
+}
+
+// TestNamedStyleSkipsMetaTypes proves the line-number and wrapper types, which
+// strig never draws, neither get entries nor trigger warnings.
+func TestNamedStyleSkipsMetaTypes(test *testing.T) {
+	var buffer bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buffer, nil)))
+	test.Cleanup(func() { slog.SetDefault(previous) })
+
+	built := namedTheme(test, builtinDark, Roles{}, "onedark") // its line numbers, #55595f, are faint
+	if logged := buffer.String(); logged != "" {
+		test.Errorf("onedark logged warnings: %s", logged)
+	}
+	for _, token := range []chroma.TokenType{chroma.Background, chroma.LineNumbers, chroma.LineHighlight, chroma.CodeLine} {
+		if _, ok := built.Syntax.styles[token]; ok {
+			test.Errorf("the syntax table has an entry for %v", token)
+		}
+	}
+	if _, ok := built.Syntax.styles[chroma.Error]; !ok {
+		test.Error("the syntax table lost its Error entry")
+	}
+}
+
+func TestSyntaxStyleChangesIdentity(test *testing.T) {
+	generated := namedTheme(test, builtinDark, Roles{}, "")
+	night := namedTheme(test, builtinDark, Roles{}, "tokyonight-night")
+	storm := namedTheme(test, builtinDark, Roles{}, "tokyonight-storm")
+	if generated.Identifier == night.Identifier || night.Identifier == storm.Identifier {
+		test.Error("the syntax style is not part of Theme.Identifier")
+	}
+	if night.ChromaStyleName() == storm.ChromaStyleName() {
+		test.Error("two syntax styles share a Chroma style name")
+	}
+	if generated.Identifier != FromPalette(builtinDark).Identifier {
+		test.Error("an empty syntax name is not the generated style")
+	}
+
+	// Overriding a role with the colour it already had changes no role, but
+	// it recolours the named style's whole class, so the identity must change.
+	same := namedTheme(test, builtinDark, Roles{SyntaxString: night.Roles.SyntaxString}, "tokyonight-night")
+	if HexString(same.Syntax.For(chroma.LiteralString).GetForeground()) == HexString(night.Syntax.For(chroma.LiteralString).GetForeground()) {
+		test.Fatal("setup: the override did not recolour strings")
+	}
+	if same.Identifier == night.Identifier || same.ChromaStyleName() == night.ChromaStyleName() {
+		test.Error("an override equal to the derived colour did not change Theme.Identifier")
+	}
+	if upper := namedTheme(test, builtinDark, Roles{}, "TokyoNight-Night"); upper.Identifier != night.Identifier {
+		test.Error("the style name's case changed Theme.Identifier")
+	}
+}
+
+func TestSyntaxStyleNameIgnoresCase(test *testing.T) {
+	if err := CheckSyntaxStyle("Dracula"); err != nil {
+		test.Error(err)
+	}
+	if name := namedTheme(test, builtinDark, Roles{}, "Dracula").Syntax.Name(); name != "dracula" {
+		test.Errorf("Syntax.Name() = %q, want dracula", name)
+	}
+}
+
+func TestUnknownSyntaxStyle(test *testing.T) {
+	_, err := FromPaletteWithSyntax(builtinDark, Roles{}, "nope")
+	if err == nil {
+		test.Fatal("no error")
+	}
+	for _, want := range []string{`unknown syntax style "nope"`, "monokai", "tokyonight-night"} {
+		if !strings.Contains(err.Error(), want) {
+			test.Errorf("error %q lacks %q", err, want)
+		}
+	}
+	if slices.ContainsFunc(SyntaxStyleNames(), func(name string) bool { return strings.HasPrefix(name, "strig-") }) {
+		test.Error("SyntaxStyleNames lists a style strig generated")
+	}
+}
+
+// TestNamedStyleWarningsAreStable proves a style that logs several warnings
+// logs them in the same order every time, so goldens that record them hold.
+func TestNamedStyleWarningsAreStable(test *testing.T) {
+	var buffer bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buffer, &slog.HandlerOptions{ReplaceAttr: func(_ []string, attribute slog.Attr) slog.Attr {
+		if attribute.Key == slog.TimeKey {
+			return slog.Attr{}
+		}
+		return attribute
+	}})))
+	test.Cleanup(func() { slog.SetDefault(previous) })
+
+	build := func() string {
+		buffer.Reset()
+		namedTheme(test, builtinLight, Roles{}, "tokyonight-night")
+		return buffer.String()
+	}
+	first := build()
+	if strings.Count(first, "syntax style colour is hard to read") < 3 {
+		test.Fatalf("setup: want several warnings, got %s", first)
+	}
+	for range 20 {
+		if again := build(); again != first {
+			test.Fatalf("warnings changed order:\n%s\nthen\n%s", first, again)
+		}
+	}
+}
+
+// TestNamedStyleWithoutTextColour uses a style that gives plain code no
+// colour: plain tokens keep the pane's own colour (the text role, here an
+// exact override that is hard to read), and nothing blames the style for it.
+func TestNamedStyleWithoutTextColour(test *testing.T) {
+	var buffer bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buffer, nil)))
+	test.Cleanup(func() { slog.SetDefault(previous) })
+
+	const faint = "#565f89"
+	if bundledChromaStyles["github"].Get(chroma.Text).Colour.IsSet() {
+		test.Fatal("setup: github now colours plain text")
+	}
+	built := namedTheme(test, builtinDark, Roles{Text: hex(faint)}, "github")
+	if foreground := styleColors(built.Syntax.For(chroma.Text))[0]; foreground != "" {
+		test.Errorf("plain text has foreground %s in the diff, want the pane's own", foreground)
+	}
+	if got := built.Syntax.chroma.Get(chroma.Text).Colour.String(); got != faint {
+		test.Errorf("plain text is %s in Chroma, want the text role %s", got, faint)
+	}
+	if logged := buffer.String(); strings.Contains(logged, faint) && strings.Contains(logged, "syntax style colour") {
+		test.Errorf("the style was blamed for the text role: %s", logged)
 	}
 }
