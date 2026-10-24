@@ -28,6 +28,13 @@ func (model *Model) SetThreads(threads []github.ReviewThread) {
 	model.relayout(key, found)
 }
 
+// SetThreadExpanded folds the thread with the given identifier open or closed,
+// replacing what the user chose before. It takes effect with the next
+// SetThreads, which the caller makes once the thread's data has changed.
+func (model *Model) SetThreadExpanded(identifier string, expanded bool) {
+	model.open[identifier] = expanded
+}
+
 // placeThreads picks the threads on the shown file and anchors each to a row
 // of the diff. A thread goes after the row whose line number on the thread's
 // side equals Line. One with no current line (outdated, or on the whole file)

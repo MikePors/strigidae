@@ -69,6 +69,10 @@ type FilePane interface {
 	// SetThreads is called when the pull request's review threads load or
 	// reload; the pane shows the ones on its file.
 	SetThreads(threads []github.ReviewThread)
+	// SetThreadExpanded folds the thread with the given identifier open or
+	// closed, replacing whatever the user chose before; it is called after a
+	// thread was resolved or unresolved, together with SetThreads.
+	SetThreadExpanded(identifier string, expanded bool)
 	// SetFile is called when the selected file changes, and again when the
 	// same path comes back with different metadata (change type, counts)
 	// after a refresh. A repeat call for the same path keeps cursor and scroll.

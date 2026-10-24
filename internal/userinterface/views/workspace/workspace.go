@@ -186,7 +186,7 @@ func (view *View) FullHelp() [][]key.Binding {
 	out := [][]key.Binding{
 		{view.bind.PaneLeft, view.bind.PaneRight, view.bind.NextFile, view.bind.PreviousFile, view.bind.FilePicker},
 		{view.bind.NextSection, view.bind.PreviousSection, view.bind.Comment, view.bind.Reply, view.bind.Viewed, view.bind.ReviewHunk},
-		{view.bind.Visual, view.bind.EditComment, view.bind.DeleteComment},
+		{view.bind.Visual, view.bind.EditComment, view.bind.DeleteComment, view.bind.ResolveThread},
 		view.searchHelp(),
 	}
 	return append(out, view.filePane.FullHelp()...)
@@ -250,6 +250,11 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 			return view, nil
 		}
 		return view, view.commentDeleted(message)
+	case threadResolvedMessage:
+		if !view.owns(message.origin) {
+			return view, nil
+		}
+		return view, view.threadResolved(message)
 	case commentCheckedMessage:
 		if !view.owns(message.origin) {
 			return view, nil
