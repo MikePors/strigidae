@@ -22,10 +22,9 @@ while strig runs (see [Switching themes while strig runs](#switching-themes-whil
 
 Coming later: `syntax:` (named syntax styles, #82), and `theme: terminal`
 and Xresources files, which build a theme from the terminal's own palette
-(#84). Until then `theme: terminal`
-is an error saying it is not supported yet, and `syntax:` in a theme file is
-accepted but ignored (strig logs a warning; syntax colours come from the
-palette).
+(#84). Until then `theme: terminal` is an error saying it is not supported
+yet, and `syntax:` in a theme file is accepted but ignored (strig logs a
+warning; syntax colours come from the palette).
 
 ## The three layers
 

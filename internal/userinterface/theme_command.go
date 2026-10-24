@@ -65,7 +65,9 @@ func (model *Model) themeLoaded(message themeLoadedMessage) tea.Cmd {
 		return nil
 	}
 	if message.err != nil {
-		return Error(fmt.Errorf("theme %s: %w", terminaltext.Clean(message.value), message.err))
+		// The error already names the theme or file. It may quote the typed
+		// value or the file's contents, so it is cleaned like other text.
+		return Error(errors.New(terminaltext.Clean(message.err.Error())))
 	}
 	for _, warning := range message.scheme.Warnings {
 		model.log.Warn("theme", "name", message.scheme.Name, "warning", warning)

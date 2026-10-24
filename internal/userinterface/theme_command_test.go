@@ -79,6 +79,9 @@ func TestThemeCommandSwitchesTheme(test *testing.T) {
 	if !sameColour(model.commandLine.input.Styles().Focused.Text.GetForeground(), want.Roles.Text) {
 		test.Error("the command line was not restyled")
 	}
+	if !sameColour(model.spin.Style.GetForeground(), want.Spinner.GetForeground()) {
+		test.Error("the spinner was not restyled")
+	}
 	if row := ansi.Strip(model.bottomRow()); !strings.Contains(row, "theme: Tokyo Night") {
 		test.Errorf("status row = %q, want it to name the new theme", row)
 	}
@@ -106,7 +109,7 @@ func TestThemeCommandErrorKeepsTheme(test *testing.T) {
 		test.Error("a failed :theme was broadcast to the views")
 	}
 	row := ansi.Strip(model.bottomRow())
-	for _, want := range []string{`theme nope: unknown theme "nope"`, "tokyo-night"} {
+	for _, want := range []string{`unknown theme "nope"`, "tokyo-night"} {
 		if !strings.Contains(row, want) {
 			test.Errorf("status row = %q, want it to contain %q", row, want)
 		}
@@ -143,7 +146,7 @@ func TestThemeCommandStaleLoadIgnored(test *testing.T) {
 
 func TestLoadThemeFromWorkingDirectory(test *testing.T) {
 	directory := test.TempDir()
-	data, err := os.ReadFile("theme/scheme/testdata/base16-flat.yaml")
+	data, err := os.ReadFile("testdata/grey.yaml")
 	if err != nil {
 		test.Fatal(err)
 	}
@@ -153,7 +156,7 @@ func TestLoadThemeFromWorkingDirectory(test *testing.T) {
 	test.Chdir(directory)
 
 	loaded, err := LoadThemeFromWorkingDirectory("mine.yaml")
-	if err != nil || loaded.Name != "Solarized Light" {
+	if err != nil || loaded.Name != "Grey" {
 		test.Errorf("relative path: %q, %v; want the file in the current directory", loaded.Name, err)
 	}
 	if loaded, err := LoadThemeFromWorkingDirectory("tokyo-night"); err != nil || loaded.Name != "Tokyo Night" {
