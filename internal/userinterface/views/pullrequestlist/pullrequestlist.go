@@ -205,21 +205,25 @@ func (view *View) selected() (github.PullRequest, bool) {
 func (view *View) handleKey(message keys.Message) tea.Cmd {
 	switch {
 	case key.Matches(message, view.globalKeys.Down):
-		view.window.Down(1)
+		view.window.Down(message.Repeat())
 	case key.Matches(message, view.globalKeys.Up):
-		view.window.Up(1)
+		view.window.Up(message.Repeat())
 	case key.Matches(message, view.globalKeys.Top):
 		view.window.GotoTop()
 	case key.Matches(message, view.globalKeys.Bottom):
-		view.window.GotoBottom()
+		if message.Count > 0 {
+			view.window.GotoRow(message.Count - 1)
+		} else {
+			view.window.GotoBottom()
+		}
 	case key.Matches(message, view.globalKeys.HalfDown):
-		view.window.HalfPageDown()
+		message.Each(view.window.Cursor, view.window.HalfPageDown)
 	case key.Matches(message, view.globalKeys.HalfUp):
-		view.window.HalfPageUp()
+		message.Each(view.window.Cursor, view.window.HalfPageUp)
 	case key.Matches(message, view.globalKeys.PageDown):
-		view.window.PageDown()
+		message.Each(view.window.Cursor, view.window.PageDown)
 	case key.Matches(message, view.globalKeys.PageUp):
-		view.window.PageUp()
+		message.Each(view.window.Cursor, view.window.PageUp)
 	case key.Matches(message, view.globalKeys.Select):
 		return view.openSelected()
 	case key.Matches(message, view.globalKeys.Open):

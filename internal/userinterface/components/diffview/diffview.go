@@ -404,6 +404,40 @@ func (model *Model) GotoTop() { model.window.GotoTop() }
 // GotoBottom moves the cursor to the last row.
 func (model *Model) GotoBottom() { model.window.GotoBottom() }
 
+// CursorRow returns the index of the row under the cursor.
+func (model *Model) CursorRow() int { return model.window.Cursor() }
+
+// GotoLine moves the cursor to line number line of the file's new side. When
+// no hunk shows that line it goes to the shown line with the closest number,
+// preferring the later one on a tie. A deleted file has no new side, so its
+// old-side numbers are used. Without any numbered line it does nothing.
+func (model *Model) GotoLine(line int) {
+	if model.file == nil {
+		return
+	}
+	deleted := model.file.Status == diff.Deleted
+	best, bestNumber := -1, 0
+	for i, row := range model.rows {
+		if !row.isLine() {
+			continue
+		}
+		number := row.line.New
+		if deleted {
+			number = row.line.Old
+		}
+		if number <= 0 {
+			continue
+		}
+		distance, bestDistance := absolute(number-line), absolute(bestNumber-line)
+		if best < 0 || distance < bestDistance || (distance == bestDistance && number > bestNumber) {
+			best, bestNumber = i, number
+		}
+	}
+	if best >= 0 {
+		model.window.GotoRow(best)
+	}
+}
+
 // --- viewport movement: view and cursor move together, as in vim ---
 
 // ScrollDown scrolls the view down n rows without moving the cursor, unless

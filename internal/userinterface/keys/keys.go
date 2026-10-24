@@ -19,7 +19,30 @@ import "charm.land/bubbles/v2/key"
 // Message is not a tea.KeyPressMsg: embedded bubbles components (viewport, ...)
 // ignore it. Views drive them through their methods (ScrollDown, GotoTop, ...)
 // in response to a Msg and never forward it to the component's Update.
-type Message struct{ Sequence string }
+//
+// Count is the number typed before the key ("11j" has Count 11); 0 means no
+// count. Views read it for movement keys and ignore it elsewhere, so other
+// keys act once. Use Repeat to read it.
+type Message struct {
+	Sequence string
+	Count    int
+}
+
+// Each runs step once per count (once without a count). It stops early when a
+// step leaves position() unchanged, so a count of 9999 against the end of a
+// list costs one step, not 9999.
+func (message Message) Each(position func() int, step func()) {
+	for range message.Repeat() {
+		before := position()
+		step()
+		if position() == before {
+			return
+		}
+	}
+}
+
+// Repeat returns how many times the key should act: the count, or 1 without one.
+func (message Message) Repeat() int { return max(message.Count, 1) }
 
 // String returns the matched key or sequence.
 func (message Message) String() string { return message.Sequence }
@@ -40,6 +63,9 @@ type Global struct {
 	Help                     key.Binding
 	// Command opens the command line (":q", ":qa"). The root handles it.
 	Command key.Binding
+	// Count documents the count prefix ("11j"). It exists only for the help
+	// overlay: the Matcher parses counts itself, and Bindings leaves it out.
+	Count key.Binding
 }
 
 // DefaultGlobal returns the default vim-style global bindings.
@@ -65,6 +91,7 @@ func DefaultGlobal() Global {
 		Cancel:        bind("esc", "esc", "cancel / clear"),
 		Help:          bind("?", "?", "toggle help"),
 		Command:       bind(":", ":", "command line (:q close, :qa quit)"),
+		Count:         bind("1", "1-9", "count: 11j, 3], 42G"),
 	}
 }
 
@@ -72,7 +99,12 @@ func DefaultGlobal() Global {
 func (global Global) Bindings() []key.Binding {
 	var out []key.Binding
 	for _, bindings := range global.FullHelp() {
-		out = append(out, bindings...)
+		for _, binding := range bindings {
+			// Count is documentation only; a bare digit is never a binding.
+			if binding.Help().Key != global.Count.Help().Key {
+				out = append(out, binding)
+			}
+		}
 	}
 	return out
 }
@@ -82,6 +114,6 @@ func (global Global) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{global.Down, global.Up, global.Top, global.Bottom, global.HalfDown, global.HalfUp, global.PageDown, global.PageUp},
 		{global.Select, global.Open, global.Refresh, global.Search, global.NextMatch, global.PreviousMatch},
-		{global.Cancel, global.Help, global.Command},
+		{global.Cancel, global.Help, global.Command, global.Count},
 	}
 }

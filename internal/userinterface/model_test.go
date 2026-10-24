@@ -392,6 +392,109 @@ func TestSequences(test *testing.T) {
 	})
 }
 
+func TestCounts(test *testing.T) {
+	test.Run("count reaches the view with the key", func(test *testing.T) {
+		view := newFake("v")
+		model := newModel(view)
+		press(model, "1")
+		press(model, "1")
+		if got := model.bar().pending; got != "11" {
+			test.Errorf("status bar pending = %q, want 11", got)
+		}
+		if len(view.keyMessages()) != 0 {
+			test.Error("view received keys while the count was pending")
+		}
+		press(model, "j")
+		if diff := cmp.Diff([]keys.Message{{Sequence: "j", Count: 11}}, view.keyMessages()); diff != "" {
+			test.Errorf("mismatch (-want +got):\n%s", diff)
+		}
+		if model.bar().pending != "" {
+			test.Error("pending count should clear after the key")
+		}
+	})
+	test.Run("count with a sequence shows both", func(test *testing.T) {
+		view := newFake("v")
+		model := newModel(view)
+		press(model, "3")
+		press(model, "z")
+		if got := model.bar().pending; got != "3z" {
+			test.Errorf("status bar pending = %q, want 3z", got)
+		}
+		press(model, "q")
+		if diff := cmp.Diff([]keys.Message{{Sequence: "z q", Count: 3}}, view.keyMessages()); diff != "" {
+			test.Errorf("mismatch (-want +got):\n%s", diff)
+		}
+	})
+	test.Run("timeout drops the count", func(test *testing.T) {
+		view := newFake("v")
+		model := newModel(view)
+		run(model, press(model, "4"))
+		if model.matcher.Pending() {
+			test.Error("timeout should clear the count")
+		}
+		press(model, "j")
+		if diff := cmp.Diff([]keys.Message{{Sequence: "j"}}, view.keyMessages()); diff != "" {
+			test.Errorf("mismatch (-want +got):\n%s", diff)
+		}
+	})
+	test.Run("unbound key drops the count", func(test *testing.T) {
+		view := newFake("v")
+		model := newModel(view)
+		press(model, "4")
+		press(model, "x")
+		press(model, "j")
+		if diff := cmp.Diff([]keys.Message{{Sequence: "j"}}, view.keyMessages()); diff != "" {
+			test.Errorf("mismatch (-want +got):\n%s", diff)
+		}
+	})
+	test.Run("digits are plain input while a view captures", func(test *testing.T) {
+		view := newFake("v")
+		view.capture = true
+		model := newModel(view)
+		press(model, "1")
+		press(model, "1")
+		if model.matcher.Pending() {
+			test.Error("a captured digit started a count")
+		}
+		if len(view.keyMessages()) != 0 || len(view.got) != 3 { // size + 1 + 1
+			test.Errorf("view got %d messages, want 2 raw digits after the size", len(view.got))
+		}
+	})
+	test.Run("capture drops a count already typed", func(test *testing.T) {
+		view := newFake("v")
+		model := newModel(view)
+		press(model, "5")
+		view.capture = true
+		press(model, "x")
+		view.capture = false
+		press(model, "j")
+		if diff := cmp.Diff([]keys.Message{{Sequence: "j"}}, view.keyMessages()); diff != "" {
+			test.Errorf("mismatch (-want +got):\n%s", diff)
+		}
+	})
+	test.Run("digits are plain input on the command line", func(test *testing.T) {
+		view := newFake("v")
+		model := newModel(view)
+		press(model, ":")
+		press(model, "5")
+		if model.matcher.Pending() {
+			test.Error("a digit on the command line started a count")
+		}
+		if got := model.commandLine.input.Value(); got != "5" {
+			test.Errorf("command line = %q, want 5", got)
+		}
+	})
+	test.Run("count is not a binding in the help", func(test *testing.T) {
+		for _, binding := range keys.DefaultGlobal().Bindings() {
+			for _, pressed := range binding.Keys() {
+				if pressed == "1" {
+					test.Error("the count help entry must not be matchable")
+				}
+			}
+		}
+	})
+}
+
 func TestKeyCapture(test *testing.T) {
 	view := newFake("v")
 	view.capture = true

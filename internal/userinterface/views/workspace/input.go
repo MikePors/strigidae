@@ -64,15 +64,15 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 	case key.Matches(message, view.bind.PaneRight):
 		view.focus = paneRight
 	case key.Matches(message, view.bind.NextFile):
-		view.stepFile(1)
+		view.stepFile(message.Repeat())
 	case key.Matches(message, view.bind.PreviousFile):
-		view.stepFile(-1)
+		view.stepFile(-message.Repeat())
 	case key.Matches(message, view.bind.FilePicker):
 		view.openPicker()
 	case view.selection() == 0 && key.Matches(message, view.bind.NextSection):
-		view.jumpSection(1)
+		message.Each(view.overview.viewport.YOffset, func() { view.jumpSection(1) })
 	case view.selection() == 0 && key.Matches(message, view.bind.PreviousSection):
-		view.jumpSection(-1)
+		message.Each(view.overview.viewport.YOffset, func() { view.jumpSection(-1) })
 	case key.Matches(message, view.bind.Comment):
 		return view.comment()
 	case key.Matches(message, view.bind.Viewed):
@@ -127,21 +127,25 @@ func (view *View) filesKey(message keys.Message) {
 	previous := view.selection()
 	switch {
 	case key.Matches(message, view.globalKeys.Down):
-		view.window.Down(1)
+		view.window.Down(message.Repeat())
 	case key.Matches(message, view.globalKeys.Up):
-		view.window.Up(1)
+		view.window.Up(message.Repeat())
 	case key.Matches(message, view.globalKeys.Top):
 		view.window.GotoTop()
 	case key.Matches(message, view.globalKeys.Bottom):
-		view.window.GotoBottom()
+		if message.Count > 0 {
+			view.window.GotoRow(message.Count - 1)
+		} else {
+			view.window.GotoBottom()
+		}
 	case key.Matches(message, view.globalKeys.HalfDown):
-		view.window.HalfPageDown()
+		message.Each(view.window.Cursor, view.window.HalfPageDown)
 	case key.Matches(message, view.globalKeys.HalfUp):
-		view.window.HalfPageUp()
+		message.Each(view.window.Cursor, view.window.HalfPageUp)
 	case key.Matches(message, view.globalKeys.PageDown):
-		view.window.PageDown()
+		message.Each(view.window.Cursor, view.window.PageDown)
 	case key.Matches(message, view.globalKeys.PageUp):
-		view.window.PageUp()
+		message.Each(view.window.Cursor, view.window.PageUp)
 	case key.Matches(message, view.globalKeys.Select):
 		view.focus = paneRight
 	}
@@ -158,21 +162,25 @@ func (view *View) rightKey(message keys.Message) tea.Cmd {
 	viewport := &view.overview.viewport
 	switch {
 	case key.Matches(message, view.globalKeys.Down):
-		viewport.ScrollDown(1)
+		viewport.ScrollDown(message.Repeat())
 	case key.Matches(message, view.globalKeys.Up):
-		viewport.ScrollUp(1)
+		viewport.ScrollUp(message.Repeat())
 	case key.Matches(message, view.globalKeys.Top):
 		viewport.GotoTop()
 	case key.Matches(message, view.globalKeys.Bottom):
-		viewport.GotoBottom()
+		if message.Count > 0 {
+			viewport.SetYOffset(message.Count - 1)
+		} else {
+			viewport.GotoBottom()
+		}
 	case key.Matches(message, view.globalKeys.HalfDown):
-		viewport.HalfPageDown()
+		message.Each(viewport.YOffset, viewport.HalfPageDown)
 	case key.Matches(message, view.globalKeys.HalfUp):
-		viewport.HalfPageUp()
+		message.Each(viewport.YOffset, viewport.HalfPageUp)
 	case key.Matches(message, view.globalKeys.PageDown):
-		viewport.PageDown()
+		message.Each(viewport.YOffset, viewport.PageDown)
 	case key.Matches(message, view.globalKeys.PageUp):
-		viewport.PageUp()
+		message.Each(viewport.YOffset, viewport.PageUp)
 	}
 	return nil
 }

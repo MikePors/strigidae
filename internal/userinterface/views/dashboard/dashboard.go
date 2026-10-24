@@ -267,25 +267,29 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 	case key.Matches(message, view.bindings.previousTab):
 		return view.switchTab(-1)
 	case key.Matches(message, view.bindings.nextSection):
-		current.moveSection(1)
+		message.Each(current.selectedIndex, func() { current.moveSection(1) })
 	case key.Matches(message, view.bindings.previousSection):
-		current.moveSection(-1)
+		message.Each(current.selectedIndex, func() { current.moveSection(-1) })
 	case key.Matches(message, view.globalKeys.Down):
-		current.move(1)
+		current.move(message.Repeat())
 	case key.Matches(message, view.globalKeys.Up):
-		current.move(-1)
+		current.move(-message.Repeat())
 	case key.Matches(message, view.globalKeys.Top):
 		current.selectIndex(0)
 	case key.Matches(message, view.globalKeys.Bottom):
-		current.selectIndex(current.total() - 1)
+		if message.Count > 0 {
+			current.selectIndex(message.Count - 1)
+		} else {
+			current.selectIndex(current.total() - 1)
+		}
 	case key.Matches(message, view.globalKeys.HalfDown):
-		current.move(max(view.listHeight()/2, 1))
+		current.move(message.Repeat() * max(view.listHeight()/2, 1))
 	case key.Matches(message, view.globalKeys.HalfUp):
-		current.move(-max(view.listHeight()/2, 1))
+		current.move(-message.Repeat() * max(view.listHeight()/2, 1))
 	case key.Matches(message, view.globalKeys.PageDown):
-		current.move(max(view.listHeight(), 1))
+		current.move(message.Repeat() * max(view.listHeight(), 1))
 	case key.Matches(message, view.globalKeys.PageUp):
-		current.move(-max(view.listHeight(), 1))
+		current.move(-message.Repeat() * max(view.listHeight(), 1))
 	case key.Matches(message, view.globalKeys.Select):
 		return view.openSelected()
 	case key.Matches(message, view.globalKeys.Open):

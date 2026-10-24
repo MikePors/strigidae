@@ -68,6 +68,8 @@ Reserved globally:
 
 There is deliberately **no single-key back or quit**: `q` and `ctrl+c` are unbound. `ctrl+o` / `ctrl+i` (back / forward through views) and `tab` are reserved for later; terminals send the same byte for `tab` and `ctrl+i`.
 
+**Counts.** Digits `1`-`9` start a count and `0` continues it (`11j`, `3]`, `42G`), capped at 9999. The sequence matcher parses it and delivers it as `keys.Message.Count` (0 means none; `Repeat()` gives at least 1). A view applies it only to `j`/`k`, `]`/`[`, `}`/`{`, `)`/`(`, `ctrl+d`/`ctrl+u`/`ctrl+f`/`ctrl+b`, `z h`/`z l`, and `G` (with a count: go to line N, which in a diff is the new-side line number, or the nearest shown one; row N in lists); every other key ignores it and acts once. The count clears on any other key, `esc`, and the sequence timeout. While a view captures keys, digits are plain input.
+
 Commands (`:` then `enter`):
 
 | Command | Meaning |
