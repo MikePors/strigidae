@@ -286,7 +286,7 @@ func (model *Model) handleKey(message tea.KeyPressMsg) tea.Cmd {
 		generation := model.sequenceGeneration
 		return model.tick(model.sequenceWait, func(time.Time) tea.Msg { return sequenceTimeoutMessage{generation: generation} })
 	case keys.Matched:
-		return model.dispatch(result.Sequence)
+		return model.dispatch(result.Sequence, result.Count)
 	default:
 		return model.forward(message)
 	}
@@ -298,15 +298,15 @@ func (model *Model) expireSequence(generation int) tea.Cmd {
 	}
 	model.sequenceGeneration++
 	if result := model.matcher.Expire(model.bindings()); result.Kind == keys.Matched {
-		return model.dispatch(result.Sequence)
+		return model.dispatch(result.Sequence, result.Count)
 	}
 	return nil
 }
 
 // dispatch acts on a resolved key or sequence: the root consumes Help and
 // Command, everything else goes to the view.
-func (model *Model) dispatch(sequence string) tea.Cmd {
-	keyMessage := keys.Message{Sequence: sequence}
+func (model *Model) dispatch(sequence string, count int) tea.Cmd {
+	keyMessage := keys.Message{Sequence: sequence, Count: count}
 	switch {
 	case key.Matches(keyMessage, model.keys.Help):
 		model.showHelp = true

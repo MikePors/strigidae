@@ -23,81 +23,81 @@ func TestMatcherFeed(test *testing.T) {
 			name:     "single key",
 			bindings: []key.Binding{bind("j")},
 			keys:     []string{"j"},
-			want:     []Result{{Matched, "j"}},
+			want:     []Result{{Kind: Matched, Sequence: "j"}},
 		},
 		{
 			name:     "unbound key",
 			bindings: []key.Binding{bind("j")},
 			keys:     []string{"z"},
-			want:     []Result{{NoMatch, "z"}},
+			want:     []Result{{Kind: NoMatch, Sequence: "z"}},
 		},
 		{
 			name:     "sequence completes",
 			bindings: []key.Binding{bind("g g")},
 			keys:     []string{"g", "g"},
-			want:     []Result{{Pending, "g"}, {Matched, "g g"}},
+			want:     []Result{{Kind: Pending, Sequence: "g"}, {Kind: Matched, Sequence: "g g"}},
 		},
 		{
 			name:     "two sequences",
 			bindings: []key.Binding{bind("g t"), bind("z c")},
 			keys:     []string{"g", "t", "z", "c"},
-			want:     []Result{{Pending, "g"}, {Matched, "g t"}, {Pending, "z"}, {Matched, "z c"}},
+			want:     []Result{{Kind: Pending, Sequence: "g"}, {Kind: Matched, Sequence: "g t"}, {Kind: Pending, Sequence: "z"}, {Kind: Matched, Sequence: "z c"}},
 		},
 		{
 			name:     "navigation brackets are single keys",
 			bindings: []key.Binding{bind("]"), bind("["), bind("}"), bind("{"), bind(")"), bind("("), bind("g g")},
 			keys:     []string{"]", "[", "}", "{", ")", "(", "]"},
 			want: []Result{
-				{Matched, "]"},
-				{Matched, "["},
-				{Matched, "}"},
-				{Matched, "{"},
-				{Matched, ")"},
-				{Matched, "("},
-				{Matched, "]"},
+				{Kind: Matched, Sequence: "]"},
+				{Kind: Matched, Sequence: "["},
+				{Kind: Matched, Sequence: "}"},
+				{Kind: Matched, Sequence: "{"},
+				{Kind: Matched, Sequence: ")"},
+				{Kind: Matched, Sequence: "("},
+				{Kind: Matched, Sequence: "]"},
 			},
 		},
 		{
 			name:     "broken sequence falls back to key alone",
 			bindings: []key.Binding{bind("g g"), bind("j")},
 			keys:     []string{"g", "j"},
-			want:     []Result{{Pending, "g"}, {Matched, "j"}},
+			want:     []Result{{Kind: Pending, Sequence: "g"}, {Kind: Matched, Sequence: "j"}},
 		},
 		{
 			name:     "broken sequence with unbound key",
 			bindings: []key.Binding{bind("g g")},
 			keys:     []string{"g", "x"},
-			want:     []Result{{Pending, "g"}, {NoMatch, "x"}},
+			want:     []Result{{Kind: Pending, Sequence: "g"}, {Kind: NoMatch, Sequence: "x"}},
 		},
 		{
 			name:     "ambiguous prefix stays pending",
 			bindings: []key.Binding{bind("g"), bind("g g")},
 			keys:     []string{"g"},
-			want:     []Result{{Pending, "g"}},
+			want:     []Result{{Kind: Pending, Sequence: "g"}},
 		},
 		{
 			name:     "ambiguous prefix completes longer",
 			bindings: []key.Binding{bind("g"), bind("g g")},
 			keys:     []string{"g", "g"},
-			want:     []Result{{Pending, "g"}, {Matched, "g g"}},
+			want:     []Result{{Kind: Pending, Sequence: "g"}, {Kind: Matched, Sequence: "g g"}},
 		},
 		{
 			name:     "three keys",
 			bindings: []key.Binding{bind("z a b")},
 			keys:     []string{"z", "a", "b"},
-			want:     []Result{{Pending, "z"}, {Pending, "z a"}, {Matched, "z a b"}},
+			want:     []Result{{Kind: Pending, Sequence: "z"}, {Kind: Pending, Sequence: "z a"}, {Kind: Matched, Sequence: "z a b"}},
 		},
 		{
 			name:     "disabled binding ignored",
 			bindings: []key.Binding{disabled},
 			keys:     []string{"x"},
-			want:     []Result{{NoMatch, "x"}},
+			want:     []Result{{Kind: NoMatch, Sequence: "x"}},
 		},
 		{
 			name:     "alternative keys",
 			bindings: []key.Binding{bind("j", "down")},
 			keys:     []string{"down"},
-			want:     []Result{{Matched, "down"}},
+			want:     []Result{{Kind: Matched, Sequence: "down"}},
 		},
 	}
 	for _, testCase := range tests {
@@ -114,6 +114,65 @@ func TestMatcherFeed(test *testing.T) {
 	}
 }
 
+func TestMatcherCounts(test *testing.T) {
+	bindings := []key.Binding{bind("j"), bind("G"), bind("z z"), bind("esc")}
+	count := func(number int, sequence string) Result {
+		return Result{Kind: Matched, Sequence: sequence, Count: number}
+	}
+	typing := Result{Kind: Pending}
+	tests := []struct {
+		name string
+		keys []string
+		want []Result
+	}{
+		{"single digit", []string{"5", "j"}, []Result{typing, count(5, "j")}},
+		{"multiple digits", []string{"1", "1", "j"}, []Result{typing, typing, count(11, "j")}},
+		{"zero continues a count", []string{"1", "0", "j"}, []Result{typing, typing, count(10, "j")}},
+		{"leading zero is not a count", []string{"0", "j"}, []Result{{Kind: NoMatch, Sequence: "0"}, count(0, "j")}},
+		{"jump to line", []string{"4", "2", "G"}, []Result{typing, typing, count(42, "G")}},
+		{"count is capped", []string{"9", "9", "9", "9", "9", "9", "j"}, []Result{typing, typing, typing, typing, typing, typing, count(MaximumCount, "j")}},
+		{"unbound key clears the count", []string{"3", "x", "j"}, []Result{typing, {Kind: NoMatch, Sequence: "x"}, count(0, "j")}},
+		{"esc clears the count", []string{"3", "esc", "j"}, []Result{typing, count(3, "esc"), count(0, "j")}},
+		{"count is kept through a sequence", []string{"3", "z", "z"}, []Result{typing, {Kind: Pending, Sequence: "z"}, count(3, "z z")}},
+		{"count survives a broken sequence", []string{"3", "z", "j"}, []Result{typing, {Kind: Pending, Sequence: "z"}, count(3, "j")}},
+		{"digit after a prefix restarts a count", []string{"z", "5", "j"}, []Result{{Kind: Pending, Sequence: "z"}, typing, count(5, "j")}},
+	}
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			var matcher Matcher
+			var got []Result
+			for _, pressed := range testCase.keys {
+				got = append(got, matcher.Feed(pressed, bindings))
+			}
+			if diff := cmp.Diff(testCase.want, got); diff != "" {
+				test.Errorf("results mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestMatcherCountDisplayAndExpire(test *testing.T) {
+	bindings := []key.Binding{bind("j"), bind("g g")}
+	var matcher Matcher
+	matcher.Feed("1", bindings)
+	matcher.Feed("1", bindings)
+	if !matcher.Pending() || matcher.Display() != "11" {
+		test.Errorf("Pending() = %v, Display() = %q; want a pending %q", matcher.Pending(), matcher.Display(), "11")
+	}
+	matcher.Feed("g", bindings)
+	if got := matcher.Display(); got != "11g" {
+		test.Errorf("Display() = %q, want %q", got, "11g")
+	}
+	matcher.Reset()
+	matcher.Feed("7", bindings)
+	if got := matcher.Expire(bindings); got.Kind != NoMatch {
+		test.Errorf("Expire() = %+v, want NoMatch", got)
+	}
+	if matcher.Pending() || matcher.Feed("j", bindings).Count != 0 {
+		test.Error("the count survived the timeout")
+	}
+}
+
 func TestMatcherExpire(test *testing.T) {
 	tests := []struct {
 		name     string
@@ -122,8 +181,9 @@ func TestMatcherExpire(test *testing.T) {
 		want     Result
 	}{
 		{"nothing pending", []key.Binding{bind("g g")}, nil, Result{Kind: NoMatch}},
-		{"incomplete prefix is dropped", []key.Binding{bind("g g")}, []string{"g"}, Result{NoMatch, "g"}},
-		{"ambiguous prefix resolves to shorter", []key.Binding{bind("g"), bind("g g")}, []string{"g"}, Result{Matched, "g"}},
+		{"incomplete prefix is dropped", []key.Binding{bind("g g")}, []string{"g"}, Result{Kind: NoMatch, Sequence: "g"}},
+		{"ambiguous prefix resolves to shorter", []key.Binding{bind("g"), bind("g g")}, []string{"g"}, Result{Kind: Matched, Sequence: "g"}},
+		{"count is delivered with the shorter", []key.Binding{bind("g"), bind("g g")}, []string{"4", "g"}, Result{Kind: Matched, Sequence: "g", Count: 4}},
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
