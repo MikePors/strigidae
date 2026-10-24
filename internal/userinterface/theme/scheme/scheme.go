@@ -10,6 +10,7 @@ package scheme
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
@@ -21,8 +22,8 @@ type Scheme struct {
 	// Overrides holds the roles the file sets exactly (the nil fields are
 	// derived from the palette).
 	Overrides theme.Roles
-	// Syntax is the syntax style the file asks for. Not implemented yet, so it
-	// is ignored; Warnings says so.
+	// Syntax names the bundled Chroma style the file asks for, checked when
+	// the file is parsed; empty means the style is generated from the palette.
 	Syntax string
 	// Warnings are problems that don't stop the theme loading, for the caller
 	// to log.
@@ -32,7 +33,11 @@ type Scheme struct {
 // Theme builds the theme. It is marked Chosen: it sets the terminal's own
 // background and foreground, and a terminal background report never replaces it.
 func (scheme Scheme) Theme() theme.Theme {
-	built := theme.FromPaletteWithOverrides(scheme.Palette, scheme.Overrides)
+	built, err := theme.FromPaletteWithSyntax(scheme.Palette, scheme.Overrides, scheme.Syntax)
+	if err != nil { // Parse already checked Syntax; only a hand-built Scheme gets here
+		slog.Warn("theme syntax style ignored", "theme", scheme.Name, "error", err)
+		built = theme.FromPaletteWithOverrides(scheme.Palette, scheme.Overrides)
+	}
 	built.Chosen = true
 	return built
 }
