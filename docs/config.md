@@ -40,6 +40,13 @@ tabs:
         order: desc
 ```
 
+### `theme`
+
+Optional. A bundled theme's name (`strig --list-themes`) or the path of a
+Base16/Base24 scheme file; unset means the built-in theme. A relative path is
+taken from the config file's directory, and `~` is expanded. See
+[themes.md](themes.md).
+
 ### `tabs`
 
 A non-empty list. Tab names must be unique.

@@ -28,6 +28,7 @@ func runTerminalInterface(application application, stderr io.Writer) error {
 	silenceBrowser()
 	logger.Info("starting", "version", version.String(), "repo", application.repository.String())
 
+	application.theme = application.buildTheme(logger)
 	model := userinterface.New(firstView(application), application.theme, userinterface.Options{Logger: logger})
 	if _, err := tea.NewProgram(model).Run(); err != nil {
 		logger.Error("program failed", "err", err)

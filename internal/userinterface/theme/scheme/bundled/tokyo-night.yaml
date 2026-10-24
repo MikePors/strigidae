@@ -1,0 +1,65 @@
+# Tokyo Night (night).
+#
+# Palette: the Base24 scheme "Tokyo Night Dark" by Michael Ball, based on Tokyo
+# Night by enkia (MIT), from https://github.com/tinted-theming/schemes
+# (base24/tokyo-night-dark.yaml, MIT licence).
+#
+# roles: exact colours from Tokyo Night's own night palette as used by
+# https://github.com/folke/tokyonight.nvim (Apache-2.0), wherever the role
+# derived from the Base24 slots differs from the colour Tokyo Night uses for
+# that purpose: text, comments and muted text, borders, selection, status
+# colours, diff tints and syntax.
+system: "base24"
+name: "Tokyo Night"
+author: "Michael Ball, based on Tokyo Night by enkia"
+variant: "dark"
+palette:
+  base00: "#1a1b26"
+  base01: "#16161e"
+  base02: "#2f3549"
+  base03: "#444b6a"
+  base04: "#787c99"
+  base05: "#a9b1d6"
+  base06: "#cbccd1"
+  base07: "#d5d6db"
+  base08: "#c0caf5"
+  base09: "#a9b1d6"
+  base0A: "#0db9d7"
+  base0B: "#9ece6a"
+  base0C: "#b4f9f8"
+  base0D: "#2ac3de"
+  base0E: "#bb9af7"
+  base0F: "#f7768e"
+  base10: "#16161e"
+  base11: "#0f0f14"
+  base12: "#ff7a93"
+  base13: "#ff9e64"
+  base14: "#73daca"
+  base15: "#7dcfff"
+  base16: "#89ddff"
+  base17: "#bb9af7"
+roles:
+  text: "#c0caf5"
+  muted: "#565f89"
+  border: "#3b4261"
+  selection: "#283457"
+  accent: "#bb9af7"
+  info: "#7aa2f7"
+  link: "#7dcfff"
+  warning: "#e0af68"
+  error: "#f7768e"
+  success: "#9ece6a"
+  added: "#9ece6a"
+  removed: "#f7768e"
+  added-tint: "#20303b"
+  removed-tint: "#37222c"
+  hunk-tint: "#1f2231"
+  syn-keyword: "#bb9af7"
+  syn-string: "#9ece6a"
+  syn-comment: "#565f89"
+  syn-number: "#ff9e64"
+  syn-function: "#7aa2f7"
+  syn-type: "#2ac3de"
+  syn-operator: "#89ddff"
+  syn-variable: "#c0caf5"
+  syn-escape: "#b4f9f8"

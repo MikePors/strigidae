@@ -54,6 +54,11 @@ type Theme struct {
 	Muted    lipgloss.Style // de-emphasised text
 	Selected lipgloss.Style // the highlighted row in a list
 
+	// Chosen is set for a theme the user picked (a bundled theme or a theme
+	// file), as opposed to a built-in one. A chosen theme also sets the
+	// terminal's own background and foreground, and a terminal's reported
+	// background no longer replaces it.
+	Chosen bool
 	// IsDark reports whether the palette is the dark variant.
 	IsDark bool
 	// Identifier fingerprints the final roles and the variant, so any change to a
@@ -64,7 +69,7 @@ type Theme struct {
 	Roles Roles
 
 	// --- PR workspace ---
-	PaneBorder       lipgloss.Style // frame of an unfocused pane
+	PaneBorder       lipgloss.Style // frame of an unfocused pane (the border role)
 	PaneBorderFocus  lipgloss.Style // frame of the focused pane
 	PaneTitle        lipgloss.Style // title in an unfocused pane's top edge
 	PaneTitleFocus   lipgloss.Style // title in the focused pane's top edge
@@ -160,7 +165,7 @@ func newTheme(palette Palette, roles Roles) Theme {
 		Roles:      roles,
 
 		// --- PR workspace ---
-		PaneBorder:       foreground(roles.Muted),
+		PaneBorder:       foreground(roles.Border),
 		PaneBorderFocus:  foreground(roles.Accent),
 		PaneTitle:        foreground(roles.Muted),
 		PaneTitleFocus:   bold(roles.OnAccent).Background(roles.Accent),

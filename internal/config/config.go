@@ -16,6 +16,9 @@ import (
 type Config struct {
 	// Tabs are shown in order; there is always at least one.
 	Tabs []Tab
+	// Theme is the theme: value as written (a bundled theme's name or a theme
+	// file path), or empty for the built-in theme.
+	Theme string
 }
 
 // Tab is a named group of sections, for example the viewer's own PRs or a

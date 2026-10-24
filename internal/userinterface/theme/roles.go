@@ -18,7 +18,8 @@ type Roles struct {
 	Background color.Color // base of every tint; the page the palette was designed for
 	Surface    color.Color // status bar and code spans
 	Text       color.Color // body text
-	Muted      color.Color // de-emphasised text, borders, line numbers
+	Muted      color.Color // de-emphasised text, line numbers
+	Border     color.Color // pane borders; follows Muted unless set
 	Selection  color.Color // the cursor row's background
 
 	// Accents.
@@ -91,6 +92,10 @@ func deriveRoles(palette Palette, overrides Roles) Roles {
 	roles := defaultRoles(palette)
 	roles.override(overrides, tintsFor(palette.Variant))
 	roles.guard(overrides.set())
+	// Borders follow the final muted colour, after the guard has had its say.
+	if overrides.Border == nil {
+		roles.Border = roles.Muted
+	}
 	return roles
 }
 
@@ -101,6 +106,7 @@ func defaultRoles(palette Palette) Roles {
 		Surface:    colorOf(Base01),
 		Text:       colorOf(Base05),
 		Muted:      colorOf(Base03),
+		Border:     colorOf(Base03),
 		Selection:  colorOf(Base02),
 
 		Accent:       colorOf(Base0E),
@@ -147,6 +153,7 @@ func (roles *Roles) fields() []roleField {
 		{"surface", &roles.Surface},
 		{"text", &roles.Text},
 		{"muted", &roles.Muted},
+		{"border", &roles.Border},
 		{"selection", &roles.Selection},
 		{"accent", &roles.Accent},
 		{"accent-strong", &roles.AccentStrong},
@@ -179,6 +186,29 @@ func (roles *Roles) fields() []roleField {
 type roleField struct {
 	name  string
 	color *color.Color
+}
+
+// RoleNames lists the name of every role, which is what a theme file's
+// roles: table accepts.
+func RoleNames() []string {
+	var roles Roles
+	var names []string
+	for _, field := range roles.fields() {
+		names = append(names, field.name)
+	}
+	return names
+}
+
+// Set makes the named role an exact colour override. An unknown name is an
+// error that lists the valid ones.
+func (roles *Roles) Set(name string, colour color.Color) error {
+	for _, field := range roles.fields() {
+		if field.name == name {
+			*field.color = colour
+			return nil
+		}
+	}
+	return fmt.Errorf("unknown role %q (valid roles: %s)", name, strings.Join(RoleNames(), ", "))
 }
 
 // set returns the names of the roles r overrides (its non-nil fields).
@@ -267,6 +297,16 @@ func (roles *Roles) guard(overridden map[string]bool) {
 		check(field.name, field.color, minimumAccentContrast, roles.Background)
 	}
 	check("on-accent", &roles.OnAccent, minimumAccentContrast, roles.Accent)
+}
+
+// Listing is every role and its final colour, one "name #rrggbb" line per
+// role, for tests and debugging.
+func (roles Roles) Listing() string {
+	var lines []string
+	for _, field := range roles.fields() {
+		lines = append(lines, field.name+" "+HexString(*field.color))
+	}
+	return strings.Join(lines, "\n") + "\n"
 }
 
 // fingerprint identifies the final roles and the variant. Every style and the

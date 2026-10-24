@@ -2,6 +2,10 @@
 # (default ~/.config/strig/config.yml), or pass --config <path>.
 # See docs/config.md for every key.
 
+# Optional colour theme: a bundled name (strig --list-themes) or the path of a
+# Base16/Base24 scheme file. See docs/themes.md.
+# theme: tokyo-night
+
 tabs:
   # Your own PRs. With no "user" and no "sections" a tab gets the default
   # sections for the signed-in user.
