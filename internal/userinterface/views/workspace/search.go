@@ -36,17 +36,18 @@ func (view *View) searchList() search.List {
 	return search.List{
 		Items: func() []search.Item {
 			items := []search.Item{{Identity: overviewKey}}
-			for _, file := range view.files() {
+			for _, entry := range view.rows[1:] {
+				file := view.files()[entry-1]
 				items = append(items, search.Item{Text: terminaltext.Clean(file.Path), Identity: fileKeyPrefix + file.Path})
 			}
 			return items
 		},
 		Cursor: view.window.Cursor,
 		GoTo: func(row int) tea.Cmd {
-			previous := view.selection()
+			previous := view.window.Cursor()
 			view.window.GotoRow(row)
-			if view.selection() != previous {
-				view.selectionChanged()
+			if view.window.Cursor() != previous {
+				view.cursorMoved()
 			}
 			view.layout()
 			return nil

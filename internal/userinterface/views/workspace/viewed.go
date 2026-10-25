@@ -77,11 +77,21 @@ func (view *View) toggleViewed() tea.Cmd {
 		toggle.want = github.FileUnviewed
 	}
 	file.Viewed = toggle.want
+	var fading tea.Cmd
+	switch {
+	case toggle.want != github.FileViewed:
+		// Taking the mark back: the file stays, and stops fading.
+		view.fades.cancel(fadeKey(file.Path))
+		view.place(view.current)
+	case view.options.HideViewed():
+		fading = view.startFade(file.Path)
+		view.moveOffMarked()
+	}
 	if toggle.inflight {
-		return nil
+		return fading
 	}
 	toggle.inflight = true
-	return view.sendViewed(file.Path, toggle.want)
+	return tea.Batch(fading, view.sendViewed(file.Path, toggle.want))
 }
 
 // sendViewed is the command that runs one mutation. On failure it also
@@ -119,6 +129,7 @@ func (view *View) viewedDone(message viewedMessage) tea.Cmd {
 	} else {
 		toggle.want = toggle.confirmed
 		view.setViewed(message.path, toggle.want)
+		view.reflow() // a mark taken back may be hidden, one restored may not
 	}
 	if toggle.want != message.sent && toggle.want != toggle.confirmed {
 		return view.sendViewed(message.path, toggle.want)

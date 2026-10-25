@@ -12,14 +12,9 @@ func (view *View) files() []github.ChangedFile {
 	return view.detail.Files
 }
 
-// entries is the number of rows in the Files pane: Overview plus the files.
-func (view *View) entries() int { return 1 + len(view.files()) }
-
-// selection is the selected Files row: 0 is Overview, i is Files[i-1].
-func (view *View) selection() int { return view.window.Cursor() }
-
-// setSelection moves the selection to row i, scrolling the Files list to show it.
-func (view *View) setSelection(i int) { view.window.Restore(i, view.window.Top(), 0) }
+// selection is the entry the right pane shows: 0 is Overview, i is Files[i-1].
+// It is the cursor's entry unless the file picker opened a hidden file.
+func (view *View) selection() int { return view.current }
 
 func (view *View) selectedPath() string {
 	if selected := view.selection(); selected > 0 && selected <= len(view.files()) {
@@ -44,10 +39,13 @@ func (view *View) selectionChanged() {
 	}
 }
 
+// selectEntry shows entry i and puts the cursor on its row, or the nearest
+// one when the file is hidden.
 func (view *View) selectEntry(i int) {
-	previous := view.selection()
-	view.setSelection(i)
-	if view.selection() != previous {
+	previous := view.current
+	view.current = i
+	view.window.Restore(nearestRow(view.rows, i), view.window.Top(), 0)
+	if view.current != previous {
 		view.selectionChanged()
 	}
 	view.layout()

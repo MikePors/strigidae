@@ -154,14 +154,13 @@ func (view *View) pullRequestLoaded(message pullRequestLoadedMessage) tea.Cmd {
 	previous := view.selectedPath()
 	view.detail, view.err, view.notFound = &message.detail, nil, false
 	view.reapplyViewed(message.sequence)
-	top, selection := view.window.Top(), 0
+	view.current = 0
 	for i, file := range message.detail.Files {
 		if previous != "" && file.Path == previous {
-			selection = i + 1
+			view.current = i + 1
 		}
 	}
-	view.window.SetRows(view.entries())
-	view.window.Restore(selection, top, 0) // a refresh must not scroll the Files list
+	view.place(view.current) // a refresh must not scroll the Files list
 	view.overview.invalidate()
 	view.selectionChanged()
 	view.search.Refresh(view.searchList())

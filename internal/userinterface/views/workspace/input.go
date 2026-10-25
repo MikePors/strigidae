@@ -119,10 +119,24 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 
 // stepFile moves to the next or previous file. It never lands on Overview.
 func (view *View) stepFile(delta int) {
-	if len(view.files()) == 0 || (view.selection() == 0 && delta < 0) {
+	if view.selection() == 0 && delta < 0 {
 		return
 	}
-	view.selectEntry(min(max(view.selection()+delta, 1), len(view.files())))
+	// Hidden files are skipped: count along the shown file entries.
+	var before, after []int
+	for _, entry := range view.rows[1:] {
+		if entry < view.selection() {
+			before = append(before, entry)
+		} else if entry > view.selection() {
+			after = append(after, entry)
+		}
+	}
+	switch {
+	case delta > 0 && len(after) > 0:
+		view.selectEntry(after[min(delta, len(after))-1])
+	case delta < 0 && len(before) > 0:
+		view.selectEntry(before[len(before)-min(-delta, len(before))])
+	}
 }
 
 func (view *View) openBrowser() tea.Cmd {
@@ -145,7 +159,7 @@ func (view *View) openAddress(url string) tea.Cmd {
 
 // filesKey moves the selection in the Files pane.
 func (view *View) filesKey(message keys.Message) {
-	previous := view.selection()
+	previous := view.window.Cursor()
 	switch {
 	case key.Matches(message, view.globalKeys.Down):
 		view.window.Down(message.Repeat())
@@ -176,8 +190,8 @@ func (view *View) filesKey(message keys.Message) {
 	case key.Matches(message, view.globalKeys.Select):
 		view.focus = paneRight
 	}
-	if view.selection() != previous {
-		view.selectionChanged()
+	if view.window.Cursor() != previous {
+		view.cursorMoved()
 	}
 }
 
