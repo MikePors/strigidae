@@ -72,6 +72,10 @@ func (pane *diffPane) SetHunkReviewed(reviewed func(file *diff.File, hunk int) b
 
 func (pane *diffPane) CursorHunk() (*diff.File, int, bool) { return pane.diffView.CursorHunk() }
 
+func (pane *diffPane) SetThreadExpanded(identifier string, expanded bool) {
+	pane.diffView.SetThreadExpanded(identifier, expanded)
+}
+
 func (pane *diffPane) SetThreads(threads []github.ReviewThread) { pane.diffView.SetThreads(threads) }
 
 func (pane *diffPane) SetSize(width, height int) { pane.diffView.SetSize(width, height) }

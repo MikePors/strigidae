@@ -23,6 +23,7 @@ type bindings struct {
 	Comment, Reply               key.Binding
 	Viewed                       key.Binding
 	ReviewHunk                   key.Binding
+	ResolveThread                key.Binding
 	// Inline comments: V starts a line selection, e and D change your comment
 	// at the cursor. The Visual* keys apply while a selection is open.
 	Visual, EditComment, DeleteComment key.Binding
@@ -43,6 +44,7 @@ func defaultBindings() bindings {
 		PreviousSection: bind("[", "[", "previous section (overview)"),
 		Comment:         bind("c", "c", "new comment: on the pull request (overview) or on the diff line / selection"),
 		Reply:           bind("r", "r", "reply to the comment thread at the cursor (diff)"),
+		ResolveThread:   bind("x", "x", "resolve or unresolve the comment thread at the cursor (diff; also :resolve, :unresolve)"),
 		Viewed:          bind("v", "v", "toggle file viewed"),
 		ReviewHunk:      bind("m", "m", "toggle hunk reviewed at the diff cursor (kept by strig until it quits)"),
 
@@ -83,6 +85,8 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 		return view.toggleHunkReviewed()
 	case key.Matches(message, view.bind.Reply):
 		return view.reply()
+	case key.Matches(message, view.bind.ResolveThread):
+		return view.resolveThread(resolveToggle)
 	case view.selection() > 0 && key.Matches(message, view.bind.Visual):
 		return view.startVisual()
 	case key.Matches(message, view.bind.EditComment):

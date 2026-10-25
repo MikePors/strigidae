@@ -276,6 +276,14 @@ type ReviewThread struct {
 	Comments          []ReviewComment
 }
 
+// ThreadResolution is the state of a review thread after it was resolved or
+// unresolved. ResolvedBy is empty when the thread is not resolved.
+type ThreadResolution struct {
+	Identifier string
+	IsResolved bool
+	ResolvedBy string
+}
+
 // ReviewEvent is the verdict of a review being submitted.
 type ReviewEvent string
 

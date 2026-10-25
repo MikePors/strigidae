@@ -4,13 +4,15 @@ import "fmt"
 
 // Operation names double as keys for fixtures in tests.
 const (
-	operationPullRequestList   = "PullRequestList"
-	operationPullRequestSearch = "PullRequestSearch"
-	operationPullRequestDetail = "PullRequestDetail"
-	operationReviewThreads     = "ReviewThreads"
-	operationReplyToThread     = "ReplyToThread"
-	operationMarkFileViewed    = "MarkFileViewed"
-	operationUnmarkFileViewed  = "UnmarkFileViewed"
+	operationPullRequestList       = "PullRequestList"
+	operationPullRequestSearch     = "PullRequestSearch"
+	operationPullRequestDetail     = "PullRequestDetail"
+	operationReviewThreads         = "ReviewThreads"
+	operationResolveReviewThread   = "ResolveReviewThread"
+	operationUnresolveReviewThread = "UnresolveReviewThread"
+	operationReplyToThread         = "ReplyToThread"
+	operationMarkFileViewed        = "MarkFileViewed"
+	operationUnmarkFileViewed      = "UnmarkFileViewed"
 )
 
 const reactionSelection = `reactionGroups { content viewerHasReacted reactors { totalCount } }`
@@ -130,6 +132,20 @@ const replyToThreadMutation = `
 mutation ` + operationReplyToThread + `($threadId: ID!, $body: String!) {
   addPullRequestReviewThreadReply(input: {pullRequestReviewThreadId: $threadId, body: $body}) {
     comment { ` + reviewCommentSelection + ` }
+  }
+}`
+
+const resolveReviewThreadMutation = `
+mutation ` + operationResolveReviewThread + `($threadId: ID!) {
+  resolveReviewThread(input: {threadId: $threadId}) {
+    thread { id isResolved resolvedBy { login } }
+  }
+}`
+
+const unresolveReviewThreadMutation = `
+mutation ` + operationUnresolveReviewThread + `($threadId: ID!) {
+  unresolveReviewThread(input: {threadId: $threadId}) {
+    thread { id isResolved resolvedBy { login } }
   }
 }`
 

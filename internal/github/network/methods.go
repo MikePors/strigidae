@@ -249,3 +249,31 @@ func (client *Client) SetFileViewed(ctx context.Context, pullRequestIdentifier, 
 	// The caller names the action and the file, so the error is not wrapped again.
 	return client.query(ctx, query, map[string]any{"pullRequestId": pullRequestIdentifier, "path": path}, &response)
 }
+
+// ResolveReviewThread implements github.Client.
+func (client *Client) ResolveReviewThread(ctx context.Context, threadIdentifier string) (github.ThreadResolution, error) {
+	var response struct {
+		ResolveReviewThread *struct{ Thread *graphqlThreadState }
+	}
+	if err := client.query(ctx, resolveReviewThreadMutation, map[string]any{"threadId": threadIdentifier}, &response); err != nil {
+		return github.ThreadResolution{}, fmt.Errorf("resolve thread: %w", err)
+	}
+	if response.ResolveReviewThread == nil || response.ResolveReviewThread.Thread == nil {
+		return github.ThreadResolution{}, fmt.Errorf("resolve thread: %w", github.ErrNotFound)
+	}
+	return response.ResolveReviewThread.Thread.resolution(), nil
+}
+
+// UnresolveReviewThread implements github.Client.
+func (client *Client) UnresolveReviewThread(ctx context.Context, threadIdentifier string) (github.ThreadResolution, error) {
+	var response struct {
+		UnresolveReviewThread *struct{ Thread *graphqlThreadState }
+	}
+	if err := client.query(ctx, unresolveReviewThreadMutation, map[string]any{"threadId": threadIdentifier}, &response); err != nil {
+		return github.ThreadResolution{}, fmt.Errorf("unresolve thread: %w", err)
+	}
+	if response.UnresolveReviewThread == nil || response.UnresolveReviewThread.Thread == nil {
+		return github.ThreadResolution{}, fmt.Errorf("unresolve thread: %w", github.ErrNotFound)
+	}
+	return response.UnresolveReviewThread.Thread.resolution(), nil
+}

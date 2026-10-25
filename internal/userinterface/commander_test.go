@@ -118,3 +118,13 @@ func TestCopyFilenameRoutedThroughCommandLine(test *testing.T) {
 		test.Errorf("status = %q, top calls %d", model.status.text, top.calls)
 	}
 }
+
+func TestResolveCommandsAreViewCommands(test *testing.T) {
+	for _, name := range []string{"resolve", "unresolve"} {
+		model := newModel(newFake("plain"))
+		run(model, typeCommand(model, name))
+		if want := "not available here: " + name; model.status.text != want {
+			test.Errorf(":%s: status = %q, want %q", name, model.status.text, want)
+		}
+	}
+}

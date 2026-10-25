@@ -74,6 +74,7 @@ type View struct {
 	pullRequestPending bool
 	diffPending        bool
 	threadPending      bool
+	threadGeneration   int                   // latest thread load or in-place change; older thread loads are stale
 	threadLoaded       bool                  // a thread load has succeeded
 	threadErr          error                 // why the last thread load failed; cleared when a load starts
 	threads            []github.ReviewThread // sorted by file and line
@@ -193,7 +194,7 @@ func (view *View) FullHelp() [][]key.Binding {
 	out := [][]key.Binding{
 		{view.bind.PaneLeft, view.bind.PaneRight, view.bind.NextFile, view.bind.PreviousFile, view.bind.FilePicker},
 		{view.bind.NextSection, view.bind.PreviousSection, view.bind.Comment, view.bind.Reply, view.bind.Viewed, view.bind.ReviewHunk},
-		{view.bind.Visual, view.bind.EditComment, view.bind.DeleteComment},
+		{view.bind.Visual, view.bind.EditComment, view.bind.DeleteComment, view.bind.ResolveThread},
 		view.searchHelp(),
 	}
 	return append(out, view.filePane.FullHelp()...)
@@ -232,7 +233,7 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		}
 		return view, view.diffLoaded(message)
 	case threadsLoadedMessage:
-		if !view.mine(message.owner, message.repository, message.number, message.sequence) {
+		if !view.mine(message.owner, message.repository, message.number, message.sequence) || message.generation != view.threadGeneration {
 			return view, nil
 		}
 		return view, view.threadsLoaded(message)
@@ -257,6 +258,11 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 			return view, nil
 		}
 		return view, view.commentDeleted(message)
+	case threadResolvedMessage:
+		if !view.owns(message.origin) {
+			return view, nil
+		}
+		return view, view.threadResolved(message)
 	case commentCheckedMessage:
 		if !view.owns(message.origin) {
 			return view, nil

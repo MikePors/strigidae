@@ -182,6 +182,21 @@ type graphqlThread struct {
 	Comments          struct{ Nodes []graphqlReviewComment }
 }
 
+// graphqlThreadState is what the resolve and unresolve mutations return.
+type graphqlThreadState struct {
+	ID         string
+	IsResolved bool
+	ResolvedBy *graphqlActor
+}
+
+func (state graphqlThreadState) resolution() github.ThreadResolution {
+	resolution := github.ThreadResolution{Identifier: state.ID, IsResolved: state.IsResolved}
+	if state.IsResolved {
+		resolution.ResolvedBy = state.ResolvedBy.login()
+	}
+	return resolution
+}
+
 func mapPullRequest(node graphqlPullRequest) (github.PullRequest, error) {
 	repository, err := github.ParseRepository(node.Repository.NameWithOwner)
 	if err != nil {
