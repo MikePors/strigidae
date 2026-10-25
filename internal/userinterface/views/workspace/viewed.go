@@ -130,6 +130,11 @@ func (view *View) viewedDone(message viewedMessage) tea.Cmd {
 	} else {
 		toggle.want = toggle.confirmed
 		view.setViewed(message.path, toggle.want)
+		if message.sent == github.FileViewed {
+			// strig did not mark it after all, so autoviewed must never unmark it
+			// (say, after the user views it on GitHub instead).
+			delete(view.hunkMarks.autoViewed, fileKey{view.repository, view.number, message.path})
+		}
 	}
 	if toggle.want != message.sent && toggle.want != toggle.confirmed {
 		return view.sendViewed(message.path, toggle.want)

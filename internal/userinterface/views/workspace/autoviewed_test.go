@@ -2,16 +2,19 @@ package workspace
 
 import (
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/github/fake"
 	"github.com/MikePors/strigidae/internal/options"
 	"github.com/MikePors/strigidae/internal/userinterface"
+	"github.com/MikePors/strigidae/internal/userinterface/keys"
 )
 
-// autoHarness opens client.go (two hunks in testdata/pull_request.diff) with the diff focused, cursor on its first
-// hunk, and the autoviewed option set to on.
+// autoHarness opens client.go (two hunks in testdata/pull_request.diff) with
+// the diff focused and the cursor on its first hunk, with the autoviewed
+// option set to on.
 func autoHarness(test *testing.T, on bool, states ...github.ViewedState) *harness {
 	test.Helper()
 	harness := viewedHarness(test, 100, 30, states...)
@@ -136,10 +139,72 @@ func TestAutoViewedWithoutPullRequestIdentifier(test *testing.T) {
 		test.Errorf("reviewing a hunk that does not complete the file showed %v", err)
 	}
 	harness.press("]", "m")
-	if err := harness.lastErr(); err == nil {
-		test.Error("no error when the file could not be marked viewed")
+	if _, ok := harness.messages[len(harness.messages)-1].(userinterface.ErrorMessage); !ok {
+		test.Errorf("the last status message is %#v, want the error (an info would race it)", harness.messages[len(harness.messages)-1])
 	}
 	if len(harness.view.hunkMarks.autoViewed) != 0 {
 		test.Error("strig recorded a mark it never sent")
+	}
+}
+
+// TestAutoViewedFailedMarkThenViewedOnGitHub: after a refused mark, a file
+// the user then views elsewhere (here: a reload shows it viewed) is theirs,
+// so unreviewing a hunk leaves it viewed.
+func TestAutoViewedFailedMarkThenViewedOnGitHub(test *testing.T) {
+	harness := autoHarness(test, true)
+	harness.client.SetError(fake.MethodSetFileViewed, errors.New("boom"))
+	harness.press("m", "]", "m")
+	harness.client.SetError(fake.MethodSetFileViewed, nil)
+
+	detail := testDetail()
+	detail.Files[0].Viewed = github.FileViewed // viewed on github.com meanwhile
+	harness.client.SetPullRequest(detail)
+	harness.press("R")
+	if harness.clientFile() != github.FileViewed {
+		test.Fatal("setup: the refresh does not show the file viewed")
+	}
+	harness.press("m")
+	if harness.clientFile() != github.FileViewed {
+		test.Error("unreviewing a hunk unmarked a file strig failed to mark")
+	}
+	if got := viewedSent(harness.client); len(got) != 1 {
+		test.Errorf("GitHub got %v, want only the refused mark", got)
+	}
+}
+
+// TestAutoViewedDismissedFile: a file GitHub dismissed (changed since it was
+// viewed, after a push) counts as not viewed, so reviewing its last hunk
+// marks it again.
+func TestAutoViewedDismissedFile(test *testing.T) {
+	harness := autoHarness(test, true, github.FileDismissed)
+	harness.press("m", "]", "m")
+	if harness.clientFile() != github.FileViewed {
+		test.Error("a dismissed file was not marked viewed when its last hunk was reviewed")
+	}
+	if got := viewedSent(harness.client); len(got) != 1 || !got[0] {
+		test.Errorf("GitHub got %v, want one viewed=true", got)
+	}
+}
+
+// TestAutoViewedWhileInFlight: unreviewing the last hunk before the mark
+// reaches GitHub queues the unmark behind it, as a second v would.
+func TestAutoViewedWhileInFlight(test *testing.T) {
+	harness := autoHarness(test, true)
+	harness.press("m", "]")
+	view, mark := harness.view.Update(keys.Message{Sequence: "m"}) // held: not run yet
+	harness.view = view.(*View)
+	view, unmark := harness.view.Update(keys.Message{Sequence: "m"})
+	harness.view = view.(*View)
+	if harness.clientFile() == github.FileViewed {
+		test.Error("the file shows viewed after its hunk was unreviewed again")
+	}
+	harness.finish(unmark) // only the status message: the unmark waits
+	next := harness.finish(mark)
+	if next == nil {
+		test.Fatal("the queued unmark was not sent after the mark finished")
+	}
+	harness.finish(next)
+	if got := viewedSent(harness.client); !slices.Equal(got, []bool{true, false}) {
+		test.Errorf("GitHub got %v, want viewed=true then false", got)
 	}
 }

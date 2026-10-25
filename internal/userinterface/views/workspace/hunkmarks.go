@@ -132,10 +132,14 @@ func (view *View) toggleHunkReviewed() tea.Cmd {
 	// Said out loud: the diff pane may be hidden (a narrow terminal with the
 	// files pane focused), and then this is the only sign anything changed.
 	command, text := view.followHunks(file, reviewed)
-	if text == "" {
-		text = fmt.Sprintf("hunk %d/%d %s", hunk+1, len(file.Hunks), state)
+	switch {
+	case text != "":
+		return tea.Batch(command, userinterface.Info(text))
+	case command != nil:
+		// Only the error: a batched info would race it for the status bar.
+		return command
 	}
-	return tea.Batch(command, userinterface.Info(text))
+	return userinterface.Info(fmt.Sprintf("hunk %d/%d %s", hunk+1, len(file.Hunks), state))
 }
 
 // followHunks keeps the selected file's viewed mark in step with its hunks
