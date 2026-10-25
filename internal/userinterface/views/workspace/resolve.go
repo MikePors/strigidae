@@ -166,20 +166,18 @@ func (view *View) threadResolved(message threadResolvedMessage) tea.Cmd {
 	return userinterface.Info(text)
 }
 
-// applyResolution updates the thread in place and folds it closed when it is
-// resolved, open when it is not. It reports false when the thread is not shown.
+// applyResolution updates the thread in place (the fold was recorded by the
+// caller). It reports false, changing nothing, when the thread is not shown or
+// a thread load is in flight: that load may carry newer data than the screen,
+// so the caller reloads after the write instead, which supersedes it.
 func (view *View) applyResolution(identifier string, resolution github.ThreadResolution) bool {
 	index := slices.IndexFunc(view.threads, func(thread github.ReviewThread) bool { return thread.Identifier == identifier })
-	if index < 0 {
+	if index < 0 || view.threadPending {
 		return false
 	}
 	// A fresh slice, so the one handed to the file pane earlier is never written to.
 	view.threads = slices.Clone(view.threads)
 	view.threads[index].IsResolved, view.threads[index].ResolvedBy = resolution.IsResolved, resolution.ResolvedBy
-	// An older thread load may still be in flight and hold the state from
-	// before the write; it is discarded.
-	view.threadGeneration++
-	view.threadPending = false
 	view.filePane.SetThreads(view.threads)
 	view.overview.invalidate()
 	view.layout()
