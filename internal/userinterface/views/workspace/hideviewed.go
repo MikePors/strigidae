@@ -1,6 +1,7 @@
 package workspace
 
 import (
+	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -59,9 +60,14 @@ func (view *View) cursorEntry() int {
 
 // place lists the rows anew and puts the cursor on the one nearest entry.
 func (view *View) place(entry int) {
-	view.rows = view.shownEntries()
+	rows := view.shownEntries()
+	changed := !slices.Equal(rows, view.rows)
+	view.rows = rows
 	view.window.SetRows(len(view.rows))
 	view.window.Restore(nearestRow(view.rows, entry), view.window.Top(), 0)
+	if changed {
+		view.search.Refresh(view.searchList()) // its rows are these
+	}
 }
 
 // reflow is place for a change of what is hidden: the cursor stays on its

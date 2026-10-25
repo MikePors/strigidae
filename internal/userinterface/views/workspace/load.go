@@ -152,6 +152,7 @@ func (view *View) pullRequestLoaded(message pullRequestLoadedMessage) tea.Cmd {
 		return userinterface.Error(terminaltext.SafeError(message.err))
 	}
 	previous := view.selectedPath()
+	following := view.current == view.cursorEntry() // the pane shows the cursor's file
 	view.detail, view.err, view.notFound = &message.detail, nil, false
 	view.reapplyViewed(message.sequence)
 	view.current = 0
@@ -161,9 +162,12 @@ func (view *View) pullRequestLoaded(message pullRequestLoadedMessage) tea.Cmd {
 		}
 	}
 	view.place(view.current) // a refresh must not scroll the Files list
+	if following {
+		view.current = view.cursorEntry() // the file may be hidden now
+	}
 	view.overview.invalidate()
 	view.selectionChanged()
-	view.search.Refresh(view.searchList())
+	view.search.Refresh(view.searchList()) // the paths may differ with the same rows
 	view.layout()
 	return nil
 }

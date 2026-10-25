@@ -1,16 +1,20 @@
 package workspace
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/github/fake"
 	"github.com/MikePors/strigidae/internal/options"
 	"github.com/MikePors/strigidae/internal/userinterface"
+	"github.com/MikePors/strigidae/internal/userinterface/components/search"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
@@ -175,13 +179,14 @@ func TestStaleFadeTimersAreIgnored(test *testing.T) {
 		hidden := newHideHarness(test, true)
 		hidden.press("j", "v")
 		hidden.send(userinterface.OptionsMessage{Values: options.Values{options.HideViewed: false}})
-		hidden.fire(fadeDuration)
 		hidden.wantRows(0, 1, 2, 3, 4, 5)
 		if hidden.stateOf() != viewed {
 			test.Error("turning the option off un-marked the file")
 		}
 		hidden.send(userinterface.OptionsMessage{Values: options.Values{options.HideViewed: true}})
-		hidden.wantRows(0, 2, 3, 4, 5) // viewed and no longer fading
+		hidden.wantRows(0, 2, 3, 4, 5) // viewed and no longer fading: hidden at once
+		hidden.fire(fadeDuration)      // the old timer arrives late
+		hidden.wantRows(0, 2, 3, 4, 5)
 	})
 	test.Run("after the mark was taken back and given again", func(test *testing.T) {
 		hidden := newHideHarness(test, true)
@@ -232,5 +237,71 @@ func TestPickerListsHiddenFilesAndKeepsTheCursorOnAShownOne(test *testing.T) {
 	hidden.press("j")
 	if got := hidden.view.selection(); got != 5 {
 		test.Errorf("j from the cursor went to entry %d, want 5", got)
+	}
+}
+
+func TestSearchMarksFollowTheRowsWhenAFileLeaves(test *testing.T) {
+	hidden := newHideHarness(test, true)
+	hidden.press("/")
+	hidden.searchFor("retry", userinterface.PromptChanged)
+	hidden.searchFor("retry", userinterface.PromptSubmitted) // cursor on retry.go
+	hidden.press("j", "v")                                   // legacy.go fades, cursor on the retry-policy doc
+	hidden.fire(fadeDuration)
+	hidden.wantRows(0, 1, 2, 4, 5)
+
+	var marked []bool
+	for _, row := range hidden.view.fileRows(60, 10) {
+		marked = append(marked, strings.Contains(ansi.Strip(row), search.Glyph))
+	}
+	if diff := cmp.Diff([]bool{false, false, true, true, false}, marked); diff != "" {
+		test.Errorf("marked rows (-want +got):\n%s", diff)
+	}
+	hidden.press("n")
+	if got := hidden.view.selectedPath(); got != "internal/sync/retry.go" {
+		test.Errorf("n went to %q, want retry.go", got)
+	}
+}
+
+func TestRefreshMovesThePaneOffAFileThatIsHiddenNow(test *testing.T) {
+	hidden := newHideHarness(test, true)
+	hidden.press("j")
+	if err := hidden.client.SetFileViewed(test.Context(), "PR_7", firstFile, true); err != nil {
+		test.Fatal(err)
+	}
+	hidden.press("R")
+	hidden.wantRows(0, 2, 3, 4, 5)
+	if hidden.view.selection() != hidden.view.cursorEntry() || hidden.view.selection() != 2 {
+		test.Errorf("pane shows entry %d, cursor on %d, want both 2", hidden.view.selection(), hidden.view.cursorEntry())
+	}
+	hidden.press("v")
+	if got := hidden.view.files()[1].Viewed; got != viewed {
+		test.Errorf("v marked something other than the cursor's file (retry.go is %q)", got)
+	}
+}
+
+func TestRefreshInTheMiddleOfAFadeKeepsTheFile(test *testing.T) {
+	hidden := newHideHarness(test, true)
+	hidden.press("j", "v", "k") // client.go fading, cursor back on it
+	hidden.press("R")
+	hidden.wantRows(0, 1, 2, 3, 4, 5)
+	if hidden.view.selection() != 1 {
+		test.Errorf("the refresh moved the pane to entry %d", hidden.view.selection())
+	}
+	hidden.fire(fadeDuration)
+	hidden.wantRows(0, 2, 3, 4, 5)
+	if hidden.view.selection() != hidden.view.cursorEntry() {
+		test.Error("the pane stayed on the file that left")
+	}
+}
+
+func TestRefusedMarkStopsFadingAtOnce(test *testing.T) {
+	hidden := newHideHarness(test, true)
+	hidden.client.SetError(fake.MethodSetFileViewed, errors.New("refused"))
+	hidden.press("j", "v")
+	if hidden.stateOf() == viewed {
+		test.Fatalf("the refused mark shows as %q", hidden.stateOf())
+	}
+	if hidden.view.fades.active(fadeKey(firstFile)) {
+		test.Error("the refused mark keeps fading")
 	}
 }

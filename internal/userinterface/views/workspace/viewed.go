@@ -129,6 +129,9 @@ func (view *View) viewedDone(message viewedMessage) tea.Cmd {
 	} else {
 		toggle.want = toggle.confirmed
 		view.setViewed(message.path, toggle.want)
+		if toggle.want != github.FileViewed {
+			view.fades.cancel(fadeKey(message.path))
+		}
 		view.reflow() // a mark taken back may be hidden, one restored may not
 	}
 	if toggle.want != message.sent && toggle.want != toggle.confirmed {
