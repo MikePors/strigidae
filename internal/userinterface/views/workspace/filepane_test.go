@@ -37,6 +37,9 @@ func (pane *stubPane) SetWrap(bool)                               {}
 func (pane *stubPane) SetHunkReviewed(func(*diff.File, int) bool) {}
 func (pane *stubPane) CursorHunk() (*diff.File, int, bool)        { return nil, 0, false }
 
+func (pane *stubPane) SetHunkHiding(func(*diff.File, int) bool, func(*diff.File, int) int) {}
+func (pane *stubPane) HiddenHunksChanged()                                                 {}
+
 func (pane *stubPane) SetThreadExpanded(string, bool) {}
 
 func (pane *stubPane) SetThreads([]github.ReviewThread)      {}

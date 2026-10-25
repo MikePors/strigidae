@@ -1,6 +1,7 @@
 package workspace
 
 import (
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -53,8 +54,14 @@ func (faded *fader) begin(key string, now time.Time) int {
 // cancel stops the fade of key; the thing stays as it was.
 func (faded *fader) cancel(key string) { delete(faded.runs, key) }
 
-// clear stops every fade.
-func (faded *fader) clear() { clear(faded.runs) }
+// clear stops the fades whose keys start with prefix.
+func (faded *fader) clear(prefix string) {
+	for key := range faded.runs {
+		if strings.HasPrefix(key, prefix) {
+			delete(faded.runs, key)
+		}
+	}
+}
 
 // active reports whether key is fading, including at its normal look.
 func (faded *fader) active(key string) bool { return faded.runs[key] != nil }

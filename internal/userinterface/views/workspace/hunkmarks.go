@@ -116,7 +116,7 @@ func (view *View) toggleHunkReviewed() tea.Cmd {
 	}
 	// Said out loud: the diff pane may be hidden (a narrow terminal with the
 	// files pane focused), and then this is the only sign anything changed.
-	return userinterface.Info(fmt.Sprintf("hunk %d/%d %s", hunk+1, len(file.Hunks), state))
+	return tea.Batch(view.hunkMarkChanged(file, hunk, view.hunkMarks.reviewed[key]), userinterface.Info(fmt.Sprintf("hunk %d/%d %s", hunk+1, len(file.Hunks), state)))
 }
 
 // hunkProgress is the diff pane title's suffix once any hunk of the selected

@@ -73,6 +73,13 @@ func (pane *diffPane) SetHunkReviewed(reviewed func(file *diff.File, hunk int) b
 	pane.diffView.SetHunkReviewed(reviewed)
 }
 
+func (pane *diffPane) SetHunkHiding(hidden func(file *diff.File, hunk int) bool, fade func(file *diff.File, hunk int) int) {
+	pane.diffView.SetHunkHidden(hidden)
+	pane.diffView.SetHunkFade(fade)
+}
+
+func (pane *diffPane) HiddenHunksChanged() { pane.diffView.HiddenHunksChanged() }
+
 func (pane *diffPane) CursorHunk() (*diff.File, int, bool) { return pane.diffView.CursorHunk() }
 
 func (pane *diffPane) SetThreadExpanded(identifier string, expanded bool) {

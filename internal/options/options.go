@@ -12,6 +12,7 @@ const (
 	HighlightSearch = "hlsearch"
 	Wrap            = "wrap"
 	HideViewed      = "hideviewed"
+	HideReviewed    = "hidereviewed"
 )
 
 // Option is one declared setting.
@@ -29,6 +30,7 @@ func All() []Option {
 		{Name: HighlightSearch, Default: true},
 		{Name: Wrap},
 		{Name: HideViewed},
+		{Name: HideReviewed},
 	}
 }
 
@@ -76,6 +78,9 @@ func (values Values) Wrap() bool { return values.Get(Wrap) }
 
 // HideViewed reports whether the Files pane leaves out files marked viewed.
 func (values Values) HideViewed() bool { return values.Get(HideViewed) }
+
+// HideReviewed reports whether the diff pane leaves out hunks marked reviewed.
+func (values Values) HideReviewed() bool { return values.Get(HideReviewed) }
 
 // Describe writes one option's value the way `:set` shows it: its name, or
 // "no" and its name.
