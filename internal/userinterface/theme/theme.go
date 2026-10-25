@@ -56,6 +56,9 @@ type Theme struct {
 	Normal   lipgloss.Style // plain text
 	Muted    lipgloss.Style // de-emphasised text
 	Selected lipgloss.Style // the highlighted row in a list
+	// Fade is the steps of something fading out, from just off its normal
+	// colour (index 0) to almost the background (the last); see fade.go.
+	Fade [FadeSteps]lipgloss.Style
 
 	// Chosen is set for a theme the user picked (a bundled theme, a theme
 	// file or the terminal's palette), as opposed to a built-in one. A
@@ -184,6 +187,7 @@ func newTheme(palette Palette, roles Roles, syntax string, overridden map[string
 		Normal:     lipgloss.NewStyle(),
 		Muted:      foreground(roles.Muted),
 		Selected:   bold(roles.AccentStrong),
+		Fade:       fadeStyles(roles),
 		IsDark:     palette.Variant == Dark,
 		Identifier: identifier,
 		Roles:      roles,
