@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/MikePors/strigidae/internal/diff"
+	"github.com/MikePors/strigidae/internal/github"
 )
 
 // markSelected is the gutter mark of a selected row that is not the cursor row.
@@ -15,7 +16,7 @@ const markSelected = "▎"
 // SideRight), and are equal for a single line.
 type Range struct {
 	Path       string
-	Side       Side
+	Side       github.DiffSide
 	Start, End int
 }
 
@@ -173,9 +174,9 @@ func rangeFor(path string, lines []*diff.Line) (Range, error) {
 	}
 	first, last := lines[0], lines[len(lines)-1]
 	if hasDeletion {
-		return Range{Path: path, Side: SideLeft, Start: first.Old, End: last.Old}, nil
+		return Range{Path: path, Side: github.SideLeft, Start: first.Old, End: last.Old}, nil
 	}
-	return Range{Path: path, Side: SideRight, Start: first.New, End: last.New}, nil
+	return Range{Path: path, Side: github.SideRight, Start: first.New, End: last.New}, nil
 }
 
 // selected reports whether base row baseIndex is inside the selection.

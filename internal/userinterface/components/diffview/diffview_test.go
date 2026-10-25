@@ -164,14 +164,14 @@ func TestCursorInfo(test *testing.T) {
 	}
 	model.CursorDown(5) // "+\t\"log\""
 	cursorLine, ok := model.Cursor()
-	want := CursorLine{Path: "server.go", Hunk: 0, Kind: diff.Add, Old: 0, New: 5, Side: SideRight, Text: "\t\"log\""}
+	want := CursorLine{Path: "server.go", Hunk: 0, Kind: diff.Add, Old: 0, New: 5, Side: github.SideRight, Text: "\t\"log\""}
 	if !ok || cursorLine != want || cursorLine.Number() != 5 {
 		test.Errorf("add line: %+v ok=%v", cursorLine, ok)
 	}
 	model.GotoTop()
 	model.CursorDown(deletedRow)
 	cursorLine, ok = model.Cursor()
-	if !ok || cursorLine.Kind != diff.Delete || cursorLine.Side != SideLeft || cursorLine.Old != 32 || cursorLine.New != 0 || cursorLine.Number() != 32 || cursorLine.Hunk != 1 {
+	if !ok || cursorLine.Kind != diff.Delete || cursorLine.Side != github.SideLeft || cursorLine.Old != 32 || cursorLine.New != 0 || cursorLine.Number() != 32 || cursorLine.Hunk != 1 {
 		test.Errorf("delete line: %+v ok=%v", cursorLine, ok)
 	}
 	model.GotoBottom() // the no-newline marker
@@ -179,7 +179,7 @@ func TestCursorInfo(test *testing.T) {
 		test.Error("marker row should not be commentable")
 	}
 	model.CursorUp(1)
-	if cursorLine, ok := model.Cursor(); !ok || cursorLine.Kind != diff.Context || cursorLine.Side != SideRight || cursorLine.Old != 37 || cursorLine.New != 39 {
+	if cursorLine, ok := model.Cursor(); !ok || cursorLine.Kind != diff.Context || cursorLine.Side != github.SideRight || cursorLine.Old != 37 || cursorLine.New != 39 {
 		test.Errorf("context line: %+v ok=%v", cursorLine, ok)
 	}
 	model.SetFile(nil)
