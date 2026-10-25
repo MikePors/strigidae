@@ -67,3 +67,19 @@ func TestEveryDeclaredOptionIsAConfigKey(test *testing.T) {
 		}
 	}
 }
+
+// TestBooleanSpelling pins the rule: an unquoted YAML boolean, so True is
+// accepted and quoted or yes/no values are not.
+func TestBooleanSpelling(test *testing.T) {
+	for _, accepted := range []string{"True", "TRUE", "true"} {
+		parsed, err := Parse("c.yml", []byte("wrap: "+accepted+"\n"))
+		if err != nil || !parsed.Options.Wrap() {
+			test.Errorf("wrap: %s gave %v, %v", accepted, parsed.Options, err)
+		}
+	}
+	for _, rejected := range []string{`"false"`, `'true'`, "yes", "no"} {
+		if _, err := Parse("c.yml", []byte("wrap: "+rejected+"\n")); err == nil {
+			test.Errorf("wrap: %s was accepted", rejected)
+		}
+	}
+}

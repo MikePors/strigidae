@@ -216,10 +216,7 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 	case userinterface.OptionsMessage:
 		view.options = message.Values
 		view.wrap = message.Values.Wrap()
-		if pane, ok := view.filePane.(interface{ SetWrap(bool) }); ok {
-			pane.SetWrap(view.wrap)
-			view.layout()
-		}
+		view.filePane.SetWrap(view.wrap)
 	case userinterface.ThemeMessage:
 		view.theme = message.Theme
 		view.markdownRenderer = markdown.New(view.theme)
