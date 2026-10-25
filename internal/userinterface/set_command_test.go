@@ -19,8 +19,8 @@ func TestApplySet(test *testing.T) {
 		wantText  string
 		wantError string
 	}{
-		{name: "bare shows the defaults", arguments: "", wantText: "wrapscan hlsearch"},
-		{name: "bare shows the current values", start: options.Values{"wrapscan": false}, arguments: "  ", want: options.Values{"wrapscan": false}, wantText: "nowrapscan hlsearch"},
+		{name: "bare shows the defaults", arguments: "", wantText: "wrapscan hlsearch nowrap"},
+		{name: "bare shows the current values", start: options.Values{"wrapscan": false}, arguments: "  ", want: options.Values{"wrapscan": false}, wantText: "nowrapscan hlsearch nowrap"},
 		{name: "turn off", arguments: "nowrapscan", want: options.Values{"wrapscan": false}, wantText: "nowrapscan"},
 		{name: "turn on", start: options.Values{"hlsearch": false}, arguments: "hlsearch", want: options.Values{"hlsearch": true}, wantText: "hlsearch"},
 		{name: "several", arguments: "nowrapscan nohlsearch", want: options.Values{"wrapscan": false, "hlsearch": false}, wantText: "nowrapscan nohlsearch"},
@@ -110,7 +110,7 @@ func TestSetCommandChangesOptionsForEveryView(test *testing.T) {
 	}
 
 	drive(model, parseCommand("set", model.top()))
-	if model.status.text != "nowrapscan hlsearch" {
+	if model.status.text != "nowrapscan hlsearch nowrap" {
 		test.Errorf("bare :set shows %q", model.status.text)
 	}
 	if got := len(optionsSeen(below)); got != 1 {
@@ -149,6 +149,17 @@ func TestOptionsReachTheRootViewAtStartAndPushedViews(test *testing.T) {
 	setModel(plain, nil)
 	if len(optionsSeen(plain)) != 0 {
 		test.Error("a view was told about options that were never set")
+	}
+}
+
+func TestSetWrapReachesViews(test *testing.T) {
+	root := newFake("v")
+	model := setModel(root, nil)
+	drive(model, parseCommand("set wrap", model.top()))
+	drive(model, parseCommand("set nowrap", model.top()))
+	want := []options.Values{{"wrap": true}, {"wrap": false}}
+	if diff := cmp.Diff(want, optionsSeen(root)); diff != "" {
+		test.Errorf("options messages (-want +got):\n%s", diff)
 	}
 }
 

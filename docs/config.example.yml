@@ -6,13 +6,11 @@
 # Base16/Base24 scheme file. See docs/themes.md.
 # theme: tokyo-night
 
-# Optional yes/no options (also `:set` while strig runs). Both default to true.
+# Optional yes/no options (also `:set` while strig runs). wrapscan and
+# hlsearch default to true, wrap to false.
 # wrapscan: false
 # hlsearch: false
-
-# Optional: wrap long diff lines onto the next rows instead of cutting them off
-# at the pane's edge (default false).
-# wrap: true
+# wrap: true   # wrap long diff lines onto the next rows instead of cutting them off
 
 tabs:
   # Your own PRs. With no "user" and no "sections" a tab gets the default

@@ -48,8 +48,6 @@ type Options struct {
 	Now func() time.Time
 	// Open opens a URL in the browser; it runs inside a tea.Cmd.
 	Open func(url string) error
-	// Wrap makes the diffs of the pull requests it opens wrap long lines.
-	Wrap bool
 }
 
 // View lists one repository's open pull requests.
@@ -63,7 +61,6 @@ type View struct {
 	// hunkMarks keeps the hunks marked reviewed in every workspace opened
 	// from here, so they survive closing and reopening a pull request.
 	hunkMarks *workspace.HunkMarks
-	wrap      bool // passed to every workspace opened from here
 
 	pullRequests []github.PullRequest
 	next         string // cursor of the next page, empty when all are loaded
@@ -103,7 +100,6 @@ func New(client github.Client, repository github.Repository, activeTheme theme.T
 		sequence:   1,
 		loading:    true,
 		hunkMarks:  workspace.NewHunkMarks(),
-		wrap:       options.Wrap,
 	}
 }
 
@@ -307,7 +303,7 @@ func (view *View) openSelected() tea.Cmd {
 		workspace.WithClock(view.now),
 		workspace.WithOpener(view.open),
 		workspace.WithHunkMarks(view.hunkMarks),
-		workspace.WithWrap(view.wrap),
+		workspace.WithWrap(view.options.Wrap()),
 	))
 }
 

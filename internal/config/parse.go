@@ -21,7 +21,6 @@ func buildTopLevel() map[string]func(nodeParser *parser, node *yaml.Node, config
 	keyParsers := map[string]func(nodeParser *parser, node *yaml.Node, config *Config){
 		"tabs":  (*parser).tabs,
 		"theme": (*parser).theme,
-		"wrap":  (*parser).wrap,
 	}
 	for _, option := range options.All() {
 		keyParsers[option.Name] = func(nodeParser *parser, node *yaml.Node, config *Config) {
@@ -74,10 +73,6 @@ func Parse(path string, data []byte) (Config, error) {
 // needs the user interface's theme packages, so the main package does that.
 func (parser *parser) theme(node *yaml.Node, config *Config) {
 	config.Theme = parser.stringValue(node, "theme")
-}
-
-func (parser *parser) wrap(node *yaml.Node, config *Config) {
-	config.Wrap = parser.boolean(node, "wrap")
 }
 
 func (parser *parser) tabs(node *yaml.Node, config *Config) {

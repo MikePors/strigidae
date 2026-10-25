@@ -15,6 +15,7 @@ import (
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/github/fake"
 	"github.com/MikePors/strigidae/internal/golden"
+	"github.com/MikePors/strigidae/internal/options"
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
@@ -596,7 +597,8 @@ func TestWrapPassedToWorkspaces(test *testing.T) {
 		tabs := testTabs(test)
 		client := fake.New()
 		seed(test, client, tabs)
-		view := New(client, tabs, theme.Default(), Options{Wrap: wrap})
+		view := New(client, tabs, theme.Default(), Options{})
+		view.Update(userinterface.OptionsMessage{Values: options.Values{options.Wrap: wrap}})
 		view.Update(tea.WindowSizeMsg{Width: 80, Height: 16})
 		settle(view, view.Init())
 		push, ok := press(view, "enter")().(userinterface.PushMessage)
@@ -604,7 +606,7 @@ func TestWrapPassedToWorkspaces(test *testing.T) {
 			test.Fatal("enter should push a view")
 		}
 		if got := push.View.(*workspace.View).Wrap(); got != wrap {
-			test.Errorf("Options.Wrap %v: workspace wraps = %v", wrap, got)
+			test.Errorf("wrap option %v: workspace wraps = %v", wrap, got)
 		}
 	}
 }

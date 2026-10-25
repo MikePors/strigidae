@@ -64,6 +64,9 @@ func newDiffPane(activeTheme theme.Theme, now func() time.Time, wrap bool) *diff
 	return &diffPane{diffView: diffview.New(activeTheme, diffview.WithClock(now), diffview.WithWrap(wrap)), globalKeys: keys.DefaultGlobal(), bind: defaultDiffBindings()}
 }
 
+// SetWrap turns wrapping of long diff lines on or off.
+func (pane *diffPane) SetWrap(wrap bool) { pane.diffView.SetWrap(wrap) }
+
 func (pane *diffPane) SetTheme(activeTheme theme.Theme) { pane.diffView.SetTheme(activeTheme) }
 
 func (pane *diffPane) SetHunkReviewed(reviewed func(file *diff.File, hunk int) bool) {

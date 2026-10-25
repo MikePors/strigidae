@@ -47,9 +47,23 @@ Base16/Base24 scheme file; unset means the built-in theme. A relative path is
 taken from the config file's directory, and `~` is expanded. See
 [themes.md](themes.md).
 
-### `wrap`
+### Options
 
-Optional, `true` or `false` (default `false`). With `true`, a diff line longer
+Optional yes/no keys, written at the top level next to `theme`. Each is also
+a `:set` option (`:set nowrapscan`, `:set wrap`, `:set` alone to show
+them), which changes it for the running session without touching the file.
+The value must be an unquoted `true` or `false`; anything else is an error
+naming the line, for example `config.yml:3: wrapscan must be true or false`.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `wrapscan` | `true` | `n` / `N` continue past the last or first match of a search; with `false` they stop and say `no more matches below` / `above` |
+| `hlsearch` | `true` | rows matching a search are marked; with `false` they are not (the search and `n` / `N` still work) |
+| `wrap` | `false` | long diff lines continue on the next screen rows instead of being cut off (see below) |
+
+#### `wrap`
+
+With `wrap: true`, a diff line longer
 than the diff pane continues on the next screen rows instead of being cut off at
 the pane's edge. Continuation rows have blank line numbers with `↪` in the gutter
 and keep the line's added or removed colour. Lines break at the pane's edge,
@@ -60,19 +74,6 @@ while wrapping is on. Only the diff pane wraps.
 A line taller than the whole pane (a minified file, say) shows only as much of
 itself as fits; the rest cannot be scrolled to while wrapping is on. A pane too
 narrow to hold a wide character (a code area of one cell) does not wrap.
-
-### Options
-
-Optional yes/no keys, written at the top level next to `theme`. Each is also
-a `:set` option (`:set nowrapscan`, `:set hlsearch`, `:set` alone to show
-them), which changes it for the running session without touching the file.
-The value must be an unquoted `true` or `false`; anything else is an error
-naming the line, for example `config.yml:3: wrapscan must be true or false`.
-
-| Key | Default | Meaning |
-|---|---|---|
-| `wrapscan` | `true` | `n` / `N` continue past the last or first match of a search; with `false` they stop and say `no more matches below` / `above` |
-| `hlsearch` | `true` | rows matching a search are marked; with `false` they are not (the search and `n` / `N` still work) |
 
 ### `tabs`
 

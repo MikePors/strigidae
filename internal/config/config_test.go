@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/MikePors/strigidae/internal/options"
 )
 
 func newSection(name, query string, limit int, sort Sort, order Order) Section {
@@ -72,12 +74,20 @@ func TestParseValid(test *testing.T) {
 		{
 			"wrap on",
 			"wrap: true\n",
-			func() Config { configuration := Default(); configuration.Wrap = true; return configuration }(),
+			func() Config {
+				configuration := Default()
+				configuration.Options = options.Values{options.Wrap: true}
+				return configuration
+			}(),
 		},
 		{
 			"wrap off",
 			"wrap: false\n",
-			Default(),
+			func() Config {
+				configuration := Default()
+				configuration.Options = options.Values{options.Wrap: false}
+				return configuration
+			}(),
 		},
 		{
 			"names are trimmed",

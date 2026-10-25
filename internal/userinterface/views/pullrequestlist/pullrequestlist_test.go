@@ -14,6 +14,7 @@ import (
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/github/fake"
 	"github.com/MikePors/strigidae/internal/golden"
+	"github.com/MikePors/strigidae/internal/options"
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
@@ -561,7 +562,8 @@ func TestWorkspacesShareHunkMarks(test *testing.T) {
 
 func TestWrapPassedToWorkspaces(test *testing.T) {
 	for _, wrap := range []bool{false, true} {
-		view := New(fakeWith(makePullRequests(1)), testRepository, theme.Default(), Options{Wrap: wrap})
+		view := New(fakeWith(makePullRequests(1)), testRepository, theme.Default(), Options{})
+		view.Update(userinterface.OptionsMessage{Values: options.Values{options.Wrap: wrap}})
 		view.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
 		deliver(test, view, view.Init())
 		push, ok := press(view, "enter")().(userinterface.PushMessage)
@@ -569,7 +571,7 @@ func TestWrapPassedToWorkspaces(test *testing.T) {
 			test.Fatal("enter should push a view")
 		}
 		if got := push.View.(*workspace.View).Wrap(); got != wrap {
-			test.Errorf("Options.Wrap %v: workspace wraps = %v", wrap, got)
+			test.Errorf("wrap option %v: workspace wraps = %v", wrap, got)
 		}
 	}
 }

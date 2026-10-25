@@ -10,6 +10,7 @@ import "strings"
 const (
 	WrapScan        = "wrapscan"
 	HighlightSearch = "hlsearch"
+	Wrap            = "wrap"
 )
 
 // Option is one declared setting.
@@ -25,6 +26,7 @@ func All() []Option {
 	return []Option{
 		{Name: WrapScan, Default: true},
 		{Name: HighlightSearch, Default: true},
+		{Name: Wrap},
 	}
 }
 
@@ -66,6 +68,9 @@ func (values Values) WrapScan() bool { return values.Get(WrapScan) }
 
 // HighlightSearch reports whether rows matching a search are marked.
 func (values Values) HighlightSearch() bool { return values.Get(HighlightSearch) }
+
+// Wrap reports whether the diff pane wraps long lines.
+func (values Values) Wrap() bool { return values.Get(Wrap) }
 
 // Describe writes one option's value the way `:set` shows it: its name, or
 // "no" and its name.
