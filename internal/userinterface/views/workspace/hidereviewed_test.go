@@ -176,7 +176,7 @@ func TestHideReviewedFadeSurvivesRefresh(test *testing.T) {
 }
 
 // TestHideReviewedInReopenedWorkspace: a workspace sharing the marks hides
-// the reviewed hunks at once; the first one's fade does not carry over.
+// the reviewed hunks at once, with no grace period.
 func TestHideReviewedInReopenedWorkspace(test *testing.T) {
 	first := newHideReviewedHarness(test, true)
 	first.press("m")

@@ -61,11 +61,12 @@ func (model *Model) renderPlaceholder(row row, current int) string {
 }
 
 // fadeOf returns how far row i has faded: its hunk's fade, for the hunk's
-// header, lines and the threads on them. Placeholders, notices, the threads
-// after the diff and the cursor row never fade.
+// header, lines and the threads on them. Notices, the threads after the diff
+// and the cursor row never fade; a file with no hunks has only those. (A
+// placeholder's hunk has stopped fading.)
 func (model *Model) fadeOf(i int) int {
 	row := model.rows[i]
-	if model.hunkFade == nil || i == model.window.Cursor() || row.placeholder || row.message {
+	if model.hunkFade == nil || i == model.window.Cursor() || row.message {
 		return 0
 	}
 	if row.threadRow != nil && slices.Contains(model.orphans, row.threadRow.threadIndex) {

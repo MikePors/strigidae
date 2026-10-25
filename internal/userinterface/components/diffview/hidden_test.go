@@ -4,10 +4,13 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MikePors/strigidae/internal/diff"
+	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
 const firstPlaceholder = "▸ reviewed hunk hidden  @@ -1,9 +1,10 @@"
@@ -148,6 +151,50 @@ func TestFadingHunkIsDrawnFainter(test *testing.T) {
 			if faded[i] != line {
 				test.Errorf("row %d %q outside the hunk changed", i, text)
 			}
+		}
+	}
+}
+
+// TestRefreshIntoHiddenHunkLandsOnPlaceholder: the cursor's hunk is hidden
+// while the diff reloads.
+func TestRefreshIntoHiddenHunkLandsOnPlaceholder(test *testing.T) {
+	hidden := map[int]bool{}
+	model := hidingModel(test, hidden, nil)
+	model.goToRow(test, "log.Println")
+	model.SetMessage("Loading diff…")
+	hidden[1] = true
+	model.SetFile(fixture(test, "server.go"))
+	if got := cursorRowText(model); !strings.HasPrefix(got, ">▸ reviewed hunk hidden  @@ -30,8 +31,9 @@") {
+		test.Errorf("cursor row %q, want the second hunk's placeholder", got)
+	}
+}
+
+// TestFadeSkipsRowsOfNoHunk: the notice and threads of a file with no hunks,
+// and the threads after the diff when the last hunk fades, are in no hunk;
+// asking for their fade would index hunks that are not there.
+func TestFadeSkipsRowsOfNoHunk(test *testing.T) {
+	fade := func(file *diff.File, hunk int) int {
+		_ = file.Hunks[hunk] // as the workspace's fingerprints do
+		return 2
+	}
+	model := New(theme.New(true), WithClock(func() time.Time { return threadNow }))
+	model.SetFile(fixture(test, "logo.png"))
+	model.SetThreads([]github.ReviewThread{binaryThread()})
+	model.SetSize(60, 10)
+	model.SetHunkFade(fade)
+	model.CursorDown(1)
+	for _, line := range strings.Split(model.Render(60, 10), "\n") {
+		if strings.Contains(ansi.Strip(line), "Binary file") && line == model.theme.Fade[1].Render(ansi.Strip(line)) {
+			test.Errorf("the notice faded: %q", line)
+		}
+	}
+
+	model = hidingModel(test, nil, map[int]int{1: 2})
+	model.GotoBottom()
+	model.CursorUp(1)
+	for _, line := range strings.Split(model.Render(100, 80), "\n") {
+		if text := ansi.Strip(line); strings.Contains(text, "Old thought.") && line == model.theme.Fade[1].Render(text) {
+			test.Errorf("a thread on no line faded with the last hunk: %q", text)
 		}
 	}
 }
