@@ -12,6 +12,7 @@ import (
 	"github.com/cli/go-gh/v2/pkg/browser"
 
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/options"
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/components/scroll"
 	"github.com/MikePors/strigidae/internal/userinterface/components/search"
@@ -71,6 +72,7 @@ type View struct {
 
 	window        scroll.Window // cursor and top row over prs
 	search        search.State
+	options       options.Values // the `:set` options, sent by the root
 	width, height int
 }
 
@@ -150,6 +152,8 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		view.width, view.height = message.Width, message.Height
 		view.window.SetSize(view.listHeight())
 		return view, nil
+	case userinterface.OptionsMessage:
+		view.options = message.Values
 	case userinterface.ThemeMessage:
 		view.theme = message.Theme
 	case pullRequestsLoadedMessage:
@@ -245,9 +249,9 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 	case key.Matches(message, view.globalKeys.Search):
 		return view.search.Start(view.searchList())
 	case key.Matches(message, view.globalKeys.NextMatch):
-		return view.search.Step(message, true, view.searchList())
+		return view.search.Step(message, true, view.searchList(), view.options.WrapScan())
 	case key.Matches(message, view.globalKeys.PreviousMatch):
-		return view.search.Step(message, false, view.searchList())
+		return view.search.Step(message, false, view.searchList(), view.options.WrapScan())
 	case key.Matches(message, view.globalKeys.Cancel):
 		view.search.Clear()
 	case key.Matches(message, view.globalKeys.Select):

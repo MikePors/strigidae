@@ -3,7 +3,11 @@ package search
 import (
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/MikePors/strigidae/internal/userinterface"
+	"github.com/MikePors/strigidae/internal/userinterface/keys"
 )
 
 func TestMatch(test *testing.T) {
@@ -68,7 +72,7 @@ func TestStateMovement(test *testing.T) {
 
 	moves := []struct {
 		name   string
-		step   func(cursor, count int) (int, bool)
+		step   func(cursor, count int, wrap bool) (int, bool)
 		cursor int
 		count  int
 		want   int
@@ -81,7 +85,7 @@ func TestStateMovement(test *testing.T) {
 		{"previous with count", state.Previous, 5, 2, 1},
 	}
 	for _, move := range moves {
-		if got, ok := move.step(move.cursor, move.count); !ok || got != move.want {
+		if got, ok := move.step(move.cursor, move.count, true); !ok || got != move.want {
 			test.Errorf("%s from %d x%d = %d, %v; want %d", move.name, move.cursor, move.count, got, ok, move.want)
 		}
 	}
@@ -93,6 +97,90 @@ func TestStateMovement(test *testing.T) {
 	state.Clear()
 	if state.Active() || state.Marked(0) {
 		test.Error("clear left a search behind")
+	}
+}
+
+func TestNextAndPreviousWithoutWrapping(test *testing.T) {
+	var state State
+	state.Begin(0, "")
+	state.Type("x", []string{"-", "x", "-", "x", "-", "x"}, 0) // matches at rows 1, 3 and 5
+	moves := []struct {
+		name   string
+		step   func(cursor, count int, wrap bool) (int, bool)
+		cursor int
+		count  int
+		want   int
+		wantOK bool
+	}{
+		{"next", state.Next, 1, 1, 3, true},
+		{"next at the last match", state.Next, 5, 1, 5, false},
+		{"next below the last match", state.Next, 6, 1, 6, false},
+		{"next with a count that runs out", state.Next, 3, 2, 3, false},
+		{"previous", state.Previous, 3, 1, 1, true},
+		{"previous at the first match", state.Previous, 1, 1, 1, false},
+		{"previous above the first match", state.Previous, 0, 1, 0, false},
+	}
+	for _, move := range moves {
+		got, ok := move.step(move.cursor, move.count, false)
+		if got != move.want || ok != move.wantOK {
+			test.Errorf("%s from %d x%d = %d, %v; want %d, %v", move.name, move.cursor, move.count, got, ok, move.want, move.wantOK)
+		}
+	}
+}
+
+func TestStepSaysWhereItStopped(test *testing.T) {
+	cursor := 0
+	list := List{
+		Items:  func() []Item { return []Item{{Text: "x"}, {Text: "-"}, {Text: "x"}} },
+		Cursor: func() int { return cursor },
+		GoTo: func(row int) tea.Cmd {
+			cursor = row
+			return nil
+		},
+	}
+	var state State
+	state.Begin(0, "")
+	state.Type("x", list.texts(), 0)
+
+	tests := []struct {
+		name     string
+		forward  bool
+		wrap     bool
+		start    int
+		wantRow  int
+		wantText string
+	}{
+		{"n wraps", true, true, 2, 0, ""},
+		{"N wraps", false, true, 0, 2, ""},
+		{"n stops at the last match", true, false, 2, 2, "no more matches below"},
+		{"N stops at the first match", false, false, 0, 0, "no more matches above"},
+		{"n moves when it can", true, false, 0, 2, ""},
+	}
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			cursor = testCase.start
+			command := state.Step(keys.Message{}, testCase.forward, list, testCase.wrap)
+			if cursor != testCase.wantRow {
+				test.Errorf("cursor = %d, want %d", cursor, testCase.wantRow)
+			}
+			gotText := ""
+			if command != nil {
+				if info, ok := command().(userinterface.InfoMessage); ok {
+					gotText = info.Text
+				}
+			}
+			if gotText != testCase.wantText {
+				test.Errorf("status = %q, want %q", gotText, testCase.wantText)
+			}
+		})
+	}
+
+	state.Clear()
+	state.Begin(0, "")
+	state.Type("zzz", list.texts(), 0)
+	command := state.Step(keys.Message{}, true, list, false)
+	if info, ok := command().(userinterface.InfoMessage); !ok || info.Text != "no match: zzz" {
+		test.Errorf("with no match at all got %v", command())
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/MikePors/strigidae/internal/options"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
@@ -36,6 +37,9 @@ type Options struct {
 	// LoadTheme loads the theme `:theme` names; LoadThemeFromWorkingDirectory
 	// by default.
 	LoadTheme ThemeLoader
+	// Options are the starting values of the `:set` options, normally from the
+	// config file. The zero value is every option at its default.
+	Options options.Values
 }
 
 // Internal timer messages. The id/gen fields discard timers that were
@@ -58,6 +62,7 @@ type Model struct {
 	notice          string
 	themeLoader     ThemeLoader
 	themeSequence   int // the latest `:theme` load; older results are ignored
+	options         options.Values
 
 	width, height      int
 	matcher            keys.Matcher
@@ -92,6 +97,12 @@ func New(root View, activeTheme theme.Theme, options Options) *Model {
 	if options.Logger == nil {
 		options.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
+	// Views start with the defaults, so they are told only when options were
+	// set. The root view hears them here and a pushed view in push; a view
+	// returns no command for them.
+	if options.Options != nil {
+		root, _ = root.Update(OptionsMessage{Values: options.Options})
+	}
 	return &Model{
 		stack:           []View{root},
 		theme:           activeTheme,
@@ -102,6 +113,7 @@ func New(root View, activeTheme theme.Theme, options Options) *Model {
 		messageLifetime: options.MessageLifetime,
 		notice:          options.Notice,
 		themeLoader:     options.LoadTheme,
+		options:         options.Options,
 		commandLine:     newCommandLine(activeTheme),
 		spin:            spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(activeTheme.Spinner)),
 	}
@@ -141,6 +153,8 @@ func (model *Model) update(message tea.Msg) tea.Cmd {
 			return nil
 		}
 		return model.setTheme(theme.New(message.IsDark()))
+	case setRequestedMessage:
+		return model.set(message.arguments)
 	case themeRequestedMessage:
 		return model.loadTheme(message.value)
 	case themeLoadedMessage:
@@ -227,6 +241,10 @@ func (model *Model) push(view View) tea.Cmd {
 	model.resetKeys()
 	model.stack = append(model.stack, view)
 	model.log.Debug("push view", "title", view.Title(), "depth", len(model.stack))
+	if model.options != nil {
+		view, _ = view.Update(OptionsMessage{Values: model.options})
+		model.stack[len(model.stack)-1] = view
+	}
 	return tea.Batch(view.Init(), model.forward(model.sizeMessage()))
 }
 

@@ -33,7 +33,7 @@ func runTerminalInterface(application application, stderr io.Writer) error {
 
 	built, notice := application.buildTheme(logger, askTerminal)
 	application.theme = built
-	model := userinterface.New(firstView(application), application.theme, userinterface.Options{Logger: logger, Notice: notice})
+	model := userinterface.New(firstView(application), application.theme, userinterface.Options{Logger: logger, Notice: notice, Options: application.config.Options})
 	if _, err := tea.NewProgram(model).Run(); err != nil {
 		logger.Error("program failed", "err", err)
 		return fmt.Errorf("run: %w", err)

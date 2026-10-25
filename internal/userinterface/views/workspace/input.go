@@ -92,9 +92,9 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 	case view.focus == paneFiles && key.Matches(message, view.globalKeys.Search):
 		return view.search.Start(view.searchList())
 	case view.focus == paneFiles && key.Matches(message, view.globalKeys.NextMatch):
-		return view.search.Step(message, true, view.searchList())
+		return view.search.Step(message, true, view.searchList(), view.options.WrapScan())
 	case view.focus == paneFiles && key.Matches(message, view.globalKeys.PreviousMatch):
-		return view.search.Step(message, false, view.searchList())
+		return view.search.Step(message, false, view.searchList(), view.options.WrapScan())
 	case view.focus == paneFiles && key.Matches(message, view.globalKeys.Cancel):
 		view.search.Clear()
 	case key.Matches(message, view.globalKeys.Open):

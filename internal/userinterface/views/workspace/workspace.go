@@ -12,6 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/options"
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/components/markdown"
 	"github.com/MikePors/strigidae/internal/userinterface/components/picker"
@@ -89,8 +90,9 @@ type View struct {
 	hunkMarks        *HunkMarks       // hunks marked reviewed; shared with other workspaces by WithHunkMarks
 	hunkFingerprints fingerprintCache // fingerprints of the last file asked about
 
-	window   scroll.Window // Files pane: row 0 is Overview, row i is Files[i-1]
-	search   search.State  // over the same rows; Overview never matches
+	window   scroll.Window  // Files pane: row 0 is Overview, row i is Files[i-1]
+	search   search.State   // over the same rows; Overview never matches
+	options  options.Values // the `:set` options, sent by the root
 	focus    pane
 	overview overview
 	picker   *picker.Model // non-nil while the file picker is open
@@ -204,6 +206,8 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		view.width, view.height = message.Width, message.Height
 		view.layout()
+	case userinterface.OptionsMessage:
+		view.options = message.Values
 	case userinterface.ThemeMessage:
 		view.theme = message.Theme
 		view.markdownRenderer = markdown.New(view.theme)

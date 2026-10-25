@@ -16,6 +16,7 @@ import (
 
 	"github.com/MikePors/strigidae/internal/config"
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/options"
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/components/scroll"
 	"github.com/MikePors/strigidae/internal/userinterface/components/search"
@@ -75,6 +76,7 @@ type tab struct {
 type View struct {
 	client     github.Client
 	theme      theme.Theme
+	options    options.Values // the `:set` options, sent by the root
 	globalKeys keys.Global
 	bindings   bindings
 	now        func() time.Time
@@ -237,6 +239,8 @@ func (view *View) search(tabIndex, sectionIndex int, target section) tea.Cmd {
 // Update implements userinterface.View.
 func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 	switch message := message.(type) {
+	case userinterface.OptionsMessage:
+		view.options = message.Values
 	case userinterface.ThemeMessage:
 		view.theme = message.Theme
 	case sectionLoadedMessage:
@@ -321,9 +325,9 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 	case key.Matches(message, view.globalKeys.Search):
 		return current.search.Start(current.searchList())
 	case key.Matches(message, view.globalKeys.NextMatch):
-		return current.search.Step(message, true, current.searchList())
+		return current.search.Step(message, true, current.searchList(), view.options.WrapScan())
 	case key.Matches(message, view.globalKeys.PreviousMatch):
-		return current.search.Step(message, false, current.searchList())
+		return current.search.Step(message, false, current.searchList(), view.options.WrapScan())
 	case key.Matches(message, view.globalKeys.Cancel):
 		current.search.Clear()
 	case key.Matches(message, view.globalKeys.Select):
