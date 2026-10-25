@@ -44,6 +44,12 @@ func WithTheme(activeTheme theme.Theme) Option { return func(view *View) { view.
 // the user's browser.
 func WithOpener(open func(url string) error) Option { return func(view *View) { view.open = open } }
 
+// WithWrap makes the diff pane wrap long lines instead of cutting them off.
+func WithWrap(wrap bool) Option { return func(view *View) { view.wrap = wrap } }
+
+// Wrap reports whether the diff pane wraps long lines.
+func (view *View) Wrap() bool { return view.wrap }
+
 // WithFilePane replaces the right pane's content for a selected file; this is
 // the hook for the diff component.
 func WithFilePane(pane FilePane) Option { return func(view *View) { view.filePane = pane } }
@@ -86,6 +92,7 @@ type View struct {
 
 	viewedState map[string]*viewedToggle // by path; see viewedToggle
 
+	wrap             bool             // the diff pane wraps long lines
 	hunkMarks        *HunkMarks       // hunks marked reviewed; shared with other workspaces by WithHunkMarks
 	hunkFingerprints fingerprintCache // fingerprints of the last file asked about
 
@@ -144,7 +151,7 @@ func New(client github.Client, repository github.Repository, number int, options
 	view.markdownRenderer = markdown.New(view.theme)
 	view.overview = newOverview()
 	if view.filePane == nil {
-		view.filePane = newDiffPane(view.theme, func() time.Time { return view.now() })
+		view.filePane = newDiffPane(view.theme, func() time.Time { return view.now() }, view.wrap)
 	}
 	view.filePane.SetTheme(view.theme)
 	view.filePane.SetHunkReviewed(view.hunkReviewed)

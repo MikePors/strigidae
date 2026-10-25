@@ -47,6 +47,16 @@ Base16/Base24 scheme file; unset means the built-in theme. A relative path is
 taken from the config file's directory, and `~` is expanded. See
 [themes.md](themes.md).
 
+### `wrap`
+
+Optional, `true` or `false` (default `false`). With `true`, a diff line longer
+than the diff pane continues on the next screen rows instead of being cut off at
+the pane's edge. Continuation rows have blank line numbers with `↪` in the gutter
+and keep the line's added or removed colour. Lines break at the pane's edge,
+never inside a wide character. `j`/`k`, counts, `G`, visual selection and
+comments still move by diff lines, and `z h` / `z l` / `z H` / `z L` do nothing
+while wrapping is on. Only the diff pane wraps.
+
 ### `tabs`
 
 A non-empty list. Tab names must be unique.

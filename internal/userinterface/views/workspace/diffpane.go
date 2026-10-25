@@ -60,8 +60,8 @@ type diffPane struct {
 
 var _ FilePane = (*diffPane)(nil)
 
-func newDiffPane(activeTheme theme.Theme, now func() time.Time) *diffPane {
-	return &diffPane{diffView: diffview.New(activeTheme, diffview.WithClock(now)), globalKeys: keys.DefaultGlobal(), bind: defaultDiffBindings()}
+func newDiffPane(activeTheme theme.Theme, now func() time.Time, wrap bool) *diffPane {
+	return &diffPane{diffView: diffview.New(activeTheme, diffview.WithClock(now), diffview.WithWrap(wrap)), globalKeys: keys.DefaultGlobal(), bind: defaultDiffBindings()}
 }
 
 func (pane *diffPane) SetTheme(activeTheme theme.Theme) { pane.diffView.SetTheme(activeTheme) }

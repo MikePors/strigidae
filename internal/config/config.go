@@ -19,6 +19,9 @@ type Config struct {
 	// Theme is the theme: value as written (a bundled theme's name or a theme
 	// file path), or empty for the built-in theme.
 	Theme string
+	// Wrap makes long diff lines continue on the next screen rows instead of
+	// being cut off at the pane's edge (wrap: true). Off by default.
+	Wrap bool
 }
 
 // Tab is a named group of sections, for example the viewer's own PRs or a

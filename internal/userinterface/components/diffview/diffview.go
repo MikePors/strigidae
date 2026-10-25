@@ -104,6 +104,10 @@ func (row row) isLine() bool {
 	return row.threadRow == nil && row.line != nil && row.line.Kind != diff.NoNewline
 }
 
+// isCode reports whether row draws a diff line's text (a line or a "no
+// newline" marker), the rows that wrap.
+func (row row) isCode() bool { return row.threadRow == nil && row.line != nil }
+
 // threadRow places a row inside a thread's block of lines.
 type threadRow struct{ threadIndex, rowInBlock int }
 
@@ -144,6 +148,12 @@ type Model struct {
 	visualBaseIndex int  // base row where it started
 
 	window scroll.Window // cursor, top row and horizontal offset
+
+	wrap bool // long lines continue on the next screen rows; see wrap.go
+	// wrapStarts caches, per base row, the column each of its screen rows
+	// starts at; it holds starts for wrapWidth only.
+	wrapStarts map[int][]int
+	wrapWidth  int
 }
 
 // New returns an empty diff pane.
@@ -238,6 +248,7 @@ func (model *Model) reset() {
 	model.base, model.rows, model.hunkRow = nil, nil, nil
 	model.fileThreads, model.attach, model.orphans, model.blocks = nil, nil, nil, nil
 	model.cache = map[int][]Span{}
+	model.wrapStarts = nil
 	model.window.Reset()
 	model.maximumWidth, model.numberWidth = 0, 0
 	model.sync()
@@ -290,6 +301,12 @@ func (model *Model) codeWidth() int { return max(model.width-model.gutterWidth()
 func (model *Model) sync() {
 	model.window.SetRows(len(model.rows))
 	model.window.SetSize(model.height)
+	if model.wrap {
+		model.window.SetRowHeight(model.rowHeight)
+		model.window.SetWidths(0, model.codeWidth()) // nothing to scroll sideways
+		return
+	}
+	model.window.SetRowHeight(nil)
 	model.window.SetWidths(model.maximumWidth, model.codeWidth())
 }
 
@@ -543,12 +560,15 @@ func (model *Model) Render(width, height int) string {
 	if len(model.rows) == 0 {
 		return model.renderMessage()
 	}
-	end := min(model.window.Top()+model.height, len(model.rows))
-	lines := make([]string, 0, end-model.window.Top())
-	for i := model.window.Top(); i < end; i++ {
+	lines := make([]string, 0, model.height)
+	for i := model.window.Top(); i < len(model.rows) && len(lines) < model.height; i++ {
+		if model.wrap && model.rows[i].isCode() {
+			lines = append(lines, model.renderWrapped(i)...)
+			continue
+		}
 		lines = append(lines, model.renderRow(i))
 	}
-	return strings.Join(lines, "\n")
+	return strings.Join(lines[:min(len(lines), model.height)], "\n")
 }
 
 func (model *Model) renderMessage() string {

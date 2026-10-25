@@ -143,6 +143,16 @@ func (parser *parser) stringValue(node *yaml.Node, what string) string {
 	return value
 }
 
+// boolean reads an unquoted true or false.
+func (parser *parser) boolean(node *yaml.Node, what string) bool {
+	value, err := strconv.ParseBool(node.Value)
+	if node.Kind != yaml.ScalarNode || node.Tag != "!!bool" || err != nil {
+		parser.fail(node, "%s must be true or false", what)
+		return false
+	}
+	return value
+}
+
 // integer reads an unquoted integer from low to high.
 func (parser *parser) integer(node *yaml.Node, what string, low, high int) int {
 	value, err := strconv.Atoi(node.Value)

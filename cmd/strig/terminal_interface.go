@@ -57,9 +57,9 @@ func askTerminal() (terminalpalette.Reply, error) {
 // or in one with no GitHub remote), else the repository's pull request list.
 func firstView(application application) userinterface.View {
 	if application.dashboard {
-		return dashboard.New(application.client, application.config.Tabs, application.theme, dashboard.Options{Notice: application.notice})
+		return dashboard.New(application.client, application.config.Tabs, application.theme, dashboard.Options{Notice: application.notice, Wrap: application.config.Wrap})
 	}
-	return pullrequestlist.New(application.client, application.repository, application.theme, pullrequestlist.Options{})
+	return pullrequestlist.New(application.client, application.repository, application.theme, pullrequestlist.Options{Wrap: application.config.Wrap})
 }
 
 // silenceBrowser stops browser launchers writing to the terminal the TUI owns.
