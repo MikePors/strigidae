@@ -33,7 +33,8 @@ type application struct {
 	// notice is shown in the status bar when the dashboard starts, to say why
 	// it is showing.
 	notice string
-	// config holds the tabs and sections the dashboard shows.
+	// config is the loaded config file: the dashboard's tabs and sections, and
+	// the yes/no options it sets.
 	config config.Config
 }
 

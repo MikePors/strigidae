@@ -16,6 +16,7 @@ import (
 
 	"github.com/MikePors/strigidae/internal/config"
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/options"
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/components/scroll"
 	"github.com/MikePors/strigidae/internal/userinterface/components/search"
@@ -42,8 +43,6 @@ type Options struct {
 	Now func() time.Time
 	// Open opens a URL in the browser; it runs inside a tea.Cmd.
 	Open func(url string) error
-	// Wrap makes the diffs of the pull requests it opens wrap long lines.
-	Wrap bool
 	// Notice, if set, is shown in the status bar when the view starts, for
 	// example why the dashboard is showing.
 	Notice string
@@ -77,6 +76,7 @@ type tab struct {
 type View struct {
 	client     github.Client
 	theme      theme.Theme
+	options    options.Values // the `:set` options, sent by the root
 	globalKeys keys.Global
 	bindings   bindings
 	now        func() time.Time
@@ -84,7 +84,6 @@ type View struct {
 	// hunkMarks keeps the hunks marked reviewed in every workspace opened
 	// from here, so they survive closing and reopening a pull request.
 	hunkMarks *workspace.HunkMarks
-	wrap      bool // passed to every workspace opened from here
 
 	notice string // shown once as an info message when the view starts
 
@@ -128,7 +127,6 @@ func New(client github.Client, tabs []config.Tab, activeTheme theme.Theme, optio
 		open:      options.Open,
 		notice:    options.Notice,
 		hunkMarks: workspace.NewHunkMarks(),
-		wrap:      options.Wrap,
 	}
 	for _, configured := range tabs {
 		current := tab{name: configured.Name}
@@ -241,6 +239,8 @@ func (view *View) search(tabIndex, sectionIndex int, target section) tea.Cmd {
 // Update implements userinterface.View.
 func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 	switch message := message.(type) {
+	case userinterface.OptionsMessage:
+		view.options = message.Values
 	case userinterface.ThemeMessage:
 		view.theme = message.Theme
 	case sectionLoadedMessage:
@@ -325,9 +325,9 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 	case key.Matches(message, view.globalKeys.Search):
 		return current.search.Start(current.searchList())
 	case key.Matches(message, view.globalKeys.NextMatch):
-		return current.search.Step(message, true, current.searchList())
+		return current.search.Step(message, true, current.searchList(), view.options.WrapScan())
 	case key.Matches(message, view.globalKeys.PreviousMatch):
-		return current.search.Step(message, false, current.searchList())
+		return current.search.Step(message, false, current.searchList(), view.options.WrapScan())
 	case key.Matches(message, view.globalKeys.Cancel):
 		current.search.Clear()
 	case key.Matches(message, view.globalKeys.Select):
@@ -370,7 +370,7 @@ func (view *View) openSelected() tea.Cmd {
 		workspace.WithClock(view.now),
 		workspace.WithOpener(view.open),
 		workspace.WithHunkMarks(view.hunkMarks),
-		workspace.WithWrap(view.wrap),
+		workspace.WithWrap(view.options.Wrap()),
 	))
 }
 

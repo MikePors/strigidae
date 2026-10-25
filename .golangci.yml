@@ -41,6 +41,7 @@ linters:
             - "**/internal/github/**"
             - "**/internal/diff/**"
             - "**/internal/config/**"
+            - "**/internal/options/**"
             - "**/internal/editor/**"
             - "**/internal/gitrepository/**"
             - "**/internal/logging/**"

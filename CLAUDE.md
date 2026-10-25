@@ -41,6 +41,7 @@ internal/github/fake/                   in-memory Client for tests and demos
 internal/gitrepository/                 infer the GitHub repository (host + owner/name) from a checkout's remotes
 internal/diff/                          unified-diff parsing and modelling (pure, no user interface)
 internal/config/                        config file loading and validation
+internal/options/                       yes/no options shared by the config file and `:set` (non-UI)
 internal/editor/                        $EDITOR handoff for writing comments
 internal/logging/                       log file setup
 internal/golden/                        golden-file test helper
@@ -61,7 +62,7 @@ cmd/strig ──► userinterface/views/* ──► userinterface/components ─
 ```
 
 - `internal/userinterface`, `userinterface/keys`, `userinterface/theme` and `userinterface/components` **never import `userinterface/views/*`**. Views may import other views, without cycles.
-- Non-UI packages (`github`, `diff`, `config`, `editor`, `gitrepository`, `logging`, `version`) never import UI packages.
+- Non-UI packages (`github`, `diff`, `config`, `options`, `editor`, `gitrepository`, `logging`, `version`) never import UI packages.
 - Only `cmd/strig` imports `internal/github/network`.
 
 ## Process-wide rules

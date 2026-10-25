@@ -3,6 +3,7 @@ package userinterface
 import (
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/MikePors/strigidae/internal/options"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
@@ -20,6 +21,11 @@ type InfoMessage struct{ Text string }
 
 // ErrorMessage shows a transient error in the status bar and logs it.
 type ErrorMessage struct{ Err error }
+
+// OptionsMessage tells views the `:set` options changed. The root also sends
+// it to the root view when strig starts and to every view it pushes, so a
+// view always knows the current values. Until then a view has the defaults.
+type OptionsMessage struct{ Values options.Values }
 
 // ThemeMessage tells views the theme changed (after the terminal background
 // was detected, or `:theme`).

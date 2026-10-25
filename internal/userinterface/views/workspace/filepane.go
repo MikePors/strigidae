@@ -64,6 +64,9 @@ type LineRange struct {
 type FilePane interface {
 	// SetTheme is called on construction and whenever the theme changes.
 	SetTheme(activeTheme theme.Theme)
+	// SetWrap turns wrapping of long lines on or off (the wrap option). Panes
+	// that never wrap ignore it.
+	SetWrap(wrap bool)
 	// SetDiff is called when a diff load starts and when it finishes.
 	SetDiff(diffState DiffState)
 	// SetThreads is called when the pull request's review threads load or

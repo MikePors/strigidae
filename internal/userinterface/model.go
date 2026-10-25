@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/MikePors/strigidae/internal/options"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
@@ -36,6 +37,9 @@ type Options struct {
 	// LoadTheme loads the theme `:theme` names; LoadThemeFromWorkingDirectory
 	// by default.
 	LoadTheme ThemeLoader
+	// StartingOptions are the starting values of the `:set` options, normally
+	// from the config file. The zero value is every option at its default.
+	StartingOptions options.Values
 }
 
 // Internal timer messages. The id/gen fields discard timers that were
@@ -58,6 +62,7 @@ type Model struct {
 	notice          string
 	themeLoader     ThemeLoader
 	themeSequence   int // the latest `:theme` load; older results are ignored
+	options         options.Values
 
 	width, height      int
 	matcher            keys.Matcher
@@ -76,32 +81,39 @@ type Model struct {
 }
 
 // New returns a root model whose stack holds just root.
-func New(root View, activeTheme theme.Theme, options Options) *Model {
-	if options.SequenceTimeout == 0 {
-		options.SequenceTimeout = DefaultSequenceTimeout
+func New(root View, activeTheme theme.Theme, startup Options) *Model {
+	if startup.SequenceTimeout == 0 {
+		startup.SequenceTimeout = DefaultSequenceTimeout
 	}
-	if options.MessageLifetime == 0 {
-		options.MessageLifetime = DefaultMessageLifetime
+	if startup.MessageLifetime == 0 {
+		startup.MessageLifetime = DefaultMessageLifetime
 	}
-	if options.Tick == nil {
-		options.Tick = tea.Tick
+	if startup.Tick == nil {
+		startup.Tick = tea.Tick
 	}
-	if options.LoadTheme == nil {
-		options.LoadTheme = LoadThemeFromWorkingDirectory
+	if startup.LoadTheme == nil {
+		startup.LoadTheme = LoadThemeFromWorkingDirectory
 	}
-	if options.Logger == nil {
-		options.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	if startup.Logger == nil {
+		startup.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+	// Views start with the defaults, so they are told only when options were
+	// set. The root view hears them here and a pushed view in push; a view
+	// returns no command for them.
+	if startup.StartingOptions != nil {
+		root, _ = root.Update(OptionsMessage{Values: startup.StartingOptions})
 	}
 	return &Model{
 		stack:           []View{root},
 		theme:           activeTheme,
 		keys:            keys.DefaultGlobal(),
-		log:             options.Logger,
-		tick:            options.Tick,
-		sequenceWait:    options.SequenceTimeout,
-		messageLifetime: options.MessageLifetime,
-		notice:          options.Notice,
-		themeLoader:     options.LoadTheme,
+		log:             startup.Logger,
+		tick:            startup.Tick,
+		sequenceWait:    startup.SequenceTimeout,
+		messageLifetime: startup.MessageLifetime,
+		notice:          startup.Notice,
+		themeLoader:     startup.LoadTheme,
+		options:         startup.StartingOptions,
 		commandLine:     newCommandLine(activeTheme),
 		spin:            spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(activeTheme.Spinner)),
 	}
@@ -141,6 +153,8 @@ func (model *Model) update(message tea.Msg) tea.Cmd {
 			return nil
 		}
 		return model.setTheme(theme.New(message.IsDark()))
+	case setRequestedMessage:
+		return model.set(message.arguments)
 	case themeRequestedMessage:
 		return model.loadTheme(message.value)
 	case themeLoadedMessage:
@@ -227,6 +241,10 @@ func (model *Model) push(view View) tea.Cmd {
 	model.resetKeys()
 	model.stack = append(model.stack, view)
 	model.log.Debug("push view", "title", view.Title(), "depth", len(model.stack))
+	if model.options != nil {
+		view, _ = view.Update(OptionsMessage{Values: model.options})
+		model.stack[len(model.stack)-1] = view
+	}
 	return tea.Batch(view.Init(), model.forward(model.sizeMessage()))
 }
 

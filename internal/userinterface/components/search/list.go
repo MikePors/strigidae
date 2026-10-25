@@ -136,9 +136,10 @@ func (state *State) Prompt(result userinterface.PromptResultMessage, list List) 
 	return nil
 }
 
-// Step handles n (forward) and N: the count-th next match, wrapping. With no
-// search it does nothing; with no match it says so.
-func (state *State) Step(message keys.Message, forward bool, list List) tea.Cmd {
+// Step handles n (forward) and N: the count-th next match, wrapping when
+// wrapScan (the wrapscan option) is on. With no search it does nothing; with no match it says
+// so, and without wrapping it says when it reached the end.
+func (state *State) Step(message keys.Message, forward bool, list List, wrapScan bool) tea.Cmd {
 	if !state.Active() {
 		return nil
 	}
@@ -146,9 +147,15 @@ func (state *State) Step(message keys.Message, forward bool, list List) tea.Cmd 
 	if forward {
 		step = state.Next
 	}
-	row, ok := step(list.Cursor(), message.Repeat())
-	if !ok {
+	row, ok := step(list.Cursor(), message.Repeat(), wrapScan)
+	switch {
+	case ok:
+	case len(state.matches) == 0:
 		return userinterface.Info("no match: " + terminaltext.Clean(state.Query()))
+	case forward:
+		return userinterface.Info("no more matches below")
+	default:
+		return userinterface.Info("no more matches above")
 	}
 	return list.GoTo(row)
 }

@@ -75,7 +75,7 @@ func (state *State) TakeRequest() bool {
 // false when nothing matches; the caller puts the cursor back on the origin.
 func (state *State) Type(query string, rows []string, origin int) (row int, ok bool) {
 	state.set(query, rows)
-	return state.following(origin - 1)
+	return state.following(origin-1, true)
 }
 
 // Cancel abandons the search being typed and goes back to the one before it.
@@ -93,23 +93,23 @@ func (state *State) Query() string { return state.query }
 // Marked reports whether row matches the search.
 func (state *State) Marked(row int) bool { return state.marked[row] }
 
-// Next returns the row count matches after cursor, wrapping. ok is false when
-// nothing matches.
-func (state *State) Next(cursor, count int) (row int, ok bool) {
-	row = cursor
-	for range max(count, 1) {
-		if row, ok = state.following(row); !ok {
-			return cursor, false
-		}
-	}
-	return row, true
+// Next returns the row count matches after cursor. With wrap it continues
+// from the first match past the last one; without, it stops: ok is false when
+// fewer than count matches follow cursor. ok is also false when nothing
+// matches.
+func (state *State) Next(cursor, count int, wrap bool) (row int, ok bool) {
+	return state.walk(cursor, count, state.following, wrap)
 }
 
 // Previous is Next going up.
-func (state *State) Previous(cursor, count int) (row int, ok bool) {
+func (state *State) Previous(cursor, count int, wrap bool) (row int, ok bool) {
+	return state.walk(cursor, count, state.preceding, wrap)
+}
+
+func (state *State) walk(cursor, count int, step func(row int, wrap bool) (int, bool), wrap bool) (row int, ok bool) {
 	row = cursor
 	for range max(count, 1) {
-		if row, ok = state.preceding(row); !ok {
+		if row, ok = step(row, wrap); !ok {
 			return cursor, false
 		}
 	}
@@ -125,27 +125,29 @@ func (state *State) set(query string, rows []string) {
 	}
 }
 
-// following is the first match after row, or the first match overall.
-func (state *State) following(row int) (int, bool) {
+// following is the first match after row, or with wrap the first match
+// overall.
+func (state *State) following(row int, wrap bool) (int, bool) {
 	for _, match := range state.matches {
 		if match > row {
 			return match, true
 		}
 	}
-	if len(state.matches) == 0 {
+	if len(state.matches) == 0 || !wrap {
 		return 0, false
 	}
 	return state.matches[0], true
 }
 
-// preceding is the last match before row, or the last match overall.
-func (state *State) preceding(row int) (int, bool) {
+// preceding is the last match before row, or with wrap the last match
+// overall.
+func (state *State) preceding(row int, wrap bool) (int, bool) {
 	for i := len(state.matches) - 1; i >= 0; i-- {
 		if state.matches[i] < row {
 			return state.matches[i], true
 		}
 	}
-	if len(state.matches) == 0 {
+	if len(state.matches) == 0 || !wrap {
 		return 0, false
 	}
 	return state.matches[len(state.matches)-1], true

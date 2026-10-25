@@ -12,6 +12,7 @@ import (
 	"github.com/cli/go-gh/v2/pkg/browser"
 
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/options"
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/components/scroll"
 	"github.com/MikePors/strigidae/internal/userinterface/components/search"
@@ -47,8 +48,6 @@ type Options struct {
 	Now func() time.Time
 	// Open opens a URL in the browser; it runs inside a tea.Cmd.
 	Open func(url string) error
-	// Wrap makes the diffs of the pull requests it opens wrap long lines.
-	Wrap bool
 }
 
 // View lists one repository's open pull requests.
@@ -62,7 +61,6 @@ type View struct {
 	// hunkMarks keeps the hunks marked reviewed in every workspace opened
 	// from here, so they survive closing and reopening a pull request.
 	hunkMarks *workspace.HunkMarks
-	wrap      bool // passed to every workspace opened from here
 
 	pullRequests []github.PullRequest
 	next         string // cursor of the next page, empty when all are loaded
@@ -74,6 +72,7 @@ type View struct {
 
 	window        scroll.Window // cursor and top row over prs
 	search        search.State
+	options       options.Values // the `:set` options, sent by the root
 	width, height int
 }
 
@@ -101,7 +100,6 @@ func New(client github.Client, repository github.Repository, activeTheme theme.T
 		sequence:   1,
 		loading:    true,
 		hunkMarks:  workspace.NewHunkMarks(),
-		wrap:       options.Wrap,
 	}
 }
 
@@ -154,6 +152,8 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		view.width, view.height = message.Width, message.Height
 		view.window.SetSize(view.listHeight())
 		return view, nil
+	case userinterface.OptionsMessage:
+		view.options = message.Values
 	case userinterface.ThemeMessage:
 		view.theme = message.Theme
 	case pullRequestsLoadedMessage:
@@ -249,9 +249,9 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 	case key.Matches(message, view.globalKeys.Search):
 		return view.search.Start(view.searchList())
 	case key.Matches(message, view.globalKeys.NextMatch):
-		return view.search.Step(message, true, view.searchList())
+		return view.search.Step(message, true, view.searchList(), view.options.WrapScan())
 	case key.Matches(message, view.globalKeys.PreviousMatch):
-		return view.search.Step(message, false, view.searchList())
+		return view.search.Step(message, false, view.searchList(), view.options.WrapScan())
 	case key.Matches(message, view.globalKeys.Cancel):
 		view.search.Clear()
 	case key.Matches(message, view.globalKeys.Select):
@@ -303,7 +303,7 @@ func (view *View) openSelected() tea.Cmd {
 		workspace.WithClock(view.now),
 		workspace.WithOpener(view.open),
 		workspace.WithHunkMarks(view.hunkMarks),
-		workspace.WithWrap(view.wrap),
+		workspace.WithWrap(view.options.Wrap()),
 	))
 }
 

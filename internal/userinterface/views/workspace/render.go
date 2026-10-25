@@ -217,7 +217,7 @@ func (view *View) fileRows(width, height int) []string {
 			rows = append(rows, view.overviewRow(selected))
 			continue
 		}
-		rows = append(rows, view.fileRow(files[i-1], width, selected, view.search.Marked(i)))
+		rows = append(rows, view.fileRow(files[i-1], width, selected, view.options.HighlightSearch() && view.search.Marked(i)))
 	}
 	return rows
 }
