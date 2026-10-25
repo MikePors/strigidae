@@ -45,16 +45,38 @@ func TestRowHeightBounds(test *testing.T) {
 	if got := window.MaximumTop(); got != 5 {
 		test.Errorf("MaximumTop = %d, want 5", got)
 	}
-	if got := window.LastVisible(); got != 1 {
-		test.Errorf("LastVisible = %d, want 1 (rows 0 and 1 fill 4 screen rows)", got)
+	if got := window.lastVisible(window.Top()); got != 1 {
+		test.Errorf("lastVisible = %d, want 1 (rows 0 and 1 fill 4 screen rows)", got)
 	}
 	tall := heightWindow(4, 1, 6, 1)
 	tall.Down(1)
-	if got := tall.LastVisible(); got != 1 {
-		test.Errorf("LastVisible on a row taller than the view = %d, want the row itself", got)
+	if got := tall.lastVisible(tall.Top()); got != 1 {
+		test.Errorf("lastVisible on a row taller than the view = %d, want the row itself", got)
 	}
 	tall.SetRowHeight(nil)
 	if got := tall.MaximumTop(); got != 0 {
 		test.Errorf("after SetRowHeight(nil), MaximumTop = %d, want 0 (three rows fit)", got)
+	}
+}
+
+// TestRowHeightAskedOnlyInRange: no operation asks the callback about a row
+// that does not exist, including on an empty window.
+func TestRowHeightAskedOnlyInRange(test *testing.T) {
+	for _, rows := range []int{0, 1, 5} {
+		window := newWindow(rows, 3, 0, 0)
+		window.SetRowHeight(func(row int) int {
+			if row < 0 || row >= rows {
+				test.Fatalf("asked for row %d of %d", row, rows)
+			}
+			return 2
+		})
+		for _, operation := range []func(){
+			window.ScrollCursorTop, window.ScrollCursorMiddle, window.ScrollCursorBottom,
+			window.PageDown, window.PageUp, window.HalfPageDown, window.HalfPageUp,
+			window.GotoBottom, window.GotoTop, func() { window.ScrollDown(2) }, func() { window.ScrollUp(2) },
+			func() { window.Down(3) }, func() { window.Up(3) }, func() { window.JumpTo(rows) },
+		} {
+			operation()
+		}
 	}
 }

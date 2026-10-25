@@ -57,6 +57,10 @@ never inside a wide character. `j`/`k`, counts, `G`, visual selection and
 comments still move by diff lines, and `z h` / `z l` / `z H` / `z L` do nothing
 while wrapping is on. Only the diff pane wraps.
 
+A line taller than the whole pane (a minified file, say) shows only as much of
+itself as fits; the rest cannot be scrolled to while wrapping is on. A pane too
+narrow to hold a wide character (a code area of one cell) does not wrap.
+
 ### `tabs`
 
 A non-empty list. Tab names must be unique.

@@ -134,6 +134,7 @@ type Model struct {
 	blockCache       map[blockKey][]string // rendered threads; dropped by SetThreads and when width or theme change
 	blockSignature   blockSignature
 	renders          int // thread blocks rendered, for tests
+	wrappedRows      int // screen rows of wrapped lines drawn, for tests
 	numberWidth      int // width of one line-number column
 	maximumWidth     int // widest code line, in cells
 
@@ -563,7 +564,7 @@ func (model *Model) Render(width, height int) string {
 	lines := make([]string, 0, model.height)
 	for i := model.window.Top(); i < len(model.rows) && len(lines) < model.height; i++ {
 		if model.wrap && model.rows[i].isCode() {
-			lines = append(lines, model.renderWrapped(i)...)
+			lines = append(lines, model.renderWrapped(i, model.height-len(lines))...)
 			continue
 		}
 		lines = append(lines, model.renderRow(i))

@@ -40,17 +40,19 @@ func (window *Window) SetRows(count int) { window.rows = max(count, 0); window.c
 func (window *Window) SetSize(height int) { window.height = max(height, 0); window.clamp() }
 
 // SetRowHeight sets how many screen rows each row takes, and re-clamps.
-// height(row) is asked only for rows near the view, so it may compute lazily;
-// a result below 1 counts as 1. nil (the default) makes every row one screen
+// height(row) is asked only for rows from 0 to the row count minus one, and
+// only for rows near the view, so it may compute lazily; a result below 1
+// counts as 1. nil (the default) makes every row one screen
 // row.
 func (window *Window) SetRowHeight(height func(row int) int) {
 	window.rowHeight = height
 	window.clamp()
 }
 
-// heightOf returns the screen rows row takes.
+// heightOf returns the screen rows row takes. The callback is never asked
+// about a row outside 0 to rows-1.
 func (window *Window) heightOf(row int) int {
-	if window.rowHeight == nil {
+	if window.rowHeight == nil || row < 0 || row >= window.rows {
 		return 1
 	}
 	return max(window.rowHeight(row), 1)
@@ -100,10 +102,8 @@ func (window *Window) MaximumTop() int {
 	return 0
 }
 
-// LastVisible returns the last row that is fully on screen with top at the
+// lastVisible returns the last row that is fully on screen with top at the
 // top of the view (top itself if even it does not fit).
-func (window *Window) LastVisible() int { return window.lastVisible(window.top) }
-
 func (window *Window) lastVisible(top int) int {
 	if window.rowHeight == nil {
 		return min(max(top+window.height-1, top), window.rows-1)

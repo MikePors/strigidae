@@ -24,7 +24,8 @@ func TestWrapColumns(test *testing.T) {
 		{"exact multiple", "abcdef", 3, []int{0, 3}},
 		{"ascii", "abcdefgh", 3, []int{0, 3, 6}},
 		{"wide character moves whole", "ab日本", 3, []int{0, 2, 4}},
-		{"wider than the row gets its own row", "a日b", 1, []int{0, 1, 3}},
+		{"a wide character fills a 2-cell row", "a日b", 2, []int{0, 1, 3}},
+		{"a 1-cell area does not wrap", "a日b", 1, []int{0}},
 		{"combining mark stays with its letter", "abécd", 3, []int{0, 3}},
 		{"no width", "abc", 0, []int{0}},
 	}
@@ -186,5 +187,67 @@ func TestWrapFollowsWidth(test *testing.T) {
 		if !strings.Contains(screen, want) {
 			test.Errorf("after widening, screen lacks %q:\n%s", want, screen)
 		}
+	}
+}
+
+// TestWrapDrawsOnlyTheScreen: a line far taller than the pane (a minified
+// bundle) costs one screen of rows per frame, not the whole line.
+func TestWrapDrawsOnlyTheScreen(test *testing.T) {
+	huge := strings.Repeat("x", 100_000)
+	file := &diff.File{OldPath: "bundle.js", NewPath: "bundle.js", Hunks: []diff.Hunk{{
+		NewStart: 1, NewLines: 1, Lines: []diff.Line{{Kind: diff.Add, New: 1, Text: huge}},
+	}}}
+	model := New(theme.New(true), WithWrap(true))
+	model.SetFile(file)
+	model.SetSize(40, 10)
+	model.CursorDown(1)
+	lines := strings.Split(model.Render(40, 10), "\n")
+	if len(lines) != 10 {
+		test.Errorf("rendered %d lines, want 10", len(lines))
+	}
+	if model.wrappedRows > 10 {
+		test.Errorf("drew %d wrapped rows for a 10-row pane", model.wrappedRows)
+	}
+}
+
+// TestWrapNarrowPaneKeepsWidth: in a 1-cell code area nothing wraps, so a
+// wide character is cut at the edge as without wrapping, and no row is wider
+// than the pane.
+func TestWrapNarrowPaneKeepsWidth(test *testing.T) {
+	file := &diff.File{OldPath: "x.txt", NewPath: "x.txt", Hunks: []diff.Hunk{{
+		NewStart: 1, NewLines: 1, Lines: []diff.Line{{Kind: diff.Add, New: 1, Text: "a日b日"}},
+	}}}
+	for _, width := range []int{12, 13, 14} {
+		model := New(theme.New(true), WithWrap(true))
+		model.SetFile(file)
+		for index, line := range strings.Split(model.Render(width, 8), "\n") {
+			if got := ansi.StringWidth(line); got != width {
+				test.Errorf("width %d: line %d is %d cells: %q", width, index, got, ansi.Strip(line))
+			}
+		}
+	}
+}
+
+// TestWrapNoNewlineMarker: the "no newline" marker is a code row too, so it
+// wraps like a line and draws as many rows as the window counts for it.
+func TestWrapNoNewlineMarker(test *testing.T) {
+	file := &diff.File{OldPath: "x.txt", NewPath: "x.txt", Hunks: []diff.Hunk{{
+		OldStart: 1, OldLines: 1, NewStart: 1, NewLines: 1, Lines: []diff.Line{
+			{Kind: diff.Add, New: 1, Text: "end"},
+			{Kind: diff.NoNewline, Text: "No newline at end of file"},
+		},
+	}}}
+	model := New(theme.New(true), WithWrap(true))
+	model.SetFile(file)
+	got := strings.Split(ansi.Strip(model.Render(21, 10)), "\n")
+	want := []string{
+		">@@ -1 +1 @@         ",
+		"       1  +end       ",
+		"          \\No newline",
+		"       ↪    at end of",
+		"       ↪    file     ",
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		test.Errorf("screen (-want +got):\n%s", diff)
 	}
 }

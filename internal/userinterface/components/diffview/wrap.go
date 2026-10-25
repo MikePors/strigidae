@@ -5,6 +5,10 @@ import (
 	"github.com/rivo/uniseg"
 )
 
+// minimumWrapWidth is the narrowest code area that wraps: the widest
+// grapheme cluster a terminal draws is two cells.
+const minimumWrapWidth = 2
+
 // markerContinued stands in the new-line-number column of a wrapped line's
 // continuation rows.
 const markerContinued = "↪"
@@ -53,11 +57,12 @@ func (model *Model) rowStarts(i int) []int {
 
 // wrapColumns splits display text into screen rows of at most width cells
 // and returns the column each row starts at. Rows break between grapheme
-// clusters, so a wide character moves whole to the next row; one wider than
-// the whole row gets a row of its own.
+// clusters, so a wide character moves whole to the next row. Below
+// minimumWrapWidth a wide character could not fit on any row, so the text
+// stays one row, cut off at the edge as without wrapping.
 func wrapColumns(text string, width int) []int {
 	starts := []int{0}
-	if width <= 0 {
+	if width < minimumWrapWidth {
 		return starts
 	}
 	if isPlainASCII(text) {
@@ -80,11 +85,12 @@ func wrapColumns(text string, width int) []int {
 	return starts
 }
 
-// renderWrapped draws code row i as one screen row per wrap row: the first
-// with the line's gutter, the rest with blank numbers and markerContinued.
-// Every row keeps the line's tint, and the spans are highlighted once for the
-// whole line.
-func (model *Model) renderWrapped(i int) []string {
+// renderWrapped draws the first limit screen rows of code row i (the rows
+// still free on screen): the first with the line's gutter, the rest with
+// blank numbers and markerContinued. Every row keeps the line's tint, and the
+// spans are highlighted once for the whole line. Stopping at limit keeps a
+// frame's cost to the screen's size however long the line is.
+func (model *Model) renderWrapped(i, limit int) []string {
 	row := model.rows[i]
 	variantStyles, mark := model.rowStyle(i)
 	gutter := model.gutterText(row.line, row.baseIndex, mark, variantStyles)
@@ -96,12 +102,13 @@ func (model *Model) renderWrapped(i int) []string {
 		spaces(model.numberWidth-1) + markerContinued + "   ")
 	spans := model.codeSpans(i)
 	starts := model.rowStarts(i)
-	lines := make([]string, len(starts))
-	for k, start := range starts {
-		width := codeWidth
+	lines := make([]string, min(len(starts), max(limit, 0)))
+	for k := range lines {
+		start, width := starts[k], codeWidth
 		if k+1 < len(starts) {
 			width = starts[k+1] - start
 		}
+		model.wrappedRows++
 		prefix := continued
 		if k == 0 {
 			prefix = gutter
