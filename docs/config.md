@@ -47,6 +47,19 @@ Base16/Base24 scheme file; unset means the built-in theme. A relative path is
 taken from the config file's directory, and `~` is expanded. See
 [themes.md](themes.md).
 
+### Options
+
+Optional yes/no keys, written at the top level next to `theme`. Each is also
+a `:set` option (`:set nowrapscan`, `:set hlsearch`, `:set` alone to show
+them), which changes it for the running session without touching the file.
+The value must be an unquoted `true` or `false`; anything else is an error
+naming the line, for example `config.yml:3: wrapscan must be true or false`.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `wrapscan` | `true` | `n` / `N` continue past the last or first match of a search; with `false` they stop and say `no more matches below` / `above` |
+| `hlsearch` | `true` | rows matching a search are marked; with `false` they are not (the search and `n` / `N` still work) |
+
 ### `tabs`
 
 A non-empty list. Tab names must be unique.

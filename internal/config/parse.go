@@ -5,6 +5,8 @@ import (
 	"regexp"
 
 	"go.yaml.in/yaml/v3"
+
+	"github.com/MikePors/strigidae/internal/options"
 )
 
 // MaximumFileSize is the largest config file strig will read.
@@ -12,10 +14,23 @@ const MaximumFileSize = 1 << 20
 
 // topLevel maps each top-level key to the function that decodes it. Another
 // feature adding a key (a theme, merge defaults) adds an entry here and a
-// field on Config.
-var topLevel = map[string]func(nodeParser *parser, node *yaml.Node, config *Config){
-	"tabs":  (*parser).tabs,
-	"theme": (*parser).theme,
+// field on Config. Every declared option is a key too.
+var topLevel = buildTopLevel()
+
+func buildTopLevel() map[string]func(nodeParser *parser, node *yaml.Node, config *Config) {
+	keyParsers := map[string]func(nodeParser *parser, node *yaml.Node, config *Config){
+		"tabs":  (*parser).tabs,
+		"theme": (*parser).theme,
+	}
+	for _, option := range options.All() {
+		keyParsers[option.Name] = func(nodeParser *parser, node *yaml.Node, config *Config) {
+			value := nodeParser.boolean(node, option.Name)
+			if nodeParser.err == nil {
+				config.Options = config.Options.With(option.Name, value)
+			}
+		}
+	}
+	return keyParsers
 }
 
 var (

@@ -6,6 +6,10 @@
 # Base16/Base24 scheme file. See docs/themes.md.
 # theme: tokyo-night
 
+# Optional yes/no options (also `:set` while strig runs). Both default to true.
+# wrapscan: false
+# hlsearch: false
+
 tabs:
   # Your own PRs. With no "user" and no "sections" a tab gets the default
   # sections for the signed-in user.

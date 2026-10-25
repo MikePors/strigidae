@@ -131,7 +131,7 @@ func TestParseErrors(test *testing.T) {
 		{"unclosed bracket", "tabs: [\n", "c.yml:1: invalid YAML: did not find expected node content"},
 		{"not a mapping", "- a\n", "c.yml:1: the config file must be a mapping of keys to values"},
 		{"empty theme", "theme:\n", "c.yml:1: theme must be a non-empty text value"},
-		{"unknown top-level key", "tabz: []\n", `c.yml:1: unknown key "tabz" in the config file (valid keys: tabs, theme)`},
+		{"unknown top-level key", "tabz: []\n", `c.yml:1: unknown key "tabz" in the config file (valid keys: hlsearch, tabs, theme, wrapscan)`},
 		{"unknown tab key", "tabs:\n  - name: Me\n    usr: a\n", `c.yml:3: unknown key "usr" in a tab (valid keys: name, user, sections)`},
 		{"unknown section key", "tabs:\n  - name: Me\n    sections:\n      - name: A\n        query: q\n        limt: 3\n", `c.yml:6: unknown key "limt" in a section (valid keys: name, query, limit, sort, order)`},
 		{"duplicate key", "tabs:\n  - name: A\ntabs: []\n", `c.yml:3: duplicate key "tabs" in the config file`},

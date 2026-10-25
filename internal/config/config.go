@@ -10,6 +10,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	"github.com/MikePors/strigidae/internal/options"
 )
 
 // Config is the validated, fully resolved configuration.
@@ -19,6 +21,9 @@ type Config struct {
 	// Theme is the theme: value as written (a bundled theme's name or a theme
 	// file path), or empty for the built-in theme.
 	Theme string
+	// Options holds the yes/no options the file sets; the rest are at their
+	// defaults (see package options).
+	Options options.Values
 }
 
 // Tab is a named group of sections, for example the viewer's own PRs or a

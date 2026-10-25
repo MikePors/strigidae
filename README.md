@@ -38,7 +38,7 @@ In a pull request, the Overview lists the head commit's checks (failing first) i
 
 ## Configuration
 
-strig reads an optional YAML config (tabs and the search queries behind their sections) from `$XDG_CONFIG_HOME/strig/config.yml` (default `~/.config/strig/config.yml`); `--config <path>` overrides it and `strig --config-path` prints the location in use. See [docs/config.md](docs/config.md) and [docs/config.example.yml](docs/config.example.yml). Colour themes (bundled ones, or any Base16/Base24 scheme file; `strig --list-themes`; `:theme <name or file>` switches while strig runs) are described in [docs/themes.md](docs/themes.md).
+strig reads an optional YAML config (tabs and the search queries behind their sections) from `$XDG_CONFIG_HOME/strig/config.yml` (default `~/.config/strig/config.yml`); `--config <path>` overrides it and `strig --config-path` prints the location in use. See [docs/config.md](docs/config.md) and [docs/config.example.yml](docs/config.example.yml). The yes/no options `wrapscan` and `hlsearch` can be set there or with `:set` while strig runs. Colour themes (bundled ones, or any Base16/Base24 scheme file; `strig --list-themes`; `:theme <name or file>` switches while strig runs) are described in [docs/themes.md](docs/themes.md).
 
 ## License
 
