@@ -98,6 +98,23 @@ func (model *Model) renderRow(i int) string {
 		}
 		return model.renderHunk(header, current)
 	}
+	variantStyles, mark := model.rowStyle(i)
+	gutter := model.gutterText(row.line, row.baseIndex, mark, variantStyles)
+	codeWidth := model.codeWidth()
+	if codeWidth == 0 {
+		return ansi.Truncate(gutter, model.width, "")
+	}
+
+	return gutter + model.codeText(model.codeSpans(i), model.window.HorizontalOffset(), codeWidth, codeWidth, variantStyles)
+}
+
+// rowStyle returns the style variant and cursor mark of code row i.
+func (model *Model) rowStyle(i int) (*variant, string) {
+	row := model.rows[i]
+	current := 0
+	if i == model.window.Cursor() {
+		current = 1
+	}
 	var kind int
 	switch row.line.Kind {
 	case diff.Add:
@@ -112,26 +129,26 @@ func (model *Model) renderRow(i int) string {
 	case model.selected(row.baseIndex):
 		mark, current = markSelected, 1 // the selection takes the cursor tint
 	}
-	variantStyles := &model.styles.variants[current][kind]
+	return &model.styles.variants[current][kind], mark
+}
 
-	gutter := model.gutterText(row.line, row.baseIndex, mark, variantStyles)
-	codeWidth := model.codeWidth()
-	if codeWidth == 0 {
-		return ansi.Truncate(gutter, model.width, "")
+// codeSpans returns the highlighted text of code row i.
+func (model *Model) codeSpans(i int) []Span {
+	if row := model.rows[i]; row.line.Kind == diff.NoNewline {
+		return []Span{{Text: row.text, Token: tokenNoNewline}}
 	}
+	return model.spansFor(i)
+}
 
-	spans := model.spansFor(i)
-	if row.line.Kind == diff.NoNewline {
-		spans = []Span{{Text: row.text, Token: tokenNoNewline}}
-	}
-	visible, used := window(spans, model.window.HorizontalOffset(), codeWidth)
-
+// codeText draws the columns [startColumn, startColumn+width) of spans, padded
+// with the row's background to padTo cells.
+func (model *Model) codeText(spans []Span, startColumn, width, padTo int, variantStyles *variant) string {
+	visible, used := window(spans, startColumn, width)
 	var builder strings.Builder
-	builder.WriteString(gutter)
 	for _, span := range visible {
 		builder.WriteString(variantStyles.codeStyle(span.Token).Render(span.Text))
 	}
-	if pad := codeWidth - used; pad > 0 {
+	if pad := padTo - used; pad > 0 {
 		builder.WriteString(variantStyles.fill.Render(spaces(pad)))
 	}
 	return builder.String()

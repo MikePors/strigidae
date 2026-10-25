@@ -63,7 +63,7 @@ func TestHostileContentIsSanitised(test *testing.T) {
 	// An unstyled theme means no ANSI of our own, so any ESC is the attacker's.
 	for _, width := range []int{200, 40, 12} {
 		for fileIndex, file := range parsedDiff.Files {
-			model := New(theme.Theme{})
+			model := New(theme.Theme{}, WithWrap(width == 12))
 			model.SetFile(file)
 			for step := 0; step < 12; step++ {
 				assertSafe(test, "file render", model.Render(width, 6))

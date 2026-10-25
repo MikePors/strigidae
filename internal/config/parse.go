@@ -16,6 +16,7 @@ const MaximumFileSize = 1 << 20
 var topLevel = map[string]func(nodeParser *parser, node *yaml.Node, config *Config){
 	"tabs":  (*parser).tabs,
 	"theme": (*parser).theme,
+	"wrap":  (*parser).wrap,
 }
 
 var (
@@ -58,6 +59,10 @@ func Parse(path string, data []byte) (Config, error) {
 // needs the user interface's theme packages, so the main package does that.
 func (parser *parser) theme(node *yaml.Node, config *Config) {
 	config.Theme = parser.stringValue(node, "theme")
+}
+
+func (parser *parser) wrap(node *yaml.Node, config *Config) {
+	config.Wrap = parser.boolean(node, "wrap")
 }
 
 func (parser *parser) tabs(node *yaml.Node, config *Config) {

@@ -42,6 +42,8 @@ type Options struct {
 	Now func() time.Time
 	// Open opens a URL in the browser; it runs inside a tea.Cmd.
 	Open func(url string) error
+	// Wrap makes the diffs of the pull requests it opens wrap long lines.
+	Wrap bool
 	// Notice, if set, is shown in the status bar when the view starts, for
 	// example why the dashboard is showing.
 	Notice string
@@ -82,6 +84,7 @@ type View struct {
 	// hunkMarks keeps the hunks marked reviewed in every workspace opened
 	// from here, so they survive closing and reopening a pull request.
 	hunkMarks *workspace.HunkMarks
+	wrap      bool // passed to every workspace opened from here
 
 	notice string // shown once as an info message when the view starts
 
@@ -125,6 +128,7 @@ func New(client github.Client, tabs []config.Tab, activeTheme theme.Theme, optio
 		open:      options.Open,
 		notice:    options.Notice,
 		hunkMarks: workspace.NewHunkMarks(),
+		wrap:      options.Wrap,
 	}
 	for _, configured := range tabs {
 		current := tab{name: configured.Name}
@@ -366,6 +370,7 @@ func (view *View) openSelected() tea.Cmd {
 		workspace.WithClock(view.now),
 		workspace.WithOpener(view.open),
 		workspace.WithHunkMarks(view.hunkMarks),
+		workspace.WithWrap(view.wrap),
 	))
 }
 

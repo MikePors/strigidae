@@ -70,6 +70,16 @@ func TestParseValid(test *testing.T) {
 			Config{Theme: "~/themes/mine.yaml", Tabs: []Tab{{Name: "Me", User: "@me", Sections: defaultsFor("@me")}}},
 		},
 		{
+			"wrap on",
+			"wrap: true\n",
+			func() Config { configuration := Default(); configuration.Wrap = true; return configuration }(),
+		},
+		{
+			"wrap off",
+			"wrap: false\n",
+			Default(),
+		},
+		{
 			"names are trimmed",
 			"tabs:\n  - name: '  Me  '\n",
 			Config{Tabs: []Tab{{Name: "Me", User: "@me", Sections: defaultsFor("@me")}}},
@@ -131,7 +141,10 @@ func TestParseErrors(test *testing.T) {
 		{"unclosed bracket", "tabs: [\n", "c.yml:1: invalid YAML: did not find expected node content"},
 		{"not a mapping", "- a\n", "c.yml:1: the config file must be a mapping of keys to values"},
 		{"empty theme", "theme:\n", "c.yml:1: theme must be a non-empty text value"},
-		{"unknown top-level key", "tabz: []\n", `c.yml:1: unknown key "tabz" in the config file (valid keys: tabs, theme)`},
+		{"wrap as text", "wrap: 'true'\n", "c.yml:1: wrap must be true or false"},
+		{"wrap as yes", "wrap: yes\n", "c.yml:1: wrap must be true or false"},
+		{"empty wrap", "wrap:\n", "c.yml:1: wrap must be true or false"},
+		{"unknown top-level key", "tabz: []\n", `c.yml:1: unknown key "tabz" in the config file (valid keys: tabs, theme, wrap)`},
 		{"unknown tab key", "tabs:\n  - name: Me\n    usr: a\n", `c.yml:3: unknown key "usr" in a tab (valid keys: name, user, sections)`},
 		{"unknown section key", "tabs:\n  - name: Me\n    sections:\n      - name: A\n        query: q\n        limt: 3\n", `c.yml:6: unknown key "limt" in a section (valid keys: name, query, limit, sort, order)`},
 		{"duplicate key", "tabs:\n  - name: A\ntabs: []\n", `c.yml:3: duplicate key "tabs" in the config file`},
