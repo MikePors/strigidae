@@ -11,6 +11,7 @@ const (
 	WrapScan        = "wrapscan"
 	HighlightSearch = "hlsearch"
 	Wrap            = "wrap"
+	AutoViewed      = "autoviewed"
 )
 
 // Option is one declared setting.
@@ -27,6 +28,7 @@ func All() []Option {
 		{Name: WrapScan, Default: true},
 		{Name: HighlightSearch, Default: true},
 		{Name: Wrap},
+		{Name: AutoViewed},
 	}
 }
 
@@ -71,6 +73,10 @@ func (values Values) HighlightSearch() bool { return values.Get(HighlightSearch)
 
 // Wrap reports whether the diff pane wraps long lines.
 func (values Values) Wrap() bool { return values.Get(Wrap) }
+
+// AutoViewed reports whether marking a file's last hunk reviewed marks the
+// file viewed.
+func (values Values) AutoViewed() bool { return values.Get(AutoViewed) }
 
 // Describe writes one option's value the way `:set` shows it: its name, or
 // "no" and its name.

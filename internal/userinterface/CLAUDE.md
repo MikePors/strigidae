@@ -77,7 +77,7 @@ Commands (`:` then `enter`):
 |---|---|
 | `:q`, `:quit` | close the current view; quits strig on the root view |
 | `:qa`, `:qall`, `:quitall` | quit strig |
-| `:set [no]<option>`, `:set <option>?` | change a yes/no option for this session (the config file is not written): `wrapscan` (`n`/`N` wrap past the last or first match), `hlsearch` (matches are marked) and `wrap` (long diff lines continue on the next rows; off by default); `:set` alone shows every value, several options may share a line, an unknown option is an error that changes nothing; the options are declared in `internal/options` and are also config keys |
+| `:set [no]<option>`, `:set <option>?` | change a yes/no option for this session (the config file is not written): `wrapscan` (`n`/`N` wrap past the last or first match), `hlsearch` (matches are marked), `wrap` (long diff lines continue on the next rows; off by default) and `autoviewed` (`m` on a file's last unreviewed hunk also marks the file viewed, and unreviewing a hunk of a file it marked unmarks it; off by default); `:set` alone shows every value, several options may share a line, an unknown option is an error that changes nothing; the options are declared in `internal/options` and are also config keys |
 | `:theme <value>` | switch the colour theme: a bundled theme's name or a theme file, resolved like the config's `theme:` but with relative paths taken from the current directory; on failure the error shows and the theme stays |
 | `:approve`, `:request-changes`, `:review` | PR workspace: submit a review verdict (`:review` opens the chooser) |
 | `:checks` | PR workspace: list the head commit's checks (failing first); `enter` opens the selected check's page in the browser |

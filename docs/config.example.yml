@@ -7,10 +7,11 @@
 # theme: tokyo-night
 
 # Optional yes/no options (also `:set` while strig runs). wrapscan and
-# hlsearch default to true, wrap to false.
+# hlsearch default to true, wrap and autoviewed to false.
 # wrapscan: false
 # hlsearch: false
-# wrap: true   # wrap long diff lines onto the next rows instead of cutting them off
+# wrap: true         # wrap long diff lines onto the next rows instead of cutting them off
+# autoviewed: true   # m on a file's last unreviewed hunk also marks the file viewed
 
 tabs:
   # Your own PRs. With no "user" and no "sections" a tab gets the default
