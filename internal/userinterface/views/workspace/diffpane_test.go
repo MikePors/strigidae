@@ -130,7 +130,7 @@ func TestDiffLookupByOldPathAndRename(test *testing.T) {
 
 func TestDiffPaneLookupFallsBackToOldPath(test *testing.T) {
 	// A ChangedFile reporting the old path of a renamed file still finds it.
-	pane := newDiffPane(theme.New(true), func() time.Time { return testNow })
+	pane := newDiffPane(theme.New(true), func() time.Time { return testNow }, false)
 	harness := loaded(test, 100, 24)
 	pane.SetDiff(harness.view.diff)
 	pane.SetFile(github.ChangedFile{Path: "docs/old-name.md", Change: github.FileRenamed})
@@ -143,7 +143,7 @@ func TestDiffPaneLookupFallsBackToOldPath(test *testing.T) {
 func TestDiffPaneStates(test *testing.T) {
 	test.Run("unknown file", func(test *testing.T) {
 		harness := loaded(test, 100, 24)
-		pane := newDiffPane(theme.New(true), func() time.Time { return testNow })
+		pane := newDiffPane(theme.New(true), func() time.Time { return testNow }, false)
 		pane.SetDiff(harness.view.diff)
 		pane.SetFile(github.ChangedFile{Path: "nope.go"})
 		if out := ansi.Strip(pane.Render(60, 5)); !strings.Contains(out, "No diff available") {

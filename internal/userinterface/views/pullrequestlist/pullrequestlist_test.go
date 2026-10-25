@@ -558,3 +558,18 @@ func TestWorkspacesShareHunkMarks(test *testing.T) {
 		test.Error("two workspaces opened from the list do not share the list's hunk marks")
 	}
 }
+
+func TestWrapPassedToWorkspaces(test *testing.T) {
+	for _, wrap := range []bool{false, true} {
+		view := New(fakeWith(makePullRequests(1)), testRepository, theme.Default(), Options{Wrap: wrap})
+		view.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
+		deliver(test, view, view.Init())
+		push, ok := press(view, "enter")().(userinterface.PushMessage)
+		if !ok {
+			test.Fatal("enter should push a view")
+		}
+		if got := push.View.(*workspace.View).Wrap(); got != wrap {
+			test.Errorf("Options.Wrap %v: workspace wraps = %v", wrap, got)
+		}
+	}
+}

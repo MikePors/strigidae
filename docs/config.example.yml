@@ -10,6 +10,10 @@
 # wrapscan: false
 # hlsearch: false
 
+# Optional: wrap long diff lines onto the next rows instead of cutting them off
+# at the pane's edge (default false).
+# wrap: true
+
 tabs:
   # Your own PRs. With no "user" and no "sections" a tab gets the default
   # sections for the signed-in user.
