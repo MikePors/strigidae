@@ -32,13 +32,16 @@ func TestApplySet(test *testing.T) {
 		{name: "unknown with no", arguments: "nofoo", wantError: "unknown option: nofoo"},
 		{name: "unknown query", arguments: "foo?", wantError: "unknown option: foo"},
 		{name: "value form", arguments: "wrapscan=false", wantError: "wrapscan is on or off: use :set wrapscan or :set nowrapscan"},
+		{name: "value form with no", arguments: "nowrapscan=1", wantError: "wrapscan is on or off: use :set wrapscan or :set nowrapscan"},
+		{name: "query with no name", arguments: "?", wantError: "missing option name"},
+		{name: "query mixed with a change", arguments: "wrapscan? nowrapscan", wantError: "can't mix name? with changes in one :set line"},
 		{name: "unknown value form", arguments: "foo=1", wantError: "unknown option: foo"},
 		{name: "a bad word changes nothing, even after a good one", arguments: "nowrapscan foo", wantError: "unknown option: foo"},
 		{name: "escapes in the name are cleaned", arguments: "foo\x1b[31m", wantError: "unknown option: foo [31m"},
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
-			got, text, err := applySet(testCase.arguments, testCase.start)
+			got, text, _, err := applySet(testCase.arguments, testCase.start)
 			if testCase.wantError != "" {
 				if err == nil || err.Error() != testCase.wantError {
 					test.Fatalf("error = %v, want %q", err, testCase.wantError)
@@ -66,7 +69,7 @@ func TestApplySet(test *testing.T) {
 func TestEveryDeclaredOptionWorksWithSet(test *testing.T) {
 	for _, option := range options.All() {
 		for _, arguments := range []string{option.Name, "no" + option.Name, option.Name + "?"} {
-			if _, _, err := applySet(arguments, nil); err != nil {
+			if _, _, _, err := applySet(arguments, nil); err != nil {
 				test.Errorf(":set %s: %v", arguments, err)
 			}
 		}
@@ -74,7 +77,7 @@ func TestEveryDeclaredOptionWorksWithSet(test *testing.T) {
 }
 
 func setModel(root View, values options.Values) *Model {
-	model := New(root, theme.Default(), Options{Tick: neverTick, Options: values})
+	model := New(root, theme.Default(), Options{Tick: neverTick, StartingOptions: values})
 	model.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
 	return model
 }
@@ -110,8 +113,8 @@ func TestSetCommandChangesOptionsForEveryView(test *testing.T) {
 	if model.status.text != "nowrapscan hlsearch" {
 		test.Errorf("bare :set shows %q", model.status.text)
 	}
-	if got := len(optionsSeen(below)); got != 2 {
-		test.Errorf("a bare :set changed nothing but sent %d messages in all, want 2", got)
+	if got := len(optionsSeen(below)); got != 1 {
+		test.Errorf("a bare :set sent a message; %d in all, want 1", got)
 	}
 }
 

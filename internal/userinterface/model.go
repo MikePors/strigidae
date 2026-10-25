@@ -37,9 +37,9 @@ type Options struct {
 	// LoadTheme loads the theme `:theme` names; LoadThemeFromWorkingDirectory
 	// by default.
 	LoadTheme ThemeLoader
-	// Options are the starting values of the `:set` options, normally from the
-	// config file. The zero value is every option at its default.
-	Options options.Values
+	// StartingOptions are the starting values of the `:set` options, normally
+	// from the config file. The zero value is every option at its default.
+	StartingOptions options.Values
 }
 
 // Internal timer messages. The id/gen fields discard timers that were
@@ -81,39 +81,39 @@ type Model struct {
 }
 
 // New returns a root model whose stack holds just root.
-func New(root View, activeTheme theme.Theme, options Options) *Model {
-	if options.SequenceTimeout == 0 {
-		options.SequenceTimeout = DefaultSequenceTimeout
+func New(root View, activeTheme theme.Theme, startup Options) *Model {
+	if startup.SequenceTimeout == 0 {
+		startup.SequenceTimeout = DefaultSequenceTimeout
 	}
-	if options.MessageLifetime == 0 {
-		options.MessageLifetime = DefaultMessageLifetime
+	if startup.MessageLifetime == 0 {
+		startup.MessageLifetime = DefaultMessageLifetime
 	}
-	if options.Tick == nil {
-		options.Tick = tea.Tick
+	if startup.Tick == nil {
+		startup.Tick = tea.Tick
 	}
-	if options.LoadTheme == nil {
-		options.LoadTheme = LoadThemeFromWorkingDirectory
+	if startup.LoadTheme == nil {
+		startup.LoadTheme = LoadThemeFromWorkingDirectory
 	}
-	if options.Logger == nil {
-		options.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	if startup.Logger == nil {
+		startup.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	// Views start with the defaults, so they are told only when options were
 	// set. The root view hears them here and a pushed view in push; a view
 	// returns no command for them.
-	if options.Options != nil {
-		root, _ = root.Update(OptionsMessage{Values: options.Options})
+	if startup.StartingOptions != nil {
+		root, _ = root.Update(OptionsMessage{Values: startup.StartingOptions})
 	}
 	return &Model{
 		stack:           []View{root},
 		theme:           activeTheme,
 		keys:            keys.DefaultGlobal(),
-		log:             options.Logger,
-		tick:            options.Tick,
-		sequenceWait:    options.SequenceTimeout,
-		messageLifetime: options.MessageLifetime,
-		notice:          options.Notice,
-		themeLoader:     options.LoadTheme,
-		options:         options.Options,
+		log:             startup.Logger,
+		tick:            startup.Tick,
+		sequenceWait:    startup.SequenceTimeout,
+		messageLifetime: startup.MessageLifetime,
+		notice:          startup.Notice,
+		themeLoader:     startup.LoadTheme,
+		options:         startup.StartingOptions,
 		commandLine:     newCommandLine(activeTheme),
 		spin:            spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(activeTheme.Spinner)),
 	}

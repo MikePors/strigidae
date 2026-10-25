@@ -18,15 +18,13 @@ type Option struct {
 	Name string
 	// Default is the value when neither the config nor `:set` changed it.
 	Default bool
-	// Help is a short description, for documentation and messages.
-	Help string
 }
 
 // All returns every option, in the order `:set` lists them.
 func All() []Option {
 	return []Option{
-		{Name: WrapScan, Default: true, Help: "n and N continue past the last or first match of a search"},
-		{Name: HighlightSearch, Default: true, Help: "mark the rows that match a search"},
+		{Name: WrapScan, Default: true},
+		{Name: HighlightSearch, Default: true},
 	}
 }
 

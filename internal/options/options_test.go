@@ -40,7 +40,7 @@ func TestString(test *testing.T) {
 func TestDeclarationsAreUnique(test *testing.T) {
 	seen := map[string]bool{}
 	for _, option := range All() {
-		if option.Name == "" || option.Help == "" || seen[option.Name] {
+		if option.Name == "" || seen[option.Name] {
 			test.Errorf("bad or duplicate declaration: %+v", option)
 		}
 		seen[option.Name] = true

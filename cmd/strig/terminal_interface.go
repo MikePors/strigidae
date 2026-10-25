@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"time"
 
@@ -33,13 +34,19 @@ func runTerminalInterface(application application, stderr io.Writer) error {
 
 	built, notice := application.buildTheme(logger, askTerminal)
 	application.theme = built
-	model := userinterface.New(firstView(application), application.theme, userinterface.Options{Logger: logger, Notice: notice, Options: application.config.Options})
+	model := userinterface.New(firstView(application), application.theme, application.userInterfaceOptions(logger, notice))
 	if _, err := tea.NewProgram(model).Run(); err != nil {
 		logger.Error("program failed", "err", err)
 		return fmt.Errorf("run: %w", err)
 	}
 	logger.Info("exiting")
 	return nil
+}
+
+// userInterfaceOptions is what the shell starts with: the logger, the startup
+// notice, and the options the config file set.
+func (application application) userInterfaceOptions(logger *slog.Logger, notice string) userinterface.Options {
+	return userinterface.Options{Logger: logger, Notice: notice, StartingOptions: application.config.Options}
 }
 
 // askTerminal asks the controlling terminal for its palette, before the
