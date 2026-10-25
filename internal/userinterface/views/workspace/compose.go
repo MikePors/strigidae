@@ -112,7 +112,7 @@ func (view *View) origin() origin {
 	return origin{owner: view, repository: view.repository, number: view.number}
 }
 
-// owns reports whether a result with origin o was asked for by this view.
+// owns reports whether a result with the given origin was asked for by this view.
 func (view *View) owns(origin origin) bool { return origin == view.origin() }
 
 func (view *View) composeMine(origin origin, sequence int) bool {
