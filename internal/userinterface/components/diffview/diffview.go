@@ -51,7 +51,7 @@ type CursorLine struct {
 	Hunk     int    // index into File.Hunks
 	Kind     diff.LineKind
 	Old, New int             // line numbers; 0 on the side where the line does not exist
-	Side     github.DiffSide // SideLeft for deleted lines, else SideRight
+	Side     github.DiffSide // github.SideLeft for deleted lines, else github.SideRight
 	Text     string
 }
 

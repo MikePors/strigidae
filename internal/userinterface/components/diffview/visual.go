@@ -12,8 +12,8 @@ import (
 const markSelected = "▎"
 
 // Range is the lines of one file a comment is written on. Start and End are
-// line numbers on Side (the old file for SideLeft, the new file for
-// SideRight), and are equal for a single line.
+// line numbers on Side (the old file for github.SideLeft, the new file for
+// github.SideRight), and are equal for a single line.
 type Range struct {
 	Path       string
 	Side       github.DiffSide
