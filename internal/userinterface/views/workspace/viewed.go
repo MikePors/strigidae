@@ -98,13 +98,12 @@ func (view *View) sendViewed(path string, state github.ViewedState) tea.Cmd {
 		if state != github.FileViewed {
 			verb = "unmark"
 		}
-		shown := userinterface.ErrorMessage{Err: terminaltext.SafeError(fmt.Errorf("%s %s as viewed: %w", verb, terminaltext.Clean(path), err))}
-		return tea.BatchMsg{func() tea.Msg { return result }, func() tea.Msg { return shown }}
+		return withShownError(result, terminaltext.SafeError(fmt.Errorf("%s %s as viewed: %w", verb, terminaltext.Clean(path), err)))
 	}
 }
 
 func (view *View) viewedMine(message viewedMessage) bool {
-	return message.owner == view && message.repository == view.repository && message.number == view.number
+	return view.owns(origin{message.owner, message.repository, message.number})
 }
 
 // viewedDone records a mutation's outcome and sends the next wanted state, if

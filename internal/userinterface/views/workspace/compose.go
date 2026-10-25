@@ -230,8 +230,7 @@ func (view *View) post(target target, body string) tea.Cmd {
 		if target.kind == kindReply {
 			what = "reply"
 		}
-		shown := userinterface.ErrorMessage{Err: terminaltext.SafeError(fmt.Errorf("post %s: %w", what, err))}
-		return tea.BatchMsg{func() tea.Msg { return result }, func() tea.Msg { return shown }}
+		return withShownError(result, terminaltext.SafeError(fmt.Errorf("post %s: %w", what, err)))
 	}
 }
 
