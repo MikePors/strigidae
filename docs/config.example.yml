@@ -7,10 +7,11 @@
 # theme: tokyo-night
 
 # Optional yes/no options (also `:set` while strig runs). wrapscan and
-# hlsearch default to true, wrap to false.
+# hlsearch default to true, wrap and hideviewed to false.
 # wrapscan: false
 # hlsearch: false
 # wrap: true   # wrap long diff lines onto the next rows instead of cutting them off
+# hideviewed: true   # files marked viewed (v) leave the Files pane after a short fade
 
 tabs:
   # Your own PRs. With no "user" and no "sections" a tab gets the default

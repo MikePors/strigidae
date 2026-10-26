@@ -44,7 +44,7 @@ func (view *View) layout() {
 	if rightWidth > 0 {
 		view.overview.ensure(view.theme, view.markdownRenderer, view.detail, threadsView{view.threads, view.threadLoaded, view.threadPending, view.threadErr}, view.now(), max(1, rightWidth-4), height)
 	}
-	view.window.SetRows(view.entries())
+	view.window.SetRows(len(view.rows))
 	view.window.SetSize(height)
 }
 
@@ -211,13 +211,16 @@ func (view *View) fileRows(width, height int) []string {
 	files := view.files()
 	var rows []string
 	view.window.SetSize(height)
-	for i := view.window.Top(); i < view.entries() && len(rows) < height; i++ {
-		selected := i == view.selection()
-		if i == 0 {
+	for row := view.window.Top(); row < len(view.rows) && len(rows) < height; row++ {
+		selected := row == view.window.Cursor()
+		entry := view.rows[row]
+		if entry == 0 {
 			rows = append(rows, view.overviewRow(selected))
 			continue
 		}
-		rows = append(rows, view.fileRow(files[i-1], width, selected, view.options.HighlightSearch() && view.search.Marked(i)))
+		file := files[entry-1]
+		faded := view.fades.step(fadeKey(file.Path))
+		rows = append(rows, view.fileRow(file, width, selected, view.options.HighlightSearch() && view.search.Marked(row), faded))
 	}
 	return rows
 }
@@ -229,7 +232,9 @@ func (view *View) overviewRow(selected bool) string {
 	return view.theme.Normal.Render("  Overview")
 }
 
-func (view *View) fileRow(file github.ChangedFile, width int, selected, matched bool) string {
+// fileRow draws one file. faded is how far it has faded (theme.FadeSteps at
+// most); the selected row never fades.
+func (view *View) fileRow(file github.ChangedFile, width int, selected, matched bool, faded int) string {
 	counts := ""
 	if file.Additions > 0 {
 		counts += fmt.Sprintf("+%d", file.Additions)
@@ -246,6 +251,13 @@ func (view *View) fileRow(file github.ChangedFile, width int, selected, matched 
 	path = padRight(path, pathWidth)
 	marker := changeMarker(file.Change)
 
+	if faded > 0 && !selected {
+		lead := "  "
+		if matched {
+			lead = search.Glyph + " "
+		}
+		return view.theme.Fade[faded-1].Render(lead + viewedGlyph(file.Viewed) + " " + marker + " " + path + " " + counts)
+	}
 	if selected {
 		cursor := "> "
 		if matched {
