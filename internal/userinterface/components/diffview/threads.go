@@ -98,11 +98,15 @@ func (model *Model) shownThreads(threadIndexes []int) []int {
 	}
 	var shown []int
 	for _, threadIndex := range threadIndexes {
-		if !model.fileThreads[threadIndex].IsResolved {
+		if !model.threadHidden(model.fileThreads[threadIndex]) {
 			shown = append(shown, threadIndex)
 		}
 	}
 	return shown
+}
+
+func (model *Model) threadHidden(reviewThread github.ReviewThread) bool {
+	return model.hideResolved && reviewThread.IsResolved
 }
 
 func (model *Model) expanded(reviewThread github.ReviewThread) bool {
@@ -245,7 +249,7 @@ func (model *Model) PreviousThread() {
 func (model *Model) ThreadCount() int {
 	count := 0
 	for _, reviewThread := range model.fileThreads {
-		if !model.hideResolved || !reviewThread.IsResolved {
+		if !model.threadHidden(reviewThread) {
 			count++
 		}
 	}

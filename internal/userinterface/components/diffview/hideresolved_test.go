@@ -35,10 +35,9 @@ func TestHideResolvedLeavesThreadOutButKeepsMarker(test *testing.T) {
 	if threads := model.ThreadsAtCursor(); len(threads) != 0 {
 		test.Errorf("ThreadsAtCursor on a line with only hidden threads = %v, want none", threads)
 	}
-	before := len(model.rows)
 	model.ToggleThread()
-	if len(model.rows) != before {
-		test.Error("toggling on a line with only hidden threads changed the rows")
+	if _, chosen := model.open["resolved"]; chosen {
+		test.Error("toggling on a line with only hidden threads unfolded the hidden thread")
 	}
 
 	model.GotoTop()

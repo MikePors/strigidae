@@ -30,3 +30,22 @@ func TestHideResolvedOption(test *testing.T) {
 		test.Errorf("nohideresolved should show the resolved thread again:\n%s", harness.screen())
 	}
 }
+
+func TestHideResolvedThreadLeavesWhenResolved(test *testing.T) {
+	inliner := newInliner(test)
+	inliner.send(userinterface.OptionsMessage{Values: options.Values{options.HideResolved: true}})
+	confirmation := inliner.ask("t-open")
+	inliner.run(confirmation.OnYes)
+	if !inliner.threadState("t-open").IsResolved {
+		test.Fatal("setup: the thread was not resolved")
+	}
+	if shown := inliner.shown(); strings.Contains(shown, "bob 2 comments") {
+		test.Errorf("a thread resolved under hideresolved should leave the diff:\n%s", shown)
+	}
+	if threads := inliner.diffView().ThreadsAtCursor(); len(threads) != 0 {
+		test.Errorf("cursor should be back on the thread's line, with nothing focused; focused %v", threads)
+	}
+	if cursor, ok := inliner.diffView().Cursor(); !ok || cursor.New != 14 {
+		test.Errorf("cursor = %+v (ok %v), want new line 14", cursor, ok)
+	}
+}
