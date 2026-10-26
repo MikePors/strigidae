@@ -13,6 +13,7 @@ const (
 	Wrap            = "wrap"
 	HideViewed      = "hideviewed"
 	HideReviewed    = "hidereviewed"
+	AutoViewed      = "autoviewed"
 )
 
 // Option is one declared setting.
@@ -31,6 +32,7 @@ func All() []Option {
 		{Name: Wrap},
 		{Name: HideViewed},
 		{Name: HideReviewed},
+		{Name: AutoViewed},
 	}
 }
 
@@ -81,6 +83,10 @@ func (values Values) HideViewed() bool { return values.Get(HideViewed) }
 
 // HideReviewed reports whether the diff pane leaves out hunks marked reviewed.
 func (values Values) HideReviewed() bool { return values.Get(HideReviewed) }
+
+// AutoViewed reports whether marking a file's last hunk reviewed marks the
+// file viewed.
+func (values Values) AutoViewed() bool { return values.Get(AutoViewed) }
 
 // Describe writes one option's value the way `:set` shows it: its name, or
 // "no" and its name.

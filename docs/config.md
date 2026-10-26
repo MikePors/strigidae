@@ -63,6 +63,7 @@ The value must be an unquoted YAML boolean: `true` or `false` (`True` and
 | `wrap` | `false` | long diff lines continue on the next screen rows instead of being cut off (see below) |
 | `hideviewed` | `false` | files marked viewed (`v`) leave the Files pane, so what is left still needs review (see below) |
 | `hidereviewed` | `false` | hunks marked reviewed (`m`) leave the diff pane, each leaving a one-line placeholder (see below) |
+| `autoviewed` | `false` | marking a file's last unreviewed hunk with `m` also marks the file viewed, as `v` would (see below) |
 
 #### `wrap`
 
@@ -115,6 +116,21 @@ at a line of a hidden hunk lands on its placeholder. The comment threads on a
 hidden hunk's lines are hidden with it, and `)` / `(` skip them; the
 Overview's "Review threads" list still shows them. `enter` on a placeholder
 does nothing.
+
+#### `autoviewed`
+
+With `autoviewed: true` (or `:set autoviewed`), reviewing the last unreviewed
+hunk of a file with `m` marks the file viewed, exactly as pressing `v` would: it
+is synced with GitHub and asks nothing. The status bar says
+`Marked <path> viewed (all hunks reviewed)`. Unreviewing a hunk of a file strig
+marked this way unmarks the file again, on GitHub too, and says
+`Marked <path> not viewed (a hunk is no longer reviewed)`. A file you marked
+with `v` yourself is never unmarked automatically, and pressing `v` on a file
+strig marked hands it back to you. Files with no hunks (binary files, pure
+renames) can't have hunks reviewed, so they are never marked this way.
+
+With `hideviewed` on, a file marked this way fades and disappears like any
+viewed file, and pressing `v` on it while it fades takes the mark back.
 
 ### `tabs`
 

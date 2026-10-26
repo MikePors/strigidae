@@ -11,6 +11,7 @@ import (
 	"github.com/MikePors/strigidae/internal/diff"
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/userinterface"
+	"github.com/MikePors/strigidae/internal/userinterface/terminaltext"
 )
 
 // HunkMarks remembers which hunks the user marked reviewed. The marks are
@@ -23,10 +24,23 @@ import (
 // it.
 type HunkMarks struct {
 	reviewed map[hunkKey]bool
+	// autoViewed holds the files strig marked viewed because all their hunks
+	// were reviewed (the autoviewed option). Only these are unmarked again
+	// when a hunk is unmarked; a file the user marked with v never is.
+	autoViewed map[fileKey]bool
 }
 
 // NewHunkMarks returns an empty set of hunk marks.
-func NewHunkMarks() *HunkMarks { return &HunkMarks{reviewed: map[hunkKey]bool{}} }
+func NewHunkMarks() *HunkMarks {
+	return &HunkMarks{reviewed: map[hunkKey]bool{}, autoViewed: map[fileKey]bool{}}
+}
+
+// fileKey identifies one file of one pull request.
+type fileKey struct {
+	repository github.Repository
+	number     int
+	path       string
+}
 
 // hunkKey identifies one hunk of one pull request.
 type hunkKey struct {
@@ -107,16 +121,58 @@ func (view *View) toggleHunkReviewed() tea.Cmd {
 		return userinterface.Info("no hunk at the cursor")
 	}
 	key := view.hunkKey(file, hunk)
+	reviewed := !view.hunkMarks.reviewed[key]
 	state := "reviewed"
-	if view.hunkMarks.reviewed[key] {
+	if reviewed {
+		view.hunkMarks.reviewed[key] = true
+	} else {
 		delete(view.hunkMarks.reviewed, key)
 		state = "not reviewed"
-	} else {
-		view.hunkMarks.reviewed[key] = true
 	}
 	// Said out loud: the diff pane may be hidden (a narrow terminal with the
 	// files pane focused), and then this is the only sign anything changed.
-	return tea.Batch(view.hunkMarkChanged(file, hunk, view.hunkMarks.reviewed[key]), userinterface.Info(fmt.Sprintf("hunk %d/%d %s", hunk+1, len(file.Hunks), state)))
+	fade := view.hunkMarkChanged(file, hunk, reviewed)
+	command, text := view.followHunks(file, reviewed)
+	switch {
+	case text != "":
+		return tea.Batch(fade, command, userinterface.Info(text))
+	case command != nil:
+		// Only the error: a batched info would race it for the status bar.
+		return tea.Batch(fade, command)
+	}
+	return tea.Batch(fade, userinterface.Info(fmt.Sprintf("hunk %d/%d %s", hunk+1, len(file.Hunks), state)))
+}
+
+// followHunks keeps the selected file's viewed mark in step with its hunks
+// when the autoviewed option is on: reviewing the last hunk marks the file
+// viewed, as v would, and unreviewing a hunk of a file strig marked that way
+// unmarks it again. It returns the mutation and what to say, or "" when the
+// file's mark stays as it is (or can't be sent, when the command is the
+// error to show).
+func (view *View) followHunks(file *diff.File, reviewed bool) (tea.Cmd, string) {
+	selected := view.selection()
+	if !view.options.AutoViewed() || selected == 0 || selected > len(view.files()) {
+		return nil, ""
+	}
+	changed := &view.detail.Files[selected-1]
+	key := fileKey{view.repository, view.number, changed.Path}
+	path := terminaltext.Clean(changed.Path)
+	switch {
+	case reviewed && view.reviewedHunks(file) == len(file.Hunks) && changed.Viewed != github.FileViewed:
+		command := view.setFileViewed(changed, github.FileViewed)
+		if view.detail.Identifier == "" {
+			return command, "" // the error saying why; nothing was marked
+		}
+		view.hunkMarks.autoViewed[key] = true
+		return command, "Marked " + path + " viewed (all hunks reviewed)"
+	case !reviewed && view.hunkMarks.autoViewed[key]:
+		delete(view.hunkMarks.autoViewed, key)
+		if changed.Viewed != github.FileViewed {
+			return nil, ""
+		}
+		return view.setFileViewed(changed, github.FileUnviewed), "Marked " + path + " not viewed (a hunk is no longer reviewed)"
+	}
+	return nil, ""
 }
 
 // hunkProgress is the diff pane title's suffix once any hunk of the selected

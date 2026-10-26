@@ -63,23 +63,34 @@ func (view *View) toggleViewed() tea.Cmd {
 	if selected == 0 || selected > len(view.files()) {
 		return nil
 	}
+	file := &view.detail.Files[selected-1]
+	// The user decided this file's mark themselves: autoviewed leaves it
+	// alone from now on.
+	delete(view.hunkMarks.autoViewed, fileKey{view.repository, view.number, file.Path})
+	want := github.FileViewed
+	if file.Viewed == github.FileViewed {
+		want = github.FileUnviewed
+	}
+	return view.setFileViewed(file, want)
+}
+
+// setFileViewed shows file's viewed mark as want at once and syncs it with
+// GitHub: the mutation is sent now if none is in flight for the file, else
+// when the running one finishes.
+func (view *View) setFileViewed(file *github.ChangedFile, want github.ViewedState) tea.Cmd {
 	if view.detail.Identifier == "" {
 		return userinterface.Error(errors.New("mark file as viewed: pull request ID unknown"))
 	}
-	file := &view.detail.Files[selected-1]
 	toggle := view.viewedState[file.Path]
 	if toggle == nil {
 		toggle = &viewedToggle{confirmed: file.Viewed}
 		view.viewedState[file.Path] = toggle
 	}
-	toggle.want = github.FileViewed
-	if file.Viewed == github.FileViewed {
-		toggle.want = github.FileUnviewed
-	}
-	file.Viewed = toggle.want
+	toggle.want = want
+	file.Viewed = want
 	var fading tea.Cmd
 	switch {
-	case toggle.want != github.FileViewed:
+	case want != github.FileViewed:
 		// Taking the mark back: the file stays, and stops fading.
 		view.fades.cancel(fadeKey(file.Path))
 		view.place(view.current)
@@ -91,7 +102,7 @@ func (view *View) toggleViewed() tea.Cmd {
 		return fading
 	}
 	toggle.inflight = true
-	return tea.Batch(fading, view.sendViewed(file.Path, toggle.want))
+	return tea.Batch(fading, view.sendViewed(file.Path, want))
 }
 
 // sendViewed is the command that runs one mutation. On failure it also
@@ -128,6 +139,11 @@ func (view *View) viewedDone(message viewedMessage) tea.Cmd {
 	} else {
 		toggle.want = toggle.confirmed
 		view.setViewed(message.path, toggle.want)
+		if message.sent == github.FileViewed {
+			// strig did not mark it after all, so autoviewed must never unmark it
+			// (say, after the user views it on GitHub instead).
+			delete(view.hunkMarks.autoViewed, fileKey{view.repository, view.number, message.path})
+		}
 		if toggle.want != github.FileViewed {
 			view.fades.cancel(fadeKey(message.path))
 		}
