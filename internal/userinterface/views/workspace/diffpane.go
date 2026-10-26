@@ -67,6 +67,10 @@ func newDiffPane(activeTheme theme.Theme, now func() time.Time, wrap bool) *diff
 // SetWrap turns wrapping of long diff lines on or off.
 func (pane *diffPane) SetWrap(wrap bool) { pane.diffView.SetWrap(wrap) }
 
+// SetHideResolved leaves resolved review threads out of the diff, or shows
+// them again.
+func (pane *diffPane) SetHideResolved(hide bool) { pane.diffView.SetHideResolved(hide) }
+
 func (pane *diffPane) SetTheme(activeTheme theme.Theme) { pane.diffView.SetTheme(activeTheme) }
 
 func (pane *diffPane) SetHunkReviewed(reviewed func(file *diff.File, hunk int) bool) {

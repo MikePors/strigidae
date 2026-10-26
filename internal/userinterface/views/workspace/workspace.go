@@ -229,6 +229,7 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		view.options = message.Values
 		view.wrap = message.Values.Wrap()
 		view.filePane.SetWrap(view.wrap)
+		view.filePane.SetHideResolved(message.Values.HideResolved())
 		view.optionsChanged()
 	case userinterface.ThemeMessage:
 		view.theme = message.Theme

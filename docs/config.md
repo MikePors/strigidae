@@ -64,6 +64,7 @@ The value must be an unquoted YAML boolean: `true` or `false` (`True` and
 | `hideviewed` | `false` | files marked viewed (`v`) leave the Files pane, so what is left still needs review (see below) |
 | `hidereviewed` | `false` | hunks marked reviewed (`m`) leave the diff pane, each leaving a one-line placeholder (see below) |
 | `autoviewed` | `false` | marking a file's last unreviewed hunk with `m` also marks the file viewed, as `v` would (see below) |
+| `hideresolved` | `false` | resolved comment threads leave the diff pane (see below) |
 
 #### `wrap`
 
@@ -131,6 +132,18 @@ renames) can't have hunks reviewed, so they are never marked this way.
 
 With `hideviewed` on, a file marked this way fades and disappears like any
 viewed file, and pressing `v` on it while it fades takes the mark back.
+
+#### `hideresolved`
+
+With `hideresolved: true`, resolved comment threads are left out of the diff
+pane, so a review with many settled threads stays readable. Turning the option
+on or off with `:set` takes effect at once, for every pull request.
+
+A line whose only threads are hidden keeps its hollow `○` marker in the gutter,
+so you can tell a settled discussion was there. `)` / `(` skip hidden threads,
+and `z a`, `z o`, `z c` and `enter` on such a line do nothing. A thread you
+resolve with `x` leaves the diff as soon as it is resolved; the Overview's
+"Review threads" list still shows every thread.
 
 ### `tabs`
 

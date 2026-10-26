@@ -121,6 +121,7 @@ type Model struct {
 	attach           map[int][]int         // base row -> indexes in fileThreads
 	orphans          []int                 // fileThreads that map to no diff line
 	open             map[string]bool       // thread ID -> expanded, once the user chose
+	hideResolved     bool                  // see SetHideResolved
 	blocks           [][]string            // rendered lines of each fileThreads entry
 	blockCache       map[blockKey][]string // rendered threads; dropped by SetThreads and when width or theme change
 	blockSignature   blockSignature
@@ -387,7 +388,7 @@ func (model *Model) relayout(key cursorKey, found bool) {
 	hiddenHunk := -1 // the hunk whose lines are being left out
 	var pending []int
 	flush := func(baseIndex int) {
-		for _, threadIndex := range pending {
+		for _, threadIndex := range model.shownThreads(pending) {
 			for lineIndex := range model.blocks[threadIndex] {
 				model.rows = append(model.rows, row{baseIndex: baseIndex, threadRow: &threadRow{threadIndex: threadIndex, rowInBlock: lineIndex}})
 			}

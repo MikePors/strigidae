@@ -78,6 +78,33 @@ func (model *Model) placeThreads() {
 	}
 }
 
+// SetHideResolved leaves resolved threads out of the pane, or shows them
+// again. A line whose only threads are hidden keeps its gutter marker, but
+// the cursor cannot reach the threads: NextThread, PreviousThread and the
+// fold and cursor-thread methods skip them. A cursor inside a thread that
+// leaves moves to its line.
+func (model *Model) SetHideResolved(hide bool) {
+	if hide == model.hideResolved {
+		return
+	}
+	model.hideResolved = hide
+	model.layout()
+}
+
+// shownThreads returns the threads of threadIndexes that are not hidden.
+func (model *Model) shownThreads(threadIndexes []int) []int {
+	if !model.hideResolved {
+		return threadIndexes
+	}
+	var shown []int
+	for _, threadIndex := range threadIndexes {
+		if !model.fileThreads[threadIndex].IsResolved {
+			shown = append(shown, threadIndex)
+		}
+	}
+	return shown
+}
+
 func (model *Model) expanded(reviewThread github.ReviewThread) bool {
 	if value, ok := model.open[reviewThread.Identifier]; ok {
 		return value
@@ -150,7 +177,7 @@ func (model *Model) threadsAtCursor() []int {
 	if row := model.rows[cursor]; row.threadRow != nil {
 		return []int{row.threadRow.threadIndex}
 	}
-	return model.attach[model.rows[cursor].baseIndex]
+	return model.shownThreads(model.attach[model.rows[cursor].baseIndex])
 }
 
 // ThreadsAtCursor returns the threads the cursor is on: the one whose rows it
@@ -214,8 +241,16 @@ func (model *Model) PreviousThread() {
 }
 
 // ThreadCount is the number of threads shown for the current file, in place
-// or in the list after the diff.
-func (model *Model) ThreadCount() int { return len(model.fileThreads) }
+// or in the list after the diff; hidden resolved ones are not counted.
+func (model *Model) ThreadCount() int {
+	count := 0
+	for _, reviewThread := range model.fileThreads {
+		if !model.hideResolved || !reviewThread.IsResolved {
+			count++
+		}
+	}
+	return count
+}
 
 // threadGlyph returns the gutter marker for base row baseIndex and whether it is the
 // "open" kind.
