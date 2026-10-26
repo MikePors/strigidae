@@ -158,7 +158,6 @@ func (currentFlow *mergeFlow) merge(environment reviewEnvironment, method github
 		if err == nil {
 			return result
 		}
-		shown := userinterface.ErrorMessage{Err: terminaltext.SafeError(fmt.Errorf("%w; refreshed to show the current state", err))}
-		return tea.BatchMsg{func() tea.Msg { return result }, func() tea.Msg { return shown }}
+		return withShownError(result, terminaltext.SafeError(fmt.Errorf("%w; refreshed to show the current state", err)))
 	}
 }

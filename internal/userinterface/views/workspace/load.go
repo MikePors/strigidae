@@ -140,7 +140,7 @@ func (view *View) reloadThreads() tea.Cmd {
 // closed workspace's commands may still be running when a new workspace for
 // the same pull request starts counting its requests from 1 again.
 func (view *View) mine(owner *View, repository github.Repository, number, sequence int) bool {
-	return owner == view && repository == view.repository && number == view.number && sequence == view.sequence
+	return view.owns(origin{owner, repository, number}) && sequence == view.sequence
 }
 
 func (view *View) pullRequestLoaded(message pullRequestLoadedMessage) tea.Cmd {

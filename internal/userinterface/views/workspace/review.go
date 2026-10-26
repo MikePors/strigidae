@@ -354,8 +354,7 @@ func (currentFlow *reviewFlow) submit(environment reviewEnvironment, event githu
 		if err == nil {
 			return result
 		}
-		shown := userinterface.ErrorMessage{Err: submitFailure(err, in.PendingReviewIdentifier != "")}
-		return tea.BatchMsg{func() tea.Msg { return result }, func() tea.Msg { return shown }}
+		return withShownError(result, submitFailure(err, in.PendingReviewIdentifier != ""))
 	}
 }
 
