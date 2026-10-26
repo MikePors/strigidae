@@ -45,31 +45,19 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
-// Side says which side of the diff a cursor line belongs to, in the sense
-// GitHub uses for review comments.
-type Side int
-
-// Sides.
-const (
-	// SideRight is the new file: added and unchanged lines.
-	SideRight Side = iota
-	// SideLeft is the old file: deleted lines.
-	SideLeft
-)
-
 // CursorLine describes the diff line under the cursor.
 type CursorLine struct {
 	Path     string // the file's current path (old path for deleted files)
 	Hunk     int    // index into File.Hunks
 	Kind     diff.LineKind
-	Old, New int // line numbers; 0 on the side where the line does not exist
-	Side     Side
+	Old, New int             // line numbers; 0 on the side where the line does not exist
+	Side     github.DiffSide // github.SideLeft for deleted lines, else github.SideRight
 	Text     string
 }
 
 // Number returns the line number on the cursor's side.
 func (cursorLine CursorLine) Number() int {
-	if cursorLine.Side == SideLeft {
+	if cursorLine.Side == github.SideLeft {
 		return cursorLine.Old
 	}
 	return cursorLine.New
@@ -543,10 +531,10 @@ func (model *Model) Cursor() (cursorLine CursorLine, ok bool) {
 	}
 	cursorLine = CursorLine{
 		Path: model.file.Path(), Hunk: row.hunk, Kind: row.line.Kind,
-		Old: row.line.Old, New: row.line.New, Text: row.line.Text,
+		Old: row.line.Old, New: row.line.New, Side: github.SideRight, Text: row.line.Text,
 	}
 	if row.line.Kind == diff.Delete {
-		cursorLine.Side = SideLeft
+		cursorLine.Side = github.SideLeft
 	}
 	return cursorLine, true
 }

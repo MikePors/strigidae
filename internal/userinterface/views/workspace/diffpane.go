@@ -175,17 +175,7 @@ func (pane *diffPane) Update(message keys.Message) tea.Cmd {
 
 func (pane *diffPane) FocusedThreads() []github.ReviewThread { return pane.diffView.ThreadsAtCursor() }
 
-func (pane *diffPane) CommentRange() (LineRange, bool) {
-	lineRange, ok := pane.diffView.Anchor()
-	if !ok {
-		return LineRange{}, false
-	}
-	side := github.SideRight
-	if lineRange.Side == diffview.SideLeft {
-		side = github.SideLeft
-	}
-	return LineRange{Path: lineRange.Path, Side: side, Start: lineRange.Start, End: lineRange.End}, true
-}
+func (pane *diffPane) CommentRange() (diffview.Range, bool) { return pane.diffView.Anchor() }
 
 func (pane *diffPane) VisualStart() bool          { return pane.diffView.VisualStart() }
 func (pane *diffPane) VisualActive() bool         { return pane.diffView.VisualActive() }
