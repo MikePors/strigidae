@@ -113,6 +113,9 @@ func (view *View) startFade(path string) tea.Cmd {
 
 // fadeTicked handles a timer of a fade.
 func (view *View) fadeTicked(message fadeMessage) tea.Cmd {
+	if strings.HasPrefix(message.key, hunkFadeKeyPrefix) {
+		return view.hunkFadeTicked(message)
+	}
 	path, ok := strings.CutPrefix(message.key, fadeKeyPrefix)
 	if !ok {
 		return nil
@@ -140,11 +143,16 @@ func (view *View) stillViewed(path string) bool {
 	return false
 }
 
-// optionsChanged applies the hideviewed option to the rows at once. Turning it
-// off ends the fades; the files stay viewed.
+// optionsChanged applies the hideviewed and hidereviewed options at once.
+// Turning one off ends its fades; the files stay viewed and the hunks
+// reviewed.
 func (view *View) optionsChanged() {
 	if !view.options.HideViewed() {
-		view.fades.clear()
+		view.fades.clear(fadeKeyPrefix)
 	}
 	view.reflow()
+	if !view.options.HideReviewed() {
+		view.fades.clear(hunkFadeKeyPrefix)
+	}
+	view.filePane.HiddenHunksChanged()
 }

@@ -62,6 +62,7 @@ The value must be an unquoted YAML boolean: `true` or `false` (`True` and
 | `hlsearch` | `true` | rows matching a search are marked; with `false` they are not (the search and `n` / `N` still work) |
 | `wrap` | `false` | long diff lines continue on the next screen rows instead of being cut off (see below) |
 | `hideviewed` | `false` | files marked viewed (`v`) leave the Files pane, so what is left still needs review (see below) |
+| `hidereviewed` | `false` | hunks marked reviewed (`m`) leave the diff pane, each leaving a one-line placeholder (see below) |
 
 #### `wrap`
 
@@ -93,6 +94,27 @@ it is fading: it is un-marked and stays. Leaving the pull request, or
 The title still counts every file (`Files 3/5 viewed`), `}` and `{` skip hidden
 files, and the file picker (`f`) still lists them all. Choosing a hidden file
 shows its diff while the Files pane cursor waits on the nearest listed file.
+
+#### `hidereviewed`
+
+With `hidereviewed: true`, hunks marked reviewed with `m` are hidden in the
+diff pane. Each leaves one muted row in its place, such as
+`▸ reviewed hunk hidden  @@ -40,5 +42,7 @@`. Turning the option on or off with
+`:set` takes effect at once.
+
+Pressing `m` marks the hunk at once, and the cursor stays where it is. The
+hunk stays for 8 seconds, fading step by step into the background, and then
+collapses to its placeholder. A cursor still inside it moves to the
+placeholder. To take a mark back, press `m` again while the hunk is fading,
+or press `m` on the placeholder: the hunk is un-marked and shown again.
+Leaving the pull request, or `:set nohidereviewed`, ends the fading; the hunks
+stay marked reviewed.
+
+`]` and `[` (and counts with them) skip hidden hunks. `G` with a count aimed
+at a line of a hidden hunk lands on its placeholder. The comment threads on a
+hidden hunk's lines are hidden with it, and `)` / `(` skip them; the
+Overview's "Review threads" list still shows them. `enter` on a placeholder
+does nothing.
 
 ### `tabs`
 

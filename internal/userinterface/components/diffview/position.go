@@ -90,9 +90,13 @@ func absolute(count int) int {
 	return count
 }
 
-// find returns the row for anchor: an exact match on kind and line numbers, else
-// the row of the same sort whose line number is closest.
+// find returns the row for anchor: an exact match on kind and line numbers
+// (the placeholder when its hunk is hidden), else the row of the same sort
+// whose line number is closest.
 func (model *Model) find(anchor anchor) int {
+	if hunk, ok := model.hiddenLine(anchor); ok {
+		return max(model.placeholderRow(hunk), 0)
+	}
 	best, bestDistance := 0, -1
 	for i, row := range model.rows {
 		var distance int
@@ -120,4 +124,18 @@ func (model *Model) find(anchor anchor) int {
 		}
 	}
 	return best
+}
+
+// hiddenLine reports the hunk of the diff line matching a line anchor, when
+// that hunk is hidden.
+func (model *Model) hiddenLine(anchor anchor) (hunk int, ok bool) {
+	if anchor.header {
+		return 0, false
+	}
+	for _, row := range model.base {
+		if row.isLine() && row.line.Kind == anchor.kind && row.line.Old == anchor.old && row.line.New == anchor.new {
+			return row.hunk, model.isHidden(row.hunk)
+		}
+	}
+	return 0, false
 }

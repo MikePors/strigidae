@@ -36,8 +36,9 @@ type variant struct {
 // styleSet precomputes every style combination so rendering never builds
 // styles.
 type styleSet struct {
-	variants [2][numberKinds]variant // [cursor][kind]
-	hunk     [2]lipgloss.Style
+	variants    [2][numberKinds]variant // [cursor][kind]
+	hunk        [2]lipgloss.Style
+	placeholder [2]lipgloss.Style // a hidden hunk's row
 }
 
 func newStyleSet(activeTheme theme.Theme) styleSet {
@@ -67,6 +68,8 @@ func newStyleSet(activeTheme theme.Theme) styleSet {
 	}
 	style.hunk[0] = activeTheme.DiffHunk
 	style.hunk[1] = activeTheme.DiffHunkCursor
+	style.placeholder[0] = activeTheme.Muted
+	style.placeholder[1] = activeTheme.Muted.Background(cursorBackground)
 	return style
 }
 
@@ -90,6 +93,9 @@ func (model *Model) renderRow(i int) string {
 	}
 	if row.message {
 		return model.renderNoticeRow(i, row)
+	}
+	if row.placeholder {
+		return model.renderPlaceholder(row, current)
 	}
 	if row.line == nil {
 		header := model.file.Hunks[row.hunk].Header()
