@@ -45,31 +45,19 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
-// Side says which side of the diff a cursor line belongs to, in the sense
-// GitHub uses for review comments.
-type Side int
-
-// Sides.
-const (
-	// SideRight is the new file: added and unchanged lines.
-	SideRight Side = iota
-	// SideLeft is the old file: deleted lines.
-	SideLeft
-)
-
 // CursorLine describes the diff line under the cursor.
 type CursorLine struct {
 	Path     string // the file's current path (old path for deleted files)
 	Hunk     int    // index into File.Hunks
 	Kind     diff.LineKind
-	Old, New int // line numbers; 0 on the side where the line does not exist
-	Side     Side
+	Old, New int             // line numbers; 0 on the side where the line does not exist
+	Side     github.DiffSide // github.SideLeft for deleted lines, else github.SideRight
 	Text     string
 }
 
 // Number returns the line number on the cursor's side.
 func (cursorLine CursorLine) Number() int {
-	if cursorLine.Side == SideLeft {
+	if cursorLine.Side == github.SideLeft {
 		return cursorLine.Old
 	}
 	return cursorLine.New
@@ -96,6 +84,9 @@ type row struct {
 	baseIndex int    // index in base of this row, or of the row a thread row follows
 	threadRow *threadRow
 	message   bool // one line of the file's notice (binary, renamed, ...), shown above its threads
+	// placeholder marks the header row of a hidden hunk, the one row left of
+	// it; see hidden.go.
+	placeholder bool
 }
 
 // isLine reports whether r is a diff line a comment can be written on: not a
@@ -139,6 +130,8 @@ type Model struct {
 	maximumWidth     int // widest code line, in cells
 
 	hunkReviewed func(file *diff.File, hunk int) bool // see SetHunkReviewed; nil: none are
+	hunkHidden   func(file *diff.File, hunk int) bool // see SetHunkHidden; nil: none are
+	hunkFade     func(file *diff.File, hunk int) int  // see SetHunkFade; nil: none fade
 
 	cache map[int][]Span // highlighted rows, by base row index; reset per file
 	saved *position      // position kept while a message replaces the file
@@ -341,10 +334,19 @@ func (model *Model) keyRow(key cursorKey) int {
 			return row
 		}
 	}
+	return model.baseRow(key.baseIndex)
+}
+
+// baseRow returns the row showing base row baseIndex, or the placeholder of
+// its hunk when that is hidden.
+func (model *Model) baseRow(baseIndex int) int {
 	for i, row := range model.rows {
-		if row.threadRow == nil && row.baseIndex == key.baseIndex {
+		if row.threadRow == nil && row.baseIndex == baseIndex {
 			return i
 		}
+	}
+	if baseIndex >= 0 && baseIndex < len(model.base) {
+		return max(model.placeholderRow(model.base[baseIndex].hunk), 0)
 	}
 	return 0
 }
@@ -382,6 +384,7 @@ func (model *Model) relayout(key cursorKey, found bool) {
 	if model.file != nil && len(base) == 0 && len(model.fileThreads) > 0 {
 		base = model.noticeRows()
 	}
+	hiddenHunk := -1 // the hunk whose lines are being left out
 	var pending []int
 	flush := func(baseIndex int) {
 		for _, threadIndex := range pending {
@@ -392,8 +395,16 @@ func (model *Model) relayout(key cursorKey, found bool) {
 		pending = pending[:0]
 	}
 	for i, row := range base {
-		if row.line == nil && !row.message {
-			model.hunkRow = append(model.hunkRow, len(model.rows))
+		switch {
+		case row.line == nil && !row.message:
+			hiddenHunk = -1
+			if model.isHidden(row.hunk) {
+				hiddenHunk, row.placeholder = row.hunk, true
+			} else {
+				model.hunkRow = append(model.hunkRow, len(model.rows))
+			}
+		case row.line != nil && row.hunk == hiddenHunk:
+			continue // with the threads on it
 		}
 		model.rows = append(model.rows, row)
 		pending = append(pending, model.attach[i]...)
@@ -404,6 +415,9 @@ func (model *Model) relayout(key cursorKey, found bool) {
 	}
 	pending = append(pending, model.orphans...)
 	flush(len(base) - 1)
+	if model.visual && model.visualBaseIndex < len(model.base) && model.isHidden(model.base[model.visualBaseIndex].hunk) {
+		model.visual = false // its first line is gone
+	}
 	model.sync()
 	if found && len(model.rows) > 0 {
 		cursorRow := model.keyRow(key)
@@ -431,14 +445,15 @@ func (model *Model) CursorRow() int { return model.window.Cursor() }
 // GotoLine moves the cursor to line number line of the file's new side. When
 // no hunk shows that line it goes to the shown line with the closest number,
 // preferring the later one on a tie. A deleted file has no new side, so its
-// old-side numbers are used. Without any numbered line it does nothing.
+// old-side numbers are used. A line of a hidden hunk lands on the hunk's
+// placeholder. Without any numbered line it does nothing.
 func (model *Model) GotoLine(line int) {
 	if model.file == nil {
 		return
 	}
 	deleted := model.file.Status == diff.Deleted
 	best, bestNumber := -1, 0
-	for i, row := range model.rows {
+	for i, row := range model.base {
 		if !row.isLine() {
 			continue
 		}
@@ -455,7 +470,7 @@ func (model *Model) GotoLine(line int) {
 		}
 	}
 	if best >= 0 {
-		model.window.GotoRow(best)
+		model.window.GotoRow(model.baseRow(best))
 	}
 }
 
@@ -543,10 +558,10 @@ func (model *Model) Cursor() (cursorLine CursorLine, ok bool) {
 	}
 	cursorLine = CursorLine{
 		Path: model.file.Path(), Hunk: row.hunk, Kind: row.line.Kind,
-		Old: row.line.Old, New: row.line.New, Text: row.line.Text,
+		Old: row.line.Old, New: row.line.New, Side: github.SideRight, Text: row.line.Text,
 	}
 	if row.line.Kind == diff.Delete {
-		cursorLine.Side = SideLeft
+		cursorLine.Side = github.SideLeft
 	}
 	return cursorLine, true
 }
@@ -563,11 +578,16 @@ func (model *Model) Render(width, height int) string {
 	}
 	lines := make([]string, 0, model.height)
 	for i := model.window.Top(); i < len(model.rows) && len(lines) < model.height; i++ {
+		var drawn []string
 		if model.wrap && model.rows[i].isCode() {
-			lines = append(lines, model.renderWrapped(i, model.height-len(lines))...)
-			continue
+			drawn = model.renderWrapped(i, model.height-len(lines))
+		} else {
+			drawn = []string{model.renderRow(i)}
 		}
-		lines = append(lines, model.renderRow(i))
+		if fade := model.fadeOf(i); fade > 0 {
+			drawn = model.faded(drawn, fade)
+		}
+		lines = append(lines, drawn...)
 	}
 	return strings.Join(lines[:min(len(lines), model.height)], "\n")
 }

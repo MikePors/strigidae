@@ -73,6 +73,13 @@ func (pane *diffPane) SetHunkReviewed(reviewed func(file *diff.File, hunk int) b
 	pane.diffView.SetHunkReviewed(reviewed)
 }
 
+func (pane *diffPane) SetHunkHiding(hidden func(file *diff.File, hunk int) bool, fade func(file *diff.File, hunk int) int) {
+	pane.diffView.SetHunkHidden(hidden)
+	pane.diffView.SetHunkFade(fade)
+}
+
+func (pane *diffPane) HiddenHunksChanged() { pane.diffView.HiddenHunksChanged() }
+
 func (pane *diffPane) CursorHunk() (*diff.File, int, bool) { return pane.diffView.CursorHunk() }
 
 func (pane *diffPane) SetThreadExpanded(identifier string, expanded bool) {
@@ -175,17 +182,7 @@ func (pane *diffPane) Update(message keys.Message) tea.Cmd {
 
 func (pane *diffPane) FocusedThreads() []github.ReviewThread { return pane.diffView.ThreadsAtCursor() }
 
-func (pane *diffPane) CommentRange() (LineRange, bool) {
-	lineRange, ok := pane.diffView.Anchor()
-	if !ok {
-		return LineRange{}, false
-	}
-	side := github.SideRight
-	if lineRange.Side == diffview.SideLeft {
-		side = github.SideLeft
-	}
-	return LineRange{Path: lineRange.Path, Side: side, Start: lineRange.Start, End: lineRange.End}, true
-}
+func (pane *diffPane) CommentRange() (diffview.Range, bool) { return pane.diffView.Anchor() }
 
 func (pane *diffPane) VisualStart() bool          { return pane.diffView.VisualStart() }
 func (pane *diffPane) VisualActive() bool         { return pane.diffView.VisualActive() }

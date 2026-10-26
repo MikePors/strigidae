@@ -12,6 +12,7 @@ import (
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/github/fake"
 	"github.com/MikePors/strigidae/internal/userinterface"
+	"github.com/MikePors/strigidae/internal/userinterface/components/diffview"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
@@ -25,17 +26,20 @@ type stubPane struct {
 
 func (pane *stubPane) SetTheme(theme.Theme) {}
 
-func (pane *stubPane) CommentRange() (LineRange, bool) { return LineRange{}, false }
-func (pane *stubPane) VisualStart() bool               { return false }
-func (pane *stubPane) VisualActive() bool              { return false }
-func (pane *stubPane) VisualMove(int) error            { return nil }
-func (pane *stubPane) VisualEnd()                      {}
+func (pane *stubPane) CommentRange() (diffview.Range, bool) { return diffview.Range{}, false }
+func (pane *stubPane) VisualStart() bool                    { return false }
+func (pane *stubPane) VisualActive() bool                   { return false }
+func (pane *stubPane) VisualMove(int) error                 { return nil }
+func (pane *stubPane) VisualEnd()                           {}
 
 func (pane *stubPane) SetDiff(DiffState) {}
 
 func (pane *stubPane) SetWrap(bool)                               {}
 func (pane *stubPane) SetHunkReviewed(func(*diff.File, int) bool) {}
 func (pane *stubPane) CursorHunk() (*diff.File, int, bool)        { return nil, 0, false }
+
+func (pane *stubPane) SetHunkHiding(func(*diff.File, int) bool, func(*diff.File, int) int) {}
+func (pane *stubPane) HiddenHunksChanged()                                                 {}
 
 func (pane *stubPane) SetThreadExpanded(string, bool) {}
 

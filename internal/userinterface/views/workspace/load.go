@@ -140,7 +140,7 @@ func (view *View) reloadThreads() tea.Cmd {
 // closed workspace's commands may still be running when a new workspace for
 // the same pull request starts counting its requests from 1 again.
 func (view *View) mine(owner *View, repository github.Repository, number, sequence int) bool {
-	return owner == view && repository == view.repository && number == view.number && sequence == view.sequence
+	return view.owns(origin{owner, repository, number}) && sequence == view.sequence
 }
 
 func (view *View) pullRequestLoaded(message pullRequestLoadedMessage) tea.Cmd {
@@ -152,19 +152,22 @@ func (view *View) pullRequestLoaded(message pullRequestLoadedMessage) tea.Cmd {
 		return userinterface.Error(terminaltext.SafeError(message.err))
 	}
 	previous := view.selectedPath()
+	following := view.current == view.cursorEntry() // the pane shows the cursor's file
 	view.detail, view.err, view.notFound = &message.detail, nil, false
 	view.reapplyViewed(message.sequence)
-	top, selection := view.window.Top(), 0
+	view.current = 0
 	for i, file := range message.detail.Files {
 		if previous != "" && file.Path == previous {
-			selection = i + 1
+			view.current = i + 1
 		}
 	}
-	view.window.SetRows(view.entries())
-	view.window.Restore(selection, top, 0) // a refresh must not scroll the Files list
+	view.place(view.current) // a refresh must not scroll the Files list
+	if following {
+		view.current = view.cursorEntry() // the file may be hidden now
+	}
 	view.overview.invalidate()
 	view.selectionChanged()
-	view.search.Refresh(view.searchList())
+	view.search.Refresh(view.searchList()) // the paths may differ with the same rows
 	view.layout()
 	return nil
 }

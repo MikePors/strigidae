@@ -6,6 +6,7 @@ import (
 
 	"github.com/MikePors/strigidae/internal/diff"
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/userinterface/components/diffview"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
@@ -29,14 +30,6 @@ type DiffState struct {
 	Err error
 	// Loading is set while a (re)load is in flight.
 	Loading bool
-}
-
-// LineRange is the lines of a file a review comment is written on. Start and
-// End are line numbers on Side and are equal for a single line.
-type LineRange struct {
-	Path       string
-	Side       github.DiffSide
-	Start, End int
 }
 
 // FilePane is the content of the right pane while a file is selected. The
@@ -89,7 +82,7 @@ type FilePane interface {
 	// CommentRange returns the lines a new comment would go on: the visual
 	// selection, else the cursor line. ok is false when the cursor is not on a
 	// diff line. Panes without lines return false.
-	CommentRange() (lineRange LineRange, ok bool)
+	CommentRange() (lineRange diffview.Range, ok bool)
 	// VisualStart begins a line selection at the cursor, reporting false when
 	// it cannot (no diff line under the cursor).
 	VisualStart() bool
@@ -109,6 +102,12 @@ type FilePane interface {
 	// SetHunkReviewed is called once with how to tell whether a hunk is
 	// marked reviewed; panes that show hunks mark their headers.
 	SetHunkReviewed(reviewed func(file *diff.File, hunk int) bool)
+	// SetHunkHiding is called once with how to tell whether a hunk is hidden
+	// and how far it has faded (0 to theme.FadeSteps); panes that show hunks
+	// leave hidden ones out and draw fading ones fainter.
+	SetHunkHiding(hidden func(file *diff.File, hunk int) bool, fade func(file *diff.File, hunk int) int)
+	// HiddenHunksChanged says the hidden function's answers changed.
+	HiddenHunksChanged()
 	// CursorHunk returns the file and hunk index at the pane's cursor. ok is
 	// false off any hunk; panes without hunks return false.
 	CursorHunk() (file *diff.File, hunk int, ok bool)

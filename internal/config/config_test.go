@@ -154,7 +154,7 @@ func TestParseErrors(test *testing.T) {
 		{"wrap as text", "wrap: 'true'\n", "c.yml:1: wrap must be true or false"},
 		{"wrap as yes", "wrap: yes\n", "c.yml:1: wrap must be true or false"},
 		{"empty wrap", "wrap:\n", "c.yml:1: wrap must be true or false"},
-		{"unknown top-level key", "tabz: []\n", `c.yml:1: unknown key "tabz" in the config file (valid keys: autoviewed, hlsearch, tabs, theme, wrap, wrapscan)`},
+		{"unknown top-level key", "tabz: []\n", `c.yml:1: unknown key "tabz" in the config file (valid keys: autoviewed, hidereviewed, hideviewed, hlsearch, tabs, theme, wrap, wrapscan)`},
 		{"unknown tab key", "tabs:\n  - name: Me\n    usr: a\n", `c.yml:3: unknown key "usr" in a tab (valid keys: name, user, sections)`},
 		{"unknown section key", "tabs:\n  - name: Me\n    sections:\n      - name: A\n        query: q\n        limt: 3\n", `c.yml:6: unknown key "limt" in a section (valid keys: name, query, limit, sort, order)`},
 		{"duplicate key", "tabs:\n  - name: A\ntabs: []\n", `c.yml:3: duplicate key "tabs" in the config file`},

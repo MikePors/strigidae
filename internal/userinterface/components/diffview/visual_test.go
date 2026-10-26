@@ -9,6 +9,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/MikePors/strigidae/internal/diff"
+	"github.com/MikePors/strigidae/internal/github"
 )
 
 // Rows of server.go (see diffview_test.go): 14 is a context line (old 31,
@@ -21,9 +22,9 @@ func TestAnchorSingleLine(test *testing.T) {
 		want Range
 		ok   bool
 	}{
-		{"context line is on the new side", 14, Range{Path: "server.go", Side: SideRight, Start: 32, End: 32}, true},
-		{"deleted line is on the old side", 15, Range{Path: "server.go", Side: SideLeft, Start: 32, End: 32}, true},
-		{"added line is on the new side", 17, Range{Path: "server.go", Side: SideRight, Start: 33, End: 33}, true},
+		{"context line is on the new side", 14, Range{Path: "server.go", Side: github.SideRight, Start: 32, End: 32}, true},
+		{"deleted line is on the old side", 15, Range{Path: "server.go", Side: github.SideLeft, Start: 32, End: 32}, true},
+		{"added line is on the new side", 17, Range{Path: "server.go", Side: github.SideRight, Start: 33, End: 33}, true},
 		{"hunk header has none", hunk2Row, Range{}, false},
 	}
 	for _, testCase := range tests {
@@ -50,13 +51,13 @@ func TestVisualRanges(test *testing.T) {
 		refusal error
 		endRow  int
 	}{
-		{"context to context stays on the new side", 13, 1, Range{Path: "server.go", Side: SideRight, Start: 31, End: 32}, nil, 14},
-		{"deleted lines are on the old side", 15, 1, Range{Path: "server.go", Side: SideLeft, Start: 32, End: 33}, nil, 16},
-		{"context with deleted is on the old side", 14, 1, Range{Path: "server.go", Side: SideLeft, Start: 31, End: 32}, nil, 15},
-		{"added lines", 17, 1, Range{Path: "server.go", Side: SideRight, Start: 33, End: 34}, nil, 18},
-		{"upwards", 16, -1, Range{Path: "server.go", Side: SideLeft, Start: 32, End: 33}, nil, 15},
-		{"deleted to added is refused", 16, 1, Range{Path: "server.go", Side: SideLeft, Start: 33, End: 33}, ErrMixesSides, 16},
-		{"into the next hunk is refused", 11, 1, Range{Path: "server.go", Side: SideRight, Start: 10, End: 10}, ErrCrossesHunk, 11},
+		{"context to context stays on the new side", 13, 1, Range{Path: "server.go", Side: github.SideRight, Start: 31, End: 32}, nil, 14},
+		{"deleted lines are on the old side", 15, 1, Range{Path: "server.go", Side: github.SideLeft, Start: 32, End: 33}, nil, 16},
+		{"context with deleted is on the old side", 14, 1, Range{Path: "server.go", Side: github.SideLeft, Start: 31, End: 32}, nil, 15},
+		{"added lines", 17, 1, Range{Path: "server.go", Side: github.SideRight, Start: 33, End: 34}, nil, 18},
+		{"upwards", 16, -1, Range{Path: "server.go", Side: github.SideLeft, Start: 32, End: 33}, nil, 15},
+		{"deleted to added is refused", 16, 1, Range{Path: "server.go", Side: github.SideLeft, Start: 33, End: 33}, ErrMixesSides, 16},
+		{"into the next hunk is refused", 11, 1, Range{Path: "server.go", Side: github.SideRight, Start: 10, End: 10}, ErrCrossesHunk, 11},
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
@@ -146,10 +147,10 @@ func TestRangeFor(test *testing.T) {
 		want  Range
 		err   error
 	}{
-		{"one context line is on the new side", []*diff.Line{makeLine(ctx, 4, 5)}, Range{Path: "f.go", Side: SideRight, Start: 5, End: 5}, nil},
-		{"one deleted line is on the old side", []*diff.Line{makeLine(deleted, 4, 0)}, Range{Path: "f.go", Side: SideLeft, Start: 4, End: 4}, nil},
-		{"context and added lines use new numbers", []*diff.Line{makeLine(ctx, 4, 5), makeLine(add, 0, 6), makeLine(add, 0, 7)}, Range{Path: "f.go", Side: SideRight, Start: 5, End: 7}, nil},
-		{"any deleted line makes it the old side", []*diff.Line{makeLine(ctx, 4, 5), makeLine(deleted, 5, 0)}, Range{Path: "f.go", Side: SideLeft, Start: 4, End: 5}, nil},
+		{"one context line is on the new side", []*diff.Line{makeLine(ctx, 4, 5)}, Range{Path: "f.go", Side: github.SideRight, Start: 5, End: 5}, nil},
+		{"one deleted line is on the old side", []*diff.Line{makeLine(deleted, 4, 0)}, Range{Path: "f.go", Side: github.SideLeft, Start: 4, End: 4}, nil},
+		{"context and added lines use new numbers", []*diff.Line{makeLine(ctx, 4, 5), makeLine(add, 0, 6), makeLine(add, 0, 7)}, Range{Path: "f.go", Side: github.SideRight, Start: 5, End: 7}, nil},
+		{"any deleted line makes it the old side", []*diff.Line{makeLine(ctx, 4, 5), makeLine(deleted, 5, 0)}, Range{Path: "f.go", Side: github.SideLeft, Start: 4, End: 5}, nil},
 		{"added with deleted is refused", []*diff.Line{makeLine(deleted, 5, 0), makeLine(add, 0, 6)}, Range{}, ErrMixesSides},
 		{"no lines", nil, Range{}, errNoLines},
 	}

@@ -51,6 +51,10 @@ func WithWrap(wrap bool) Option { return func(view *View) { view.wrap = wrap } }
 // Wrap reports whether the diff pane wraps long lines.
 func (view *View) Wrap() bool { return view.wrap }
 
+// WithTick replaces how the fade of a viewed file is timed, which by default
+// is tea.Tick.
+func WithTick(tick userinterface.TickFunction) Option { return func(view *View) { view.tick = tick } }
+
 // WithFilePane replaces the right pane's content for a selected file; this is
 // the hook for the diff component.
 func WithFilePane(pane FilePane) Option { return func(view *View) { view.filePane = pane } }
@@ -62,6 +66,7 @@ type View struct {
 	number     int
 
 	now              func() time.Time
+	tick             userinterface.TickFunction
 	open             func(url string) error
 	theme            theme.Theme
 	globalKeys       keys.Global
@@ -98,7 +103,10 @@ type View struct {
 	hunkMarks        *HunkMarks       // hunks marked reviewed; shared with other workspaces by WithHunkMarks
 	hunkFingerprints fingerprintCache // fingerprints of the last file asked about
 
-	window   scroll.Window  // Files pane: row 0 is Overview, row i is Files[i-1]
+	window   scroll.Window  // Files pane: over rows
+	rows     []int          // the entry each Files pane row shows; see hideviewed.go
+	current  int            // the entry the right pane shows
+	fades    fader          // viewed files about to leave the Files pane
 	search   search.State   // over the same rows; Overview never matches
 	options  options.Values // the `:set` options, sent by the root
 	focus    pane
@@ -136,6 +144,8 @@ func New(client github.Client, repository github.Repository, number int, options
 		repository:     repository,
 		number:         number,
 		now:            time.Now,
+		tick:           tea.Tick,
+		rows:           []int{0},
 		open:           openInBrowser,
 		theme:          theme.Default(),
 		globalKeys:     keys.DefaultGlobal(),
@@ -158,6 +168,7 @@ func New(client github.Client, repository github.Repository, number int, options
 	}
 	view.filePane.SetTheme(view.theme)
 	view.filePane.SetHunkReviewed(view.hunkReviewed)
+	view.filePane.SetHunkHiding(view.hunkHidden, view.hunkFade)
 	return view
 }
 
@@ -218,6 +229,7 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		view.options = message.Values
 		view.wrap = message.Values.Wrap()
 		view.filePane.SetWrap(view.wrap)
+		view.optionsChanged()
 	case userinterface.ThemeMessage:
 		view.theme = message.Theme
 		view.markdownRenderer = markdown.New(view.theme)
@@ -243,6 +255,10 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 			return view, nil
 		}
 		return view, view.threadsLoaded(message)
+	case fadeMessage:
+		if message.owner == view {
+			return view, view.fadeTicked(message)
+		}
 	case viewedMessage:
 		if view.viewedMine(message) {
 			return view, view.viewedDone(message)

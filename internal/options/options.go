@@ -11,6 +11,8 @@ const (
 	WrapScan        = "wrapscan"
 	HighlightSearch = "hlsearch"
 	Wrap            = "wrap"
+	HideViewed      = "hideviewed"
+	HideReviewed    = "hidereviewed"
 	AutoViewed      = "autoviewed"
 )
 
@@ -28,6 +30,8 @@ func All() []Option {
 		{Name: WrapScan, Default: true},
 		{Name: HighlightSearch, Default: true},
 		{Name: Wrap},
+		{Name: HideViewed},
+		{Name: HideReviewed},
 		{Name: AutoViewed},
 	}
 }
@@ -73,6 +77,12 @@ func (values Values) HighlightSearch() bool { return values.Get(HighlightSearch)
 
 // Wrap reports whether the diff pane wraps long lines.
 func (values Values) Wrap() bool { return values.Get(Wrap) }
+
+// HideViewed reports whether the Files pane leaves out files marked viewed.
+func (values Values) HideViewed() bool { return values.Get(HideViewed) }
+
+// HideReviewed reports whether the diff pane leaves out hunks marked reviewed.
+func (values Values) HideReviewed() bool { return values.Get(HideReviewed) }
 
 // AutoViewed reports whether marking a file's last hunk reviewed marks the
 // file viewed.
