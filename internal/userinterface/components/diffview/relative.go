@@ -6,9 +6,10 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
 )
 
-// relativeWidth is the width of the relative-number column: the digits of
-// keys.MaximumCount. Counts stop there, so a row further away is left blank.
-const relativeWidth = 4
+// relativeDigits is how many digits the relative-number column holds: those
+// of keys.MaximumCount. Counts stop there, so a row further away is left
+// blank.
+const relativeDigits = 4
 
 // WithRelativeNumber starts the pane with the relative-number column shown.
 func WithRelativeNumber(on bool) Option { return func(model *Model) { model.relativeNumber = on } }
@@ -29,7 +30,7 @@ func (model *Model) relativeColumnWidth() int {
 	if !model.relativeNumber {
 		return 0
 	}
-	return relativeWidth + 1
+	return relativeDigits + 1
 }
 
 // relativeCell returns row i's cell of the column: its distance from the
@@ -42,5 +43,5 @@ func (model *Model) relativeCell(i int) string {
 	if distance <= keys.MaximumCount {
 		text = strconv.Itoa(distance)
 	}
-	return spaces(relativeWidth-len(text)) + text + " "
+	return spaces(relativeDigits-len(text)) + text + " "
 }

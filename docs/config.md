@@ -162,6 +162,8 @@ the cursor stops on is numbered: diff lines, hunk headers, the placeholders of
 hidden hunks, notices and each line of a comment thread. So `5j` moves to the
 row marked `5` below. With `wrap` on, a long line's continuation rows have no
 number. Rows further than 9999 rows away (the largest count) are left blank.
+The numbers are for `j` / `k` outside a line selection: in visual mode (`V`)
+`j` / `k` move one diff line at a time and skip thread rows.
 The column takes five cells from the code area. `G` with a count still goes to
 a new-side line number.
 

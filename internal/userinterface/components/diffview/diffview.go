@@ -290,9 +290,14 @@ func (model *Model) SetSize(width, height int) {
 func (model *Model) Size() (width, height int) { return model.width, model.height }
 
 // gutterWidth is the fixed width of the non-scrolling left part of a row:
-// cursor mark, relative number (when shown), old number, new number, thread
-// marker, change marker.
-func (model *Model) gutterWidth() int { return model.relativeColumnWidth() + 2*model.numberWidth + 5 }
+// cursor mark, relative number (when shown), then lineNumbersWidth.
+func (model *Model) gutterWidth() int {
+	return 1 + model.relativeColumnWidth() + model.lineNumbersWidth()
+}
+
+// lineNumbersWidth is the width of the gutter after the relative number: old
+// number, new number, thread marker, change marker.
+func (model *Model) lineNumbersWidth() int { return 2*model.numberWidth + 4 }
 
 func (model *Model) codeWidth() int { return max(model.width-model.gutterWidth(), 0) }
 
