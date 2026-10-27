@@ -116,8 +116,8 @@ func (view *View) fadeTicked(message fadeMessage) tea.Cmd {
 	if strings.HasPrefix(message.key, hunkFadeKeyPrefix) {
 		return view.hunkFadeTicked(message)
 	}
-	if identifier, ok := strings.CutPrefix(message.key, threadFadeKeyPrefix); ok {
-		return view.threadFadeTicked(message, identifier)
+	if strings.HasPrefix(message.key, threadFadeKeyPrefix) {
+		return view.threadFadeTicked(message)
 	}
 	path, ok := strings.CutPrefix(message.key, fadeKeyPrefix)
 	if !ok {

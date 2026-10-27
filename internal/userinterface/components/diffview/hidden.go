@@ -74,7 +74,10 @@ func (model *Model) fadeOf(i int) int {
 	if row.threadRow != nil {
 		fade = model.threadFadeStep(row.threadRow.threadIndex)
 	}
-	if model.hunkFade == nil || row.threadRow != nil && slices.Contains(model.orphans, row.threadRow.threadIndex) {
+	if model.hunkFade == nil {
+		return fade
+	}
+	if row.threadRow != nil && slices.Contains(model.orphans, row.threadRow.threadIndex) {
 		return fade
 	}
 	hunk := row.hunk

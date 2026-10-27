@@ -1,12 +1,6 @@
 package workspace
 
-import (
-	"slices"
-
-	tea "charm.land/bubbletea/v2"
-
-	"github.com/MikePors/strigidae/internal/github"
-)
+import tea "charm.land/bubbletea/v2"
 
 // With the hideresolved option, resolved threads leave the diff pane. One
 // resolved from strig while the option is on first fades for a grace period,
@@ -23,23 +17,30 @@ func (view *View) threadFade(identifier string) (step int, fading bool) {
 	return view.fades.step(key), view.fades.active(key)
 }
 
-// threadResolutionChanged starts the fade of a thread just resolved, or ends
-// it for one unresolved, which then stays.
-func (view *View) threadResolutionChanged(identifier string, resolved bool) tea.Cmd {
-	key := threadFadeKey(identifier)
-	if !resolved {
-		view.fades.cancel(key)
-		return nil
-	}
+// beginThreadFade starts the fade of a thread just resolved.
+func (view *View) beginThreadFade(identifier string) tea.Cmd {
 	if !view.options.HideResolved() {
 		return nil
 	}
+	key := threadFadeKey(identifier)
 	return view.fadeCommand(key, view.fades.begin(key, view.now()))
 }
 
+// endUnresolvedFades stops the fades of the threads now shown unresolved,
+// which then stay. It reads view.threads, so callers run it only once that
+// holds the latest data: while a reload is in flight the list may be older
+// than a write, and the reload's arrival calls it again.
+func (view *View) endUnresolvedFades() {
+	for _, thread := range view.threads {
+		if !thread.IsResolved {
+			view.fades.cancel(threadFadeKey(thread.Identifier))
+		}
+	}
+}
+
 // threadFadeTicked handles a timer of a thread's fade: the thread leaves once
-// it is over. A thread unresolved meanwhile (by a refresh) stops fading.
-func (view *View) threadFadeTicked(message fadeMessage, identifier string) tea.Cmd {
+// it is over.
+func (view *View) threadFadeTicked(message fadeMessage) tea.Cmd {
 	current, over := view.fades.advance(message.key, message.generation, view.now())
 	switch {
 	case !current:
@@ -47,14 +48,6 @@ func (view *View) threadFadeTicked(message fadeMessage, identifier string) tea.C
 	case over:
 		view.filePane.ThreadFadesChanged()
 		return nil
-	case !view.stillResolved(identifier):
-		view.fades.cancel(message.key)
-		return nil
 	}
 	return view.fadeCommand(message.key, message.generation)
-}
-
-func (view *View) stillResolved(identifier string) bool {
-	index := slices.IndexFunc(view.threads, func(thread github.ReviewThread) bool { return thread.Identifier == identifier })
-	return index >= 0 && view.threads[index].IsResolved
 }
