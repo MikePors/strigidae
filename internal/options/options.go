@@ -15,6 +15,7 @@ const (
 	HideReviewed    = "hidereviewed"
 	AutoViewed      = "autoviewed"
 	HideResolved    = "hideresolved"
+	RelativeNumber  = "relativenumber"
 )
 
 // Option is one declared setting.
@@ -35,6 +36,7 @@ func All() []Option {
 		{Name: HideReviewed},
 		{Name: AutoViewed},
 		{Name: HideResolved},
+		{Name: RelativeNumber},
 	}
 }
 
@@ -93,6 +95,10 @@ func (values Values) AutoViewed() bool { return values.Get(AutoViewed) }
 // HideResolved reports whether the diff pane leaves out resolved review
 // threads.
 func (values Values) HideResolved() bool { return values.Get(HideResolved) }
+
+// RelativeNumber reports whether the diff pane numbers its rows by distance
+// from the cursor.
+func (values Values) RelativeNumber() bool { return values.Get(RelativeNumber) }
 
 // Describe writes one option's value the way `:set` shows it: its name, or
 // "no" and its name.

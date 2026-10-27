@@ -199,7 +199,7 @@ func (model *Model) renderNoticeRow(i int, row row) string {
 	if i == model.window.Cursor() {
 		lead = ">"
 	}
-	text := ansi.Truncate(lead+row.text, model.width, "")
+	text := ansi.Truncate(lead+model.relativeCell(i)+row.text, model.width, "")
 	return model.theme.Muted.Render(text + spaces(model.width-ansi.StringWidth(text)))
 }
 
@@ -308,7 +308,7 @@ func (model *Model) renderThreadRow(i int, row row) string {
 	if i == model.window.Cursor() {
 		lead = ">"
 	}
-	lead += spaces(model.gutterWidth() - 1)
+	lead += model.relativeCell(i) + spaces(model.gutterWidth()-1-model.relativeColumnWidth())
 	text := ansi.Truncate(lead+model.blocks[row.threadRow.threadIndex][row.threadRow.rowInBlock], model.width, "")
 	return text + spaces(model.width-ansi.StringWidth(text))
 }

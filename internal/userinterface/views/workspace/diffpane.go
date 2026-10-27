@@ -71,6 +71,9 @@ func (pane *diffPane) SetWrap(wrap bool) { pane.diffView.SetWrap(wrap) }
 // them again.
 func (pane *diffPane) SetHideResolved(hide bool) { pane.diffView.SetHideResolved(hide) }
 
+// SetRelativeNumber shows or hides the diff's relative-number column.
+func (pane *diffPane) SetRelativeNumber(on bool) { pane.diffView.SetRelativeNumber(on) }
+
 func (pane *diffPane) SetTheme(activeTheme theme.Theme) { pane.diffView.SetTheme(activeTheme) }
 
 func (pane *diffPane) SetHunkReviewed(reviewed func(file *diff.File, hunk int) bool) {

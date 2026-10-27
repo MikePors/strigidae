@@ -95,17 +95,17 @@ func (model *Model) renderRow(i int) string {
 		return model.renderNoticeRow(i, row)
 	}
 	if row.placeholder {
-		return model.renderPlaceholder(row, current)
+		return model.renderPlaceholder(i, row, current)
 	}
 	if row.line == nil {
 		header := model.file.Hunks[row.hunk].Header()
 		if model.hunkReviewed != nil && model.hunkReviewed(model.file, row.hunk) {
 			header = markerReviewed + " " + header
 		}
-		return model.renderHunk(header, current)
+		return model.renderHunk(i, header, current)
 	}
 	variantStyles, mark := model.rowStyle(i)
-	gutter := model.gutterText(row.line, row.baseIndex, mark, variantStyles)
+	gutter := model.gutterText(i, mark, variantStyles)
 	codeWidth := model.codeWidth()
 	if codeWidth == 0 {
 		return ansi.Truncate(gutter, model.width, "")
@@ -160,9 +160,10 @@ func (model *Model) codeText(spans []Span, startColumn, width, padTo int, varian
 	return builder.String()
 }
 
-// gutterText is the styled fixed part of a diff row: cursor mark, line
-// numbers, thread marker, change marker.
-func (model *Model) gutterText(line *diff.Line, baseIndex int, mark string, variantStyles *variant) string {
+// gutterText is the styled fixed part of diff row i: cursor mark, relative
+// number, line numbers, thread marker, change marker.
+func (model *Model) gutterText(i int, mark string, variantStyles *variant) string {
+	line, baseIndex := model.rows[i].line, model.rows[i].baseIndex
 	marker := " "
 	switch line.Kind {
 	case diff.Add:
@@ -180,7 +181,7 @@ func (model *Model) gutterText(line *diff.Line, baseIndex int, mark string, vari
 			titleStyle = variantStyles.thread[1]
 		}
 	}
-	return variantStyles.gutter.Render(mark+numberCell(line.Old, model.numberWidth)+" "+numberCell(line.New, model.numberWidth)+" ") +
+	return variantStyles.gutter.Render(mark+model.relativeCell(i)+numberCell(line.Old, model.numberWidth)+" "+numberCell(line.New, model.numberWidth)+" ") +
 		titleStyle.Render(glyph) + variantStyles.gutter.Render(marker)
 }
 
@@ -192,13 +193,13 @@ func numberCell(count, width int) string {
 	return spaces(width-len(text)) + text
 }
 
-func (model *Model) renderHunk(header string, current int) string {
+func (model *Model) renderHunk(i int, header string, current int) string {
 	mark := " "
 	if current == 1 {
 		mark = ">"
 	}
 	header, _ = displayText(header) // the section text is copied from file content
-	text := ansi.Truncate(mark+header, model.width, "")
+	text := ansi.Truncate(mark+model.relativeCell(i)+header, model.width, "")
 	text += spaces(model.width - ansi.StringWidth(text))
 	return model.styles.hunk[current].Render(text)
 }
