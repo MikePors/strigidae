@@ -9,6 +9,7 @@ import (
 
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/userinterface/components/thread"
+	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
 // Glyphs in the gutter column that marks commented lines.
@@ -105,8 +106,39 @@ func (model *Model) shownThreads(threadIndexes []int) []int {
 	return shown
 }
 
+// SetThreadFade sets how the pane learns whether a thread is fading out and
+// how far: step is 0 for its normal look, up to theme.FadeSteps for the
+// faintest. A resolved thread that is fading stays shown under
+// SetHideResolved until fading turns false and ThreadFadesChanged is called.
+// The step is asked while rendering. nil fades none.
+func (model *Model) SetThreadFade(fade func(identifier string) (step int, fading bool)) {
+	model.threadFade = fade
+}
+
+// ThreadFadesChanged rebuilds the rows after a thread stopped fading, so a
+// resolved one leaves under SetHideResolved. A cursor inside it moves to its
+// line.
+func (model *Model) ThreadFadesChanged() { model.layout() }
+
 func (model *Model) threadHidden(reviewThread github.ReviewThread) bool {
-	return model.hideResolved && reviewThread.IsResolved
+	return model.hideResolved && reviewThread.IsResolved && !model.threadFading(reviewThread.Identifier)
+}
+
+func (model *Model) threadFading(identifier string) bool {
+	if model.threadFade == nil {
+		return false
+	}
+	_, fading := model.threadFade(identifier)
+	return fading
+}
+
+// threadFadeStep returns how far thread threadIndex has faded.
+func (model *Model) threadFadeStep(threadIndex int) int {
+	if model.threadFade == nil {
+		return 0
+	}
+	step, _ := model.threadFade(model.fileThreads[threadIndex].Identifier)
+	return min(step, theme.FadeSteps)
 }
 
 func (model *Model) expanded(reviewThread github.ReviewThread) bool {

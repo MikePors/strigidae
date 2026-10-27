@@ -41,6 +41,8 @@ func (pane *stubPane) CursorHunk() (*diff.File, int, bool)        { return nil, 
 
 func (pane *stubPane) SetHunkHiding(func(*diff.File, int) bool, func(*diff.File, int) int) {}
 func (pane *stubPane) HiddenHunksChanged()                                                 {}
+func (pane *stubPane) SetThreadFade(func(string) (int, bool))                              {}
+func (pane *stubPane) ThreadFadesChanged()                                                 {}
 
 func (pane *stubPane) SetThreadExpanded(string, bool) {}
 

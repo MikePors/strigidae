@@ -61,22 +61,30 @@ func (model *Model) renderPlaceholder(row row, current int) string {
 }
 
 // fadeOf returns how far row i has faded: its hunk's fade, for the hunk's
-// header, lines and the threads on them. Notices, the threads after the diff
-// and the cursor row never fade; a file with no hunks has only those. (A
-// placeholder's hunk has stopped fading.)
+// header, lines and the threads on them, or a thread row's own fade (see
+// SetThreadFade) when that is further. Notices and the cursor row never fade,
+// and the threads after the diff fade only by their own; a file with no hunks
+// has only those. (A placeholder's hunk has stopped fading.)
 func (model *Model) fadeOf(i int) int {
 	row := model.rows[i]
-	if model.hunkFade == nil || i == model.window.Cursor() || row.message {
+	if i == model.window.Cursor() || row.message {
 		return 0
 	}
+	fade := 0
+	if row.threadRow != nil {
+		fade = model.threadFadeStep(row.threadRow.threadIndex)
+	}
+	if model.hunkFade == nil {
+		return fade
+	}
 	if row.threadRow != nil && slices.Contains(model.orphans, row.threadRow.threadIndex) {
-		return 0
+		return fade
 	}
 	hunk := row.hunk
 	if row.threadRow != nil {
 		hunk = model.base[row.baseIndex].hunk
 	}
-	return min(model.hunkFade(model.file, hunk), theme.FadeSteps)
+	return max(fade, min(model.hunkFade(model.file, hunk), theme.FadeSteps))
 }
 
 // faded draws already rendered lines in fade step fade: their text only, in

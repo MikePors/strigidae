@@ -182,6 +182,8 @@ func (view *View) threadsLoaded(message threadsLoadedMessage) tea.Cmd {
 		return userinterface.Error(terminaltext.SafeError(fmt.Errorf("load review threads: %w", message.err)))
 	}
 	view.threads, view.threadLoaded = sortThreads(message.threads), true
+	view.fades.endHolds(threadFadeKeyPrefix)
+	view.endUnresolvedFades()
 	view.filePane.SetThreads(view.threads)
 	view.overview.invalidate()
 	view.layout()

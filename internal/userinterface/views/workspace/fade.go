@@ -26,11 +26,12 @@ type fadeMessage struct {
 	generation int
 }
 
-// fadeRun is one thing fading out.
+// fadeRun is one thing fading out, or held at its normal look (see hold).
 type fadeRun struct {
 	generation int
 	started    time.Time
 	step       int // 0 until the first timer, then 1..theme.FadeSteps
+	held       bool
 }
 
 // fader tracks things that fade out before they go, by a caller-chosen key.
@@ -49,6 +50,22 @@ func (faded *fader) begin(key string, now time.Time) int {
 	faded.generation++
 	faded.runs[key] = &fadeRun{generation: faded.generation, started: now}
 	return faded.generation
+}
+
+// hold keeps key active at its normal look with no timers, ending any fade
+// of it, until cancel or endHolds.
+func (faded *fader) hold(key string) {
+	faded.begin(key, time.Time{})
+	faded.runs[key].held = true
+}
+
+// endHolds ends the holds whose keys start with prefix.
+func (faded *fader) endHolds(prefix string) {
+	for key, run := range faded.runs {
+		if run.held && strings.HasPrefix(key, prefix) {
+			delete(faded.runs, key)
+		}
+	}
 }
 
 // cancel stops the fade of key; the thing stays as it was.

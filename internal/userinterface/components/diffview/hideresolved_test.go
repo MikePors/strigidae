@@ -3,6 +3,8 @@ package diffview
 import (
 	"strings"
 	"testing"
+
+	"github.com/MikePors/strigidae/internal/diff"
 )
 
 func TestHideResolvedLeavesThreadOutButKeepsMarker(test *testing.T) {
@@ -53,5 +55,83 @@ func TestHideResolvedLeavesThreadOutButKeepsMarker(test *testing.T) {
 	model.SetHideResolved(false)
 	if out := screen(model); !strings.Contains(out, "▸ carol 1 comment · 2d ago [resolved]") || model.ThreadCount() != 5 {
 		test.Errorf("turning the option off should show the resolved thread again:\n%s", out)
+	}
+}
+
+func TestFadingResolvedThreadStaysUntilFadesChange(test *testing.T) {
+	model := threadModel(test, 100, 80)
+	fading, step := true, 2
+	model.SetThreadFade(func(identifier string) (int, bool) {
+		if identifier == "resolved" && fading {
+			return step, true
+		}
+		return 0, false
+	})
+	model.SetHideResolved(true)
+	if !strings.Contains(screen(model), "carol") {
+		test.Fatalf("a fading resolved thread should stay shown:\n%s", screen(model))
+	}
+	header := -1
+	for i, row := range model.rows {
+		if row.threadRow != nil && model.fileThreads[row.threadRow.threadIndex].Identifier == "resolved" {
+			header = i
+			break
+		}
+	}
+	if header < 0 {
+		test.Fatal("the fading thread has no rows")
+	}
+	model.GotoTop()
+	if model.fadeOf(header) != step {
+		test.Errorf("the fading thread's row fades by %d, want %d", model.fadeOf(header), step)
+	}
+	model.window.JumpTo(header)
+	if model.fadeOf(header) != 0 {
+		test.Error("the cursor row should never fade")
+	}
+
+	fading = false
+	if !strings.Contains(screen(model), "carol") {
+		test.Error("the thread should stay until ThreadFadesChanged")
+	}
+	model.ThreadFadesChanged()
+	if strings.Contains(screen(model), "carol") {
+		test.Errorf("the thread should leave once its fade ended:\n%s", screen(model))
+	}
+	if row := model.rows[model.window.Cursor()]; row.threadRow != nil || row.line == nil || row.line.New != 2 {
+		test.Errorf("cursor should move to the thread's line, at %q", cursorRowText(model))
+	}
+}
+
+func TestThreadFadeCombinesWithHunkFade(test *testing.T) {
+	for name, testCase := range map[string]struct {
+		hunkStep, threadStep int
+		fading               bool
+		want                 int
+	}{
+		"thread fade further":    {hunkStep: 1, threadStep: 3, fading: true, want: 3},
+		"hunk fade further":      {hunkStep: 2, threadStep: 1, fading: true, want: 2},
+		"thread not fading":      {hunkStep: 1, want: 1},
+		"thread fade, hunk none": {threadStep: 2, fading: true, want: 2},
+	} {
+		test.Run(name, func(test *testing.T) {
+			model := threadModel(test, 100, 80)
+			model.SetHunkFade(func(*diff.File, int) int { return testCase.hunkStep })
+			model.SetThreadFade(func(identifier string) (int, bool) {
+				if identifier == "open" {
+					return testCase.threadStep, testCase.fading
+				}
+				return 0, false
+			})
+			for i, row := range model.rows {
+				if row.threadRow != nil && model.fileThreads[row.threadRow.threadIndex].Identifier == "open" {
+					if got := model.fadeOf(i); got != testCase.want {
+						test.Errorf("fadeOf = %d, want %d", got, testCase.want)
+					}
+					return
+				}
+			}
+			test.Fatal("the open thread has no rows")
+		})
 	}
 }

@@ -116,6 +116,9 @@ func (view *View) fadeTicked(message fadeMessage) tea.Cmd {
 	if strings.HasPrefix(message.key, hunkFadeKeyPrefix) {
 		return view.hunkFadeTicked(message)
 	}
+	if strings.HasPrefix(message.key, threadFadeKeyPrefix) {
+		return view.threadFadeTicked(message)
+	}
 	path, ok := strings.CutPrefix(message.key, fadeKeyPrefix)
 	if !ok {
 		return nil
@@ -143,9 +146,9 @@ func (view *View) stillViewed(path string) bool {
 	return false
 }
 
-// optionsChanged applies the hideviewed and hidereviewed options at once.
-// Turning one off ends its fades; the files stay viewed and the hunks
-// reviewed.
+// optionsChanged applies the hideviewed, hidereviewed and hideresolved
+// options at once. Turning one off ends its fades; the files stay viewed, the
+// hunks reviewed and the threads resolved.
 func (view *View) optionsChanged() {
 	if !view.options.HideViewed() {
 		view.fades.clear(fadeKeyPrefix)
@@ -155,4 +158,7 @@ func (view *View) optionsChanged() {
 		view.fades.clear(hunkFadeKeyPrefix)
 	}
 	view.filePane.HiddenHunksChanged()
+	if !view.options.HideResolved() {
+		view.fades.clear(threadFadeKeyPrefix)
+	}
 }
