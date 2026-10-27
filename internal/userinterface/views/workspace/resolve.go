@@ -158,7 +158,7 @@ func (view *View) threadResolved(message threadResolvedMessage) tea.Cmd {
 	}
 	// The fold and the fade are recorded first so that a reload honours them
 	// too. An unresolved thread's fade ends once the screen shows it
-	// unresolved: here, or when the reload arrives.
+	// unresolved: here, or when the reload arrives, holding it until then.
 	view.filePane.SetThreadExpanded(message.threadIdentifier, !message.resolution.IsResolved)
 	var fade tea.Cmd
 	if message.resolution.IsResolved {
@@ -167,6 +167,9 @@ func (view *View) threadResolved(message threadResolvedMessage) tea.Cmd {
 	// A reload started since the thread was picked may have read it before the
 	// write, so it is read again rather than patched.
 	if message.sequence != view.sequence || !view.applyResolution(message.threadIdentifier, message.resolution) {
+		if !message.resolution.IsResolved {
+			view.holdThreadFade(message.threadIdentifier)
+		}
 		return tea.Batch(userinterface.Info(text), view.reloadThreads(), fade)
 	}
 	view.endUnresolvedFades()

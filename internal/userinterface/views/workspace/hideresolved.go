@@ -26,6 +26,15 @@ func (view *View) beginThreadFade(identifier string) tea.Cmd {
 	return view.fadeCommand(key, view.fades.begin(key, view.now()))
 }
 
+// holdThreadFade keeps a thread just unresolved shown at its normal look
+// while the screen still holds it resolved, because a reload is in flight;
+// the reload's arrival ends the hold.
+func (view *View) holdThreadFade(identifier string) {
+	if view.options.HideResolved() {
+		view.fades.hold(threadFadeKey(identifier))
+	}
+}
+
 // endUnresolvedFades stops the fades of the threads now shown unresolved,
 // which then stay. It reads view.threads, so callers run it only once that
 // holds the latest data: while a reload is in flight the list may be older

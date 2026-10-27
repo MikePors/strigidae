@@ -165,7 +165,7 @@ func TestHideResolvedArrivingResolvedHidesAtOnce(test *testing.T) {
 func TestHideResolvedFadesWhileThreadsReload(test *testing.T) {
 	fading := newFadingInliner(test)
 	_, write := fading.view.Update(fading.ask("t-open").OnYes())
-	fading.view.threadPending = true // a refresh is in flight
+	_ = fading.view.reloadThreads() // in flight; the write's reload supersedes it
 	_, reload := fading.view.Update(write())
 	fading.fire()
 	if _, ok := fading.view.threadFade("t-open"); !ok {
@@ -217,4 +217,70 @@ func TestHideResolvedThreadIsDrawnFaded(test *testing.T) {
 		}
 	}
 	test.Fatal("the fading thread is not drawn")
+}
+
+// TestHideResolvedFadesAfterRefresh: a resolve that lands after R started a
+// fresh load (a newer sequence) also takes the reload path and still fades.
+func TestHideResolvedFadesAfterRefresh(test *testing.T) {
+	fading := newFadingInliner(test)
+	_, write := fading.view.Update(fading.ask("t-open").OnYes())
+	_ = fading.view.load() // R, still in flight
+	_, reload := fading.view.Update(write())
+	fading.fire()
+	if _, ok := fading.view.threadFade("t-open"); !ok {
+		test.Fatal("the fade stopped after a refresh started")
+	}
+	fading.run(reload)
+	fading.fireAll()
+	if strings.Contains(fading.shown(), openThreadText) {
+		test.Errorf("the thread should leave once its fade is over:\n%s", fading.shown())
+	}
+}
+
+// TestHideResolvedUnresolveWhileThreadsReload: an unresolve that lands while
+// a thread load is in flight holds the thread at its normal look until the
+// reload shows it unresolved, rather than letting it fade on and leave.
+func TestHideResolvedUnresolveWhileThreadsReload(test *testing.T) {
+	fading := newFadingInliner(test)
+	fading.resolveOpenThread()
+	fading.fire()
+	fading.fire()
+	_, write := fading.view.Update(fading.ask("t-open").OnYes())
+	_ = fading.view.reloadThreads()
+	_, reload := fading.view.Update(write())
+	if step, ok := fading.view.threadFade("t-open"); !ok || step != 0 {
+		test.Errorf("after unresolving: step %d, held %v; want step 0, held", step, ok)
+	}
+	fading.fireAll()
+	if !strings.Contains(fading.shown(), openThreadText) {
+		test.Fatalf("a thread just unresolved left before the reload landed:\n%s", fading.shown())
+	}
+	fading.run(reload)
+	if _, ok := fading.view.threadFade("t-open"); ok {
+		test.Error("the reload should end the hold")
+	}
+	if fading.threadState("t-open").IsResolved || !strings.Contains(fading.shown(), openThreadText) {
+		test.Errorf("the thread should stay, unresolved:\n%s", fading.shown())
+	}
+}
+
+// TestHideResolvedHoldEndsWhenReloadShowsResolved: if someone resolves the
+// thread again before the reload lands, the reload ends the hold and the
+// thread hides.
+func TestHideResolvedHoldEndsWhenReloadShowsResolved(test *testing.T) {
+	fading := newFadingInliner(test)
+	fading.resolveOpenThread()
+	_, write := fading.view.Update(fading.ask("t-open").OnYes())
+	_ = fading.view.reloadThreads()
+	_, reload := fading.view.Update(write())
+	if _, err := fading.client.ResolveReviewThread(test.Context(), "t-open"); err != nil {
+		test.Fatal(err)
+	}
+	fading.run(reload)
+	if _, ok := fading.view.threadFade("t-open"); ok {
+		test.Error("the reload should end the hold")
+	}
+	if strings.Contains(fading.shown(), openThreadText) {
+		test.Errorf("a thread the reload shows resolved should hide:\n%s", fading.shown())
+	}
 }
