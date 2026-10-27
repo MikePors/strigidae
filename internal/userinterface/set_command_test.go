@@ -19,8 +19,8 @@ func TestApplySet(test *testing.T) {
 		wantText  string
 		wantError string
 	}{
-		{name: "bare shows the defaults", arguments: "", wantText: "wrapscan hlsearch nowrap nohideviewed nohidereviewed noautoviewed"},
-		{name: "bare shows the current values", start: options.Values{"wrapscan": false}, arguments: "  ", want: options.Values{"wrapscan": false}, wantText: "nowrapscan hlsearch nowrap nohideviewed nohidereviewed noautoviewed"},
+		{name: "bare shows the defaults", arguments: "", wantText: "wrapscan hlsearch nowrap nohideviewed nohidereviewed noautoviewed nohideresolved"},
+		{name: "bare shows the current values", start: options.Values{"wrapscan": false}, arguments: "  ", want: options.Values{"wrapscan": false}, wantText: "nowrapscan hlsearch nowrap nohideviewed nohidereviewed noautoviewed nohideresolved"},
 		{name: "turn off", arguments: "nowrapscan", want: options.Values{"wrapscan": false}, wantText: "nowrapscan"},
 		{name: "turn on", start: options.Values{"hlsearch": false}, arguments: "hlsearch", want: options.Values{"hlsearch": true}, wantText: "hlsearch"},
 		{name: "several", arguments: "nowrapscan nohlsearch", want: options.Values{"wrapscan": false, "hlsearch": false}, wantText: "nowrapscan nohlsearch"},
@@ -110,7 +110,7 @@ func TestSetCommandChangesOptionsForEveryView(test *testing.T) {
 	}
 
 	drive(model, parseCommand("set", model.top()))
-	if model.status.text != "nowrapscan hlsearch nowrap nohideviewed nohidereviewed noautoviewed" {
+	if model.status.text != "nowrapscan hlsearch nowrap nohideviewed nohidereviewed noautoviewed nohideresolved" {
 		test.Errorf("bare :set shows %q", model.status.text)
 	}
 	if got := len(optionsSeen(below)); got != 1 {

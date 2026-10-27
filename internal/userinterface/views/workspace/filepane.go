@@ -60,6 +60,9 @@ type FilePane interface {
 	// SetWrap turns wrapping of long lines on or off (the wrap option). Panes
 	// that never wrap ignore it.
 	SetWrap(wrap bool)
+	// SetHideResolved leaves resolved review threads out, or shows them again
+	// (the hideresolved option). Panes without threads ignore it.
+	SetHideResolved(hide bool)
 	// SetDiff is called when a diff load starts and when it finishes.
 	SetDiff(diffState DiffState)
 	// SetThreads is called when the pull request's review threads load or
