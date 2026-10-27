@@ -25,9 +25,9 @@ func TestString(test *testing.T) {
 		values Values
 		want   string
 	}{
-		"defaults": {nil, "wrapscan hlsearch nowrap nohideviewed nohidereviewed noautoviewed nohideresolved"},
-		"mixed":    {Values{WrapScan: false}, "nowrapscan hlsearch nowrap nohideviewed nohidereviewed noautoviewed nohideresolved"},
-		"all off":  {Values{WrapScan: false, HighlightSearch: false}, "nowrapscan nohlsearch nowrap nohideviewed nohidereviewed noautoviewed nohideresolved"},
+		"defaults": {nil, "wrapscan hlsearch nowrap nohideviewed nohidereviewed noautoviewed nohideresolved norelativenumber"},
+		"mixed":    {Values{WrapScan: false}, "nowrapscan hlsearch nowrap nohideviewed nohidereviewed noautoviewed nohideresolved norelativenumber"},
+		"all off":  {Values{WrapScan: false, HighlightSearch: false}, "nowrapscan nohlsearch nowrap nohideviewed nohidereviewed noautoviewed nohideresolved norelativenumber"},
 	} {
 		test.Run(name, func(test *testing.T) {
 			if diff := cmp.Diff(testCase.want, testCase.values.String()); diff != "" {

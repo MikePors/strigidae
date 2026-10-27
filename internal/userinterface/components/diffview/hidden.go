@@ -49,13 +49,13 @@ func (model *Model) placeholderRow(hunk int) int {
 	return -1
 }
 
-func (model *Model) renderPlaceholder(row row, current int) string {
+func (model *Model) renderPlaceholder(i int, row row, current int) string {
 	mark := " "
 	if current == 1 {
 		mark = ">"
 	}
 	header, _ := displayText(model.file.Hunks[row.hunk].Header()) // file content
-	text := ansi.Truncate(mark+placeholderText+header, model.width, "")
+	text := ansi.Truncate(mark+model.relativeCell(i)+placeholderText+header, model.width, "")
 	text += spaces(model.width - ansi.StringWidth(text))
 	return model.styles.placeholder[current].Render(text)
 }

@@ -65,6 +65,7 @@ The value must be an unquoted YAML boolean: `true` or `false` (`True` and
 | `hidereviewed` | `false` | hunks marked reviewed (`m`) leave the diff pane, each leaving a one-line placeholder (see below) |
 | `autoviewed` | `false` | marking a file's last unreviewed hunk with `m` also marks the file viewed, as `v` would (see below) |
 | `hideresolved` | `false` | resolved comment threads leave the diff pane, one you resolve after a short fade (see below) |
+| `relativenumber` | `false` | the diff pane numbers every row by its distance from the cursor, for counts with `j` / `k` (see below) |
 
 #### `wrap`
 
@@ -151,6 +152,20 @@ answer `y` to unresolve it: it stops fading and stays. Threads that were
 already resolved when they loaded (by you earlier, or by someone else) are
 hidden at once. Leaving the pull request, or `:set nohideresolved`, ends the
 fading.
+
+#### `relativenumber`
+
+With `relativenumber: true`, the diff pane's gutter gains a column, left of
+the old and new line numbers, that numbers every row by its distance from the
+cursor: `0` on the cursor row, `1` on the rows next to it, and so on. Every row
+the cursor stops on is numbered: diff lines, hunk headers, the placeholders of
+hidden hunks, notices and each line of a comment thread. So `5j` moves to the
+row marked `5` below. With `wrap` on, a long line's continuation rows have no
+number. Rows further than 9999 rows away (the largest count) are left blank.
+The numbers are for `j` / `k` outside a line selection: in visual mode (`V`)
+`j` / `k` move one diff line at a time and skip thread rows.
+The column takes five cells from the code area. `G` with a count still goes to
+a new-side line number.
 
 ### `tabs`
 

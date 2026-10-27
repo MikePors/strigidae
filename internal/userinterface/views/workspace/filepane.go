@@ -63,6 +63,9 @@ type FilePane interface {
 	// SetHideResolved leaves resolved review threads out, or shows them again
 	// (the hideresolved option). Panes without threads ignore it.
 	SetHideResolved(hide bool)
+	// SetRelativeNumber shows or hides row numbers counted from the cursor
+	// (the relativenumber option). Panes without a gutter ignore it.
+	SetRelativeNumber(on bool)
 	// SetDiff is called when a diff load starts and when it finishes.
 	SetDiff(diffState DiffState)
 	// SetThreads is called when the pull request's review threads load or

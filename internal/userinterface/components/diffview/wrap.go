@@ -91,14 +91,13 @@ func wrapColumns(text string, width int) []int {
 // spans are highlighted once for the whole line. Stopping at limit keeps a
 // frame's cost to the screen's size however long the line is.
 func (model *Model) renderWrapped(i, limit int) []string {
-	row := model.rows[i]
 	variantStyles, mark := model.rowStyle(i)
-	gutter := model.gutterText(row.line, row.baseIndex, mark, variantStyles)
+	gutter := model.gutterText(i, mark, variantStyles)
 	codeWidth := model.codeWidth()
 	if codeWidth == 0 {
 		return []string{ansi.Truncate(gutter, model.width, "")}
 	}
-	continued := variantStyles.gutter.Render(" " + spaces(model.numberWidth) + " " +
+	continued := variantStyles.gutter.Render(" " + spaces(model.relativeColumnWidth()+model.numberWidth) + " " +
 		spaces(model.numberWidth-1) + markerContinued + "   ")
 	spans := model.codeSpans(i)
 	starts := model.rowStarts(i)
