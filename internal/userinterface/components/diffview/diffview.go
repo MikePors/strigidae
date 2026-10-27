@@ -134,6 +134,8 @@ type Model struct {
 	hunkHidden   func(file *diff.File, hunk int) bool // see SetHunkHidden; nil: none are
 	hunkFade     func(file *diff.File, hunk int) int  // see SetHunkFade; nil: none fade
 
+	threadFade func(identifier string) (step int, fading bool) // see SetThreadFade; nil: none fade
+
 	cache map[int][]Span // highlighted rows, by base row index; reset per file
 	saved *position      // position kept while a message replaces the file
 

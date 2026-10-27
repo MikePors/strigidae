@@ -3,9 +3,13 @@ package workspace
 import (
 	"strings"
 	"testing"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/MikePors/strigidae/internal/options"
 	"github.com/MikePors/strigidae/internal/userinterface"
+	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
 func TestHideResolvedOption(test *testing.T) {
@@ -31,21 +35,124 @@ func TestHideResolvedOption(test *testing.T) {
 	}
 }
 
-func TestHideResolvedThreadLeavesWhenResolved(test *testing.T) {
-	inliner := newInliner(test)
-	inliner.send(userinterface.OptionsMessage{Values: options.Values{options.HideResolved: true}})
-	confirmation := inliner.ask("t-open")
-	inliner.run(confirmation.OnYes)
-	if !inliner.threadState("t-open").IsResolved {
-		test.Fatal("setup: the thread was not resolved")
+// fadingInliner is an inliner with hideresolved on, a clock the test moves
+// and fade timers it fires.
+type fadingInliner struct {
+	*inliner
+	clock time.Time
+	ticks []pendingTick
+}
+
+func newFadingInliner(test *testing.T) *fadingInliner {
+	test.Helper()
+	fading := &fadingInliner{inliner: newInliner(test), clock: testNow}
+	fading.view.now = func() time.Time { return fading.clock }
+	fading.view.tick = func(after time.Duration, function func(time.Time) tea.Msg) tea.Cmd {
+		fading.ticks = append(fading.ticks, pendingTick{after, function})
+		return nil
 	}
-	if shown := inliner.shown(); strings.Contains(shown, "bob 2 comments") {
-		test.Errorf("a thread resolved under hideresolved should leave the diff:\n%s", shown)
+	fading.send(userinterface.OptionsMessage{Values: options.Values{options.HideResolved: true}})
+	return fading
+}
+
+// fire moves the clock on by one fade interval and delivers the waiting
+// timers.
+func (fading *fadingInliner) fire() {
+	fading.test.Helper()
+	fading.clock = fading.clock.Add(fadeInterval)
+	waiting := fading.ticks
+	fading.ticks = nil
+	for _, tick := range waiting {
+		fading.send(tick.function(fading.clock))
 	}
-	if threads := inliner.diffView().ThreadsAtCursor(); len(threads) != 0 {
-		test.Errorf("cursor should be back on the thread's line, with nothing focused; focused %v", threads)
+}
+
+// fireAll fires timers until none are left.
+func (fading *fadingInliner) fireAll() {
+	fading.test.Helper()
+	for range theme.FadeSteps + 2 {
+		fading.fire()
 	}
-	if cursor, ok := inliner.diffView().Cursor(); !ok || cursor.New != 14 {
+	if len(fading.ticks) != 0 {
+		fading.test.Fatalf("fade still running: %d timers", len(fading.ticks))
+	}
+}
+
+func (fading *fadingInliner) resolve(identifier string) {
+	fading.test.Helper()
+	fading.run(fading.ask(identifier).OnYes)
+	if !fading.threadState(identifier).IsResolved {
+		fading.test.Fatalf("setup: %s was not resolved", identifier)
+	}
+}
+
+const openThreadText = "bob 2 comments"
+
+func TestHideResolvedThreadFadesThenLeaves(test *testing.T) {
+	fading := newFadingInliner(test)
+	fading.resolve("t-open")
+	if !strings.Contains(fading.shown(), openThreadText) {
+		test.Fatalf("a thread just resolved should stay while it fades:\n%s", fading.shown())
+	}
+	if len(fading.ticks) != 1 || fading.ticks[0].after != fadeInterval {
+		test.Fatalf("fade timers = %v, want one after %v", fading.ticks, fadeInterval)
+	}
+	fading.fire()
+	if step, ok := fading.view.threadFade("t-open"); !ok || step != 1 {
+		test.Errorf("after one interval: step %d, fading %v; want step 1, fading", step, ok)
+	}
+	if !strings.Contains(fading.shown(), openThreadText) {
+		test.Error("the thread left before its fade was over")
+	}
+	fading.fireAll()
+	if shown := fading.shown(); strings.Contains(shown, openThreadText) {
+		test.Errorf("the thread should leave once its fade is over:\n%s", shown)
+	}
+	if cursor, ok := fading.diffView().Cursor(); !ok || cursor.New != 14 {
 		test.Errorf("cursor = %+v (ok %v), want new line 14", cursor, ok)
+	}
+}
+
+func TestHideResolvedUnresolveWhileFadingKeepsThread(test *testing.T) {
+	fading := newFadingInliner(test)
+	fading.resolve("t-open")
+	fading.fire()
+	confirmation := fading.ask("t-open")
+	if !strings.HasPrefix(confirmation.Text, "Unresolve thread") {
+		test.Fatalf("x on a fading thread asked %q, want to unresolve", confirmation.Text)
+	}
+	fading.run(confirmation.OnYes)
+	if fading.threadState("t-open").IsResolved {
+		test.Fatal("setup: the thread was not unresolved")
+	}
+	if _, ok := fading.view.threadFade("t-open"); ok {
+		test.Error("unresolving should end the fade")
+	}
+	fading.fire() // the cancelled run's timer is ignored
+	if len(fading.ticks) != 0 {
+		test.Errorf("a cancelled fade asked for more timers: %d", len(fading.ticks))
+	}
+	if !strings.Contains(fading.shown(), openThreadText) {
+		test.Errorf("an unresolved thread should stay:\n%s", fading.shown())
+	}
+}
+
+func TestHideResolvedOffEndsFade(test *testing.T) {
+	fading := newFadingInliner(test)
+	fading.resolve("t-open")
+	fading.send(userinterface.OptionsMessage{Values: options.Values{options.HideResolved: false}})
+	if _, ok := fading.view.threadFade("t-open"); ok {
+		test.Error(":set nohideresolved should end the fade")
+	}
+	fading.fire()
+	if !strings.Contains(fading.shown(), openThreadText) {
+		test.Errorf("with the option off a resolved thread stays:\n%s", fading.shown())
+	}
+}
+
+func TestHideResolvedArrivingResolvedHidesAtOnce(test *testing.T) {
+	fading := newFadingInliner(test)
+	if len(fading.ticks) != 0 || strings.Contains(fading.shown(), "[resolved]") {
+		test.Errorf("a thread loaded resolved should hide with no fade; timers %d:\n%s", len(fading.ticks), fading.shown())
 	}
 }

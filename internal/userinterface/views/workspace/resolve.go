@@ -156,14 +156,15 @@ func (view *View) threadResolved(message threadResolvedMessage) tea.Cmd {
 	if message.resolve {
 		text = "Resolved thread on " + message.location
 	}
-	// The fold is recorded first so that a reload honours it too.
+	// The fold and the fade are recorded first so that a reload honours them too.
 	view.filePane.SetThreadExpanded(message.threadIdentifier, !message.resolution.IsResolved)
+	fade := view.threadResolutionChanged(message.threadIdentifier, message.resolution.IsResolved)
 	// A reload started since the thread was picked may have read it before the
 	// write, so it is read again rather than patched.
 	if message.sequence != view.sequence || !view.applyResolution(message.threadIdentifier, message.resolution) {
-		return tea.Batch(userinterface.Info(text), view.reloadThreads())
+		return tea.Batch(userinterface.Info(text), view.reloadThreads(), fade)
 	}
-	return userinterface.Info(text)
+	return tea.Batch(userinterface.Info(text), fade)
 }
 
 // applyResolution updates the thread in place (the fold was recorded by the

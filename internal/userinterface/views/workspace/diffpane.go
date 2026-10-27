@@ -84,6 +84,12 @@ func (pane *diffPane) SetHunkHiding(hidden func(file *diff.File, hunk int) bool,
 
 func (pane *diffPane) HiddenHunksChanged() { pane.diffView.HiddenHunksChanged() }
 
+func (pane *diffPane) SetThreadFade(fade func(identifier string) (step int, fading bool)) {
+	pane.diffView.SetThreadFade(fade)
+}
+
+func (pane *diffPane) ThreadFadesChanged() { pane.diffView.ThreadFadesChanged() }
+
 func (pane *diffPane) CursorHunk() (*diff.File, int, bool) { return pane.diffView.CursorHunk() }
 
 func (pane *diffPane) SetThreadExpanded(identifier string, expanded bool) {

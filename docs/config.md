@@ -64,7 +64,7 @@ The value must be an unquoted YAML boolean: `true` or `false` (`True` and
 | `hideviewed` | `false` | files marked viewed (`v`) leave the Files pane, so what is left still needs review (see below) |
 | `hidereviewed` | `false` | hunks marked reviewed (`m`) leave the diff pane, each leaving a one-line placeholder (see below) |
 | `autoviewed` | `false` | marking a file's last unreviewed hunk with `m` also marks the file viewed, as `v` would (see below) |
-| `hideresolved` | `false` | resolved comment threads leave the diff pane (see below) |
+| `hideresolved` | `false` | resolved comment threads leave the diff pane, one you resolve after a short fade (see below) |
 
 #### `wrap`
 
@@ -141,9 +141,16 @@ on or off with `:set` takes effect at once, for every pull request.
 
 A line whose only threads are hidden keeps its hollow `○` marker in the gutter,
 so you can tell a settled discussion was there. `)` / `(` skip hidden threads,
-and `z a`, `z o`, `z c` and `enter` on such a line do nothing. A thread you
-resolve with `x` leaves the diff as soon as it is resolved; the Overview's
+and `z a`, `z o`, `z c` and `enter` on such a line do nothing. The Overview's
 "Review threads" list still shows every thread.
+
+A thread you resolve with `x` (or `:resolve`) stays in place for 8 seconds,
+fading step by step into the background, then leaves; a cursor still inside
+it moves to its line. To take it back, press `x` on it while it is fading and
+answer `y` to unresolve it: it stops fading and stays. Threads that were
+already resolved when they loaded (by you earlier, or by someone else) are
+hidden at once. Leaving the pull request, or `:set nohideresolved`, ends the
+fading.
 
 ### `tabs`
 

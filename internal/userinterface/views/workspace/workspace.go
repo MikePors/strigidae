@@ -169,6 +169,7 @@ func New(client github.Client, repository github.Repository, number int, options
 	view.filePane.SetTheme(view.theme)
 	view.filePane.SetHunkReviewed(view.hunkReviewed)
 	view.filePane.SetHunkHiding(view.hunkHidden, view.hunkFade)
+	view.filePane.SetThreadFade(view.threadFade)
 	return view
 }
 

@@ -55,3 +55,45 @@ func TestHideResolvedLeavesThreadOutButKeepsMarker(test *testing.T) {
 		test.Errorf("turning the option off should show the resolved thread again:\n%s", out)
 	}
 }
+
+func TestFadingResolvedThreadStaysUntilFadesChange(test *testing.T) {
+	model := threadModel(test, 100, 80)
+	fading, step := true, 2
+	model.SetThreadFade(func(identifier string) (int, bool) {
+		if identifier == "resolved" && fading {
+			return step, true
+		}
+		return 0, false
+	})
+	model.SetHideResolved(true)
+	if !strings.Contains(screen(model), "carol") {
+		test.Fatalf("a fading resolved thread should stay shown:\n%s", screen(model))
+	}
+	header := -1
+	for i, row := range model.rows {
+		if row.threadRow != nil && model.fileThreads[row.threadRow.threadIndex].Identifier == "resolved" {
+			header = i
+			break
+		}
+	}
+	model.GotoTop()
+	if header < 0 || model.fadeOf(header) != step {
+		test.Errorf("the fading thread's row fades by %d, want %d", model.fadeOf(header), step)
+	}
+	model.window.JumpTo(header)
+	if model.fadeOf(header) != 0 {
+		test.Error("the cursor row should never fade")
+	}
+
+	fading = false
+	if !strings.Contains(screen(model), "carol") {
+		test.Error("the thread should stay until ThreadFadesChanged")
+	}
+	model.ThreadFadesChanged()
+	if strings.Contains(screen(model), "carol") {
+		test.Errorf("the thread should leave once its fade ended:\n%s", screen(model))
+	}
+	if row := model.rows[model.window.Cursor()]; row.threadRow != nil || row.line == nil || row.line.New != 2 {
+		test.Errorf("cursor should move to the thread's line, at %q", cursorRowText(model))
+	}
+}
