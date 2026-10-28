@@ -609,14 +609,17 @@ func addPendingThread(timeouts userinterface.Timeouts, client github.Client, in 
 	addContext, cancelAdd := timeouts.RequestContext()
 	defer cancelAdd()
 	_, err = client.AddReviewThread(addContext, in)
-	if err != nil && created {
+	// Only a refusal proves nothing was written. After a timeout or a network
+	// error the comment may have gone through, so the review is left alone.
+	if errors.Is(err, github.ErrCommentRejected) && created {
 		discardEmptyReview(timeouts, client, pending.Identifier)
 	}
 	return userinterface.WriteError(err)
 }
 
-// discardEmptyReview deletes a pending review this call created and could not
-// put a comment in, so GitHub is not left showing an empty one. It is best
+// discardEmptyReview deletes a pending review this call created and GitHub
+// refused to put a comment in (ErrCommentRejected), so GitHub is not left
+// showing an empty one. It is best
 // effort: a failure is logged and the caller keeps the error that led here.
 // It has a context of its own because the failed call may have used up its
 // deadline.
