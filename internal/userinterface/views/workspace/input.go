@@ -57,6 +57,32 @@ func defaultBindings() bindings {
 	}
 }
 
+// actions names the workspace's own bindings, in the namespace of the global
+// ones (keys.Global.Actions). Next and previous section are the dashboard's
+// names too: the same action in another view.
+func (workspaceBindings *bindings) actions() []keys.Action {
+	return []keys.Action{
+		{Name: "focus-files-pane", Binding: &workspaceBindings.PaneLeft},
+		{Name: "focus-right-pane", Binding: &workspaceBindings.PaneRight},
+		{Name: "next-file", Binding: &workspaceBindings.NextFile},
+		{Name: "previous-file", Binding: &workspaceBindings.PreviousFile},
+		{Name: "file-picker", Binding: &workspaceBindings.FilePicker},
+		{Name: "next-section", Binding: &workspaceBindings.NextSection},
+		{Name: "previous-section", Binding: &workspaceBindings.PreviousSection},
+		{Name: "new-comment", Binding: &workspaceBindings.Comment},
+		{Name: "reply", Binding: &workspaceBindings.Reply},
+		{Name: "toggle-viewed", Binding: &workspaceBindings.Viewed},
+		{Name: "toggle-hunk-reviewed", Binding: &workspaceBindings.ReviewHunk},
+		{Name: "resolve-thread", Binding: &workspaceBindings.ResolveThread},
+		{Name: "start-visual-mode", Binding: &workspaceBindings.Visual},
+		{Name: "edit-comment", Binding: &workspaceBindings.EditComment},
+		{Name: "delete-comment", Binding: &workspaceBindings.DeleteComment},
+		{Name: "extend-selection-down", Binding: &workspaceBindings.VisualDown},
+		{Name: "extend-selection-up", Binding: &workspaceBindings.VisualUp},
+		{Name: "leave-visual-mode", Binding: &workspaceBindings.VisualExit},
+	}
+}
+
 func openInBrowser(url string) error {
 	return browser.New("", io.Discard, io.Discard).Browse(url)
 }
@@ -239,4 +265,15 @@ func (view *View) jumpSection(delta int) {
 func (view *View) diffNavigation(message keys.Message) bool {
 	bindings := view.navigationBind
 	return key.Matches(message, bindings.NextHunk, bindings.PreviousHunk, bindings.NextThread, bindings.PreviousThread)
+}
+
+// ActionNames lists the action names of the workspace and its diff pane, for
+// the check that views don't reuse each other's names by accident.
+func ActionNames() []string {
+	workspaceBindings, paneBindings := defaultBindings(), defaultDiffBindings()
+	var names []string
+	for _, action := range append(workspaceBindings.actions(), paneBindings.actions()...) {
+		names = append(names, action.Name)
+	}
+	return names
 }

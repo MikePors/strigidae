@@ -47,6 +47,24 @@ func defaultDiffBindings() diffBindings {
 	}
 }
 
+// actions names the diff pane's own bindings, in the namespace of the global
+// ones (keys.Global.Actions).
+func (paneBindings *diffBindings) actions() []keys.Action {
+	return []keys.Action{
+		{Name: "next-hunk", Binding: &paneBindings.NextHunk},
+		{Name: "previous-hunk", Binding: &paneBindings.PreviousHunk},
+		{Name: "next-thread", Binding: &paneBindings.NextThread},
+		{Name: "previous-thread", Binding: &paneBindings.PreviousThread},
+		{Name: "toggle-thread", Binding: &paneBindings.ToggleThread},
+		{Name: "open-thread", Binding: &paneBindings.OpenThread},
+		{Name: "close-thread", Binding: &paneBindings.CloseThread},
+		{Name: "scroll-left", Binding: &paneBindings.ScrollLeft},
+		{Name: "scroll-right", Binding: &paneBindings.ScrollRight},
+		{Name: "half-scroll-left", Binding: &paneBindings.HalfScrollLeft},
+		{Name: "half-scroll-right", Binding: &paneBindings.HalfScrollRight},
+	}
+}
+
 // diffPane adapts diffview.Model to FilePane: it resolves the selected file in
 // the parsed diff and maps keys to diffview's methods.
 type diffPane struct {

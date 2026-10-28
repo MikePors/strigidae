@@ -97,7 +97,7 @@ Reserved prefixes:
 
 Adding a binding or command: make sure it doesn't collide with the tables above or another binding active in the same view, add it with help text and an action name, and **list every new or changed binding in the PR description** so the maintainer can approve it. Any binding an issue marks "TBD" is the maintainer's call; propose one in the PR and ask.
 
-Action names are the stable names a config file will use for bindings. A global binding (a `key.Binding` field of `keys.Global`) is named in `Actions` in `keys/actions.go`; a view's in that view's `actions` (so far only the dashboard has one). All names share one namespace, and `keys.CheckActions` checks them. Each package's tests fail on a binding without a name.
+Action names are the stable names a config file will use for bindings. A global binding (a `key.Binding` field of `keys.Global`) is named in `Actions` in `keys/actions.go`; a view's in that view's `actions` (the dashboard, the workspace and its diff pane have one). All names share one namespace, and `keys.CheckActions` checks them. Each package's tests fail on a binding without a name.
 
 ## Rendering tests
 
