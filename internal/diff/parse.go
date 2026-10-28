@@ -1,6 +1,7 @@
 package diff
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -38,6 +39,21 @@ func Parse(text string) (*Diff, error) {
 		parsed.err = &ParseError{Line: 1, Message: "no diff found"}
 	}
 	return parsed.diff, parsed.err
+}
+
+// ParseHunks parses the hunks of one file's patch: unified diff hunks with no
+// file header, the form GitHub's file list gives. Like Parse it returns the
+// hunks it could parse along with any error.
+func ParseHunks(patch string) ([]Hunk, error) {
+	parsed, err := Parse("diff --git a/file b/file\n" + patch)
+	var parseError *ParseError
+	if errors.As(err, &parseError) {
+		err = &ParseError{Line: parseError.Line - 1, Message: parseError.Message} // not counting the header added above
+	}
+	if len(parsed.Files) == 0 {
+		return nil, err
+	}
+	return parsed.Files[0].Hunks, err
 }
 
 type parser struct {
