@@ -25,8 +25,10 @@ Arguments: a PR number, then optionally the word `post`. If there's no number, a
   ```sh
   git fetch origin main "pull/<N>/head"
   tmp=$(mktemp -d)
-  git worktree add --detach "$tmp" FETCH_HEAD
+  git worktree add --detach "$tmp" <head.sha>
   ```
+
+  Check out the `head.sha` read above, not `FETCH_HEAD`: with several refs in one fetch, `FETCH_HEAD` is the first of them (`main`). If `git worktree add` says the commit is unknown, the author pushed meanwhile: read the PR again and repeat.
 
   The reviewer diffs against the PR's base: `git -C "$tmp" diff <base.sha>...HEAD`.
 - **Maintainer decisions.** Note what the issue and the PR body record as decisions (keys, wording, scope, accepted trade-offs). Reviewers must not re-litigate them.
