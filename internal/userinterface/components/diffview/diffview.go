@@ -391,7 +391,9 @@ func (model *Model) relayout(key cursorKey, found bool) {
 		model.blocks[i] = model.renderBlock(i)
 	}
 	base := model.base
-	if model.file != nil && len(base) == 0 && len(model.fileThreads) > 0 {
+	// Counted after hiding: a notice whose threads are all hidden is drawn
+	// as for a file with none, with no cursor.
+	if model.file != nil && len(base) == 0 && model.ThreadCount() > 0 {
 		base = model.noticeRows()
 	}
 	hiddenHunk := -1 // the hunk whose lines are being left out
