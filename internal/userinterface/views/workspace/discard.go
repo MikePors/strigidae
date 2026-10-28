@@ -71,7 +71,7 @@ func (discard reviewDiscard) check(asked *github.PendingReview) tea.Msg {
 	}
 	err = discard.client.DeleteReview(ctx, pending.Identifier)
 	if errors.Is(err, github.ErrNotFound) {
-		return discard.finish(true, nil) // deleted or submitted between the re-read and the write
+		return discard.finish(true, nil) // deleted between the re-read and the write; a submitted review may fail with another error, shown as one
 	}
 	return discard.finish(false, err)
 }

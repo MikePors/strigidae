@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -84,8 +85,12 @@ func TestDiscardReviewDeclinedWritesNothing(test *testing.T) {
 	inliner := newInliner(test)
 	inliner.addPending("draft")
 	inliner.askDiscard() // declining is the shell dropping OnYes
-	if len(inliner.discardCalls()) != 0 || len(inliner.client.DeletedReviews()) != 0 {
-		test.Error("something was deleted")
+	if len(inliner.discardCalls()) != 0 || len(inliner.client.DeletedReviews()) != 0 || inliner.view.writes != 0 {
+		test.Errorf("deleted %v or busy (writes %d) after the question", inliner.client.DeletedReviews(), inliner.view.writes)
+	}
+	status, err := inliner.client.GetReviewStatus(test.Context(), testRepository, 7)
+	if err != nil || status.Pending == nil || status.Pending.CommentCount != 1 {
+		test.Errorf("the pending review did not survive: %+v, %v", status.Pending, err)
 	}
 	inliner.askDiscard() // the view is free to ask again
 }
@@ -110,9 +115,16 @@ func TestDiscardReviewChangedBetweenAskingAndYes(test *testing.T) {
 		inliner := newInliner(test)
 		inliner.addPending("draft")
 		confirmation := inliner.askDiscard()
-		inliner.client.SetPendingReview(testRepository, 7, nil) // submitted on github.com
+		inliner.submitElsewhere() // the drafts are published on github.com
 		inliner.messages = nil
 		inliner.run(confirmation.OnYes)
+		for _, thread := range inliner.view.threads {
+			for _, comment := range thread.Comments {
+				if comment.Pending {
+					test.Errorf("the screen still shows a pending draft: %+v", thread)
+				}
+			}
+		}
 		if len(inliner.discardCalls()) != 0 {
 			test.Error("deleted on a stale yes")
 		}
@@ -189,8 +201,29 @@ func TestDiscardReviewYesIsRefusedWhileAMergeRuns(test *testing.T) {
 	inliner.view.merge.merging = true
 	inliner.messages = nil
 	inliner.run(confirmation.OnYes)
-	if len(inliner.discardCalls()) != 0 || len(inliner.infoMessages()) == 0 {
-		test.Errorf("calls %v, infos %v", inliner.discardCalls(), inliner.infoMessages())
+	if diff := cmp.Diff([]string{"a merge is in progress"}, inliner.infoMessages()); diff != "" {
+		test.Errorf("info (-want +got):\n%s", diff)
+	}
+	if len(inliner.discardCalls()) != 0 || inliner.view.writes != 0 {
+		test.Errorf("calls %v, writes %d", inliner.discardCalls(), inliner.view.writes)
+	}
+}
+
+func TestDiscardReviewGoneAtTheWriteIsANotice(test *testing.T) {
+	inliner := newInliner(test)
+	inliner.addPending("draft")
+	confirmation := inliner.askDiscard()
+	inliner.client.SetError(fake.MethodDeleteReview, fmt.Errorf("delete review: %w", github.ErrNotFound))
+	inliner.messages = nil
+	inliner.run(confirmation.OnYes)
+	if diff := cmp.Diff([]string{"no pending review"}, inliner.infoMessages()); diff != "" {
+		test.Errorf("info (-want +got):\n%s", diff)
+	}
+	if message := inliner.lastError(); message != "" {
+		test.Errorf("error shown: %q", message)
+	}
+	if inliner.view.writes != 0 {
+		test.Errorf("view stayed busy: %d", inliner.view.writes)
 	}
 }
 

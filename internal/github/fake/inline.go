@@ -227,7 +227,8 @@ func (client *Client) DeletedComments() []string {
 
 // DeleteReview implements github.Client. Like GitHub it deletes the pending
 // review with its draft comments, and a thread left without comments goes with
-// them. An identifier that is not a pending review yields ErrNotFound.
+// them. Any identifier that is not a pending review, a submitted review
+// included, yields ErrNotFound; GitHub may report a submitted one differently.
 func (client *Client) DeleteReview(ctx context.Context, reviewIdentifier string) error {
 	client.mutex.Lock()
 	defer client.mutex.Unlock()
