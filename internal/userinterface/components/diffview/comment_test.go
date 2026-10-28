@@ -1,36 +1,56 @@
 package diffview
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
-// TestCommentAtCursorFollowsEachRowOfTheThread walks every row of the open
-// thread: the diff line and the header are not on a comment, the rows of the
-// first comment report index 0, and those of the second report index 1.
-func TestCommentAtCursorFollowsEachRowOfTheThread(test *testing.T) {
+// TestCommentAtCursorMatchesWhatEachRowShows walks every row of the open
+// thread and compares the comment CommentAtCursor reports with the one the
+// rendered row belongs to, read from the row's own text: the diff line, the
+// header and the blank row between comments are on no comment; alice's
+// header and body rows are on comment 0 and bob's on comment 1.
+func TestCommentAtCursorMatchesWhatEachRowShows(test *testing.T) {
 	model := threadModel(test, 100, 80)
 	model.goToRow(test, `"log"`)
 	if _, _, ok := model.CommentAtCursor(); ok {
 		test.Fatal("the diff line reports a comment")
 	}
-	model.CursorDown(1) // the header
-	if _, _, ok := model.CommentAtCursor(); ok {
-		test.Fatal("the thread header reports a comment")
+	classify := func(text string) (want int, known bool) {
+		switch {
+		case strings.Contains(text, "comments"):
+			return -1, true // the thread header
+		case strings.Contains(text, "alice") || strings.Contains(text, "Do we need"):
+			return 0, true
+		case strings.Contains(text, "bob") || strings.Contains(text, "Yes, for"):
+			return 1, true
+		case strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(text), ">")) == "│":
+			return -1, true // the blank row between two comments
+		}
+		return 0, false
 	}
-	var seen []int
-	for range 40 {
+	var seen []string
+	for range 12 {
 		model.CursorDown(1)
+		text := cursorRowText(model)
+		want, known := classify(text)
+		if !known {
+			break // left the thread
+		}
+		seen = append(seen, strings.TrimSpace(text))
 		reviewThread, index, ok := model.CommentAtCursor()
-		if !ok {
-			break
+		if want < 0 {
+			if ok {
+				test.Errorf("row %q reports comment %d, want none", text, index)
+			}
+			continue
 		}
-		if reviewThread.Identifier != "open" {
-			test.Fatalf("thread = %q", reviewThread.Identifier)
-		}
-		if len(seen) == 0 || seen[len(seen)-1] != index {
-			seen = append(seen, index)
+		if !ok || reviewThread.Identifier != "open" || index != want {
+			test.Errorf("row %q: comment (%d, %v), want %d", text, index, ok, want)
 		}
 	}
-	if len(seen) != 2 || seen[0] != 0 || seen[1] != 1 {
-		test.Errorf("comment indexes in row order = %v, want [0 1]", seen)
+	if len(seen) < 6 {
+		test.Errorf("walked only %d rows of the thread: %q", len(seen), seen)
 	}
 }
 

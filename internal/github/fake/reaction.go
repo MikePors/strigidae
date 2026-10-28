@@ -42,33 +42,7 @@ func (client *Client) react(ctx context.Context, method, subjectIdentifier strin
 	threads := slices.Clone(client.threads[key])
 	threads[threadIndex].Comments = slices.Clone(threads[threadIndex].Comments)
 	comment := &threads[threadIndex].Comments[commentIndex]
-	comment.Reactions = changeReaction(comment.Reactions, content, add)
+	comment.Reactions = github.WithViewerReaction(comment.Reactions, content, add)
 	client.threads[key] = threads
 	return nil
-}
-
-// changeReaction returns reactions with the viewer's reaction of kind content
-// added or removed, keeping GitHub's order and dropping a group that reaches
-// zero.
-func changeReaction(reactions []github.ReactionSummary, content github.ReactionContent, add bool) []github.ReactionSummary {
-	out := slices.Clone(reactions)
-	index := slices.IndexFunc(out, func(summary github.ReactionSummary) bool { return summary.Content == content })
-	switch {
-	case add && index < 0:
-		out = append(out, github.ReactionSummary{Content: content, Count: 1, ViewerReacted: true})
-	case add && !out[index].ViewerReacted:
-		out[index].Count++
-		out[index].ViewerReacted = true
-	case !add && index >= 0 && out[index].ViewerReacted:
-		out[index].Count--
-		out[index].ViewerReacted = false
-		if out[index].Count <= 0 {
-			out = slices.Delete(out, index, index+1)
-		}
-	}
-	order := func(summary github.ReactionSummary) int {
-		return slices.Index(github.ReactionContents, summary.Content)
-	}
-	slices.SortStableFunc(out, func(first, second github.ReactionSummary) int { return order(first) - order(second) })
-	return out
 }

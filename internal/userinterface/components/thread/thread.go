@@ -50,7 +50,7 @@ func Lines(environment Environment, thread github.ReviewThread, width int, optio
 }
 
 // CommentRows says which comment each line of Lines belongs to: its index in
-// thread.Comments, or -1 for the header line. The arguments are those given to
+// thread.Comments, or -1 for the header line and the blank rows between comments. The arguments are those given to
 // Lines.
 func CommentRows(environment Environment, thread github.ReviewThread, width int, options Options) []int {
 	_, owners := build(environment, thread, width, options)
@@ -85,7 +85,7 @@ func build(environment Environment, thread github.ReviewThread, width int, optio
 		}
 		if i < len(thread.Comments)-1 {
 			out = append(out, strings.TrimRight(bar, " "))
-			owner = append(owner, i)
+			owner = append(owner, -1) // the blank row between two comments belongs to neither
 		}
 	}
 	return out, owner

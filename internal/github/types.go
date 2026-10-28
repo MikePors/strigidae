@@ -1,6 +1,9 @@
 package github
 
-import "time"
+import (
+	"slices"
+	"time"
+)
 
 // PullRequestState is the lifecycle state of a pull request.
 type PullRequestState string
@@ -239,6 +242,32 @@ type ReactionSummary struct {
 	Content       ReactionContent
 	Count         int
 	ViewerReacted bool
+}
+
+// WithViewerReaction returns reactions with the viewer's reaction of kind
+// content added (add true) or removed, as GitHub counts it: the group's count
+// goes up or down, a group that reaches zero is dropped, and the groups keep
+// GitHub's order. Adding one the viewer already has, or removing one the viewer
+// lacks, changes nothing. The argument is not modified.
+func WithViewerReaction(reactions []ReactionSummary, content ReactionContent, add bool) []ReactionSummary {
+	out := slices.Clone(reactions)
+	index := slices.IndexFunc(out, func(summary ReactionSummary) bool { return summary.Content == content })
+	switch {
+	case add && index < 0:
+		out = append(out, ReactionSummary{Content: content, Count: 1, ViewerReacted: true})
+	case add && !out[index].ViewerReacted:
+		out[index].Count++
+		out[index].ViewerReacted = true
+	case !add && index >= 0 && out[index].ViewerReacted:
+		out[index].Count--
+		out[index].ViewerReacted = false
+		if out[index].Count <= 0 {
+			out = slices.Delete(out, index, index+1)
+		}
+	}
+	order := func(summary ReactionSummary) int { return slices.Index(ReactionContents, summary.Content) }
+	slices.SortStableFunc(out, func(first, second ReactionSummary) int { return order(first) - order(second) })
+	return out
 }
 
 // IssueComment is a top-level comment on a pull request.

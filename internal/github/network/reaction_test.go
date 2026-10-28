@@ -2,6 +2,8 @@ package network
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -39,5 +41,46 @@ func TestReactionMutationsSendTheCommentAndKind(test *testing.T) {
 				test.Errorf("unexpected variables: %v", got.Variables)
 			}
 		})
+	}
+}
+
+// reactionCalls runs both reaction calls against a server that always answers
+// with the fixture.
+func reactionCalls(test *testing.T, fixture string) map[string]error {
+	test.Helper()
+	testServer := &server{}
+	testServer.override = func(_ call, writer http.ResponseWriter) bool {
+		testServer.fixture(writer, http.StatusOK, fixture)
+		return true
+	}
+	client := newTestClient(test, testServer)
+	return map[string]error{
+		"add":    client.AddReaction(context.Background(), "PRRC_1", github.ReactionEyes),
+		"remove": client.RemoveReaction(context.Background(), "PRRC_1", github.ReactionEyes),
+	}
+}
+
+func TestReactionNullPayloadIsNotFound(test *testing.T) {
+	for name, err := range reactionCalls(test, "reaction_null.json") {
+		if !errors.Is(err, github.ErrNotFound) {
+			test.Errorf("%s: err = %v, want ErrNotFound", name, err)
+		}
+	}
+}
+
+func TestReactionGraphQLErrors(test *testing.T) {
+	tests := []struct {
+		fixture string
+		want    error
+	}{
+		{"error_not_found.json", github.ErrNotFound},
+		{"error_insufficient_scopes.json", github.ErrForbidden},
+	}
+	for _, testCase := range tests {
+		for name, err := range reactionCalls(test, testCase.fixture) {
+			if !errors.Is(err, testCase.want) {
+				test.Errorf("%s with %s: err = %v, want %v", name, testCase.fixture, err, testCase.want)
+			}
+		}
 	}
 }

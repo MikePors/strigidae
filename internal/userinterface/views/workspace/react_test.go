@@ -2,11 +2,11 @@ package workspace
 
 import (
 	"context"
-	"strconv"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/MikePors/strigidae/internal/github"
@@ -37,13 +37,104 @@ func (inliner *inliner) seedReactions() {
 	inliner.press("R")
 }
 
-// toComment puts the diff cursor on a row of the given comment of thread t-open.
+// cursorLine is the diff pane's row under the cursor as the screen shows it.
+func (inliner *inliner) cursorLine() string {
+	rendered := ansi.Strip(inliner.diffView().Render(inliner.view.paneWidth, inliner.view.paneHeight))
+	for line := range strings.SplitSeq(rendered, "\n") {
+		if strings.HasPrefix(line, ">") {
+			return line
+		}
+	}
+	return ""
+}
+
+// toLineContaining puts the diff cursor, from the top, on the first row whose
+// rendered text contains text; with text "" it is the first row that shows
+// only the thread's bar, the blank row between two comments.
+func (inliner *inliner) toLineContaining(text string) {
+	inliner.test.Helper()
+	inliner.cursorTo("a row showing "+text, func(*diffview.Model) bool {
+		line := strings.TrimSpace(strings.TrimPrefix(inliner.cursorLine(), ">"))
+		if text == "" {
+			return line == "│"
+		}
+		return strings.Contains(line, text)
+	})
+}
+
+// toComment puts the cursor on the body row of comment 0 or 1 of thread t-open.
 func (inliner *inliner) toComment(commentIndex int) {
 	inliner.test.Helper()
-	inliner.cursorTo("a row of comment "+strconv.Itoa(commentIndex), func(diffView *diffview.Model) bool {
-		reviewThread, index, ok := diffView.CommentAtCursor()
-		return ok && reviewThread.Identifier == "t-open" && index == commentIndex
-	})
+	inliner.toLineContaining([]string{"Why retry here?", "Handles flaky links."}[commentIndex])
+}
+
+func TestReactOnTheAuthorRowOfTheSecondComment(test *testing.T) {
+	inliner := newInliner(test)
+	inliner.toLineContaining("alice ·")
+	inliner.react("rocket")
+	calls := inliner.reactionCalls()
+	if len(calls) != 1 || calls[0].SubjectIdentifier != secondCommentIdentifier {
+		test.Fatalf("calls = %+v", calls)
+	}
+}
+
+func TestReactOnTheBlankRowBetweenCommentsSaysSo(test *testing.T) {
+	inliner := newInliner(test)
+	inliner.toLineContaining("")
+	inliner.react("rocket")
+	if diff := cmp.Diff([]string{noticeNotOnComment}, inliner.infoMessages()); diff != "" {
+		test.Errorf("info (-want +got):\n%s", diff)
+	}
+	if len(inliner.reactionCalls()) != 0 {
+		test.Error("written")
+	}
+}
+
+// toggleWithoutReload runs :react <name> and delivers the result of the
+// write, but not the reload it asks for, so the screen shows only what the
+// view itself recorded.
+func (inliner *inliner) toggleWithoutReload(name string) {
+	inliner.test.Helper()
+	command, _ := inliner.view.Command("react", name)
+	result, ok := command().(reactionToggledMessage)
+	if !ok {
+		inliner.test.Fatal("the write did not succeed")
+	}
+	inliner.view.Update(result)
+}
+
+func TestSecondReactDecidesFromTheFirst(test *testing.T) {
+	inliner := newInliner(test)
+	inliner.toComment(0)
+	inliner.toggleWithoutReload("rocket") // adds
+	inliner.messages = nil
+	inliner.react("")
+	if shown := inliner.shown(); !strings.Contains(shown, "🚀 rocket    1  ✓") {
+		test.Fatalf("the picker does not show the reaction just added:\n%s", shown)
+	}
+	inliner.keyPress(tea.KeyEscape)
+	inliner.toggleWithoutReload("rocket") // removes, not adds again
+	want := []string{fake.MethodAddReaction, fake.MethodRemoveReaction}
+	var got []string
+	for _, call := range inliner.reactionCalls() {
+		got = append(got, call.Method)
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		test.Errorf("calls (-want +got):\n%s", diff)
+	}
+}
+
+func TestReactPickerTitleShowsGhostForADeletedAuthor(test *testing.T) {
+	inliner := newInliner(test)
+	threads := testThreads()
+	threads[0].Comments[0].Author = ""
+	inliner.client.SetReviewThreads(testRepository, 7, threads)
+	inliner.press("R")
+	inliner.toComment(0)
+	inliner.react("")
+	if shown := inliner.shown(); !strings.Contains(shown, "React to ghost's comment") {
+		test.Errorf("title does not use the thread's author text:\n%s", shown)
+	}
 }
 
 func (inliner *inliner) react(name string) {

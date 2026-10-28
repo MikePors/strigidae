@@ -10,6 +10,7 @@ import (
 
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/userinterface"
+	"github.com/MikePors/strigidae/internal/userinterface/components/comment"
 	"github.com/MikePors/strigidae/internal/userinterface/components/picker"
 	"github.com/MikePors/strigidae/internal/userinterface/terminaltext"
 )
@@ -38,10 +39,11 @@ func (target reactionTarget) summary(content github.ReactionContent) github.Reac
 
 // reactionToggledMessage is the result of adding or removing a reaction.
 type reactionToggledMessage struct {
-	origin  origin
-	content github.ReactionContent
-	removed bool
-	err     error
+	origin            origin
+	commentIdentifier string
+	content           github.ReactionContent
+	removed           bool
+	err               error
 }
 
 // reactCommand handles :react [name].
@@ -100,7 +102,7 @@ func (view *View) openReactionPicker(target reactionTarget, author string) {
 		items[i] = reactionLabel(content, target.summary(content))
 	}
 	view.pickerReaction = &target
-	view.picker = picker.New(view.theme, "React to "+terminaltext.Clean(author)+"'s comment", items)
+	view.picker = picker.New(view.theme, "React to "+comment.Author(author)+"'s comment", items)
 }
 
 // reactionLabel is the plain text of a picker row: emoji, shortcode, the count
@@ -131,7 +133,7 @@ func (view *View) toggleReaction(target reactionTarget, content github.ReactionC
 			err = client.AddReaction(ctx, target.commentIdentifier, content)
 		}
 		err = userinterface.WriteError(err)
-		result := reactionToggledMessage{origin: origin, content: content, removed: removed, err: err}
+		result := reactionToggledMessage{origin: origin, commentIdentifier: target.commentIdentifier, content: content, removed: removed, err: err}
 		if err == nil {
 			return result
 		}
@@ -146,9 +148,34 @@ func (view *View) reactionToggled(message reactionToggledMessage) tea.Cmd {
 	if message.err != nil {
 		return nil // the error is already shown
 	}
+	// The comment shows the change at once, so a second :react decides from
+	// what the first did; the reload then brings GitHub's own counts.
+	view.applyReaction(message)
 	text := "reacted " + message.content.Emoji()
 	if message.removed {
 		text = "removed " + message.content.Emoji()
 	}
 	return tea.Batch(userinterface.Info(text), view.reloadThreads())
+}
+
+// applyReaction records a successful write in the comment on screen.
+func (view *View) applyReaction(message reactionToggledMessage) {
+	// Fresh slices, so the ones handed to the file pane earlier are never written to.
+	threads := slices.Clone(view.threads)
+	for i := range threads {
+		index := slices.IndexFunc(threads[i].Comments, func(reviewComment github.ReviewComment) bool {
+			return reviewComment.Identifier == message.commentIdentifier
+		})
+		if index < 0 {
+			continue
+		}
+		threads[i].Comments = slices.Clone(threads[i].Comments)
+		reviewComment := &threads[i].Comments[index]
+		reviewComment.Reactions = github.WithViewerReaction(reviewComment.Reactions, message.content, !message.removed)
+		view.threads = threads
+		view.filePane.SetThreads(view.threads)
+		view.overview.invalidate()
+		view.layout()
+		return
+	}
 }
