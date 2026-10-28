@@ -80,4 +80,11 @@ type Client interface {
 	ResolveReviewThread(ctx context.Context, threadIdentifier string) (ThreadResolution, error)
 	// UnresolveReviewThread marks the thread unresolved and returns its new state.
 	UnresolveReviewThread(ctx context.Context, threadIdentifier string) (ThreadResolution, error)
+	// AddReaction adds the viewer's reaction to the comment with the given
+	// node ID. Adding one the viewer already has changes nothing. A comment
+	// that does not exist yields ErrNotFound.
+	AddReaction(ctx context.Context, subjectIdentifier string, content ReactionContent) error
+	// RemoveReaction removes the viewer's reaction from the comment with the
+	// given node ID. Removing one the viewer does not have changes nothing.
+	RemoveReaction(ctx context.Context, subjectIdentifier string, content ReactionContent) error
 }

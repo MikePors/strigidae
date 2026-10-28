@@ -3,6 +3,7 @@ package workspace
 import (
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/userinterface/components/picker"
 	"github.com/MikePors/strigidae/internal/userinterface/terminaltext"
 )
@@ -18,7 +19,7 @@ func (view *View) openPicker() {
 		items[i] = terminaltext.Clean(file.Path)
 		paths[i] = file.Path
 	}
-	view.pickerItems, view.pickerPaths, view.pickerChecks = items, paths, nil
+	view.pickerItems, view.pickerPaths, view.pickerChecks, view.pickerReaction = items, paths, nil, nil
 	view.picker = picker.New(view.theme, "Go to file", items)
 }
 
@@ -28,10 +29,13 @@ func (view *View) pickerKey(message tea.KeyPressMsg) tea.Cmd {
 	result := view.picker.Update(message)
 	switch result.Outcome {
 	case picker.Cancelled:
-		view.picker, view.pickerChecks = nil, nil
+		view.picker, view.pickerChecks, view.pickerReaction = nil, nil, nil
 	case picker.Chosen:
-		checks := view.pickerChecks
-		view.picker, view.pickerChecks = nil, nil
+		checks, target := view.pickerChecks, view.pickerReaction
+		view.picker, view.pickerChecks, view.pickerReaction = nil, nil, nil
+		if target != nil {
+			return view.toggleReaction(*target, github.ReactionContents[result.Index])
+		}
 		if checks != nil {
 			return view.openCheck(checks[result.Index])
 		}

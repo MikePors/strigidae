@@ -233,6 +233,10 @@ func (pane *diffPane) moveThread(message keys.Message, forward bool) tea.Cmd {
 
 func (pane *diffPane) FocusedThreads() []github.ReviewThread { return pane.diffView.ThreadsAtCursor() }
 
+func (pane *diffPane) FocusedComment() (github.ReviewThread, int, bool) {
+	return pane.diffView.CommentAtCursor()
+}
+
 func (pane *diffPane) CommentRange() (diffview.Range, bool) { return pane.diffView.Anchor() }
 
 func (pane *diffPane) VisualStart() bool          { return pane.diffView.VisualStart() }

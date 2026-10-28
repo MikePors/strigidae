@@ -127,6 +127,8 @@ type View struct {
 	// pickerChecks is non-nil while the picker lists checks (:checks) rather
 	// than files; it is the sorted list the picker's rows came from.
 	pickerChecks []github.Check
+	// pickerReaction is non-nil while the picker lists the 8 reactions (:react).
+	pickerReaction *reactionTarget
 
 	paneFile   github.ChangedFile // last value given to filePane.SetFile
 	paneWidth  int                // size last given to filePane.SetSize
@@ -295,6 +297,11 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 			return view, nil
 		}
 		return view, view.threadResolved(message)
+	case reactionToggledMessage:
+		if !view.owns(message.origin) {
+			return view, nil
+		}
+		return view, view.reactionToggled(message)
 	case reviewDiscardedMessage:
 		if !view.owns(message.origin) {
 			return view, nil

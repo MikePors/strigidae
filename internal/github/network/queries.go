@@ -10,6 +10,8 @@ const (
 	operationReviewThreads         = "ReviewThreads"
 	operationResolveReviewThread   = "ResolveReviewThread"
 	operationUnresolveReviewThread = "UnresolveReviewThread"
+	operationAddReaction           = "AddReaction"
+	operationRemoveReaction        = "RemoveReaction"
 	operationReplyToThread         = "ReplyToThread"
 	operationMarkFileViewed        = "MarkFileViewed"
 	operationUnmarkFileViewed      = "UnmarkFileViewed"

@@ -45,10 +45,25 @@ func Quiet(thread github.ReviewThread) bool { return thread.IsResolved || thread
 // Lines renders t in at most width columns per line. The first line is the
 // header; its first cell is the fold glyph. Lines are not padded.
 func Lines(environment Environment, thread github.ReviewThread, width int, options Options) []string {
+	lines, _ := build(environment, thread, width, options)
+	return lines
+}
+
+// CommentRows says which comment each line of Lines belongs to: its index in
+// thread.Comments, or -1 for the header line and the blank rows between comments. The arguments are those given to
+// Lines.
+func CommentRows(environment Environment, thread github.ReviewThread, width int, options Options) []int {
+	_, owners := build(environment, thread, width, options)
+	return owners
+}
+
+// build returns the lines and, parallel to them, the comment each belongs to.
+func build(environment Environment, thread github.ReviewThread, width int, options Options) (lines []string, owners []int) {
 	width = max(width, 8)
 	out := []string{header(environment, thread, width, options)}
+	owner := []int{-1}
 	if !options.Expanded {
-		return out
+		return out, owner
 	}
 	theme := environment.Theme
 	bar := theme.ThreadBar.Render("│ ")
@@ -59,18 +74,21 @@ func Lines(environment Environment, thread github.ReviewThread, width int, optio
 			Reactions: reviewComment.Reactions, Muted: thread.IsOutdated,
 		}
 		out = append(out, ansi.Truncate(bar+comment.Header(theme, environment.Now, reviewComment), width, "…"))
+		owner = append(owner, i)
 		body := comment.Body(theme, environment.Markdown, reviewComment, bodyWidth)
 		if body == "" {
 			continue
 		}
 		for line := range strings.SplitSeq(body, "\n") {
 			out = append(out, bar+line)
+			owner = append(owner, i)
 		}
 		if i < len(thread.Comments)-1 {
 			out = append(out, strings.TrimRight(bar, " "))
+			owner = append(owner, -1) // the blank row between two comments belongs to neither
 		}
 	}
-	return out
+	return out, owner
 }
 
 func header(environment Environment, thread github.ReviewThread, width int, options Options) string {

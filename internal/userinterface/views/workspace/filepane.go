@@ -92,6 +92,10 @@ type FilePane interface {
 	// whose rows it is in, or those on the line it is on. Panes without
 	// threads return nil.
 	FocusedThreads() []github.ReviewThread
+	// FocusedComment returns the thread and the index in its Comments of the
+	// comment whose rows the cursor is on. ok is false anywhere else. Panes
+	// without threads return false.
+	FocusedComment() (reviewThread github.ReviewThread, commentIndex int, ok bool)
 	// CommentRange returns the lines a new comment would go on: the visual
 	// selection, else the cursor line. ok is false when the cursor is not on a
 	// diff line. Panes without lines return false.

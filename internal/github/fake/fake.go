@@ -59,6 +59,9 @@ type Call struct {
 	PullRequestIdentifier string
 	Path                  string
 	Viewed                bool
+	// SubjectIdentifier and Reaction are set by AddReaction and RemoveReaction.
+	SubjectIdentifier string
+	Reaction          github.ReactionContent
 }
 
 // Reply is a recorded successful ReplyToThread call.

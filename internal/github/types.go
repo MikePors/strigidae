@@ -1,6 +1,9 @@
 package github
 
-import "time"
+import (
+	"slices"
+	"time"
+)
 
 // PullRequestState is the lifecycle state of a pull request.
 type PullRequestState string
@@ -181,6 +184,37 @@ const (
 	ReactionEyes       ReactionContent = "EYES"
 )
 
+// ReactionContents lists every kind of reaction in GitHub's order.
+var ReactionContents = []ReactionContent{
+	ReactionThumbsUp, ReactionThumbsDown, ReactionLaugh, ReactionHooray,
+	ReactionConfused, ReactionHeart, ReactionRocket, ReactionEyes,
+}
+
+// Shortcode returns the name GitHub gives the reaction (+1, heart, ...), or
+// the raw content if unknown.
+func (content ReactionContent) Shortcode() string {
+	switch content {
+	case ReactionThumbsUp:
+		return "+1"
+	case ReactionThumbsDown:
+		return "-1"
+	case ReactionLaugh:
+		return "laugh"
+	case ReactionHooray:
+		return "hooray"
+	case ReactionConfused:
+		return "confused"
+	case ReactionHeart:
+		return "heart"
+	case ReactionRocket:
+		return "rocket"
+	case ReactionEyes:
+		return "eyes"
+	default:
+		return string(content)
+	}
+}
+
 // Emoji returns the emoji for the reaction, or the raw content if unknown.
 func (content ReactionContent) Emoji() string {
 	switch content {
@@ -210,6 +244,32 @@ type ReactionSummary struct {
 	Content       ReactionContent
 	Count         int
 	ViewerReacted bool
+}
+
+// WithViewerReaction returns reactions with the viewer's reaction of kind
+// content added (add true) or removed, as GitHub counts it: the group's count
+// goes up or down, a group that reaches zero is dropped, and the groups keep
+// GitHub's order. Adding one the viewer already has, or removing one the viewer
+// lacks, changes nothing. The argument is not modified.
+func WithViewerReaction(reactions []ReactionSummary, content ReactionContent, add bool) []ReactionSummary {
+	out := slices.Clone(reactions)
+	index := slices.IndexFunc(out, func(summary ReactionSummary) bool { return summary.Content == content })
+	switch {
+	case add && index < 0:
+		out = append(out, ReactionSummary{Content: content, Count: 1, ViewerReacted: true})
+	case add && !out[index].ViewerReacted:
+		out[index].Count++
+		out[index].ViewerReacted = true
+	case !add && index >= 0 && out[index].ViewerReacted:
+		out[index].Count--
+		out[index].ViewerReacted = false
+		if out[index].Count <= 0 {
+			out = slices.Delete(out, index, index+1)
+		}
+	}
+	order := func(summary ReactionSummary) int { return slices.Index(ReactionContents, summary.Content) }
+	slices.SortStableFunc(out, func(first, second ReactionSummary) int { return order(first) - order(second) })
+	return out
 }
 
 // IssueComment is a top-level comment on a pull request.
