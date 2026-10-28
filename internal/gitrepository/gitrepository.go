@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/MikePors/strigidae/internal/environment"
 	"github.com/MikePors/strigidae/internal/github"
 )
 
@@ -42,6 +43,7 @@ type Runner func(ctx context.Context, directory string, arguments ...string) (st
 func ExecRunner(ctx context.Context, directory string, arguments ...string) (string, error) {
 	command := exec.CommandContext(ctx, "git", arguments...)
 	command.Dir = directory
+	command.Env = environment.Scrub(command.Environ())
 	out, err := command.Output()
 	if err != nil {
 		return "", fmt.Errorf("git %s: %w", strings.Join(arguments, " "), err)

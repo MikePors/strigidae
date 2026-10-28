@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/MikePors/strigidae/internal/environment"
 )
 
 // fallback is used when neither $VISUAL nor $EDITOR is set.
@@ -68,5 +70,7 @@ func Command(path string, getEnvironment func(string) string) *exec.Cmd {
 			break
 		}
 	}
-	return exec.Command("sh", "-c", editor+` "$@"`, "strig", path)
+	command := exec.Command("sh", "-c", editor+` "$@"`, "strig", path)
+	command.Env = environment.Scrub(command.Environ())
+	return command
 }

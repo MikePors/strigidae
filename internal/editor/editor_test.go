@@ -9,7 +9,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func environment(entries map[string]string) func(string) string {
+func lookup(entries map[string]string) func(string) string {
 	return func(key string) string { return entries[key] }
 }
 
@@ -28,7 +28,7 @@ func TestCommandChoice(test *testing.T) {
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
 			want := []string{"sh", "-c", testCase.want + ` "$@"`, "strig", "f.md"}
-			if diff := cmp.Diff(want, Command("f.md", environment(testCase.environment)).Args); diff != "" {
+			if diff := cmp.Diff(want, Command("f.md", lookup(testCase.environment)).Args); diff != "" {
 				test.Errorf("args (-want +got):\n%s", diff)
 			}
 		})
@@ -45,7 +45,7 @@ func TestSessionRoundTrip(test *testing.T) {
 		test.Fatal(err)
 	}
 	// "cp src <file>" stands in for an editor that replaces the content.
-	session, err := New("draft", environment(map[string]string{"EDITOR": copyPath + " " + source}))
+	session, err := New("draft", lookup(map[string]string{"EDITOR": copyPath + " " + source}))
 	if err != nil {
 		test.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestQuotedEditorAndPathWithSpaces(test *testing.T) {
 	if err := os.WriteFile(source, []byte("quoted"), 0o600); err != nil {
 		test.Fatal(err)
 	}
-	session, err := New("", environment(map[string]string{"VISUAL": `"` + copyPath + `" "` + source + `"`}))
+	session, err := New("", lookup(map[string]string{"VISUAL": `"` + copyPath + `" "` + source + `"`}))
 	if err != nil {
 		test.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestQuotedEditorAndPathWithSpaces(test *testing.T) {
 }
 
 func TestResultRemovesFileWhenEditorFailed(test *testing.T) {
-	session, err := New("", environment(nil))
+	session, err := New("", lookup(nil))
 	if err != nil {
 		test.Fatal(err)
 	}
@@ -102,5 +102,31 @@ func TestResultRemovesFileWhenEditorFailed(test *testing.T) {
 	}
 	if _, err := os.Stat(session.Path()); !os.IsNotExist(err) {
 		test.Error("file not removed")
+	}
+}
+
+func TestCommandScrubsTokens(test *testing.T) {
+	test.Setenv("GH_TOKEN", "secret")
+	test.Setenv("GITHUB_TOKEN", "secret")
+	test.Setenv("GH_ENTERPRISE_TOKEN", "secret")
+	test.Setenv("GITHUB_ENTERPRISE_TOKEN", "secret")
+	test.Setenv("STRIG_TEST_KEPT", "kept")
+
+	command := Command("f.md", lookup(nil))
+
+	if command.Env == nil {
+		test.Fatal("Env is nil, so the child would inherit every variable")
+	}
+	var got []string
+	for _, variable := range command.Env {
+		switch variable {
+		case "GH_TOKEN=secret", "GITHUB_TOKEN=secret", "GH_ENTERPRISE_TOKEN=secret", "GITHUB_ENTERPRISE_TOKEN=secret":
+			test.Errorf("token variable %q reached the editor", variable)
+		case "STRIG_TEST_KEPT=kept":
+			got = append(got, variable)
+		}
+	}
+	if diff := cmp.Diff([]string{"STRIG_TEST_KEPT=kept"}, got); diff != "" {
+		test.Errorf("other variables must be kept (-want +got):\n%s", diff)
 	}
 }
