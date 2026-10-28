@@ -1,0 +1,37 @@
+[
+  {
+    "sha": "1111111111111111111111111111111111111111",
+    "filename": "internal/diff/diff.go",
+    "status": "modified",
+    "additions": 1,
+    "deletions": 1,
+    "changes": 2,
+    "patch": "@@ -1,3 +1,3 @@\n package diff\n-// old\n+// new\n \n"
+  },
+  {
+    "sha": "2222222222222222222222222222222222222222",
+    "filename": "docs/new.md",
+    "status": "added",
+    "additions": 1,
+    "deletions": 0,
+    "changes": 1,
+    "patch": "@@ -0,0 +1 @@\n+# New"
+  },
+  {
+    "sha": "3333333333333333333333333333333333333333",
+    "filename": "docs/after.md",
+    "previous_filename": "docs/before.md",
+    "status": "renamed",
+    "additions": 0,
+    "deletions": 0,
+    "changes": 0
+  },
+  {
+    "sha": "4444444444444444444444444444444444444444",
+    "filename": "assets/logo.png",
+    "status": "removed",
+    "additions": 0,
+    "deletions": 0,
+    "changes": 0
+  }
+]

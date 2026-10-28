@@ -100,6 +100,21 @@ type ChangedFile struct {
 	Viewed ViewedState
 }
 
+// FilePatch is one file of a pull request with its own patch, from the pull
+// request's file list.
+type FilePatch struct {
+	Path string
+	// PreviousPath is the path before a rename or copy; empty otherwise.
+	PreviousPath string
+	Change       FileChangeType
+	Additions    int
+	Deletions    int
+	// Patch is the file's hunks in unified diff format, from its first "@@"
+	// line, with no file header. GitHub leaves it empty for a binary file, a
+	// file too large on its own, and a file with no changed lines.
+	Patch string
+}
+
 // ReviewState is the state of a submitted review.
 type ReviewState string
 
