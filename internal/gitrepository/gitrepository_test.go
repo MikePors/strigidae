@@ -3,6 +3,8 @@ package gitrepository
 import (
 	"context"
 	"errors"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -149,5 +151,30 @@ func TestInfer(test *testing.T) {
 				test.Errorf("repo = %v, want %v", got.Repository, testCase.want)
 			}
 		})
+	}
+}
+
+func TestExecRunnerScrubsTokens(test *testing.T) {
+	test.Setenv("GH_TOKEN", "secret")
+	test.Setenv("GITHUB_TOKEN", "secret")
+	test.Setenv("GH_ENTERPRISE_TOKEN", "secret")
+	test.Setenv("GITHUB_ENTERPRISE_TOKEN", "secret")
+	test.Setenv("STRIG_TEST_KEPT", "kept")
+
+	// A shell alias prints the environment git itself passes to its children.
+	output, err := ExecRunner(context.Background(), test.TempDir(), "-c", "alias.printenvironment=!env", "printenvironment")
+	if err != nil {
+		test.Fatal(err)
+	}
+	lines := strings.Split(output, "\n")
+	for _, name := range []string{"GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"} {
+		for _, line := range lines {
+			if strings.HasPrefix(line, name+"=") {
+				test.Errorf("%s reached git", name)
+			}
+		}
+	}
+	if !slices.Contains(lines, "STRIG_TEST_KEPT=kept") {
+		test.Errorf("STRIG_TEST_KEPT was dropped:\n%s", output)
 	}
 }
