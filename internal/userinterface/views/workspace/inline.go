@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 
@@ -589,6 +590,7 @@ func addPendingThread(timeouts userinterface.Timeouts, client github.Client, in 
 		return errors.New("head moved since you loaded the diff; refresh first")
 	}
 	pending := status.Pending
+	created := false
 	switch {
 	case pending == nil:
 		startContext, cancelStart := timeouts.RequestContext()
@@ -597,7 +599,7 @@ func addPendingThread(timeouts userinterface.Timeouts, client github.Client, in 
 		if err != nil {
 			return fmt.Errorf("start review: %w", userinterface.WriteError(err))
 		}
-		pending = &pendingReview
+		pending, created = &pendingReview, true
 	case pending.CommitObjectIdentifier == "":
 		return errors.New("your pending review is on an unknown commit; submit or discard it on GitHub first")
 	case pending.CommitObjectIdentifier != head:
@@ -607,5 +609,24 @@ func addPendingThread(timeouts userinterface.Timeouts, client github.Client, in 
 	addContext, cancelAdd := timeouts.RequestContext()
 	defer cancelAdd()
 	_, err = client.AddReviewThread(addContext, in)
+	// Only a refusal proves nothing was written. After a timeout or a network
+	// error the comment may have gone through, so the review is left alone.
+	if errors.Is(err, github.ErrCommentRejected) && created {
+		discardEmptyReview(timeouts, client, pending.Identifier)
+	}
 	return userinterface.WriteError(err)
+}
+
+// discardEmptyReview deletes a pending review this call created and GitHub
+// refused to put a comment in (ErrCommentRejected), so GitHub is not left
+// showing an empty one. It is best
+// effort: a failure is logged and the caller keeps the error that led here.
+// It has a context of its own because the failed call may have used up its
+// deadline.
+func discardEmptyReview(timeouts userinterface.Timeouts, client github.Client, reviewIdentifier string) {
+	ctx, cancel := timeouts.RequestContext()
+	defer cancel()
+	if err := client.DeleteReview(ctx, reviewIdentifier); err != nil {
+		slog.Warn("delete empty pending review", "review", reviewIdentifier, "err", err)
+	}
 }

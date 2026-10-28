@@ -1,6 +1,7 @@
 package workspace
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"slices"
@@ -294,7 +295,7 @@ func TestInlineFailedPostKeepsDraft(test *testing.T) {
 	if len(inliner.client.AddedThreads()) != 1 || len(inliner.view.drafts) != 0 {
 		test.Errorf("retry: added %d, drafts %v", len(inliner.client.AddedThreads()), inliner.view.drafts)
 	}
-	// The failed first try had already created the pending review; the retry joins it.
+	// A generic failure may have written the comment, so the first try's review stays and the retry joins it.
 	if len(inliner.client.StartedReviews()) != 1 {
 		test.Errorf("started %d reviews", len(inliner.client.StartedReviews()))
 	}
@@ -1853,5 +1854,53 @@ func TestInlineSendIgnoresADiffLoadInFlight(test *testing.T) {
 	inliner.press("c")
 	if len(inliner.client.AddedThreads()) != 1 {
 		test.Errorf("added %d threads, error %q", len(inliner.client.AddedThreads()), inliner.lastError())
+	}
+}
+
+func TestInlineFailedPostDeletesOnlyTheReviewItCreated(test *testing.T) {
+	for _, testCase := range []struct {
+		name          string
+		existing      bool
+		addError      error
+		deleteError   error
+		wantShown     string
+		wantDeleted   int
+		wantRemaining bool // a pending review is left on the server
+	}{
+		{name: "rejected comment deletes the created review", addError: fmt.Errorf("add: %w", github.ErrCommentRejected), wantShown: "comment not created", wantDeleted: 1},
+		{name: "timeout leaves the review", addError: fmt.Errorf("add: %w", context.DeadlineExceeded), wantShown: "may have gone through", wantRemaining: true},
+		{name: "generic error leaves the review", addError: errors.New("boom"), wantShown: "boom", wantRemaining: true},
+		{name: "existing review is never deleted", existing: true, addError: github.ErrCommentRejected, wantShown: "comment not created", wantRemaining: true},
+		{name: "delete failure keeps the original error", addError: github.ErrCommentRejected, deleteError: errors.New("delete exploded"), wantShown: "comment not created", wantRemaining: true},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			inliner := newInliner(test)
+			if testCase.existing {
+				inliner.client.SetPendingReview(testRepository, 7, &github.PendingReview{Identifier: "existing-review", CommitObjectIdentifier: inliner.view.diffHead})
+			}
+			inliner.client.SetError(fake.MethodAddReviewThread, testCase.addError)
+			if testCase.deleteError != nil {
+				inliner.client.SetError(fake.MethodDeleteReview, testCase.deleteError)
+			}
+			inliner.body = "my draft"
+			inliner.moveTo(github.SideRight, 10)
+			inliner.press("c")
+			if got := inliner.lastError(); !strings.Contains(got, testCase.wantShown) || strings.Contains(got, "delete exploded") {
+				test.Errorf("error = %q, want the add failure %q only", got, testCase.wantShown)
+			}
+			if got := len(inliner.client.DeletedReviews()); got != testCase.wantDeleted {
+				test.Errorf("deleted %d reviews, want %d", got, testCase.wantDeleted)
+			}
+			status, err := inliner.client.GetReviewStatus(test.Context(), testRepository, 7)
+			if err != nil || (status.Pending != nil) != testCase.wantRemaining {
+				test.Errorf("pending review %+v, %v; want remaining %v", status.Pending, err, testCase.wantRemaining)
+			}
+			if testCase.existing && len(inliner.methods(fake.MethodDeleteReview)) != 0 {
+				test.Errorf("DeleteReview called on an existing review")
+			}
+			if len(inliner.view.drafts) != 1 {
+				test.Errorf("draft not kept: %v", inliner.view.drafts)
+			}
+		})
 	}
 }
