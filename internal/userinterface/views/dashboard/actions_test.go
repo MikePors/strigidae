@@ -32,11 +32,13 @@ func TestActionsCoverEveryBinding(test *testing.T) {
 		if field.Type != reflect.TypeFor[key.Binding]() {
 			continue
 		}
-		if binding := value.Field(i).Addr().Pointer(); named[binding] != 1 {
+		binding := value.Field(i).Addr().Pointer()
+		if named[binding] != 1 {
 			test.Errorf("bindings.%s is named %d times, want once", field.Name, named[binding])
 		}
+		delete(named, binding)
 	}
-	if len(named) != value.NumField() {
-		test.Errorf("%d actions for %d bindings", len(named), value.NumField())
+	if len(named) != 0 {
+		test.Errorf("%d actions point outside the dashboard's bindings", len(named))
 	}
 }
