@@ -71,6 +71,6 @@ func Command(path string, getEnvironment func(string) string) *exec.Cmd {
 		}
 	}
 	command := exec.Command("sh", "-c", editor+` "$@"`, "strig", path)
-	command.Env = environment.Scrub(os.Environ())
+	command.Env = environment.Scrub(command.Environ())
 	return command
 }

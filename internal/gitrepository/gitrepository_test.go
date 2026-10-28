@@ -162,7 +162,8 @@ func TestExecRunnerScrubsTokens(test *testing.T) {
 	test.Setenv("STRIG_TEST_KEPT", "kept")
 
 	// A shell alias prints the environment git itself passes to its children.
-	output, err := ExecRunner(context.Background(), test.TempDir(), "-c", "alias.printenvironment=!env", "printenvironment")
+	directory := test.TempDir()
+	output, err := ExecRunner(context.Background(), directory, "-c", "alias.printenvironment=!env", "printenvironment")
 	if err != nil {
 		test.Fatal(err)
 	}
@@ -173,6 +174,10 @@ func TestExecRunnerScrubsTokens(test *testing.T) {
 				test.Errorf("%s reached git", name)
 			}
 		}
+	}
+	// Setting Env by hand would otherwise leave the inherited, stale PWD.
+	if !slices.Contains(lines, "PWD="+directory) {
+		test.Errorf("PWD is not %q:\n%s", directory, output)
 	}
 	if !slices.Contains(lines, "STRIG_TEST_KEPT=kept") {
 		test.Errorf("STRIG_TEST_KEPT was dropped:\n%s", output)
