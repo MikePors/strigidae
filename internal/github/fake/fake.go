@@ -51,6 +51,8 @@ type Call struct {
 	Page             github.PageRequest
 	ThreadIdentifier string
 	Body             string
+	// ReviewIdentifier is set by DeleteReview.
+	ReviewIdentifier string
 	// PullRequestIdentifier, Path and Viewed are set by the methods that take them:
 	// PullRequestIdentifier by SetFileViewed, StartReview and MergePullRequest, Path by
 	// SetFileViewed and AddReviewThread, Viewed by SetFileViewed.
@@ -104,6 +106,7 @@ type Client struct {
 	added          []github.AddThreadInput
 	started        []StartedReview
 	deleted        []string
+	deletedReviews []string
 }
 
 var _ github.Client = (*Client)(nil)

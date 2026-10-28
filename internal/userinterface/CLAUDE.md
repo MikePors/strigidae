@@ -85,6 +85,7 @@ Commands (`:` then `enter`):
 | `:copy-filename` | PR workspace: copy the selected file's path to the clipboard (OSC 52; tmux needs `set -g set-clipboard on`) |
 | `:edit-comment`, `:delete-comment` | PR workspace: change your comment at the diff cursor (same as `e` / `D`): the last comment of the focused thread you may change, pending ones first; deleting always asks `y/N`, editing a published comment asks `y/N` after the editor closes |
 | `:resolve`, `:unresolve` | PR workspace: resolve or unresolve the comment thread at the diff cursor (`x` does whichever applies); both ask `y/N` naming the file and line, and refuse with a notice when the thread is already in that state |
+| `:discard-review` | PR workspace: delete your pending review and all its draft comments after a `y/N` naming how many drafts go with it; no key; says `no pending review` when there is none; refused while a review is being submitted, a merge is running or a comment is being saved |
 
 **View commands.** The table above is static. A view with commands of its own implements `userinterface.Commander` (`Command(name, args) (tea.Cmd, handled bool)`) and its names are added to `viewCommands` in `command.go`. The root consults only the top view, and only when the static table has no match, so a command never reaches two views the way a broadcast result would. A listed name the top view declines (or a top view that is not a Commander) gives "not available here: name"; any other name gives "not a command: name". List the view's commands in the table above.
 

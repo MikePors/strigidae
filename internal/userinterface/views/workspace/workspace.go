@@ -289,6 +289,11 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 			return view, nil
 		}
 		return view, view.threadResolved(message)
+	case reviewDiscardedMessage:
+		if !view.owns(message.origin) {
+			return view, nil
+		}
+		return view, view.reviewDiscarded(message)
 	case commentCheckedMessage:
 		if !view.owns(message.origin) {
 			return view, nil
