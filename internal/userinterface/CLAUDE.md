@@ -95,7 +95,7 @@ Reserved prefixes:
 | `g …` | goto: `g g` top, `g t` / `g T` next / previous tab |
 | `z …` | folds (expand/collapse threads, files), horizontal scrolling (`z h` / `z l` a few columns, `z H` / `z L` half a screen, as in vim) and screen positioning: `z t` / `z z` / `z b` scroll the cursor line to the top / middle / bottom of the view without moving the cursor (lists with a cursor; they take no count, and the Overview doesn't have them yet) |
 
-Adding a binding or command: make sure it doesn't collide with the tables above or another binding active in the same view, add it with help text (a global binding also gets an action name in `keys.Global.Actions`; the test fails without one), and **list every new or changed binding in the PR description** so the maintainer can approve it. Any binding an issue marks "TBD" is the maintainer's call; propose one in the PR and ask.
+Adding a binding or command: make sure it doesn't collide with the tables above or another binding active in the same view, add it with help text (a global binding, a `key.Binding` field of `keys.Global`, also gets an action name in `Actions` in `keys/actions.go`; its test fails without one), and **list every new or changed binding in the PR description** so the maintainer can approve it. Any binding an issue marks "TBD" is the maintainer's call; propose one in the PR and ask.
 
 ## Rendering tests
 

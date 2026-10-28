@@ -28,9 +28,9 @@ func TestGlobalActionNames(test *testing.T) {
 // binding added later can't be left without a name.
 func TestGlobalActionsCoverEveryBinding(test *testing.T) {
 	global := DefaultGlobal()
-	named := map[*key.Binding]int{}
+	named := map[uintptr]int{} // by address, so unexported fields need no Interface
 	for _, action := range global.Actions() {
-		named[action.Binding]++
+		named[reflect.ValueOf(action.Binding).Pointer()]++
 	}
 	value := reflect.ValueOf(&global).Elem()
 	bindingType := reflect.TypeFor[key.Binding]()
@@ -39,7 +39,7 @@ func TestGlobalActionsCoverEveryBinding(test *testing.T) {
 		if field.Type != bindingType || field.Name == "Count" {
 			continue
 		}
-		binding := value.Field(i).Addr().Interface().(*key.Binding)
+		binding := value.Field(i).Addr().Pointer()
 		if named[binding] != 1 {
 			test.Errorf("Global.%s is named %d times, want once", field.Name, named[binding])
 		}
