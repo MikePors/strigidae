@@ -1,6 +1,11 @@
 package keys
 
-import "charm.land/bubbles/v2/key"
+import (
+	"fmt"
+	"regexp"
+
+	"charm.land/bubbles/v2/key"
+)
 
 // Action is a binding with its action name: the stable name a config file
 // uses to refer to it, independent of its keys and help text. Names are
@@ -36,4 +41,24 @@ func (global *Global) Actions() []Action {
 		{"help", &global.Help},
 		{"command-line", &global.Command},
 	}
+}
+
+var actionName = regexp.MustCompile(`^[a-z]+(-[a-z]+)*$`)
+
+// CheckActions reports the first action whose name is not lower-case words
+// joined by hyphens, or is used twice. Names share one namespace across the
+// global bindings and every view's, so a view's tests pass its actions
+// together with the global ones.
+func CheckActions(actions []Action) error {
+	seen := map[string]bool{}
+	for _, action := range actions {
+		if !actionName.MatchString(action.Name) {
+			return fmt.Errorf("action name %q is not lower-case words joined by hyphens", action.Name)
+		}
+		if seen[action.Name] {
+			return fmt.Errorf("action name %q is used twice", action.Name)
+		}
+		seen[action.Name] = true
+	}
+	return nil
 }
