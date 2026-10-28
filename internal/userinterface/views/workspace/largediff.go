@@ -36,7 +36,7 @@ func perFileDiff(patches []github.FilePatch) (raw string, built *diff.Diff, err 
 				file.OldPath = patch.PreviousPath
 			}
 		}
-		fmt.Fprintf(&text, "%s\x00%s\x00%s\x00%s\n", patch.Change, patch.PreviousPath, patch.Path, patch.Patch)
+		fmt.Fprintf(&text, "%s\x00%s\x00%s\x00%d\x00%d\x00%s\n", patch.Change, patch.PreviousPath, patch.Path, patch.Additions, patch.Deletions, patch.Patch)
 		if patch.Patch == "" {
 			pureMove := (file.Status == diff.Renamed || file.Status == diff.Copied) && patch.Additions+patch.Deletions == 0
 			file.PatchMissing = !pureMove

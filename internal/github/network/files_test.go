@@ -103,3 +103,25 @@ func TestListFilePatchesNotFound(test *testing.T) {
 		test.Errorf("want ErrNotFound, got %v", err)
 	}
 }
+
+func TestListFilePatchesStatuses(test *testing.T) {
+	testServer := &server{}
+	testServer.override = func(_ call, writer http.ResponseWriter) bool {
+		writer.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = writer.Write([]byte(`[{"filename":"a","status":"copied","previous_filename":"z"},{"filename":"b","status":"changed"},{"filename":"c","status":"unchanged"}]`))
+		return true
+	}
+	client := newTestClient(test, testServer)
+	got, err := client.ListFilePatches(context.Background(), repository, 27)
+	if err != nil {
+		test.Fatal(err)
+	}
+	want := []github.FilePatch{
+		{Path: "a", PreviousPath: "z", Change: github.FileCopied},
+		{Path: "b", Change: github.FileChanged},
+		{Path: "c", Change: github.FileModified}, // an unknown status
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		test.Errorf("mismatch (-want +got):\n%s", diff)
+	}
+}

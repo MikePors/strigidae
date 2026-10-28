@@ -75,6 +75,13 @@ func TestPerFileDiffParseErrorAndRaw(test *testing.T) {
 	if changed, _, _ := perFileDiff(patches); changed == raw {
 		test.Error("Raw should change when a patch does")
 	}
+	// A rename with no patch is a pure move or PatchMissing by its line counts.
+	moved := []github.FilePatch{{Path: "b", PreviousPath: "a", Change: github.FileRenamed}}
+	pureRaw, _, _ := perFileDiff(moved)
+	moved[0].Additions = 5
+	if changed, _, _ := perFileDiff(moved); changed == pureRaw {
+		test.Error("Raw should change when the line counts do")
+	}
 }
 
 // fixturePatches turns the test diff into the file list GitHub would give
@@ -110,6 +117,9 @@ func fixturePatches(test *testing.T) []github.FilePatch {
 func perFileHarness(test *testing.T, width, height int) *harness {
 	test.Helper()
 	perFile := newHarness(test, width, height)
+	detail := testDetail()
+	detail.HeadSHA = "cccc3333"
+	perFile.client.SetPullRequest(detail)
 	perFile.client.SetError(fake.MethodGetDiff, github.ErrDiffTooLarge)
 	perFile.client.SetFilePatches(testRepository, 7, fixturePatches(test))
 	perFile.client.SetReviewThreads(testRepository, 7, testThreads())
@@ -124,6 +134,10 @@ func TestLargeDiffLoadsFileByFile(test *testing.T) {
 	}
 	if perFile.view.diff.Err != nil || perFile.view.diff.Parsed == nil {
 		test.Fatalf("diff state = %+v, want a parsed diff and no error", perFile.view.diff)
+	}
+	// Inline comments and reviews check the head the diff was loaded at.
+	if perFile.view.diffHead != "cccc3333" {
+		test.Errorf("diff head = %q, want the detail's head", perFile.view.diffHead)
 	}
 
 	// Each file with a patch looks as it does in the whole diff, threads and

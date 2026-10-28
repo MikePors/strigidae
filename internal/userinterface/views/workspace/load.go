@@ -110,8 +110,8 @@ func (view *View) fetchDiff(message pullRequestLoadedMessage) tea.Cmd {
 			if listError != nil {
 				return diffLoadedMessage{owner: owner, repository: repository, number: number, sequence: sequence, err: err, fallbackErr: listError}
 			}
-			raw, parsed, parseError := perFileDiff(patches)
-			return diffLoadedMessage{owner: owner, repository: repository, number: number, sequence: sequence, head: head, raw: raw, parsed: parsed, parseErr: parseError, perFile: true}
+			perFileRaw, parsed, parseError := perFileDiff(patches)
+			return diffLoadedMessage{owner: owner, repository: repository, number: number, sequence: sequence, head: head, raw: perFileRaw, parsed: parsed, parseErr: parseError, perFile: true}
 		}
 		if err != nil {
 			return diffLoadedMessage{owner: owner, repository: repository, number: number, sequence: sequence, err: err}
@@ -221,7 +221,7 @@ func (view *View) diffLoaded(message diffLoadedMessage) tea.Cmd {
 	}
 	if message.fallbackErr != nil {
 		// The pane says the diff is too large; this says why it isn't shown file by file.
-		return userinterface.Error(terminaltext.SafeError(fmt.Errorf("load the files of %s#%d one by one: %w", view.repository, view.number, message.fallbackErr)))
+		return userinterface.Error(terminaltext.SafeError(fmt.Errorf("load the diff file by file: %w", message.fallbackErr)))
 	}
 	if message.perFile {
 		return userinterface.Info(perFileNotice)
