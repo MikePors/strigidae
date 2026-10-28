@@ -54,8 +54,6 @@ type diffPane struct {
 	globalKeys keys.Global
 	bind       diffBindings
 
-	skipResolved bool
-
 	state   DiffState
 	file    github.ChangedFile
 	hasFile bool
@@ -76,7 +74,6 @@ func (pane *diffPane) SetHideResolved(hide bool) { pane.diffView.SetHideResolved
 
 // SetSkipResolved makes `)` and `(` pass over resolved threads.
 func (pane *diffPane) SetSkipResolved(skip bool) {
-	pane.skipResolved = skip
 	pane.diffView.SetSkipResolved(skip)
 }
 
@@ -181,9 +178,9 @@ func (pane *diffPane) Update(message keys.Message) tea.Cmd {
 	case key.Matches(message, pane.bind.PreviousHunk):
 		message.Each(diffView.CursorRow, diffView.PreviousHunk)
 	case key.Matches(message, pane.bind.NextThread):
-		return pane.moveThread(message, diffView.NextThread)
+		return pane.moveThread(message, true)
 	case key.Matches(message, pane.bind.PreviousThread):
-		return pane.moveThread(message, diffView.PreviousThread)
+		return pane.moveThread(message, false)
 	case key.Matches(message, pane.bind.ToggleThread), key.Matches(message, pane.globalKeys.Select):
 		diffView.ToggleThread()
 	case key.Matches(message, pane.bind.OpenThread):
@@ -202,13 +199,16 @@ func (pane *diffPane) Update(message keys.Message) tea.Cmd {
 	return nil
 }
 
-// moveThread applies a thread key. Under skipresolved a key that finds no
-// unresolved thread says so instead of silently staying put.
-func (pane *diffPane) moveThread(message keys.Message, step func()) tea.Cmd {
-	before := pane.diffView.CursorRow()
-	message.Each(pane.diffView.CursorRow, step)
-	if pane.skipResolved && pane.diffView.CursorRow() == before {
+// moveThread applies a thread key. Under skipresolved a key with no
+// unresolved thread to land on in its direction says so and leaves the cursor.
+func (pane *diffPane) moveThread(message keys.Message, forward bool) tea.Cmd {
+	if pane.diffView.NoThreadToVisit(forward) {
 		return userinterface.Info("no unresolved threads")
+	}
+	if forward {
+		message.Each(pane.diffView.CursorRow, pane.diffView.NextThread)
+	} else {
+		message.Each(pane.diffView.CursorRow, pane.diffView.PreviousThread)
 	}
 	return nil
 }

@@ -116,3 +116,37 @@ func TestSkipResolvedAppliesToOpenWorkspace(test *testing.T) {
 		test.Error("resolved thread should still be shown")
 	}
 }
+
+func TestSkipResolvedNoticeOnlyWhenNothingToVisit(test *testing.T) {
+	testCases := []struct {
+		name       string
+		values     options.Values
+		presses    int
+		wantNotice bool
+	}{
+		{"option on, landing on a thread", options.Values{options.SkipResolved: true}, 1, false},
+		{"option on, past the last thread", options.Values{options.SkipResolved: true}, 3, true},
+		{"option off, past the last thread", nil, 4, false},
+	}
+	for _, testCase := range testCases {
+		test.Run(testCase.name, func(test *testing.T) {
+			harness := threadHarness(test, 110, 40)
+			harness.selectFile()
+			harness.send(userinterface.OptionsMessage{Values: testCase.values})
+			harness.press("g g")
+			for range testCase.presses {
+				harness.messages = nil
+				harness.press(")")
+			}
+			notice := false
+			for _, message := range harness.messages {
+				if info, ok := message.(userinterface.InfoMessage); ok && info.Text == "no unresolved threads" {
+					notice = true
+				}
+			}
+			if notice != testCase.wantNotice {
+				test.Errorf("notice = %v, want %v (messages %v)", notice, testCase.wantNotice, harness.messages)
+			}
+		})
+	}
+}

@@ -270,6 +270,30 @@ func (model *Model) threadHeaderAt(i int) bool {
 	return !model.skipResolved || !model.fileThreads[row.threadRow.threadIndex].IsResolved
 }
 
+// NoThreadToVisit reports whether the file has threads shown but the thread
+// keys have none to land on in the given direction, which only happens under
+// SetSkipResolved. A pane with no file, a message or no threads reports false:
+// there the keys have nothing to say.
+func (model *Model) NoThreadToVisit(forward bool) bool {
+	if !model.skipResolved || model.file == nil || model.ThreadCount() == 0 {
+		return false
+	}
+	if forward {
+		for i := model.window.Cursor() + 1; i < len(model.rows); i++ {
+			if model.threadHeaderAt(i) {
+				return false
+			}
+		}
+		return true
+	}
+	for i := min(model.window.Cursor(), len(model.rows)) - 1; i >= 0; i-- {
+		if model.threadHeaderAt(i) {
+			return false
+		}
+	}
+	return true
+}
+
 // NextThread moves the cursor to the header of the next thread below it (no-op
 // after the last one), putting it at the top of the view. Under
 // SetSkipResolved resolved threads are passed over.
