@@ -27,6 +27,7 @@ The maintainer's rules for when strig asks before acting:
 
 - Anything that publishes or changes what other people see (submitting a review, merging, editing a published comment) always asks `y/N`, and always has a command (`:approve`, `:merge`). A key may also start it, but the `y/N` still follows; no single keypress ever publishes.
 - Private drafts (pending review comments, the Files "viewed" mark) are added and edited without `y/N`.
+- A reaction is confirmed by choosing it (in the picker, or by naming it in `:react <name>`); no single keypress ever adds one, and it has no `y/N`.
 - **Every deletion asks `y/N`**, draft or published.
 - Cancelling happens only at the `y/N`. An empty body is an error, not a cancel, and nothing is written.
 - Keys with a command behind them are welcome (`e` / `D` and `:edit-comment` / `:delete-comment`; `x` and `:resolve` / `:unresolve`).
@@ -86,6 +87,7 @@ Commands (`:` then `enter`):
 | `:copy-filename` | PR workspace: copy the selected file's path to the clipboard (OSC 52; tmux needs `set -g set-clipboard on`) |
 | `:edit-comment`, `:delete-comment` | PR workspace: change your comment at the diff cursor (same as `e` / `D`): the last comment of the focused thread you may change, pending ones first; deleting always asks `y/N`, editing a published comment asks `y/N` after the editor closes |
 | `:resolve`, `:unresolve` | PR workspace: resolve or unresolve the comment thread at the diff cursor (`x` does whichever applies); both ask `y/N` naming the file and line, and refuse with a notice when the thread is already in that state |
+| `:react [name]` | PR workspace: react to the comment under the diff cursor (inside an open thread; anywhere else it says `move onto a comment to react to it`). Alone it opens a picker of GitHub's 8 reactions with counts and `✓` for the ones you have; `enter` toggles the selected one. `:react <name>` toggles directly; names are `+1`, `-1`, `laugh`, `hooray`, `confused`, `heart`, `rocket`, `eyes`, and an unknown one is an error that lists them. No key and no `y/N`; refused while a review is being submitted, a merge is running or a comment is being saved |
 | `:discard-review` | PR workspace: delete your pending review and all its draft comments after a `y/N` naming how many drafts go with it; no key; says `no pending review` when there is none; refused while a review is being submitted, a merge is running or a comment is being saved |
 
 **View commands.** The table above is static. A view with commands of its own implements `userinterface.Commander` (`Command(name, args) (tea.Cmd, handled bool)`) and its names are added to `viewCommands` in `command.go`. The root consults only the top view, and only when the static table has no match, so a command never reaches two views the way a broadcast result would. A listed name the top view declines (or a top view that is not a Commander) gives "not available here: name"; any other name gives "not a command: name". List the view's commands in the table above.

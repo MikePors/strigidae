@@ -11,3 +11,10 @@ Checks only the maintainer can do, such as live verification against real GitHub
   4. Run `:discard-review` again. It should say `no pending review`.
   5. **Submitted elsewhere:** start a pending review again, run `:discard-review`, and leave the `y/N` open. Submit the review on github.com, then answer `y` in strig. strig re-reads before deleting, so it should say `no pending review` and delete nothing.
   6. **GitHub's answer for a submitted review** (outside strig). The code assumes deleting a review that is no longer pending gives an error other than not-found. Take the node ID of the review you just submitted (`gh api graphql -f query='{repository(owner:"<owner>",name:"<repo>"){pullRequest(number:<N>){reviews(last:1){nodes{id state}}}}}'`), then run `gh api graphql -f query='mutation{deletePullRequestReview(input:{pullRequestReviewId:"<id>"}){clientMutationId}}'`. Report the error GitHub returns.
+
+- [ ] **`:react` adds and removes a reaction on GitHub** (#156). The `addReaction` / `removeReaction` calls have only been tested against the fake client.
+  1. On a test PR with a review comment in a thread, open it in strig and move the diff cursor onto the comment's text (not the thread's first line).
+  2. Run `:react`. The picker should be titled with the comment's author and list the 8 reactions with their counts. Choose `+1` with `enter`.
+  3. strig should say `reacted 👍`, and the comment should show 👍 with a count in strig and on github.com.
+  4. Run `:react +1` on the same comment. strig should say `removed 👍`, and the reaction should be gone on github.com.
+  5. Run `:react` with the cursor on a diff line. It should say `move onto a comment to react to it`.

@@ -51,6 +51,10 @@ func (pane *stubPane) SetThreadExpanded(string, bool) {}
 func (pane *stubPane) SetThreads([]github.ReviewThread)      {}
 func (pane *stubPane) FocusedThreads() []github.ReviewThread { return nil }
 
+func (pane *stubPane) FocusedComment() (github.ReviewThread, int, bool) {
+	return github.ReviewThread{}, 0, false
+}
+
 func (pane *stubPane) SetFile(file github.ChangedFile) { pane.files = append(pane.files, file.Path) }
 
 func (pane *stubPane) SetSize(width, height int) {

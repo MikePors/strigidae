@@ -226,6 +226,28 @@ func (model *Model) ThreadsAtCursor() []github.ReviewThread {
 	return out
 }
 
+// CommentAtCursor returns the thread and the index in its Comments of the
+// comment whose rows the cursor is on. ok is false when the cursor is not on a
+// comment: on a diff line, a folded thread, or a thread's header row.
+func (model *Model) CommentAtCursor() (reviewThread github.ReviewThread, commentIndex int, ok bool) {
+	cursor := model.window.Cursor()
+	if cursor >= len(model.rows) || model.rows[cursor].threadRow == nil {
+		return reviewThread, 0, false
+	}
+	placement := *model.rows[cursor].threadRow
+	reviewThread = model.fileThreads[placement.threadIndex]
+	if !model.expanded(reviewThread) {
+		return reviewThread, 0, false
+	}
+	environment := thread.Environment{Theme: model.theme, Markdown: model.markdownRenderer, Now: model.now()}
+	options := thread.Options{Expanded: true, Location: slices.Contains(model.orphans, placement.threadIndex)}
+	owners := thread.CommentRows(environment, reviewThread, model.width-model.gutterWidth(), options)
+	if placement.rowInBlock >= len(owners) || owners[placement.rowInBlock] < 0 {
+		return reviewThread, 0, false
+	}
+	return reviewThread, owners[placement.rowInBlock], true
+}
+
 func (model *Model) setExpanded(threadIndexes []int, value bool) {
 	if len(threadIndexes) == 0 {
 		return

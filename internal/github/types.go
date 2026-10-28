@@ -179,6 +179,37 @@ const (
 	ReactionEyes       ReactionContent = "EYES"
 )
 
+// ReactionContents lists every kind of reaction in GitHub's order.
+var ReactionContents = []ReactionContent{
+	ReactionThumbsUp, ReactionThumbsDown, ReactionLaugh, ReactionHooray,
+	ReactionConfused, ReactionHeart, ReactionRocket, ReactionEyes,
+}
+
+// Shortcode returns the name GitHub gives the reaction (+1, heart, ...), or
+// the raw content if unknown.
+func (content ReactionContent) Shortcode() string {
+	switch content {
+	case ReactionThumbsUp:
+		return "+1"
+	case ReactionThumbsDown:
+		return "-1"
+	case ReactionLaugh:
+		return "laugh"
+	case ReactionHooray:
+		return "hooray"
+	case ReactionConfused:
+		return "confused"
+	case ReactionHeart:
+		return "heart"
+	case ReactionRocket:
+		return "rocket"
+	case ReactionEyes:
+		return "eyes"
+	default:
+		return string(content)
+	}
+}
+
 // Emoji returns the emoji for the reaction, or the raw content if unknown.
 func (content ReactionContent) Emoji() string {
 	switch content {
