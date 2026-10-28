@@ -120,7 +120,7 @@ func (view *View) reviewEnvironment() reviewEnvironment {
 }
 
 // Command implements userinterface.Commander: :approve, :request-changes, :review,
-// :checks, :merge, :copy-filename, :edit-comment, :delete-comment, :resolve and :unresolve.
+// :checks, :merge, :copy-filename, :edit-comment, :delete-comment, :discard-review, :resolve and :unresolve.
 func (view *View) Command(name, arguments string) (tea.Cmd, bool) {
 	switch name {
 	case "copy-filename":
@@ -133,6 +133,8 @@ func (view *View) Command(name, arguments string) (tea.Cmd, bool) {
 		return view.editComment(), true
 	case "delete-comment":
 		return view.deleteComment(), true
+	case "discard-review":
+		return view.discardReview(), true
 	case "resolve":
 		return view.resolveThread(resolveOnly), true
 	case "unresolve":

@@ -70,6 +70,10 @@ type Client interface {
 	// the same permissions (see ReviewComment.ViewerCanDelete).
 	// Deleting a thread's only comment removes the thread.
 	DeleteReviewComment(ctx context.Context, commentIdentifier string) error
+	// DeleteReview deletes the viewer's pending review with the given node ID,
+	// together with all its draft comments. A review that no longer exists
+	// yields ErrNotFound; a review that was submitted cannot be deleted.
+	DeleteReview(ctx context.Context, reviewIdentifier string) error
 	// ResolveReviewThread marks the thread resolved and returns its new state.
 	// A thread that does not exist yields ErrNotFound.
 	ResolveReviewThread(ctx context.Context, threadIdentifier string) (ThreadResolution, error)

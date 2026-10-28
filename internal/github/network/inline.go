@@ -14,6 +14,7 @@ const (
 	operationUpdateReviewComment = "UpdateReviewComment"
 	operationDeleteReviewComment = "DeleteReviewComment"
 	operationGetReviewComment    = "GetReviewComment"
+	operationDeleteReview        = "DeleteReview"
 )
 
 const getReviewCommentQuery = `
@@ -47,6 +48,11 @@ mutation ` + operationUpdateReviewComment + `($commentId: ID!, $body: String!) {
 const deleteReviewCommentMutation = `
 mutation ` + operationDeleteReviewComment + `($commentId: ID!) {
   deletePullRequestReviewComment(input: {id: $commentId}) { clientMutationId }
+}`
+
+const deleteReviewMutation = `
+mutation ` + operationDeleteReview + `($reviewId: ID!) {
+  deletePullRequestReview(input: {pullRequestReviewId: $reviewId}) { clientMutationId }
 }`
 
 // StartReview implements github.Client.
@@ -111,6 +117,15 @@ func (client *Client) DeleteReviewComment(ctx context.Context, commentIdentifier
 	var response map[string]any
 	if err := client.query(ctx, deleteReviewCommentMutation, map[string]any{"commentId": commentIdentifier}, &response); err != nil {
 		return fmt.Errorf("delete review comment: %w", err)
+	}
+	return nil
+}
+
+// DeleteReview implements github.Client.
+func (client *Client) DeleteReview(ctx context.Context, reviewIdentifier string) error {
+	var response map[string]any
+	if err := client.query(ctx, deleteReviewMutation, map[string]any{"reviewId": reviewIdentifier}, &response); err != nil {
+		return fmt.Errorf("delete review: %w", err)
 	}
 	return nil
 }

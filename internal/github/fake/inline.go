@@ -18,6 +18,7 @@ const (
 	MethodUpdateReviewComment = "UpdateReviewComment"
 	MethodDeleteReviewComment = "DeleteReviewComment"
 	MethodGetReviewComment    = "GetReviewComment"
+	MethodDeleteReview        = "DeleteReview"
 )
 
 // StartedReview is a recorded successful StartReview call.
@@ -222,6 +223,41 @@ func (client *Client) DeletedComments() []string {
 	client.mutex.Lock()
 	defer client.mutex.Unlock()
 	return slices.Clone(client.deleted)
+}
+
+// DeleteReview implements github.Client. Like GitHub it deletes the pending
+// review with its draft comments, and a thread left without comments goes with
+// them. An identifier that is not a pending review yields ErrNotFound.
+func (client *Client) DeleteReview(ctx context.Context, reviewIdentifier string) error {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	if err := client.begin(ctx, Call{Method: MethodDeleteReview, ReviewIdentifier: reviewIdentifier}); err != nil {
+		return err
+	}
+	for key, pendingReview := range client.pending {
+		if pendingReview.Identifier != reviewIdentifier {
+			continue
+		}
+		delete(client.pending, key)
+		var kept []github.ReviewThread
+		for _, thread := range client.threads[key] {
+			thread.Comments = slices.DeleteFunc(slices.Clone(thread.Comments), func(comment github.ReviewComment) bool { return comment.Pending })
+			if len(thread.Comments) > 0 {
+				kept = append(kept, thread)
+			}
+		}
+		client.threads[key] = kept
+		client.deletedReviews = append(client.deletedReviews, reviewIdentifier)
+		return nil
+	}
+	return fmt.Errorf("delete review %s: %w", reviewIdentifier, github.ErrNotFound)
+}
+
+// DeletedReviews returns the IDs of the successfully deleted reviews.
+func (client *Client) DeletedReviews() []string {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	return slices.Clone(client.deletedReviews)
 }
 
 // GetReviewComment implements github.Client. It finds the comment in any
