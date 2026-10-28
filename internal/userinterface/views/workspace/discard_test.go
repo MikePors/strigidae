@@ -1,6 +1,7 @@
 package workspace
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -243,4 +244,50 @@ func TestDiscardReviewDeleteErrorIsShown(test *testing.T) {
 	if len(inliner.client.DeletedReviews()) != 0 {
 		test.Error("deleted despite the error")
 	}
+}
+
+func TestDiscardReviewTimesOut(test *testing.T) {
+	tests := []struct {
+		name         string
+		blockRead    bool
+		wantMayApply bool
+	}{
+		{"re-read", true, false},
+		{"delete", false, true},
+	}
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			inliner := newInliner(test)
+			inliner.addPending("first draft")
+			inliner.view.timeouts = shortTimeouts
+			if testCase.blockRead {
+				inliner.view.client = blockingReadClient{blockingClient{Client: inliner.client}}
+			} else {
+				inliner.view.client = blockingClient{Client: inliner.client}
+			}
+			inliner.messages = nil
+			if testCase.blockRead {
+				inliner.command("discard-review") // the first re-read, before any question
+			} else {
+				inliner.run(inliner.askDiscard().OnYes)
+			}
+			err := inliner.lastErr()
+			if !errors.Is(err, context.DeadlineExceeded) {
+				test.Fatalf("error = %v, want a deadline error", err)
+			}
+			if got := strings.Contains(err.Error(), "it may have gone through"); got != testCase.wantMayApply {
+				test.Errorf("error = %v, says may have gone through = %v, want %v", err, got, testCase.wantMayApply)
+			}
+			if inliner.view.writes != 0 {
+				test.Errorf("writes in flight = %d, want 0", inliner.view.writes)
+			}
+		})
+	}
+}
+
+// blockingReadClient also blocks the review state read.
+type blockingReadClient struct{ blockingClient }
+
+func (client blockingReadClient) GetReviewStatus(ctx context.Context, _ github.Repository, _ int) (github.ReviewStatus, error) {
+	return github.ReviewStatus{}, client.wait(ctx)
 }

@@ -1,7 +1,6 @@
 package workspace
 
 import (
-	"context"
 	"errors"
 	"fmt"
 
@@ -32,8 +31,9 @@ type reviewDiscardedMessage struct {
 
 // reviewDiscard is one guarded discard of the viewer's pending review.
 type reviewDiscard struct {
-	origin origin
-	client github.Client
+	origin   origin
+	client   github.Client
+	timeouts userinterface.Timeouts
 }
 
 // discardReview starts discarding the viewer's pending review.
@@ -46,7 +46,7 @@ func (view *View) discardReview() tea.Cmd {
 	case view.writes > 0:
 		return userinterface.Info(commentSavingText)
 	}
-	discard := reviewDiscard{origin: view.origin(), client: view.client}
+	discard := reviewDiscard{origin: view.origin(), client: view.client, timeouts: view.timeouts}
 	view.writeStarted()
 	return func() tea.Msg { return discard.check(nil) }
 }
@@ -55,8 +55,9 @@ func (view *View) discardReview() tea.Cmd {
 // or nil before the question: it then asks, and after the yes it runs again
 // and deletes.
 func (discard reviewDiscard) check(asked *github.PendingReview) tea.Msg {
-	ctx := context.Background()
-	status, err := discard.client.GetReviewStatus(ctx, discard.origin.repository, discard.origin.number)
+	readContext, cancelRead := discard.timeouts.RequestContext()
+	defer cancelRead()
+	status, err := discard.client.GetReviewStatus(readContext, discard.origin.repository, discard.origin.number)
 	if err != nil {
 		return discard.finish(false, fmt.Errorf("check review state: %w", err))
 	}
@@ -69,7 +70,9 @@ func (discard reviewDiscard) check(asked *github.PendingReview) tea.Msg {
 		again := func() tea.Msg { return discard.check(&current) }
 		return commentCheckedMessage{origin: discard.origin, question: discardQuestion(current), onYes: agreed(discard.origin, again)}
 	}
-	err = discard.client.DeleteReview(ctx, pending.Identifier)
+	deleteContext, cancelDelete := discard.timeouts.RequestContext()
+	defer cancelDelete()
+	err = userinterface.WriteError(discard.client.DeleteReview(deleteContext, pending.Identifier))
 	if errors.Is(err, github.ErrNotFound) {
 		return discard.finish(true, nil) // deleted between the re-read and the write; a submitted review may fail with another error, shown as one
 	}
