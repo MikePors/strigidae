@@ -169,6 +169,11 @@ func TestHideResolvedOnNoticeOnlyFile(test *testing.T) {
 	}
 	model.NextThread() // nothing to reach; must not panic
 	model.CursorDown(1)
+	model.SetFile(fixture(test, "logo.png")) // a refresh while hidden
+	model.SetThreads([]github.ReviewThread{resolved})
+	if got := screen(model); got != want {
+		test.Errorf("after a refresh the notice should still look as with no threads:\n%s", got)
+	}
 
 	model.SetHideResolved(false)
 	out := screen(model)
