@@ -63,3 +63,19 @@ func TestContextNotOnAFoldedThread(test *testing.T) {
 		test.Error("a folded thread reports a comment")
 	}
 }
+
+// TestContextCommentAfterFoldWithoutRelayout: SetThreadExpanded changes the
+// fold state before the next SetThreads lays the rows out again; the rows
+// still drawn expanded are then on no comment.
+func TestContextCommentAfterFoldWithoutRelayout(test *testing.T) {
+	model := threadModel(test, 100, 80)
+	model.goToRow(test, `"log"`)
+	model.CursorDown(2)
+	if !model.Context().OnComment {
+		test.Fatal("setup: the cursor is not on a comment row")
+	}
+	model.SetThreadExpanded("open", false)
+	if model.Context().OnComment {
+		test.Error("a thread folded since the last layout reports a comment")
+	}
+}

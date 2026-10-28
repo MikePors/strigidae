@@ -91,6 +91,8 @@ func (model *Model) cursorComment() (commentIndex int, ok bool) {
 		return 0, false
 	}
 	placement := *model.rows[cursor].threadRow
+	// SetThreadExpanded changes the fold state without a relayout, so the
+	// stored owners can describe a layout that is no longer the chosen one.
 	if !model.expanded(model.fileThreads[placement.threadIndex]) {
 		return 0, false
 	}
