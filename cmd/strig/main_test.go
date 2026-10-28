@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/x/ansi"
 	cliBrowser "github.com/cli/browser"
@@ -18,6 +19,7 @@ import (
 	"github.com/MikePors/strigidae/internal/config"
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/github/fake"
+	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
@@ -304,6 +306,25 @@ func TestRunConfig(test *testing.T) {
 			}
 			if diff := cmp.Diff(testCase.wantTabs, tabs); diff != "" {
 				test.Errorf("tabs (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestApplicationTimeouts(test *testing.T) {
+	tests := []struct {
+		name   string
+		config config.Config
+		want   userinterface.Timeouts
+	}{
+		{"absent", config.Default(), userinterface.Timeouts{}},
+		{"both set", config.Config{Timeouts: config.Timeouts{Request: 2 * time.Second, Load: time.Minute}}, userinterface.Timeouts{Request: 2 * time.Second, Load: time.Minute}},
+		{"one set", config.Config{Timeouts: config.Timeouts{Load: time.Minute}}, userinterface.Timeouts{Load: time.Minute}},
+	}
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			if got := (application{config: testCase.config}).timeouts(); got != testCase.want {
+				test.Errorf("timeouts = %+v, want %+v", got, testCase.want)
 			}
 		})
 	}

@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -149,6 +150,16 @@ func (parser *parser) boolean(node *yaml.Node, what string) bool {
 	if node.Kind != yaml.ScalarNode || node.Tag != "!!bool" || err != nil {
 		parser.fail(node, "%s must be true or false", what)
 		return false
+	}
+	return value
+}
+
+// duration reads a positive Go duration such as 10s or 1m30s.
+func (parser *parser) duration(node *yaml.Node, what string) time.Duration {
+	value, err := time.ParseDuration(strings.TrimSpace(node.Value))
+	if node.Kind != yaml.ScalarNode || err != nil || value <= 0 {
+		parser.fail(node, "%s must be a positive duration such as 10s or 1m30s", what)
+		return 0
 	}
 	return value
 }

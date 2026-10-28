@@ -64,9 +64,15 @@ func askTerminal() (terminalpalette.Reply, error) {
 // or in one with no GitHub remote), else the repository's pull request list.
 func firstView(application application) userinterface.View {
 	if application.dashboard {
-		return dashboard.New(application.client, application.config.Tabs, application.theme, dashboard.Options{Notice: application.notice})
+		return dashboard.New(application.client, application.config.Tabs, application.theme, dashboard.Options{Notice: application.notice, Timeouts: application.timeouts()})
 	}
-	return pullrequestlist.New(application.client, application.repository, application.theme, pullrequestlist.Options{})
+	return pullrequestlist.New(application.client, application.repository, application.theme, pullrequestlist.Options{Timeouts: application.timeouts()})
+}
+
+// timeouts hands the config file's deadlines to the views; a field the file
+// left out is zero, which selects the view's default.
+func (application application) timeouts() userinterface.Timeouts {
+	return userinterface.Timeouts{Request: application.config.Timeouts.Request, Load: application.config.Timeouts.Load}
 }
 
 // silenceBrowser stops browser launchers writing to the terminal the TUI owns.

@@ -47,6 +47,25 @@ Base16/Base24 scheme file; unset means the built-in theme. A relative path is
 taken from the config file's directory, and `~` is expanded. See
 [themes.md](themes.md).
 
+### `timeouts`
+
+Optional. How long strig waits for GitHub before giving up on a call.
+
+```yaml
+timeouts:
+  request: 10s
+  load: 30s
+```
+
+| Key | Default | Applies to |
+|---|---|---|
+| `request` | `10s` | Small calls and every write |
+| `load` | `30s` | Bigger reads, paged ones as a whole: the diff, a pull request's details, its threads and the pull request lists |
+
+Either key may be left out and keeps its default. Values are Go durations
+(`10s`, `1m`, `1m30s`); zero, negative or unparseable values are a config
+error at startup. There is no `:set` for these.
+
 ### Options
 
 Optional yes/no keys, written at the top level next to `theme`. Each is also

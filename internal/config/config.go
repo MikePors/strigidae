@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/MikePors/strigidae/internal/options"
 )
@@ -24,6 +25,17 @@ type Config struct {
 	// Options holds the yes/no options the file sets; the rest are at their
 	// defaults (see package options).
 	Options options.Values
+	// Timeouts are the GitHub call deadlines the file sets; a zero field
+	// means the file left it out and the user interface's default applies.
+	Timeouts Timeouts
+}
+
+// Timeouts holds the optional deadline overrides of the timeouts: key.
+type Timeouts struct {
+	// Request bounds one small call or write.
+	Request time.Duration
+	// Load bounds a bigger read: a diff, details, threads, a pull request list.
+	Load time.Duration
 }
 
 // Tab is a named group of sections, for example the viewer's own PRs or a

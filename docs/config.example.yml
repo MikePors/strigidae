@@ -6,6 +6,12 @@
 # Base16/Base24 scheme file. See docs/themes.md.
 # theme: tokyo-night
 
+# Optional deadlines for GitHub calls, as Go durations (10s, 1m, 1m30s). Either
+# key may be left out and keeps its default.
+# timeouts:
+#   request: 10s   # small calls and every write
+#   load: 30s      # diff, pull request details, threads, PR lists
+
 # Optional yes/no options (also `:set` while strig runs). wrapscan and
 # hlsearch default to true, wrap, hideviewed, hidereviewed, autoviewed,
 # hideresolved, skipresolved and relativenumber to false.

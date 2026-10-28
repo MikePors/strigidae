@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -39,6 +40,38 @@ func TestParseValid(test *testing.T) {
 				{Name: "Me", User: "@me", Sections: defaultsFor("@me")},
 				{Name: "Alice", User: "alice", Sections: defaultsFor("alice")},
 			}},
+		},
+		{
+			"timeouts are zero when absent",
+			"tabs:\n  - name: Me\n",
+			Config{Tabs: []Tab{{Name: "Me", User: "@me", Sections: defaultsFor("@me")}}},
+		},
+		{
+			"request override alone",
+			"timeouts:\n  request: 5s\n",
+			func() Config {
+				configuration := Default()
+				configuration.Timeouts.Request = 5 * time.Second
+				return configuration
+			}(),
+		},
+		{
+			"load override alone",
+			"timeouts:\n  load: 1m30s\n",
+			func() Config {
+				configuration := Default()
+				configuration.Timeouts.Load = 90 * time.Second
+				return configuration
+			}(),
+		},
+		{
+			"both overrides",
+			"timeouts:\n  request: 2s\n  load: 1m\n",
+			func() Config {
+				configuration := Default()
+				configuration.Timeouts = Timeouts{Request: 2 * time.Second, Load: time.Minute}
+				return configuration
+			}(),
 		},
 		{
 			"is:pr is added when missing, not when present",
@@ -154,7 +187,14 @@ func TestParseErrors(test *testing.T) {
 		{"wrap as text", "wrap: 'true'\n", "c.yml:1: wrap must be true or false"},
 		{"wrap as yes", "wrap: yes\n", "c.yml:1: wrap must be true or false"},
 		{"empty wrap", "wrap:\n", "c.yml:1: wrap must be true or false"},
-		{"unknown top-level key", "tabz: []\n", `c.yml:1: unknown key "tabz" in the config file (valid keys: autoviewed, hideresolved, hidereviewed, hideviewed, hlsearch, relativenumber, skipresolved, tabs, theme, wrap, wrapscan)`},
+		{"unknown top-level key", "tabz: []\n", `c.yml:1: unknown key "tabz" in the config file (valid keys: autoviewed, hideresolved, hidereviewed, hideviewed, hlsearch, relativenumber, skipresolved, tabs, theme, timeouts, wrap, wrapscan)`},
+		{"zero request", "timeouts:\n  request: 0s\n", "c.yml:2: timeouts: request must be a positive duration such as 10s or 1m30s"},
+		{"bare zero request", "timeouts:\n  request: 0\n", "c.yml:2: timeouts: request must be a positive duration such as 10s or 1m30s"},
+		{"negative load", "timeouts:\n  load: -5s\n", "c.yml:2: timeouts: load must be a positive duration such as 10s or 1m30s"},
+		{"unparseable load", "timeouts:\n  load: soon\n", "c.yml:2: timeouts: load must be a positive duration such as 10s or 1m30s"},
+		{"empty request", "timeouts:\n  request:\n", "c.yml:2: timeouts: request must be a positive duration such as 10s or 1m30s"},
+		{"unknown timeouts key", "timeouts:\n  read: 5s\n", `c.yml:2: unknown key "read" in timeouts (valid keys: request, load)`},
+		{"timeouts not a mapping", "timeouts: 5s\n", "c.yml:1: timeouts must be a mapping of keys to values"},
 		{"unknown tab key", "tabs:\n  - name: Me\n    usr: a\n", `c.yml:3: unknown key "usr" in a tab (valid keys: name, user, sections)`},
 		{"unknown section key", "tabs:\n  - name: Me\n    sections:\n      - name: A\n        query: q\n        limt: 3\n", `c.yml:6: unknown key "limt" in a section (valid keys: name, query, limit, sort, order)`},
 		{"duplicate key", "tabs:\n  - name: A\ntabs: []\n", `c.yml:3: duplicate key "tabs" in the config file`},
