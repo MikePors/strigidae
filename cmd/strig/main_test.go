@@ -10,7 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	cliBrowser "github.com/cli/browser"
 	"github.com/google/go-cmp/cmp"
@@ -304,6 +306,75 @@ func TestRunConfig(test *testing.T) {
 			}
 			if diff := cmp.Diff(testCase.wantTabs, tabs); diff != "" {
 				test.Errorf("tabs (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// deadlineClient records the deadline of each pull request load it receives.
+type deadlineClient struct {
+	*fake.Client
+	deadlines *[]time.Time
+}
+
+func (client deadlineClient) record(ctx context.Context) {
+	if deadline, ok := ctx.Deadline(); ok {
+		*client.deadlines = append(*client.deadlines, deadline)
+	}
+}
+
+func (client deadlineClient) ListPullRequests(ctx context.Context, repository github.Repository, pageRequest github.PageRequest) (github.Page[github.PullRequest], error) {
+	client.record(ctx)
+	return client.Client.ListPullRequests(ctx, repository, pageRequest)
+}
+
+func (client deadlineClient) SearchPullRequests(ctx context.Context, query string, pageRequest github.PageRequest) (github.Page[github.PullRequest], error) {
+	client.record(ctx)
+	return client.Client.SearchPullRequests(ctx, query, pageRequest)
+}
+
+// runCommand runs command and any commands batched inside it.
+func runCommand(command tea.Cmd) {
+	if command == nil {
+		return
+	}
+	if batch, ok := command().(tea.BatchMsg); ok {
+		for _, inner := range batch {
+			runCommand(inner)
+		}
+	}
+}
+
+func TestFirstViewUsesConfiguredTimeouts(test *testing.T) {
+	// The default load timeout is 30s, so an hour proves the override arrived.
+	configured := config.Config{Timeouts: config.Timeouts{Load: time.Hour}}
+	tests := []struct {
+		name      string
+		dashboard bool
+	}{
+		{"pull request list", false},
+		{"dashboard", true},
+	}
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			var deadlines []time.Time
+			configured.Tabs = config.Default().Tabs
+			view := firstView(application{
+				client:     deadlineClient{Client: fake.New(), deadlines: &deadlines},
+				repository: github.Repository{Owner: "o", Name: "r"},
+				dashboard:  testCase.dashboard,
+				config:     configured,
+				theme:      theme.Default(),
+			})
+			started := time.Now()
+			runCommand(view.Init())
+			if len(deadlines) == 0 {
+				test.Fatal("no pull request load was made")
+			}
+			for _, deadline := range deadlines {
+				if deadline.Sub(started) < 30*time.Minute {
+					test.Errorf("load deadline is %v away, want about an hour", deadline.Sub(started))
+				}
 			}
 		})
 	}
