@@ -50,7 +50,7 @@ func TestHideReviewedFadesThenLeavesPlaceholder(test *testing.T) {
 	}
 	for step := 1; step <= theme.FadeSteps; step++ {
 		hidden.fire(fadeInterval)
-		file, _, _ := hidden.view.filePane.CursorHunk()
+		file := hidden.view.filePane.Context().File
 		if got := hidden.view.hunkFade(file, 0); got != step {
 			test.Fatalf("fade step = %d, want %d", got, step)
 		}
@@ -79,7 +79,7 @@ func TestHideReviewedUndoWhileFading(test *testing.T) {
 	if got := hidden.lastInfo(); got != "hunk 1/2 not reviewed" {
 		test.Errorf("status = %q", got)
 	}
-	file, _, _ := hidden.view.filePane.CursorHunk()
+	file := hidden.view.filePane.Context().File
 	if hidden.view.fades.active(hidden.view.hunkFadeKey(file, 0)) {
 		test.Error("the hunk is still fading after it was unmarked")
 	}

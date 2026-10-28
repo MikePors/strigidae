@@ -66,7 +66,7 @@ func (inliner *inliner) moveTo(side github.DiffSide, count int) {
 func (inliner *inliner) toThread(identifier string) {
 	inliner.test.Helper()
 	inliner.cursorTo("thread "+identifier, func(diffView *diffview.Model) bool {
-		threads := diffView.ThreadsAtCursor()
+		threads := diffView.Context().Threads
 		return len(threads) == 1 && threads[0].Identifier == identifier
 	})
 }

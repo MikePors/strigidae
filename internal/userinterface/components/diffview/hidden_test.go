@@ -42,8 +42,8 @@ func TestHiddenHunkLeavesPlaceholder(test *testing.T) {
 			test.Errorf("%q is missing:\n%s", kept, shown)
 		}
 	}
-	if file, hunk, ok := model.CursorHunk(); !ok || file != model.file || hunk != 0 {
-		test.Errorf("CursorHunk on the placeholder = %v, %d, %v; want hunk 0", file != nil, hunk, ok)
+	if context := model.Context(); !context.InHunk || context.File != model.file || context.Hunk != 0 {
+		test.Errorf("Context on the placeholder = %v, %d, %v; want hunk 0", context.File != nil, context.Hunk, context.InHunk)
 	}
 	if _, ok := model.Cursor(); ok {
 		test.Error("the placeholder is a line to comment on")

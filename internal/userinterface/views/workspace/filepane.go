@@ -88,18 +88,10 @@ type FilePane interface {
 	SetFile(file github.ChangedFile)
 	// SetSize gives the pane's inner size; it is called whenever it changes.
 	SetSize(width, height int)
-	// FocusedThreads returns the review threads at the pane's cursor: the one
-	// whose rows it is in, or those on the line it is on. Panes without
-	// threads return nil.
-	FocusedThreads() []github.ReviewThread
-	// FocusedComment returns the thread and the index in its Comments of the
-	// comment whose rows the cursor is on. ok is false anywhere else. Panes
-	// without threads return false.
-	FocusedComment() (reviewThread github.ReviewThread, commentIndex int, ok bool)
-	// CommentRange returns the lines a new comment would go on: the visual
-	// selection, else the cursor line. ok is false when the cursor is not on a
-	// diff line. Panes without lines return false.
-	CommentRange() (lineRange diffview.Range, ok bool)
+	// Context returns what is at the pane's cursor: the threads and comment
+	// there, and the lines a new comment would go on. Panes without threads
+	// or lines return the zero value.
+	Context() diffview.Context
 	// VisualStart begins a line selection at the cursor, reporting false when
 	// it cannot (no diff line under the cursor).
 	VisualStart() bool
@@ -132,7 +124,4 @@ type FilePane interface {
 	SetThreadFade(fade func(identifier string) (step int, fading bool))
 	// ThreadFadesChanged says a thread stopped fading.
 	ThreadFadesChanged()
-	// CursorHunk returns the file and hunk index at the pane's cursor. ok is
-	// false off any hunk; panes without hunks return false.
-	CursorHunk() (file *diff.File, hunk int, ok bool)
 }

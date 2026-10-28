@@ -246,7 +246,7 @@ func TestResolveWithSeveralThreadsOrNone(test *testing.T) {
 	}
 
 	inliner.cursorTo("two threads", func(diffView *diffview.Model) bool {
-		return len(diffView.ThreadsAtCursor()) == 2
+		return len(diffView.Context().Threads) == 2
 	})
 	inliner.messages = nil
 	inliner.press("x")

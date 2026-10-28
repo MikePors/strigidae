@@ -10,16 +10,17 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
-// TestCursorHunk walks every row of server.go with its threads: a header, a
+// TestContextHunk walks every row of server.go with its threads: a header, a
 // line or a thread under a line is in the hunk of the last header above it;
 // the threads on no line (outdated, gone), shown at the end, are in none.
-func TestCursorHunk(test *testing.T) {
+func TestContextHunk(test *testing.T) {
 	model := threadModel(test, 100, 80)
 	headers, threadRows, orphanRows := -1, 0, 0
 	for i := range model.rows {
 		model.GotoTop()
 		model.CursorDown(i)
-		file, hunk, ok := model.CursorHunk()
+		context := model.Context()
+		file, hunk, ok := context.File, context.Hunk, context.InHunk
 		row := model.rows[i]
 		if row.line == nil && row.threadRow == nil && !row.message {
 			headers++
@@ -32,7 +33,7 @@ func TestCursorHunk(test *testing.T) {
 			}
 		}
 		if !ok || file != model.file || hunk != headers {
-			test.Errorf("row %d: CursorHunk = %v, %d, %v; want hunk %d", i, file != nil, hunk, ok, headers)
+			test.Errorf("row %d: Context = %v, %d, %v; want hunk %d", i, file != nil, hunk, ok, headers)
 		}
 	}
 	if headers != len(model.file.Hunks)-1 || threadRows == 0 || orphanRows == 0 {
@@ -43,22 +44,22 @@ func TestCursorHunk(test *testing.T) {
 	}
 }
 
-func TestCursorHunkWithoutHunks(test *testing.T) {
+func TestContextHunkWithoutHunks(test *testing.T) {
 	model := New(theme.New(true))
-	if _, _, ok := model.CursorHunk(); ok {
-		test.Error("no file: CursorHunk is ok")
+	if model.Context().InHunk {
+		test.Error("no file: Context is ok")
 	}
 	model.SetFile(fixture(test, "server.go"))
 	model.SetSize(80, 10)
 	model.SetDiffError(errors.New("boom"))
-	if _, _, ok := model.CursorHunk(); ok {
-		test.Error("an error message is shown: CursorHunk is ok")
+	if model.Context().InHunk {
+		test.Error("an error message is shown: Context is ok")
 	}
 }
 
-// TestCursorHunkOnNotice uses a rename with no hunks and a thread: its
+// TestContextHunkOnNotice uses a rename with no hunks and a thread: its
 // notice rows and the thread are in no hunk.
-func TestCursorHunkOnNotice(test *testing.T) {
+func TestContextHunkOnNotice(test *testing.T) {
 	model := New(theme.New(true))
 	model.SetFile(fixture(test, "pkg/new.go"))
 	model.SetThreads([]github.ReviewThread{{
@@ -72,8 +73,8 @@ func TestCursorHunkOnNotice(test *testing.T) {
 	for i := range model.rows {
 		model.GotoTop()
 		model.CursorDown(i)
-		if _, _, ok := model.CursorHunk(); ok {
-			test.Errorf("row %d (%+v): CursorHunk is ok", i, model.rows[i])
+		if model.Context().InHunk {
+			test.Errorf("row %d (%+v): Context is ok", i, model.rows[i])
 		}
 	}
 }

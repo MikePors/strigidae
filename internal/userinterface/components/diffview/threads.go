@@ -161,24 +161,32 @@ type blockKey struct {
 	location   bool
 }
 
+// block is one laid-out thread: its lines and, parallel to them, the index in
+// the thread's Comments each belongs to (-1 for none).
+type block struct {
+	lines  []string
+	owners []int
+}
+
 // renderBlock returns the lines of thread threadIndex, from the cache when the thread,
 // its expanded state, the width and the theme are unchanged.
-func (model *Model) renderBlock(threadIndex int) []string {
+func (model *Model) renderBlock(threadIndex int) block {
 	reviewThread := model.fileThreads[threadIndex]
 	now := model.now()
 	signature := blockSignature{width: model.width - model.gutterWidth(), themeIdentifier: model.theme.Identifier, minute: now.Truncate(time.Minute)}
 	if model.blockCache == nil || signature != model.blockSignature {
-		model.blockCache, model.blockSignature = map[blockKey][]string{}, signature
+		model.blockCache, model.blockSignature = map[blockKey]block{}, signature
 	}
 	key := blockKey{identifier: reviewThread.Identifier, expanded: model.expanded(reviewThread), location: slices.Contains(model.orphans, threadIndex)}
-	if lines, ok := model.blockCache[key]; ok {
-		return lines
+	if cached, ok := model.blockCache[key]; ok {
+		return cached
 	}
 	model.renders++
 	environment := thread.Environment{Theme: model.theme, Markdown: model.markdownRenderer, Now: now}
-	lines := thread.Lines(environment, reviewThread, signature.width, thread.Options{Expanded: key.expanded, Location: key.location})
-	model.blockCache[key] = lines
-	return lines
+	lines, owners := thread.Layout(environment, reviewThread, signature.width, thread.Options{Expanded: key.expanded, Location: key.location})
+	built := block{lines: lines, owners: owners}
+	model.blockCache[key] = built
+	return built
 }
 
 // noticeRows are the rows for the notice of a file with no diff rows (binary,
@@ -214,38 +222,6 @@ func (model *Model) threadsAtCursor() []int {
 		return []int{row.threadRow.threadIndex}
 	}
 	return model.shownThreads(model.attach[model.rows[cursor].baseIndex])
-}
-
-// ThreadsAtCursor returns the threads the cursor is on: the one whose rows it
-// is in, or those anchored to the diff line it is on.
-func (model *Model) ThreadsAtCursor() []github.ReviewThread {
-	var out []github.ReviewThread
-	for _, threadIndex := range model.threadsAtCursor() {
-		out = append(out, model.fileThreads[threadIndex])
-	}
-	return out
-}
-
-// CommentAtCursor returns the thread and the index in its Comments of the
-// comment whose rows the cursor is on. ok is false when the cursor is not on a
-// comment: on a diff line, a folded thread, or a thread's header row.
-func (model *Model) CommentAtCursor() (reviewThread github.ReviewThread, commentIndex int, ok bool) {
-	cursor := model.window.Cursor()
-	if cursor >= len(model.rows) || model.rows[cursor].threadRow == nil {
-		return reviewThread, 0, false
-	}
-	placement := *model.rows[cursor].threadRow
-	reviewThread = model.fileThreads[placement.threadIndex]
-	if !model.expanded(reviewThread) {
-		return reviewThread, 0, false
-	}
-	environment := thread.Environment{Theme: model.theme, Markdown: model.markdownRenderer, Now: model.now()}
-	options := thread.Options{Expanded: true, Location: slices.Contains(model.orphans, placement.threadIndex)}
-	owners := thread.CommentRows(environment, reviewThread, model.width-model.gutterWidth(), options)
-	if placement.rowInBlock >= len(owners) || owners[placement.rowInBlock] < 0 {
-		return reviewThread, 0, false
-	}
-	return reviewThread, owners[placement.rowInBlock], true
 }
 
 func (model *Model) setExpanded(threadIndexes []int, value bool) {

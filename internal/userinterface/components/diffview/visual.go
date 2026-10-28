@@ -97,21 +97,6 @@ func (model *Model) nextLineRow(i, step int) int {
 	return -1
 }
 
-// Anchor returns the range a comment would be written on: the selection while
-// one is in progress, else the cursor line. ok is false when the cursor is not
-// on a diff line.
-func (model *Model) Anchor() (lineRange Range, ok bool) {
-	if model.visual {
-		return model.selection()
-	}
-	cursorLine, ok := model.Cursor()
-	if !ok {
-		return Range{}, false
-	}
-	count := cursorLine.Number()
-	return Range{Path: cursorLine.Path, Side: cursorLine.Side, Start: count, End: count}, true
-}
-
 // selection is the range between the selection's anchor and the cursor.
 func (model *Model) selection() (Range, bool) {
 	baseIndex, ok := model.cursorBase()

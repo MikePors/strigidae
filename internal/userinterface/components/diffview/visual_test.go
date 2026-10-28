@@ -31,7 +31,8 @@ func TestAnchorSingleLine(test *testing.T) {
 		test.Run(testCase.name, func(test *testing.T) {
 			model := newModel(test, 80, 30)
 			model.CursorDown(testCase.row)
-			got, ok := model.Anchor()
+			context := model.Context()
+			got, ok := context.Lines, context.HasLines
 			if ok != testCase.ok {
 				test.Fatalf("ok = %v", ok)
 			}
@@ -72,7 +73,8 @@ func TestVisualRanges(test *testing.T) {
 			if got := model.window.Cursor(); got != testCase.endRow {
 				test.Errorf("cursor row = %d, want %d", got, testCase.endRow)
 			}
-			got, ok := model.Anchor()
+			context := model.Context()
+			got, ok := context.Lines, context.HasLines
 			if !ok {
 				test.Fatal("no anchor")
 			}
