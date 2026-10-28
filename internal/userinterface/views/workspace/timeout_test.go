@@ -67,6 +67,10 @@ func (client blockingClient) SetFileViewed(ctx context.Context, _, _ string, _ b
 	return client.wait(ctx)
 }
 
+func (client blockingClient) DeleteReview(ctx context.Context, _ string) error {
+	return client.wait(ctx)
+}
+
 var shortTimeouts = userinterface.Timeouts{Request: 5 * time.Millisecond, Load: 5 * time.Millisecond}
 
 func TestLoadTimesOut(test *testing.T) {
