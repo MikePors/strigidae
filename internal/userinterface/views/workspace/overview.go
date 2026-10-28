@@ -59,7 +59,7 @@ func (overview *overview) ensure(activeTheme theme.Theme, markdownRenderer *mark
 	} else {
 		add(markdownRenderer.Render(terminaltext.CleanBlock(detail.Body), width))
 	}
-	if reactionText := comment.ReactionText(activeTheme, detail.Reactions); reactionText != "" {
+	if reactionText := comment.ReactionText(activeTheme, detail.Reactions, width); reactionText != "" {
 		add(reactionText)
 	}
 	add("")

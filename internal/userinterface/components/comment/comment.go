@@ -51,19 +51,36 @@ func Header(activeTheme theme.Theme, now time.Time, comment Comment) string {
 		}
 		text += " " + activeTheme.Pending.Render(label)
 	}
-	if reactionText := ReactionText(activeTheme, comment.Reactions); reactionText != "" {
+	if reactionText := ReactionText(activeTheme, comment.Reactions, 0); reactionText != "" {
 		text += "  " + reactionText
 	}
 	return text
 }
 
 // ReactionText renders the non-zero reaction counts in the muted style, or ""
-// when there are none.
-func ReactionText(activeTheme theme.Theme, reactionList []github.ReactionSummary) string {
-	if text := reactions(reactionList); text != "" {
-		return activeTheme.Muted.Render(text)
+// when there are none. A positive width wraps the text onto several lines,
+// breaking only between reactions so an emoji stays with its count.
+func ReactionText(activeTheme theme.Theme, reactionList []github.ReactionSummary, width int) string {
+	var lines []string
+	current := ""
+	for _, part := range reactionParts(reactionList) {
+		switch {
+		case current == "":
+			current = part
+		case width > 0 && ansi.StringWidth(current+" "+part) > width:
+			lines = append(lines, current)
+			current = part
+		default:
+			current += " " + part
+		}
 	}
-	return ""
+	if current != "" {
+		lines = append(lines, current)
+	}
+	for i, line := range lines {
+		lines[i] = activeTheme.Muted.Render(line)
+	}
+	return strings.Join(lines, "\n")
 }
 
 // Body renders the Markdown body in width columns, or "" for a blank body.
@@ -91,15 +108,15 @@ func Author(name string) string {
 	return terminaltext.Clean(name)
 }
 
-// reactions formats the non-zero reaction counts: "👍 2 👀 1".
-func reactions(reactionList []github.ReactionSummary) string {
+// reactionParts is one "👍 2" string per non-zero reaction.
+func reactionParts(reactionList []github.ReactionSummary) []string {
 	var parts []string
 	for _, reaction := range reactionList {
 		if reaction.Count > 0 {
 			parts = append(parts, terminaltext.Clean(reaction.Content.Emoji())+" "+strconv.Itoa(reaction.Count))
 		}
 	}
-	return strings.Join(parts, " ")
+	return parts
 }
 
 // RelativeTime formats t relative to now ("5m ago").
