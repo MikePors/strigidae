@@ -14,7 +14,10 @@ import (
 // DiffState is the workspace's diff and where loading it stands.
 type DiffState struct {
 	// Raw is the unified diff of the whole pull request. On a refresh it keeps
-	// the previous text while Loading is set, and after a failed refresh.
+	// the previous text while Loading is set, and after a failed refresh. A
+	// diff too large for GitHub to give whole is built file by file from the
+	// file list; Raw is then a text of the file list's patches, which still
+	// changes whenever the diff does.
 	Raw string
 	// Parsed is Raw parsed by internal/diff, done in the load command. It is nil
 	// until a load gets as far as parsing. When ParseError is set it holds the
