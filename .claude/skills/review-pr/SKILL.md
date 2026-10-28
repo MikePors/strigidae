@@ -23,10 +23,14 @@ Arguments: a PR number, then optionally the word `post`. If there's no number, a
 - **A private checkout.** Make one that won't disturb the user's work:
 
   ```sh
-  git fetch origin main "pull/<N>/head"
+  git fetch origin main
+  git fetch origin "pull/<N>/head"
+  head=$(gh api "repos/{owner}/{repo}/pulls/<N>" -q .head.sha)
   tmp=$(mktemp -d)
-  git worktree add --detach "$tmp" FETCH_HEAD
+  git worktree add --detach "$tmp" "$head"
   ```
+
+  Fetch the pull request on its own: with several refs in one fetch, `FETCH_HEAD` is the first of them.
 
   The reviewer diffs against the PR's base: `git -C "$tmp" diff <base.sha>...HEAD`.
 - **Maintainer decisions.** Note what the issue and the PR body record as decisions (keys, wording, scope, accepted trade-offs). Reviewers must not re-litigate them.
