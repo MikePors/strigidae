@@ -63,8 +63,9 @@ timeouts:
 | `load` | `30s` | Bigger reads, paged ones as a whole: the diff, a pull request's details, its threads and the pull request lists |
 
 Either key may be left out and keeps its default. Values are Go durations
-(`10s`, `1m`, `1m30s`); zero, negative or unparseable values are a config
-error at startup. There is no `:set` for these.
+(`10s`, `1m`, `1m30s`); the unit is required, so `10` is an error. Zero,
+negative or unparseable values are a config error at startup, and so is an
+empty `timeouts:` (use `{}` or leave the key out). There is no `:set` for these.
 
 ### Options
 

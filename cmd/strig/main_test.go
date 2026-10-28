@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	cliBrowser "github.com/cli/browser"
 	"github.com/google/go-cmp/cmp"
@@ -19,7 +20,6 @@ import (
 	"github.com/MikePors/strigidae/internal/config"
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/github/fake"
-	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
@@ -311,20 +311,70 @@ func TestRunConfig(test *testing.T) {
 	}
 }
 
-func TestApplicationTimeouts(test *testing.T) {
+// deadlineClient records the deadline of each pull request load it receives.
+type deadlineClient struct {
+	*fake.Client
+	deadlines *[]time.Time
+}
+
+func (client deadlineClient) record(ctx context.Context) {
+	if deadline, ok := ctx.Deadline(); ok {
+		*client.deadlines = append(*client.deadlines, deadline)
+	}
+}
+
+func (client deadlineClient) ListPullRequests(ctx context.Context, repository github.Repository, pageRequest github.PageRequest) (github.Page[github.PullRequest], error) {
+	client.record(ctx)
+	return client.Client.ListPullRequests(ctx, repository, pageRequest)
+}
+
+func (client deadlineClient) SearchPullRequests(ctx context.Context, query string, pageRequest github.PageRequest) (github.Page[github.PullRequest], error) {
+	client.record(ctx)
+	return client.Client.SearchPullRequests(ctx, query, pageRequest)
+}
+
+// runCommand runs command and any commands batched inside it.
+func runCommand(command tea.Cmd) {
+	if command == nil {
+		return
+	}
+	if batch, ok := command().(tea.BatchMsg); ok {
+		for _, inner := range batch {
+			runCommand(inner)
+		}
+	}
+}
+
+func TestFirstViewUsesConfiguredTimeouts(test *testing.T) {
+	// The default load timeout is 30s, so an hour proves the override arrived.
+	configured := config.Config{Timeouts: config.Timeouts{Load: time.Hour}}
 	tests := []struct {
-		name   string
-		config config.Config
-		want   userinterface.Timeouts
+		name      string
+		dashboard bool
 	}{
-		{"absent", config.Default(), userinterface.Timeouts{}},
-		{"both set", config.Config{Timeouts: config.Timeouts{Request: 2 * time.Second, Load: time.Minute}}, userinterface.Timeouts{Request: 2 * time.Second, Load: time.Minute}},
-		{"one set", config.Config{Timeouts: config.Timeouts{Load: time.Minute}}, userinterface.Timeouts{Load: time.Minute}},
+		{"pull request list", false},
+		{"dashboard", true},
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
-			if got := (application{config: testCase.config}).timeouts(); got != testCase.want {
-				test.Errorf("timeouts = %+v, want %+v", got, testCase.want)
+			var deadlines []time.Time
+			configured.Tabs = config.Default().Tabs
+			view := firstView(application{
+				client:     deadlineClient{Client: fake.New(), deadlines: &deadlines},
+				repository: github.Repository{Owner: "o", Name: "r"},
+				dashboard:  testCase.dashboard,
+				config:     configured,
+				theme:      theme.Default(),
+			})
+			started := time.Now()
+			runCommand(view.Init())
+			if len(deadlines) == 0 {
+				test.Fatal("no pull request load was made")
+			}
+			for _, deadline := range deadlines {
+				if deadline.Sub(started) < 30*time.Minute {
+					test.Errorf("load deadline is %v away, want about an hour", deadline.Sub(started))
+				}
 			}
 		})
 	}

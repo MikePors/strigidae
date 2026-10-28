@@ -80,9 +80,9 @@ func (parser *parser) timeouts(node *yaml.Node, config *Config) {
 	parser.mapping(node, "timeouts", func(key string, node *yaml.Node) {
 		switch key {
 		case "request":
-			config.Timeouts.Request = parser.duration(node, "timeouts: request")
+			config.Timeouts.Request = parser.duration(node, "request timeout")
 		case "load":
-			config.Timeouts.Load = parser.duration(node, "timeouts: load")
+			config.Timeouts.Load = parser.duration(node, "load timeout")
 		}
 	}, []string{"request", "load"})
 }
