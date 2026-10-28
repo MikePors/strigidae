@@ -1,7 +1,6 @@
 package workspace
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -31,6 +30,7 @@ type reviewFlow struct {
 // reviewEnvironment is what the flow needs from the workspace at one moment.
 type reviewEnvironment struct {
 	client         github.Client
+	timeouts       userinterface.Timeouts
 	repository     github.Repository
 	number         int
 	theme          theme.Theme
@@ -107,7 +107,7 @@ type (
 
 func (view *View) reviewEnvironment() reviewEnvironment {
 	return reviewEnvironment{
-		client: view.client, repository: view.repository, number: view.number, theme: view.theme,
+		client: view.client, timeouts: view.timeouts, repository: view.repository, number: view.number, theme: view.theme,
 		edit: view.edit, reload: view.load,
 		loaded:         view.detail != nil,
 		ownPullRequest: view.detail != nil && view.detail.ViewerDidAuthor,
@@ -266,7 +266,9 @@ func (currentFlow *reviewFlow) start(environment reviewEnvironment, event github
 	currentFlow.sequence++
 	flow, sequence := currentFlow, currentFlow.sequence
 	return func() tea.Msg {
-		status, err := environment.client.GetReviewStatus(context.Background(), environment.repository, environment.number)
+		ctx, cancel := environment.timeouts.RequestContext()
+		defer cancel()
+		status, err := environment.client.GetReviewStatus(ctx, environment.repository, environment.number)
 		return reviewPendingMessage{flow: flow, repository: environment.repository, number: environment.number, sequence: sequence, event: event, pending: status.Pending, err: err}
 	}
 }
@@ -300,7 +302,9 @@ func (currentFlow *reviewFlow) edited(message reviewEditedMessage, environment r
 	}
 	flow, sequence, event := currentFlow, currentFlow.sequence, message.event
 	return func() tea.Msg {
-		status, err := environment.client.GetReviewStatus(context.Background(), environment.repository, environment.number)
+		ctx, cancel := environment.timeouts.RequestContext()
+		defer cancel()
+		status, err := environment.client.GetReviewStatus(ctx, environment.repository, environment.number)
 		return reviewFreshMessage{flow: flow, repository: environment.repository, number: environment.number, sequence: sequence, event: event, body: body, status: status, err: err}
 	}
 }
@@ -349,7 +353,9 @@ func (currentFlow *reviewFlow) submit(environment reviewEnvironment, event githu
 		in.PendingReviewIdentifier = status.Pending.Identifier
 	}
 	return func() tea.Msg {
-		err := environment.client.SubmitReview(context.Background(), in)
+		ctx, cancel := environment.timeouts.RequestContext()
+		defer cancel()
+		err := userinterface.WriteError(environment.client.SubmitReview(ctx, in))
 		result := reviewSubmittedMessage{flow: flow, repository: environment.repository, number: environment.number, event: event, body: body, err: err}
 		if err == nil {
 			return result

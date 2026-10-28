@@ -147,6 +147,7 @@ func (answer answer) covers(pending bool) bool { return answer.given && answer.p
 type commentWrite struct {
 	origin     origin
 	client     github.Client
+	timeouts   userinterface.Timeouts
 	identifier string
 	change     change
 	// ask returns the question for a comment that is pending or published, or
@@ -159,8 +160,9 @@ type commentWrite struct {
 // run re-reads the comment and writes, or asks first. given is what the user
 // has already said yes to (the zero answer before any question).
 func (write commentWrite) run(given answer) tea.Msg {
-	ctx := context.Background()
-	fresh, err := freshComment(ctx, write.client, write.identifier, write.change)
+	readContext, cancelRead := write.timeouts.RequestContext()
+	defer cancelRead()
+	fresh, err := freshComment(readContext, write.client, write.identifier, write.change)
 	if err != nil {
 		return write.result(err)
 	}
@@ -169,7 +171,9 @@ func (write commentWrite) run(given answer) tea.Msg {
 		again := func() tea.Msg { return write.run(yes(pending)) }
 		return commentCheckedMessage{origin: write.origin, question: query, onYes: agreed(write.origin, again)}
 	}
-	err = write.write(ctx, write.client)
+	writeContext, cancelWrite := write.timeouts.RequestContext()
+	defer cancelWrite()
+	err = userinterface.WriteError(write.write(writeContext, write.client))
 	if errors.Is(err, github.ErrNotFound) {
 		err = errCommentGone // deleted between the re-read and the write
 	}
@@ -326,12 +330,14 @@ func (view *View) editComment() tea.Cmd {
 	if command != nil {
 		return command
 	}
-	origin, client := view.origin(), view.client
+	origin, client, timeouts := view.origin(), view.client, view.timeouts
 	currentTarget := target{kind: kindEdit, commentIdentifier: comment.Identifier, threadIdentifier: thread.Identifier, label: threadLocation(thread), home: view.reachableHome(thread)}
 	view.commentSequence++ // a compose started meanwhile supersedes this read
 	sequence := view.commentSequence
 	return func() tea.Msg {
-		fresh, err := freshComment(context.Background(), client, currentTarget.commentIdentifier, changeEdit)
+		ctx, cancel := timeouts.RequestContext()
+		defer cancel()
+		fresh, err := freshComment(ctx, client, currentTarget.commentIdentifier, changeEdit)
 		currentTarget.initial = fresh.Body
 		return commentReadMessage{origin: origin, sequence: sequence, target: currentTarget, err: err}
 	}
@@ -396,7 +402,7 @@ func (view *View) deleteComment() tea.Cmd {
 	}
 	origin, identifier, label := view.origin(), comment.Identifier, terminaltext.Clean(threadLocation(thread))
 	write := commentWrite{
-		origin: origin, client: view.client, identifier: identifier, change: changeDelete,
+		origin: origin, client: view.client, timeouts: view.timeouts, identifier: identifier, change: changeDelete,
 		ask: func(pending bool) string {
 			if pending {
 				return "Delete pending comment on " + label + "?"
@@ -448,9 +454,9 @@ func (view *View) sendEdit(target target, body string) tea.Cmd {
 		delete(view.drafts, target.draftKey())
 		return userinterface.Info("comment unchanged")
 	}
-	origin, client, label := view.origin(), view.client, terminaltext.Clean(target.label)
+	origin, client, timeouts, label := view.origin(), view.client, view.timeouts, terminaltext.Clean(target.label)
 	write := commentWrite{
-		origin: origin, client: client, identifier: target.commentIdentifier, change: changeEdit,
+		origin: origin, client: client, timeouts: timeouts, identifier: target.commentIdentifier, change: changeEdit,
 		ask: func(pending bool) string {
 			if pending {
 				return ""
@@ -467,7 +473,7 @@ func (view *View) sendEdit(target target, body string) tea.Cmd {
 				return result
 			}
 			if isStale(err) {
-				result.threadLive = threadExists(client, origin, target.threadIdentifier)
+				result.threadLive = threadExists(client, timeouts, origin, target.threadIdentifier)
 			}
 			return withShownError(result, editFailure(err, target, result.threadLive))
 		},
@@ -478,8 +484,10 @@ func (view *View) sendEdit(target target, body string) tea.Cmd {
 
 // threadExists reports whether a thread is still on the pull request. When the
 // threads cannot be listed it says no, which keeps the text where `c` finds it.
-func threadExists(client github.Client, origin origin, threadIdentifier string) bool {
-	threads, err := loadThreads(context.Background(), client, origin.repository, origin.number)
+func threadExists(client github.Client, timeouts userinterface.Timeouts, origin origin, threadIdentifier string) bool {
+	ctx, cancel := timeouts.LoadContext()
+	defer cancel()
+	threads, err := loadThreads(ctx, client, origin.repository, origin.number)
 	return err == nil && slices.ContainsFunc(threads, func(thread github.ReviewThread) bool { return thread.Identifier == threadIdentifier })
 }
 
@@ -551,13 +559,13 @@ func (view *View) sendInline(target target, body string) tea.Cmd {
 	// A diff load in flight is no obstacle: the lines are anchored to target.head,
 	// and addPendingThread refuses unless the server is still on it. (The caller
 	// checked that the pull request is loaded.)
-	origin, client := view.origin(), view.client
+	origin, client, timeouts := view.origin(), view.client, view.timeouts
 	in := *target.inline
 	in.Repository, in.Number, in.Body = origin.repository, origin.number, body
 	pullRequestIdentifier := view.detail.Identifier
 	view.writeStarted()
 	return func() tea.Msg {
-		err := addPendingThread(context.Background(), client, in, pullRequestIdentifier, target.head)
+		err := addPendingThread(timeouts, client, in, pullRequestIdentifier, target.head)
 		result := postedMessage{origin: origin, target: target, body: body, err: err}
 		if err == nil {
 			return result
@@ -570,8 +578,10 @@ func (view *View) sendInline(target target, body string) tea.Cmd {
 // head first when there is none. The comment's line numbers come from the diff
 // of commit head, so it is refused when the pull request has moved on or the
 // existing pending review is anchored to another (or an unknown) commit.
-func addPendingThread(ctx context.Context, client github.Client, in github.AddThreadInput, pullRequestIdentifier, head string) error {
-	status, err := client.GetReviewStatus(ctx, in.Repository, in.Number)
+func addPendingThread(timeouts userinterface.Timeouts, client github.Client, in github.AddThreadInput, pullRequestIdentifier, head string) error {
+	statusContext, cancelStatus := timeouts.RequestContext()
+	defer cancelStatus()
+	status, err := client.GetReviewStatus(statusContext, in.Repository, in.Number)
 	if err != nil {
 		return fmt.Errorf("check review state: %w", err)
 	}
@@ -581,9 +591,11 @@ func addPendingThread(ctx context.Context, client github.Client, in github.AddTh
 	pending := status.Pending
 	switch {
 	case pending == nil:
-		pendingReview, err := client.StartReview(ctx, github.StartReviewInput{Repository: in.Repository, Number: in.Number, PullRequestIdentifier: pullRequestIdentifier, CommitObjectIdentifier: head})
+		startContext, cancelStart := timeouts.RequestContext()
+		defer cancelStart()
+		pendingReview, err := client.StartReview(startContext, github.StartReviewInput{Repository: in.Repository, Number: in.Number, PullRequestIdentifier: pullRequestIdentifier, CommitObjectIdentifier: head})
 		if err != nil {
-			return fmt.Errorf("start review: %w", err)
+			return fmt.Errorf("start review: %w", userinterface.WriteError(err))
 		}
 		pending = &pendingReview
 	case pending.CommitObjectIdentifier == "":
@@ -592,6 +604,8 @@ func addPendingThread(ctx context.Context, client github.Client, in github.AddTh
 		return errors.New("your pending review is on an older commit; submit it first, or delete it on GitHub")
 	}
 	in.PendingReviewIdentifier = pending.Identifier
-	_, err = client.AddReviewThread(ctx, in)
-	return err
+	addContext, cancelAdd := timeouts.RequestContext()
+	defer cancelAdd()
+	_, err = client.AddReviewThread(addContext, in)
+	return userinterface.WriteError(err)
 }

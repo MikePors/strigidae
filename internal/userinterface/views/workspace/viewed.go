@@ -1,7 +1,6 @@
 package workspace
 
 import (
-	"context"
 	"errors"
 	"fmt"
 
@@ -108,9 +107,11 @@ func (view *View) setFileViewed(file *github.ChangedFile, want github.ViewedStat
 // sendViewed is the command that runs one mutation. On failure it also
 // returns the error itself, so it shows even if the view was left meanwhile.
 func (view *View) sendViewed(path string, state github.ViewedState) tea.Cmd {
-	client, repository, number, owner, pullRequestIdentifier := view.client, view.repository, view.number, view, view.detail.Identifier
+	client, repository, number, owner, pullRequestIdentifier, timeouts := view.client, view.repository, view.number, view, view.detail.Identifier, view.timeouts
 	return func() tea.Msg {
-		err := client.SetFileViewed(context.Background(), pullRequestIdentifier, path, state == github.FileViewed)
+		ctx, cancel := timeouts.RequestContext()
+		defer cancel()
+		err := userinterface.WriteError(client.SetFileViewed(ctx, pullRequestIdentifier, path, state == github.FileViewed))
 		result := viewedMessage{owner: owner, repository: repository, number: number, path: path, sent: state, err: err}
 		if err == nil {
 			return result
