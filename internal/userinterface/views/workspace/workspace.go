@@ -45,6 +45,11 @@ func WithTheme(activeTheme theme.Theme) Option { return func(view *View) { view.
 // the user's browser.
 func WithOpener(open func(url string) error) Option { return func(view *View) { view.open = open } }
 
+// WithTimeouts sets the deadlines of the GitHub calls; zero fields select the defaults.
+func WithTimeouts(timeouts userinterface.Timeouts) Option {
+	return func(view *View) { view.timeouts = timeouts }
+}
+
 // WithWrap makes the diff pane wrap long lines instead of cutting them off.
 func WithWrap(wrap bool) Option { return func(view *View) { view.wrap = wrap } }
 
@@ -62,6 +67,7 @@ func WithFilePane(pane FilePane) Option { return func(view *View) { view.filePan
 // View is the PR workspace screen.
 type View struct {
 	client     github.Client
+	timeouts   userinterface.Timeouts
 	repository github.Repository
 	number     int
 

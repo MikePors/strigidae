@@ -98,15 +98,17 @@ func (view *View) load() tea.Cmd {
 
 // fetchDiff loads the diff once the detail has landed.
 func (view *View) fetchDiff(message pullRequestLoadedMessage) tea.Cmd {
-	client, repository, number, sequence, owner := view.client, view.repository, view.number, message.sequence, view
+	client, repository, number, sequence, owner, timeouts := view.client, view.repository, view.number, message.sequence, view, view.timeouts
 	head := ""
 	if message.err == nil {
 		head = message.detail.HeadSHA
 	}
 	return func() tea.Msg {
-		raw, err := client.GetDiff(context.Background(), repository, number)
+		ctx, cancel := timeouts.LoadContext() // covers the file-patch fallback too
+		defer cancel()
+		raw, err := client.GetDiff(ctx, repository, number)
 		if errors.Is(err, github.ErrDiffTooLarge) {
-			patches, listError := client.ListFilePatches(context.Background(), repository, number)
+			patches, listError := client.ListFilePatches(ctx, repository, number)
 			if listError != nil {
 				return diffLoadedMessage{owner: owner, repository: repository, number: number, sequence: sequence, err: err, fallbackErr: listError}
 			}
@@ -130,9 +132,11 @@ func (view *View) reloadPullRequest() tea.Cmd { return view.fetchPullRequest(fal
 func (view *View) fetchPullRequest(thenDiff bool) tea.Cmd {
 	view.pullRequestPending = true
 	view.overview.invalidate()
-	client, repository, number, sequence, owner := view.client, view.repository, view.number, view.sequence, view
+	client, repository, number, sequence, owner, timeouts := view.client, view.repository, view.number, view.sequence, view, view.timeouts
 	return func() tea.Msg {
-		detail, err := client.GetPullRequest(context.Background(), repository, number)
+		ctx, cancel := timeouts.LoadContext()
+		defer cancel()
+		detail, err := client.GetPullRequest(ctx, repository, number)
 		return pullRequestLoadedMessage{owner: owner, repository: repository, number: number, sequence: sequence, detail: detail, err: err, thenDiff: thenDiff}
 	}
 }
@@ -142,9 +146,11 @@ func (view *View) fetchPullRequest(thenDiff bool) tea.Cmd {
 func (view *View) reloadThreads() tea.Cmd {
 	view.threadPending, view.threadErr = true, nil
 	view.threadGeneration++
-	client, repository, number, sequence, owner, generation := view.client, view.repository, view.number, view.sequence, view, view.threadGeneration
+	client, repository, number, sequence, owner, generation, timeouts := view.client, view.repository, view.number, view.sequence, view, view.threadGeneration, view.timeouts
 	return func() tea.Msg {
-		threads, err := loadThreads(context.Background(), client, repository, number)
+		ctx, cancel := timeouts.LoadContext()
+		defer cancel()
+		threads, err := loadThreads(ctx, client, repository, number)
 		return threadsLoadedMessage{owner: owner, repository: repository, number: number, sequence: sequence, generation: generation, threads: threads, err: err}
 	}
 }

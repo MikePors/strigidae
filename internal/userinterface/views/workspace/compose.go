@@ -1,7 +1,6 @@
 package workspace
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -214,14 +213,17 @@ func firstLine(body string) string {
 // post is the command that runs when the user confirms. On failure it also
 // returns the error itself, so it shows even if the view was left meanwhile.
 func (view *View) post(target target, body string) tea.Cmd {
-	client, origin := view.client, view.origin()
+	client, origin, timeouts := view.client, view.origin(), view.timeouts
 	return func() tea.Msg {
+		ctx, cancel := timeouts.RequestContext()
+		defer cancel()
 		var err error
 		if target.kind == kindReply {
-			_, err = client.ReplyToThread(context.Background(), target.threadIdentifier, body)
+			_, err = client.ReplyToThread(ctx, target.threadIdentifier, body)
 		} else {
-			_, err = client.AddComment(context.Background(), origin.repository, origin.number, body)
+			_, err = client.AddComment(ctx, origin.repository, origin.number, body)
 		}
+		err = userinterface.WriteError(err)
 		result := postedMessage{origin: origin, target: target, body: body, err: err}
 		if err == nil {
 			return result

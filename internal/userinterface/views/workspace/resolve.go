@@ -1,7 +1,6 @@
 package workspace
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"slices"
@@ -54,6 +53,7 @@ type threadAction struct {
 	origin           origin
 	sequence         int
 	client           github.Client
+	timeouts         userinterface.Timeouts
 	threadIdentifier string
 	location         string
 	resolve          bool
@@ -78,7 +78,7 @@ func (view *View) resolveThread(mode resolveMode) tea.Cmd {
 		return userinterface.Info(noticeNotResolved)
 	}
 	action := threadAction{
-		origin: view.origin(), sequence: view.sequence, client: view.client,
+		origin: view.origin(), sequence: view.sequence, client: view.client, timeouts: view.timeouts,
 		threadIdentifier: thread.Identifier, location: terminaltext.Clean(threadLocation(thread)),
 		resolve: !thread.IsResolved,
 	}
@@ -97,8 +97,9 @@ func (action threadAction) verb() string {
 // check re-reads the thread. Unless the user has said yes already it then asks;
 // after the yes it runs again and writes.
 func (action threadAction) check(asked bool) tea.Msg {
-	ctx := context.Background()
-	threads, err := loadThreads(ctx, action.client, action.origin.repository, action.origin.number)
+	loadContext, cancelLoad := action.timeouts.LoadContext()
+	defer cancelLoad()
+	threads, err := loadThreads(loadContext, action.client, action.origin.repository, action.origin.number)
 	if err != nil {
 		return action.finish(github.ThreadResolution{}, fmt.Errorf("check thread: %w", err))
 	}
@@ -118,11 +119,14 @@ func (action threadAction) check(asked bool) tea.Msg {
 		return commentCheckedMessage{origin: action.origin, question: action.verb() + " thread on " + action.location + "?", onYes: agreed(action.origin, again)}
 	}
 	var resolution github.ThreadResolution
+	ctx, cancel := action.timeouts.RequestContext()
+	defer cancel()
 	if action.resolve {
 		resolution, err = action.client.ResolveReviewThread(ctx, action.threadIdentifier)
 	} else {
 		resolution, err = action.client.UnresolveReviewThread(ctx, action.threadIdentifier)
 	}
+	err = userinterface.WriteError(err)
 	if errors.Is(err, github.ErrNotFound) {
 		err = errThreadGone
 	}

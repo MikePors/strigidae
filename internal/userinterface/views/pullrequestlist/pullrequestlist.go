@@ -2,7 +2,6 @@
 package pullrequestlist
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"time"
@@ -26,7 +25,6 @@ const (
 	// loadMoreMargin is how close to the end of the loaded rows the selection
 	// gets before the next page is requested.
 	loadMoreMargin = 5
-	requestTimeout = 30 * time.Second
 )
 
 // pullRequestsLoadedMessage is the result of a ListPullRequests call. repo and seq identify
@@ -48,6 +46,8 @@ type Options struct {
 	Now func() time.Time
 	// Open opens a URL in the browser; it runs inside a tea.Cmd.
 	Open func(url string) error
+	// Timeouts are the deadlines of the GitHub calls; zero fields select the defaults.
+	Timeouts userinterface.Timeouts
 }
 
 // View lists one repository's open pull requests.
@@ -58,6 +58,7 @@ type View struct {
 	globalKeys keys.Global
 	now        func() time.Time
 	open       func(url string) error
+	timeouts   userinterface.Timeouts
 	// hunkMarks keeps the hunks marked reviewed in every workspace opened
 	// from here, so they survive closing and reopening a pull request.
 	hunkMarks *workspace.HunkMarks
@@ -97,6 +98,7 @@ func New(client github.Client, repository github.Repository, activeTheme theme.T
 		globalKeys: keys.DefaultGlobal(),
 		now:        options.Now,
 		open:       options.Open,
+		timeouts:   options.Timeouts,
 		sequence:   1,
 		loading:    true,
 		hunkMarks:  workspace.NewHunkMarks(),
@@ -136,9 +138,9 @@ func (view *View) Init() tea.Cmd { return view.fetch(github.PageRequest{}, false
 // fetch loads one page. The closure captures copies, so it shares no state
 // with the view.
 func (view *View) fetch(pageRequest github.PageRequest, more bool) tea.Cmd {
-	client, repository, sequence := view.client, view.repository, view.sequence
+	client, repository, sequence, timeouts := view.client, view.repository, view.sequence, view.timeouts
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+		ctx, cancel := timeouts.LoadContext()
 		defer cancel()
 		page, err := client.ListPullRequests(ctx, repository, pageRequest)
 		return pullRequestsLoadedMessage{repository: repository, sequence: sequence, more: more, page: page, err: err}
@@ -304,6 +306,7 @@ func (view *View) openSelected() tea.Cmd {
 		workspace.WithOpener(view.open),
 		workspace.WithHunkMarks(view.hunkMarks),
 		workspace.WithWrap(view.options.Wrap()),
+		workspace.WithTimeouts(view.timeouts),
 	))
 }
 

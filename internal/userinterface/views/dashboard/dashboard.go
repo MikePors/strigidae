@@ -5,7 +5,6 @@
 package dashboard
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"time"
@@ -26,8 +25,6 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/views/workspace"
 )
 
-const requestTimeout = 30 * time.Second
-
 // sectionLoadedMessage is the result of one section's search. The tab,
 // section and sequence identify the request: every view receives every
 // command result, and a refresh supersedes a search still in flight.
@@ -46,6 +43,8 @@ type Options struct {
 	// Notice, if set, is shown in the status bar when the view starts, for
 	// example why the dashboard is showing.
 	Notice string
+	// Timeouts are the deadlines of the GitHub calls; zero fields select the defaults.
+	Timeouts userinterface.Timeouts
 }
 
 // section is one search and what it found.
@@ -81,6 +80,7 @@ type View struct {
 	bindings   bindings
 	now        func() time.Time
 	open       func(url string) error
+	timeouts   userinterface.Timeouts
 	// hunkMarks keeps the hunks marked reviewed in every workspace opened
 	// from here, so they survive closing and reopening a pull request.
 	hunkMarks *workspace.HunkMarks
@@ -137,6 +137,7 @@ func New(client github.Client, tabs []config.Tab, activeTheme theme.Theme, optio
 		now:       options.Now,
 		open:      options.Open,
 		notice:    options.Notice,
+		timeouts:  options.Timeouts,
 		hunkMarks: workspace.NewHunkMarks(),
 	}
 	for _, configured := range tabs {
@@ -238,9 +239,9 @@ func (view *View) load(index int) tea.Cmd {
 // search runs one query. The closure captures copies, so it shares no state
 // with the view.
 func (view *View) search(tabIndex, sectionIndex int, target section) tea.Cmd {
-	client := view.client
+	client, timeouts := view.client, view.timeouts
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+		ctx, cancel := timeouts.LoadContext()
 		defer cancel()
 		page, err := client.SearchPullRequests(ctx, target.search, github.PageRequest{Limit: target.limit})
 		return sectionLoadedMessage{tab: tabIndex, section: sectionIndex, sequence: target.sequence, page: page, err: err}
@@ -382,6 +383,7 @@ func (view *View) openSelected() tea.Cmd {
 		workspace.WithOpener(view.open),
 		workspace.WithHunkMarks(view.hunkMarks),
 		workspace.WithWrap(view.options.Wrap()),
+		workspace.WithTimeouts(view.timeouts),
 	))
 }
 

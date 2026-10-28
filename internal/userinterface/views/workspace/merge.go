@@ -1,7 +1,6 @@
 package workspace
 
 import (
-	"context"
 	"fmt"
 
 	tea "charm.land/bubbletea/v2"
@@ -77,7 +76,9 @@ func (currentFlow *mergeFlow) command(arguments string, environment reviewEnviro
 	currentFlow.sequence++
 	flow, sequence := currentFlow, currentFlow.sequence
 	return func() tea.Msg {
-		status, err := environment.client.GetMergeStatus(context.Background(), environment.repository, environment.number)
+		ctx, cancel := environment.timeouts.RequestContext()
+		defer cancel()
+		status, err := environment.client.GetMergeStatus(ctx, environment.repository, environment.number)
 		return mergeFreshMessage{flow: flow, repository: environment.repository, number: environment.number, sequence: sequence, requested: requested, status: status, err: err}
 	}
 }
@@ -153,7 +154,9 @@ func (currentFlow *mergeFlow) merge(environment reviewEnvironment, method github
 		Method: method, ExpectedHeadObjectIdentifier: status.HeadSHA,
 	}
 	return func() tea.Msg {
-		err := environment.client.MergePullRequest(context.Background(), in)
+		ctx, cancel := environment.timeouts.RequestContext()
+		defer cancel()
+		err := userinterface.WriteError(environment.client.MergePullRequest(ctx, in))
 		result := mergedMessage{flow: flow, repository: environment.repository, number: environment.number, method: method, err: err}
 		if err == nil {
 			return result
