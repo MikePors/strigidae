@@ -252,6 +252,7 @@ func TestGetPullRequest(test *testing.T) {
 		},
 		ViewerDidAuthor: true,
 		Body:            "Closes #4\n\n## Summary\nAdds the client layer.\n",
+		Reactions:       []github.ReactionSummary{{Content: github.ReactionHeart, Count: 3, ViewerReacted: true}},
 		Additions:       120, Deletions: 7,
 		Labels:         []github.Label{{Name: "enhancement", Color: "a2eeef"}},
 		ReviewRequests: []github.Reviewer{{Name: "octocat"}, {Name: "maintainers", IsTeam: true}},

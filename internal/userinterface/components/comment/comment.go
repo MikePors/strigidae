@@ -51,10 +51,19 @@ func Header(activeTheme theme.Theme, now time.Time, comment Comment) string {
 		}
 		text += " " + activeTheme.Pending.Render(label)
 	}
-	if reactionText := reactions(comment.Reactions); reactionText != "" {
-		text += "  " + activeTheme.Muted.Render(reactionText)
+	if reactionText := ReactionText(activeTheme, comment.Reactions); reactionText != "" {
+		text += "  " + reactionText
 	}
 	return text
+}
+
+// ReactionText renders the non-zero reaction counts in the muted style, or ""
+// when there are none.
+func ReactionText(activeTheme theme.Theme, reactionList []github.ReactionSummary) string {
+	if text := reactions(reactionList); text != "" {
+		return activeTheme.Muted.Render(text)
+	}
+	return ""
 }
 
 // Body renders the Markdown body in width columns, or "" for a blank body.

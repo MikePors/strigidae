@@ -59,6 +59,9 @@ func (overview *overview) ensure(activeTheme theme.Theme, markdownRenderer *mark
 	} else {
 		add(markdownRenderer.Render(terminaltext.CleanBlock(detail.Body), width))
 	}
+	if reactionText := comment.ReactionText(activeTheme, detail.Reactions); reactionText != "" {
+		add(reactionText)
+	}
 	add("")
 
 	overview.sections = append(overview.sections, line)

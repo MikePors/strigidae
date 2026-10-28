@@ -20,6 +20,10 @@
         "repository": {"nameWithOwner": "MikePors/strigidae"},
         "viewerDidAuthor": true,
         "body": "Closes #4\n\n## Summary\nAdds the client layer.\n",
+        "reactionGroups": [
+          {"content": "HEART", "viewerHasReacted": true, "reactors": {"totalCount": 3}},
+          {"content": "EYES", "viewerHasReacted": false, "reactors": {"totalCount": 0}}
+        ],
         "additions": 120,
         "deletions": 7,
         "labels": {"nodes": [{"name": "enhancement", "color": "a2eeef"}]},
