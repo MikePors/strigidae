@@ -401,3 +401,14 @@ func (view *View) browseSelected() tea.Cmd {
 		return userinterface.InfoMessage{Text: fmt.Sprintf("opened %s#%d in browser", terminaltext.Clean(pullRequest.Repository.String()), pullRequest.Number)}
 	}
 }
+
+// ActionNames lists the action names of the dashboard, for the check that
+// views don't reuse each other's names by accident.
+func ActionNames() []string {
+	dashboardBindings := View{}.bindings
+	var names []string
+	for _, action := range dashboardBindings.actions() {
+		names = append(names, action.Name)
+	}
+	return names
+}

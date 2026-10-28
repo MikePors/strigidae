@@ -266,3 +266,14 @@ func (view *View) diffNavigation(message keys.Message) bool {
 	bindings := view.navigationBind
 	return key.Matches(message, bindings.NextHunk, bindings.PreviousHunk, bindings.NextThread, bindings.PreviousThread)
 }
+
+// ActionNames lists the action names of the workspace and its diff pane, for
+// the check that views don't reuse each other's names by accident.
+func ActionNames() []string {
+	workspaceBindings, paneBindings := defaultBindings(), defaultDiffBindings()
+	var names []string
+	for _, action := range append(workspaceBindings.actions(), paneBindings.actions()...) {
+		names = append(names, action.Name)
+	}
+	return names
+}
