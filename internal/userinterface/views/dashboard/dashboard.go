@@ -99,6 +99,17 @@ type bindings struct {
 	nextSection, previousSection key.Binding
 }
 
+// actions names the dashboard's own bindings, in the namespace of the global
+// ones (keys.Global.Actions).
+func (dashboardBindings *bindings) actions() []keys.Action {
+	return []keys.Action{
+		{Name: "next-tab", Binding: &dashboardBindings.nextTab},
+		{Name: "previous-tab", Binding: &dashboardBindings.previousTab},
+		{Name: "next-section", Binding: &dashboardBindings.nextSection},
+		{Name: "previous-section", Binding: &dashboardBindings.previousSection},
+	}
+}
+
 var (
 	_ userinterface.View     = (*View)(nil)
 	_ userinterface.Loader   = (*View)(nil)

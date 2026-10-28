@@ -2,25 +2,41 @@ package keys
 
 import (
 	"reflect"
-	"regexp"
 	"testing"
 
 	"charm.land/bubbles/v2/key"
 )
 
-var actionName = regexp.MustCompile(`^[a-z]+(-[a-z]+)*$`)
-
 func TestGlobalActionNames(test *testing.T) {
 	global := DefaultGlobal()
-	seen := map[string]bool{}
-	for _, action := range global.Actions() {
-		if !actionName.MatchString(action.Name) {
-			test.Errorf("action name %q is not lower-case words joined by hyphens", action.Name)
-		}
-		if seen[action.Name] {
-			test.Errorf("action name %q is used twice", action.Name)
-		}
-		seen[action.Name] = true
+	if err := CheckActions(global.Actions()); err != nil {
+		test.Error(err)
+	}
+}
+
+func TestCheckActions(test *testing.T) {
+	binding := key.NewBinding()
+	tests := []struct {
+		name  string
+		names []string
+		valid bool
+	}{
+		{"words joined by hyphens", []string{"down", "half-page-down"}, true},
+		{"empty", []string{""}, false},
+		{"upper case", []string{"Down"}, false},
+		{"trailing hyphen", []string{"down-"}, false},
+		{"used twice", []string{"down", "up", "down"}, false},
+	}
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			var actions []Action
+			for _, name := range testCase.names {
+				actions = append(actions, Action{name, &binding})
+			}
+			if err := CheckActions(actions); (err == nil) != testCase.valid {
+				test.Errorf("CheckActions(%q) = %v, want valid %v", testCase.names, err, testCase.valid)
+			}
+		})
 	}
 }
 
