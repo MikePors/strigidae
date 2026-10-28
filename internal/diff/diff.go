@@ -115,6 +115,9 @@ type File struct {
 	// Similarity is the rename/copy similarity percentage (0 when absent).
 	Similarity int
 	Hunks      []Hunk
+	// PatchMissing is set on a diff built file by file when GitHub gave this
+	// file no patch: it is binary, or too large on its own.
+	PatchMissing bool
 }
 
 // Path returns the new path, falling back to the old one (deleted files).

@@ -16,6 +16,10 @@ type Client interface {
 	GetPullRequest(ctx context.Context, repository Repository, number int) (PullRequestDetail, error)
 	// GetDiff returns the raw unified diff of the pull request.
 	GetDiff(ctx context.Context, repository Repository, number int) (string, error)
+	// ListFilePatches returns every file of the pull request with its own
+	// patch, up to GitHub's limit of 3000 files. It is the fallback for a diff
+	// GetDiff refuses with ErrDiffTooLarge.
+	ListFilePatches(ctx context.Context, repository Repository, number int) ([]FilePatch, error)
 	// ListReviewThreads lists review threads, including resolved and outdated ones.
 	ListReviewThreads(ctx context.Context, repository Repository, number int, pageRequest PageRequest) (Page[ReviewThread], error)
 	// ReplyToThread posts a reply to the thread with the given ID and returns the new comment.

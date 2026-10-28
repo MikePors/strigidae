@@ -321,3 +321,39 @@ func FuzzParse(fuzzer *testing.F) {
 		}
 	})
 }
+
+func TestParseHunks(test *testing.T) {
+	hunks, err := ParseHunks("@@ -1,2 +1,2 @@ func main() {\n a\n-b\n+c\n@@ -10 +10,2 @@\n x\n+y\n\\ No newline at end of file")
+	if err != nil {
+		test.Fatal(err)
+	}
+	want := []Hunk{
+		{OldStart: 1, OldLines: 2, NewStart: 1, NewLines: 2, Section: "func main() {", Lines: []Line{
+			{Kind: Context, Old: 1, New: 1, Text: "a"},
+			{Kind: Delete, Old: 2, Text: "b"},
+			{Kind: Add, New: 2, Text: "c"},
+		}},
+		{OldStart: 10, OldLines: 1, NewStart: 10, NewLines: 2, Lines: []Line{
+			{Kind: Context, Old: 10, New: 10, Text: "x"},
+			{Kind: Add, New: 11, Text: "y"},
+			{Kind: NoNewline, Text: "No newline at end of file"},
+		}},
+	}
+	if diff := cmp.Diff(want, hunks); diff != "" {
+		test.Errorf("mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestParseHunksEmptyAndMalformed(test *testing.T) {
+	if hunks, err := ParseHunks(""); err != nil || len(hunks) != 0 {
+		test.Errorf("empty patch = %v, %v; want no hunks and no error", hunks, err)
+	}
+	hunks, err := ParseHunks("@@ -1,3 +1,3 @@\n a\n")
+	var parseError *ParseError
+	if !errors.As(err, &parseError) || parseError.Line != 2 {
+		test.Errorf("err = %v, want a *ParseError on the patch's line 2", err)
+	}
+	if len(hunks) != 1 || len(hunks[0].Lines) != 1 {
+		test.Errorf("best-effort hunks lost: %+v", hunks)
+	}
+}

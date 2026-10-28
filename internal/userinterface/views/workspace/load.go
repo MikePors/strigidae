@@ -43,6 +43,12 @@ type (
 		parsed   *diff.Diff
 		parseErr error
 		err      error // the GetDiff failure
+		// perFile is set when GetDiff refused the diff as too large and it was
+		// built from the file list instead (perFileDiff).
+		perFile bool
+		// fallbackErr is why the file list could not be loaded either; err
+		// then still holds the too-large error.
+		fallbackErr error
 	}
 	threadsLoadedMessage struct {
 		owner      *View
@@ -99,6 +105,14 @@ func (view *View) fetchDiff(message pullRequestLoadedMessage) tea.Cmd {
 	}
 	return func() tea.Msg {
 		raw, err := client.GetDiff(context.Background(), repository, number)
+		if errors.Is(err, github.ErrDiffTooLarge) {
+			patches, listError := client.ListFilePatches(context.Background(), repository, number)
+			if listError != nil {
+				return diffLoadedMessage{owner: owner, repository: repository, number: number, sequence: sequence, err: err, fallbackErr: listError}
+			}
+			perFileRaw, parsed, parseError := perFileDiff(patches)
+			return diffLoadedMessage{owner: owner, repository: repository, number: number, sequence: sequence, head: head, raw: perFileRaw, parsed: parsed, parseErr: parseError, perFile: true}
+		}
 		if err != nil {
 			return diffLoadedMessage{owner: owner, repository: repository, number: number, sequence: sequence, err: err}
 		}
@@ -192,7 +206,9 @@ func (view *View) threadsLoaded(message threadsLoadedMessage) tea.Cmd {
 
 func (view *View) diffLoaded(message diffLoadedMessage) tea.Cmd {
 	view.diffPending = false
-	if message.err != nil && view.diff.Parsed != nil && !errors.Is(message.err, github.ErrDiffTooLarge) {
+	// err is set only when no diff came back: a too-large diff is built file
+	// by file, and err stays only if that failed too.
+	if message.err != nil && view.diff.Parsed != nil {
 		view.diff.Loading = false // keep the loaded diff; the error goes to the status bar
 	} else {
 		view.diff = DiffState{Raw: message.raw, Parsed: message.parsed, ParseError: message.parseErr, Err: message.err}
@@ -202,6 +218,13 @@ func (view *View) diffLoaded(message diffLoadedMessage) tea.Cmd {
 	if message.parseErr != nil {
 		// Files that parsed still show; the problem is reported once here.
 		return userinterface.Error(terminaltext.SafeError(fmt.Errorf("%s#%d: %w", view.repository, view.number, message.parseErr)))
+	}
+	if message.fallbackErr != nil {
+		// The pane says the diff is too large; this says why it isn't shown file by file.
+		return userinterface.Error(terminaltext.SafeError(fmt.Errorf("load the diff file by file: %w", message.fallbackErr)))
+	}
+	if message.perFile {
+		return userinterface.Info(perFileNotice)
 	}
 	// A diff that is merely too large is shown in the diff pane, not as a
 	// transient error.

@@ -179,6 +179,61 @@ func (client *Client) GetDiff(ctx context.Context, repository github.Repository,
 	return string(bytes), nil
 }
 
+// filePageSize and maximumFilePages cover GitHub's limit of 3000 files in a
+// pull request's file list.
+const (
+	filePageSize     = 100
+	maximumFilePages = 30
+)
+
+// restFile is one entry of the REST file list.
+type restFile struct {
+	Filename         string
+	PreviousFilename string `json:"previous_filename"`
+	Status           string
+	Additions        int
+	Deletions        int
+	Patch            string
+}
+
+// fileChanges maps the REST file list's statuses to the change types the
+// GraphQL file list uses.
+var fileChanges = map[string]github.FileChangeType{
+	"added":    github.FileAdded,
+	"removed":  github.FileDeleted,
+	"modified": github.FileModified,
+	"renamed":  github.FileRenamed,
+	"copied":   github.FileCopied,
+	"changed":  github.FileChanged,
+}
+
+// ListFilePatches implements github.Client. It uses REST because the GraphQL
+// file list has no patches.
+func (client *Client) ListFilePatches(ctx context.Context, repository github.Repository, number int) ([]github.FilePatch, error) {
+	var patches []github.FilePatch
+	for page := 1; page <= maximumFilePages; page++ {
+		path := fmt.Sprintf("repos/%s/%s/pulls/%d/files?per_page=%d&page=%d", url.PathEscape(repository.Owner), url.PathEscape(repository.Name), number, filePageSize, page)
+		var response []restFile
+		if err := client.rest.DoWithContext(ctx, "GET", path, nil, &response); err != nil {
+			return nil, fmt.Errorf("list files of %s#%d: %w", repository, number, client.mapError(err))
+		}
+		for _, file := range response {
+			change, ok := fileChanges[file.Status]
+			if !ok {
+				change = github.FileModified
+			}
+			patches = append(patches, github.FilePatch{
+				Path: file.Filename, PreviousPath: file.PreviousFilename, Change: change,
+				Additions: file.Additions, Deletions: file.Deletions, Patch: file.Patch,
+			})
+		}
+		if len(response) < filePageSize {
+			break
+		}
+	}
+	return patches, nil
+}
+
 // ListReviewThreads implements github.Client.
 func (client *Client) ListReviewThreads(ctx context.Context, repository github.Repository, number int, pageRequest github.PageRequest) (github.Page[github.ReviewThread], error) {
 	var response struct {

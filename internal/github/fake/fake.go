@@ -31,6 +31,7 @@ const (
 	MethodSearchPullRequests = "SearchPullRequests"
 	MethodGetPullRequest     = "GetPullRequest"
 	MethodGetDiff            = "GetDiff"
+	MethodListFilePatches    = "ListFilePatches"
 	MethodListReviewThreads  = "ListReviewThreads"
 	MethodReplyToThread      = "ReplyToThread"
 	MethodAddComment         = "AddComment"
@@ -89,6 +90,7 @@ type Client struct {
 	search         map[string][]github.PullRequest
 	details        map[pullRequestKey]github.PullRequestDetail
 	diffs          map[pullRequestKey]string
+	filePatches    map[pullRequestKey][]github.FilePatch
 	threads        map[pullRequestKey][]github.ReviewThread
 	injectedErrors map[string]error
 	calls          []Call
@@ -115,6 +117,7 @@ func New() *Client {
 		search:         map[string][]github.PullRequest{},
 		details:        map[pullRequestKey]github.PullRequestDetail{},
 		diffs:          map[pullRequestKey]string{},
+		filePatches:    map[pullRequestKey][]github.FilePatch{},
 		threads:        map[pullRequestKey][]github.ReviewThread{},
 		injectedErrors: map[string]error{},
 		pending:        map[pullRequestKey]github.PendingReview{},
@@ -203,6 +206,15 @@ func (client *Client) SetDiff(repository github.Repository, number int, diff str
 	client.mutex.Lock()
 	defer client.mutex.Unlock()
 	client.diffs[pullRequestKey{repository, number}] = diff
+}
+
+// SetFilePatches sets the file list ListFilePatches returns for a pull
+// request. To exercise the fallback for a large diff, pair it with
+// SetError(MethodGetDiff, github.ErrDiffTooLarge).
+func (client *Client) SetFilePatches(repository github.Repository, number int, patches []github.FilePatch) {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	client.filePatches[pullRequestKey{repository, number}] = slices.Clone(patches)
 }
 
 // SetReviewThreads sets the threads returned for a pull request.
@@ -332,6 +344,20 @@ func (client *Client) GetDiff(ctx context.Context, repository github.Repository,
 		return "", fmt.Errorf("load diff of %s#%d: %w", repository, number, github.ErrNotFound)
 	}
 	return diffText, nil
+}
+
+// ListFilePatches implements github.Client.
+func (client *Client) ListFilePatches(ctx context.Context, repository github.Repository, number int) ([]github.FilePatch, error) {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	if err := client.begin(ctx, Call{Method: MethodListFilePatches, Repository: repository, Number: number}); err != nil {
+		return nil, err
+	}
+	patches, ok := client.filePatches[pullRequestKey{repository, number}]
+	if !ok {
+		return nil, fmt.Errorf("list files of %s#%d: %w", repository, number, github.ErrNotFound)
+	}
+	return slices.Clone(patches), nil
 }
 
 // ListReviewThreads implements github.Client. A pull request with no threads

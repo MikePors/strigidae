@@ -630,6 +630,9 @@ func (model *Model) messageLines() []string {
 	}
 	file := model.file
 	var out []string
+	if file.PatchMissing {
+		out = append(out, strings.Split(TooLargeMessage(), "\n")...)
+	}
 	if file.Binary {
 		out = append(out, "Binary file: contents not shown.")
 	}

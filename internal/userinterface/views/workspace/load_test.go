@@ -134,11 +134,13 @@ func TestDiffRefreshFailureKeepsDiff(test *testing.T) {
 	if harness.lastErr() == nil {
 		test.Error("diff failure should reach the status bar")
 	}
-	// A too-large diff clears the text.
+	// A diff that became too large, with no file list to build it from
+	// either, is a failed refresh too.
 	harness.client.SetError(fake.MethodGetDiff, github.ErrDiffTooLarge)
+	harness.client.SetError(fake.MethodListFilePatches, errors.New("blip"))
 	harness.press("R")
-	if harness.view.diff.Raw != "" || !errors.Is(harness.view.diff.Err, github.ErrDiffTooLarge) {
-		test.Errorf("too-large diff = %+v", harness.view.diff)
+	if harness.view.diff.Raw != before || harness.view.diff.Err != nil {
+		test.Errorf("diff after a too-large refresh with no file list = %+v, want Raw kept", harness.view.diff)
 	}
 }
 

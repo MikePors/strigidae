@@ -28,6 +28,7 @@ var operationPattern = regexp.MustCompile(`(?:query|mutation)\s+(\w+)`)
 type call struct {
 	Method        string
 	Path          string
+	RawQuery      string
 	Query         string
 	Operation     string
 	Variables     map[string]any
@@ -66,7 +67,7 @@ func (server *server) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 	if request.Body != nil {
 		raw, _ = io.ReadAll(request.Body)
 	}
-	recordedCall := call{Method: request.Method, Path: request.URL.Path, Accept: request.Header.Get("Accept"), Authorization: request.Header.Get("Authorization"), RESTRaw: string(raw)}
+	recordedCall := call{Method: request.Method, Path: request.URL.Path, RawQuery: request.URL.RawQuery, Accept: request.Header.Get("Accept"), Authorization: request.Header.Get("Authorization"), RESTRaw: string(raw)}
 	if request.URL.Path == "/graphql" {
 		var request struct {
 			Query     string

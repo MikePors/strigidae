@@ -401,3 +401,31 @@ func TestSetFileViewed(test *testing.T) {
 		test.Errorf("last call = %+v", last)
 	}
 }
+
+func TestListFilePatches(test *testing.T) {
+	ctx := context.Background()
+	client := fake.New()
+	if _, err := client.ListFilePatches(ctx, repository, 1); !errors.Is(err, github.ErrNotFound) {
+		test.Errorf("unseeded: want ErrNotFound, got %v", err)
+	}
+	seeded := []github.FilePatch{{Path: "a.go", Change: github.FileModified, Additions: 1, Patch: "@@ -1 +1,2 @@\n a\n+b"}}
+	client.SetFilePatches(repository, 1, seeded)
+	got, err := client.ListFilePatches(ctx, repository, 1)
+	if err != nil {
+		test.Fatal(err)
+	}
+	if diff := cmp.Diff(seeded, got); diff != "" {
+		test.Errorf("mismatch (-want +got):\n%s", diff)
+	}
+	got[0].Path = "changed.go"
+	if again, _ := client.ListFilePatches(ctx, repository, 1); again[0].Path != "a.go" {
+		test.Error("a caller's change reached the fake")
+	}
+	client.SetError(fake.MethodListFilePatches, github.ErrForbidden)
+	if _, err := client.ListFilePatches(ctx, repository, 1); !errors.Is(err, github.ErrForbidden) {
+		test.Errorf("want the injected error, got %v", err)
+	}
+	if calls := client.Calls(); len(calls) == 0 || calls[len(calls)-1] != (fake.Call{Method: fake.MethodListFilePatches, Repository: repository, Number: 1}) {
+		test.Errorf("call not recorded: %v", calls)
+	}
+}
