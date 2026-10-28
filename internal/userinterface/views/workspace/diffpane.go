@@ -8,6 +8,7 @@ import (
 
 	"github.com/MikePors/strigidae/internal/diff"
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/components/diffview"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
@@ -53,6 +54,8 @@ type diffPane struct {
 	globalKeys keys.Global
 	bind       diffBindings
 
+	skipResolved bool
+
 	state   DiffState
 	file    github.ChangedFile
 	hasFile bool
@@ -70,6 +73,12 @@ func (pane *diffPane) SetWrap(wrap bool) { pane.diffView.SetWrap(wrap) }
 // SetHideResolved leaves resolved review threads out of the diff, or shows
 // them again.
 func (pane *diffPane) SetHideResolved(hide bool) { pane.diffView.SetHideResolved(hide) }
+
+// SetSkipResolved makes `)` and `(` pass over resolved threads.
+func (pane *diffPane) SetSkipResolved(skip bool) {
+	pane.skipResolved = skip
+	pane.diffView.SetSkipResolved(skip)
+}
 
 // SetRelativeNumber shows or hides the diff's relative-number column.
 func (pane *diffPane) SetRelativeNumber(on bool) { pane.diffView.SetRelativeNumber(on) }
@@ -172,9 +181,9 @@ func (pane *diffPane) Update(message keys.Message) tea.Cmd {
 	case key.Matches(message, pane.bind.PreviousHunk):
 		message.Each(diffView.CursorRow, diffView.PreviousHunk)
 	case key.Matches(message, pane.bind.NextThread):
-		message.Each(diffView.CursorRow, diffView.NextThread)
+		return pane.moveThread(message, diffView.NextThread)
 	case key.Matches(message, pane.bind.PreviousThread):
-		message.Each(diffView.CursorRow, diffView.PreviousThread)
+		return pane.moveThread(message, diffView.PreviousThread)
 	case key.Matches(message, pane.bind.ToggleThread), key.Matches(message, pane.globalKeys.Select):
 		diffView.ToggleThread()
 	case key.Matches(message, pane.bind.OpenThread):
@@ -189,6 +198,17 @@ func (pane *diffPane) Update(message keys.Message) tea.Cmd {
 		diffView.HalfScrollLeft()
 	case key.Matches(message, pane.bind.HalfScrollRight):
 		diffView.HalfScrollRight()
+	}
+	return nil
+}
+
+// moveThread applies a thread key. Under skipresolved a key that finds no
+// unresolved thread says so instead of silently staying put.
+func (pane *diffPane) moveThread(message keys.Message, step func()) tea.Cmd {
+	before := pane.diffView.CursorRow()
+	message.Each(pane.diffView.CursorRow, step)
+	if pane.skipResolved && pane.diffView.CursorRow() == before {
+		return userinterface.Info("no unresolved threads")
 	}
 	return nil
 }

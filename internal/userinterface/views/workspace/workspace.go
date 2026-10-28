@@ -231,6 +231,7 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		view.wrap = message.Values.Wrap()
 		view.filePane.SetWrap(view.wrap)
 		view.filePane.SetHideResolved(message.Values.HideResolved())
+		view.filePane.SetSkipResolved(message.Values.SkipResolved())
 		view.filePane.SetRelativeNumber(message.Values.RelativeNumber())
 		view.optionsChanged()
 	case userinterface.ThemeMessage:

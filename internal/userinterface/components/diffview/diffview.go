@@ -122,6 +122,7 @@ type Model struct {
 	orphans          []int                 // fileThreads that map to no diff line
 	open             map[string]bool       // thread ID -> expanded, once the user chose
 	hideResolved     bool                  // see SetHideResolved
+	skipResolved     bool                  // see SetSkipResolved
 	blocks           [][]string            // rendered lines of each fileThreads entry
 	blockCache       map[blockKey][]string // rendered threads; dropped by SetThreads and when width or theme change
 	blockSignature   blockSignature

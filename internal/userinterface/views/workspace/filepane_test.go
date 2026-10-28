@@ -36,6 +36,7 @@ func (pane *stubPane) SetDiff(DiffState) {}
 
 func (pane *stubPane) SetWrap(bool)                               {}
 func (pane *stubPane) SetHideResolved(bool)                       {}
+func (pane *stubPane) SetSkipResolved(bool)                       {}
 func (pane *stubPane) SetRelativeNumber(bool)                     {}
 func (pane *stubPane) SetHunkReviewed(func(*diff.File, int) bool) {}
 func (pane *stubPane) CursorHunk() (*diff.File, int, bool)        { return nil, 0, false }

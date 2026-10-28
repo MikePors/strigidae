@@ -8,7 +8,7 @@
 
 # Optional yes/no options (also `:set` while strig runs). wrapscan and
 # hlsearch default to true, wrap, hideviewed, hidereviewed, autoviewed,
-# hideresolved and relativenumber to false.
+# hideresolved, skipresolved and relativenumber to false.
 # wrapscan: false
 # hlsearch: false
 # wrap: true   # wrap long diff lines onto the next rows instead of cutting them off
@@ -16,6 +16,7 @@
 # hidereviewed: true   # hunks marked reviewed (m) leave the diff pane after a short fade
 # autoviewed: true   # m on a file's last unreviewed hunk also marks the file viewed
 # hideresolved: true   # resolved comment threads leave the diff pane
+# skipresolved: true   # ) and ( jump over resolved comment threads
 # relativenumber: true   # number diff rows by distance from the cursor, for 5j / 5k
 
 tabs:
