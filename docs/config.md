@@ -65,6 +65,7 @@ The value must be an unquoted YAML boolean: `true` or `false` (`True` and
 | `hidereviewed` | `false` | hunks marked reviewed (`m`) leave the diff pane, each leaving a one-line placeholder (see below) |
 | `autoviewed` | `false` | marking a file's last unreviewed hunk with `m` also marks the file viewed, as `v` would (see below) |
 | `hideresolved` | `false` | resolved comment threads leave the diff pane, one you resolve after a short fade (see below) |
+| `skipresolved` | `false` | `)` / `(` jump over resolved comment threads, which stay shown and reachable with `j` / `k` (see below) |
 | `relativenumber` | `false` | the diff pane numbers every row by its distance from the cursor, for counts with `j` / `k` (see below) |
 
 #### `wrap`
@@ -152,6 +153,19 @@ answer `y` to unresolve it: it stops fading and stays. Threads that were
 already resolved when they loaded (by you earlier, or by someone else) are
 hidden at once. Leaving the pull request, or `:set nohideresolved`, ends the
 fading.
+
+#### `skipresolved`
+
+With `skipresolved: true`, `)` and `(` jump over resolved comment threads and
+land only on unresolved ones. A count counts only the threads they land on, so
+`3)` goes to the third unresolved thread below. When there is no unresolved
+thread in that direction, they show `no unresolved threads` and the cursor
+stays. Resolved threads still show, folded, and stay reachable with `j` / `k`.
+
+Only resolved threads are skipped: an outdated thread that is still unresolved
+is visited. With `hideresolved` on, resolved threads are hidden and `)` / `(`
+already skip them. Turning the option on or off with `:set` takes effect at
+once in an open pull request.
 
 #### `relativenumber`
 

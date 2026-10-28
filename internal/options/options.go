@@ -15,6 +15,7 @@ const (
 	HideReviewed    = "hidereviewed"
 	AutoViewed      = "autoviewed"
 	HideResolved    = "hideresolved"
+	SkipResolved    = "skipresolved"
 	RelativeNumber  = "relativenumber"
 )
 
@@ -36,6 +37,7 @@ func All() []Option {
 		{Name: HideReviewed},
 		{Name: AutoViewed},
 		{Name: HideResolved},
+		{Name: SkipResolved},
 		{Name: RelativeNumber},
 	}
 }
@@ -95,6 +97,9 @@ func (values Values) AutoViewed() bool { return values.Get(AutoViewed) }
 // HideResolved reports whether the diff pane leaves out resolved review
 // threads.
 func (values Values) HideResolved() bool { return values.Get(HideResolved) }
+
+// SkipResolved reports whether `)` and `(` pass over resolved review threads.
+func (values Values) SkipResolved() bool { return values.Get(SkipResolved) }
 
 // RelativeNumber reports whether the diff pane numbers its rows by distance
 // from the cursor.

@@ -67,6 +67,9 @@ type FilePane interface {
 	// SetHideResolved leaves resolved review threads out, or shows them again
 	// (the hideresolved option). Panes without threads ignore it.
 	SetHideResolved(hide bool)
+	// SetSkipResolved makes the thread keys pass over resolved threads (the
+	// skipresolved option). Panes without threads ignore it.
+	SetSkipResolved(skip bool)
 	// SetRelativeNumber shows or hides row numbers counted from the cursor
 	// (the relativenumber option). Panes without a gutter ignore it.
 	SetRelativeNumber(on bool)

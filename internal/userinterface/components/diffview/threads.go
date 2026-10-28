@@ -255,21 +255,62 @@ func (model *Model) ToggleThread() {
 	model.setExpanded(timestamps, !all)
 }
 
+// SetSkipResolved makes NextThread and PreviousThread pass over resolved
+// threads, or visit them again. Resolved threads stay shown and reachable
+// with the cursor keys.
+func (model *Model) SetSkipResolved(skip bool) { model.skipResolved = skip }
+
+// threadHeaderAt reports whether row i is the first row of a thread the
+// thread keys may land on.
+func (model *Model) threadHeaderAt(i int) bool {
+	row := model.rows[i]
+	if row.threadRow == nil || row.threadRow.rowInBlock != 0 {
+		return false
+	}
+	return !model.skipResolved || !model.fileThreads[row.threadRow.threadIndex].IsResolved
+}
+
+// NoThreadToVisit reports whether the file has threads shown but the thread
+// keys have none to land on in the given direction, which only happens under
+// SetSkipResolved. A pane with no file, a message or no threads reports false:
+// there the keys have nothing to say.
+func (model *Model) NoThreadToVisit(forward bool) bool {
+	if !model.skipResolved || model.file == nil || model.ThreadCount() == 0 {
+		return false
+	}
+	if forward {
+		for i := model.window.Cursor() + 1; i < len(model.rows); i++ {
+			if model.threadHeaderAt(i) {
+				return false
+			}
+		}
+		return true
+	}
+	for i := min(model.window.Cursor(), len(model.rows)) - 1; i >= 0; i-- {
+		if model.threadHeaderAt(i) {
+			return false
+		}
+	}
+	return true
+}
+
 // NextThread moves the cursor to the header of the next thread below it (no-op
-// after the last one), putting it at the top of the view.
+// after the last one), putting it at the top of the view. Under
+// SetSkipResolved resolved threads are passed over.
 func (model *Model) NextThread() {
 	for i := model.window.Cursor() + 1; i < len(model.rows); i++ {
-		if row := model.rows[i]; row.threadRow != nil && row.threadRow.rowInBlock == 0 {
+		if model.threadHeaderAt(i) {
 			model.window.JumpTo(i)
 			return
 		}
 	}
 }
 
-// PreviousThread moves the cursor to the header of the closest thread above it.
+// PreviousThread moves the cursor to the header of the closest thread above
+// it, passing over resolved ones under SetSkipResolved.
 func (model *Model) PreviousThread() {
 	for i := min(model.window.Cursor(), len(model.rows)) - 1; i >= 0; i-- {
-		if row := model.rows[i]; row.threadRow != nil && row.threadRow.rowInBlock == 0 {
+		if model.threadHeaderAt(i) {
 			model.window.JumpTo(i)
 			return
 		}

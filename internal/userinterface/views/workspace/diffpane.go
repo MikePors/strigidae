@@ -8,6 +8,7 @@ import (
 
 	"github.com/MikePors/strigidae/internal/diff"
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/components/diffview"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
@@ -70,6 +71,11 @@ func (pane *diffPane) SetWrap(wrap bool) { pane.diffView.SetWrap(wrap) }
 // SetHideResolved leaves resolved review threads out of the diff, or shows
 // them again.
 func (pane *diffPane) SetHideResolved(hide bool) { pane.diffView.SetHideResolved(hide) }
+
+// SetSkipResolved makes `)` and `(` pass over resolved threads.
+func (pane *diffPane) SetSkipResolved(skip bool) {
+	pane.diffView.SetSkipResolved(skip)
+}
 
 // SetRelativeNumber shows or hides the diff's relative-number column.
 func (pane *diffPane) SetRelativeNumber(on bool) { pane.diffView.SetRelativeNumber(on) }
@@ -172,9 +178,9 @@ func (pane *diffPane) Update(message keys.Message) tea.Cmd {
 	case key.Matches(message, pane.bind.PreviousHunk):
 		message.Each(diffView.CursorRow, diffView.PreviousHunk)
 	case key.Matches(message, pane.bind.NextThread):
-		message.Each(diffView.CursorRow, diffView.NextThread)
+		return pane.moveThread(message, true)
 	case key.Matches(message, pane.bind.PreviousThread):
-		message.Each(diffView.CursorRow, diffView.PreviousThread)
+		return pane.moveThread(message, false)
 	case key.Matches(message, pane.bind.ToggleThread), key.Matches(message, pane.globalKeys.Select):
 		diffView.ToggleThread()
 	case key.Matches(message, pane.bind.OpenThread):
@@ -189,6 +195,20 @@ func (pane *diffPane) Update(message keys.Message) tea.Cmd {
 		diffView.HalfScrollLeft()
 	case key.Matches(message, pane.bind.HalfScrollRight):
 		diffView.HalfScrollRight()
+	}
+	return nil
+}
+
+// moveThread applies a thread key. Under skipresolved a key with no
+// unresolved thread to land on in its direction says so and leaves the cursor.
+func (pane *diffPane) moveThread(message keys.Message, forward bool) tea.Cmd {
+	if pane.diffView.NoThreadToVisit(forward) {
+		return userinterface.Info("no unresolved threads")
+	}
+	if forward {
+		message.Each(pane.diffView.CursorRow, pane.diffView.NextThread)
+	} else {
+		message.Each(pane.diffView.CursorRow, pane.diffView.PreviousThread)
 	}
 	return nil
 }
