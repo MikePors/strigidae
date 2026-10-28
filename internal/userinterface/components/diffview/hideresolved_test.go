@@ -3,8 +3,11 @@ package diffview
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/MikePors/strigidae/internal/diff"
+	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
 func TestHideResolvedLeavesThreadOutButKeepsMarker(test *testing.T) {
@@ -133,5 +136,48 @@ func TestThreadFadeCombinesWithHunkFade(test *testing.T) {
 			}
 			test.Fatal("the open thread has no rows")
 		})
+	}
+}
+
+func TestHideResolvedOnNoticeOnlyFile(test *testing.T) {
+	plain := New(theme.New(true), WithClock(func() time.Time { return threadNow }))
+	plain.SetSize(60, 10)
+	plain.SetFile(fixture(test, "logo.png"))
+	want := screen(plain)
+
+	model := New(theme.New(true), WithClock(func() time.Time { return threadNow }))
+	model.SetSize(60, 10)
+	model.SetFile(fixture(test, "logo.png"))
+	resolved := binaryThread()
+	resolved.IsResolved = true
+	model.SetThreads([]github.ReviewThread{resolved})
+	model.NextThread()
+	fading := true
+	model.SetThreadFade(func(string) (int, bool) { return 1, fading })
+
+	model.SetHideResolved(true)
+	if !strings.Contains(screen(model), "hank") {
+		test.Errorf("a fading thread should keep the thread layout:\n%s", screen(model))
+	}
+	fading = false
+	model.ThreadFadesChanged()
+	if got := screen(model); got != want {
+		test.Errorf("with every thread hidden the notice should look as with no threads:\n got:\n%s\nwant:\n%s", got, want)
+	}
+	if model.ThreadCount() != 0 {
+		test.Errorf("ThreadCount = %d, want 0", model.ThreadCount())
+	}
+	model.NextThread() // nothing to reach; must not panic
+	model.CursorDown(1)
+	model.SetFile(fixture(test, "logo.png")) // a refresh while hidden
+	model.SetThreads([]github.ReviewThread{resolved})
+	if got := screen(model); got != want {
+		test.Errorf("after a refresh the notice should still look as with no threads:\n%s", got)
+	}
+
+	model.SetHideResolved(false)
+	out := screen(model)
+	if !strings.Contains(out, "hank") || !strings.Contains(cursorRowText(model), "Binary file") {
+		test.Errorf("turning the option off should bring the thread back with the cursor on the notice, at %q:\n%s", cursorRowText(model), out)
 	}
 }
