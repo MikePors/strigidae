@@ -112,7 +112,7 @@ A local or parameter may take the name of its type's package (`theme theme.Theme
 5. **Review.** Every PR gets an independent review by a fresh agent with no stake in the code (`/review-pr <N>` in Claude Code; see `.claude/skills/review-pr`) on top of the author's own check. It reports in the terminal; `/review-pr <N> post` also puts the findings on the PR as one comment-only review. Fix findings in new commits. For posted findings, reply in each thread naming the fixing commit and resolve it; leave threads that need the maintainer's decision open.
 6. CI must be green. Address review comments with new commits; don't rewrite history on a PR under review. The maintainer merges, with merge commits.
 
-**Definition of done:** the issue's acceptance criteria are met; tests cover the new logic and main view states; `make check` passes; new keybindings appear in the help overlay; README/docs reflect user-facing changes; the PR description is complete.
+**Definition of done:** the issue's acceptance criteria are met; tests cover the new logic and main view states; `make check` passes; new keybindings appear in the help overlay; README/docs reflect user-facing changes; the PR description is complete. Checks that only the maintainer can do (a mutation against real GitHub, behaviour in a real terminal) are added to [`HUMAN.md`](HUMAN.md) with the issue, the steps and what to report; the maintainer removes them once done.
 
 ## Tooling notes
 
