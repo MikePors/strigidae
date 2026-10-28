@@ -169,6 +169,7 @@ func cloneDetail(detail github.PullRequestDetail) github.PullRequestDetail {
 	detail.Labels = slices.Clone(detail.Labels)
 	detail.ReviewRequests = slices.Clone(detail.ReviewRequests)
 	detail.Files = slices.Clone(detail.Files)
+	detail.Reactions = cloneReactions(detail.Reactions)
 	detail.Reviews = slices.Clone(detail.Reviews)
 	detail.CheckList = slices.Clone(detail.CheckList)
 	if detail.Comments != nil {

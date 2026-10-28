@@ -145,9 +145,11 @@ type PullRequestDetail struct {
 	// refuses to approve or request changes on your own pull request.
 	ViewerDidAuthor bool
 	Body            string
-	Additions       int
-	Deletions       int
-	Labels          []Label
+	// Reactions are the reactions on the description (Body).
+	Reactions []ReactionSummary
+	Additions int
+	Deletions int
+	Labels    []Label
 	// ReviewRequests are the reviewers currently asked to review.
 	ReviewRequests []Reviewer
 	Files          []ChangedFile

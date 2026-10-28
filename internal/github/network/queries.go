@@ -74,6 +74,7 @@ query ` + operationPullRequestDetail + `($owner: String!, $name: String!, $numbe
     pullRequest(number: $number) {
       ...PullRequestFields
       body additions deletions viewerDidAuthor mergeStateStatus
+      ` + reactionSelection + `
       statusCheckRollup { contexts(first: 100) { totalCount nodes {
         __typename
         ... on CheckRun { name status conclusion detailsUrl checkSuite { workflowRun { workflow { name } } } }
