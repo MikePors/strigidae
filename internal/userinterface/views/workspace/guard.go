@@ -14,13 +14,13 @@ import (
 type writeKind int
 
 const (
-	// writeComment: `c` on a diff line, `V` (starts an inline comment), `r`,
+	// writeComment: `c` (lines only), `V` (starts an inline comment), `r`,
 	// `e` / `:edit-comment`, `D` / `:delete-comment`, and the reply's yes.
 	writeComment writeKind = iota
 	// writeThread: `x`, `:resolve`, `:unresolve`.
 	writeThread
-	// writeOverviewComment: `c` on the Overview (a top-level comment). It
-	// needs no diff.
+	// writeOverviewComment: `C` (a top-level comment) from anywhere in the
+	// workspace. It needs no diff.
 	writeOverviewComment
 	// writeReaction: `:react`.
 	writeReaction

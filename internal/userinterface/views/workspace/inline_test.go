@@ -1575,7 +1575,7 @@ func TestRefusedEditTextGoesToTheThreadOrTheLine(test *testing.T) {
 				inliner.openedOn = nil
 				inliner.press("C")
 				if diff := cmp.Diff([]string{"my rewrite"}, inliner.openedOn); diff != "" {
-					test.Errorf("c in the Overview opened on (-want +got):\n%s", diff)
+					test.Errorf("C in the Overview opened on (-want +got):\n%s", diff)
 				}
 			}
 			if testCase.wantKey == lineKey {

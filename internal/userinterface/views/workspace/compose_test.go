@@ -421,6 +421,41 @@ func TestCommentKeyRefusesOnTheOverview(test *testing.T) {
 	}
 }
 
+// With one pane shown (a narrow terminal on the Files pane), c has no diff to
+// use and says so; C needs none and still starts the top-level comment.
+func TestCommentKeysInANarrowTerminal(test *testing.T) {
+	narrow := func(test *testing.T) *composer {
+		testComposer := &composer{harness: threadHarness(test, 60, 20), body: "top comment"}
+		testComposer.view.edit = func(initial string, done func(string, error) tea.Msg) tea.Cmd {
+			testComposer.openedOn = append(testComposer.openedOn, initial)
+			return func() tea.Msg { return done(testComposer.body, testComposer.err) }
+		}
+		return testComposer
+	}
+	test.Run("c refuses", func(test *testing.T) {
+		composer := narrow(test)
+		composer.press("c")
+		if diff := cmp.Diff([]string{"focus the diff to comment on it"}, composer.infoMessages()); diff != "" {
+			test.Errorf("notices (-want +got):\n%s", diff)
+		}
+		if len(composer.openedOn) != 0 || len(composer.client.Comments()) != 0 {
+			test.Errorf("editor %v, comments %v", composer.openedOn, composer.client.Comments())
+		}
+	})
+	test.Run("C starts the flow", func(test *testing.T) {
+		composer := narrow(test)
+		composer.press("C")
+		confirmation, ok := composer.lastConfirm()
+		if !ok || confirmation.Text != `Post comment? "top comment"` {
+			test.Fatalf("confirmation = %q (%v)", confirmation.Text, ok)
+		}
+		composer.run(confirmation.OnYes)
+		if len(composer.client.Comments()) != 1 {
+			test.Errorf("comments = %v", composer.client.Comments())
+		}
+	})
+}
+
 func TestConfirmationTextIsCleanAndFits(test *testing.T) {
 	composer := newComposer(test)
 	composer.body = hostile + strings.Repeat(" long", 60)
