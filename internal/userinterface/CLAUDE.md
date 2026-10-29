@@ -30,7 +30,6 @@ The maintainer's rules for when strig asks before acting:
 - A reaction is confirmed by choosing it (in the picker, or by naming it in `:react <name>`); no single keypress ever adds one, and it has no `y/N`.
 - **Every deletion asks `y/N`**, draft or published.
 - Cancelling happens only at the `y/N`. An empty body is an error, not a cancel, and nothing is written.
-- Thread and comment actions (`r`, `x`, `e`, `D`, `:react`, `:resolve`, `:unresolve`, `:edit-comment`, `:delete-comment`) work on the diff cursor and need the diff pane focused. The workspace resolves their target in one place (`views/workspace/target.go`), with one notice per level.
 - Keys with a command behind them are welcome (`e` / `D` and `:edit-comment` / `:delete-comment`; `x` and `:resolve` / `:unresolve`).
 - Re-read the state before asking and again after `y`; if it changed, ask again or refuse and refresh. Never write on a stale yes.
 
@@ -99,6 +98,8 @@ Reserved prefixes:
 |---|---|
 | `g …` | goto: `g g` top, `g t` / `g T` next / previous tab |
 | `z …` | folds (expand/collapse threads, files), horizontal scrolling (`z h` / `z l` a few columns, `z H` / `z L` half a screen, as in vim) and screen positioning: `z t` / `z z` / `z b` scroll the cursor line to the top / middle / bottom of the view without moving the cursor (lists with a cursor; they take no count, and the Overview doesn't have them yet) |
+
+**Targets.** Thread and comment actions (`r`, `x`, `e`, `D`, `:react`, `:resolve`, `:unresolve`, `:edit-comment`, `:delete-comment`) work on the diff cursor and need the diff pane focused. The workspace resolves their target in one place (`views/workspace/target.go`), with one notice per level.
 
 Adding a binding or command: make sure it doesn't collide with the tables above or another binding active in the same view, add it with help text and an action name, and **list every new or changed binding in the PR description** so the maintainer can approve it. Any binding an issue marks "TBD" is the maintainer's call; propose one in the PR and ask.
 

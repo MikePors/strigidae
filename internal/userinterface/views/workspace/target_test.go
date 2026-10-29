@@ -213,3 +213,53 @@ func TestEditAndDeleteActOnTheCommentUnderTheCursor(test *testing.T) {
 		}
 	})
 }
+
+// The lines level needs no focus on the diff: c works from the Files pane.
+func TestNewCommentWorksFromTheFilesPane(test *testing.T) {
+	inliner := newInliner(test)
+	inliner.moveTo(github.SideRight, 11)
+	inliner.press("h")
+	if inliner.view.focus != paneFiles {
+		test.Fatalf("focus = %v, want the Files pane", inliner.view.focus)
+	}
+	inliner.body = "from the files pane"
+	inliner.press("c")
+	if diff := cmp.Diff([]string{""}, inliner.openedOn); diff != "" {
+		test.Errorf("editor opened on (-want +got):\n%s", diff)
+	}
+}
+
+// The Overview has no diff cursor, but the pane behind it remembers where it
+// was: no action may target the thread or comment left there.
+func TestOverviewNeverTargetsTheHiddenDiffCursor(test *testing.T) {
+	tests := []struct {
+		name string
+		run  func(inliner *inliner)
+		want string
+	}{
+		{"x", func(inliner *inliner) { inliner.press("x") }, "no comment thread here"},
+		{"r", func(inliner *inliner) { inliner.press("r") }, "no comment thread here"},
+		{"e", func(inliner *inliner) { inliner.press("e") }, noticeEdit},
+		{"D", func(inliner *inliner) { inliner.press("D") }, noticeDelete},
+		{":react", func(inliner *inliner) { inliner.react("heart") }, "move onto a comment to react to it"},
+	}
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			inliner := newInliner(test)
+			inliner.seedTargets()
+			inliner.toLineContaining("first mine")
+			inliner.press("h", "g g", "l") // Overview, right pane focused
+			if inliner.view.selection() != 0 || inliner.view.focus != paneRight {
+				test.Fatalf("selection %d, focus %v", inliner.view.selection(), inliner.view.focus)
+			}
+			inliner.messages, inliner.openedOn, inliner.body = nil, nil, "text"
+			testCase.run(inliner)
+			if diff := cmp.Diff([]string{testCase.want}, inliner.infoMessages()); diff != "" {
+				test.Errorf("infos (-want +got):\n%s", diff)
+			}
+			if effect(inliner) {
+				test.Error("went ahead on the hidden cursor")
+			}
+		})
+	}
+}
