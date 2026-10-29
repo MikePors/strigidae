@@ -319,7 +319,8 @@ func readmissions() []readmission {
 }
 
 // At the re-admission point: a busy state that started since is refused with
-// its notice and nothing is written. (:react has no yes, so no re-admission.)
+// its notice and nothing is written. (:react's re-admission is choosing in the
+// picker: TestGuardAtReactionPickerChoice.)
 func TestGuardAtReadmission(test *testing.T) {
 	for _, point := range readmissions() {
 		for _, state := range busyCases() {
@@ -350,5 +351,30 @@ func TestGuardAtReadmission(test *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// Choosing a reaction in the picker is a re-admission point: a review or a
+// merge that started while the picker was open refuses it.
+func TestGuardAtReactionPickerChoice(test *testing.T) {
+	for _, state := range busyCases() {
+		test.Run(state.name, func(test *testing.T) {
+			inliner := guardedInliner(test)
+			inliner.onOwnComment()
+			command("react", "")(inliner)
+			if inliner.view.picker == nil {
+				test.Fatal("the picker did not open")
+			}
+			state.apply(inliner)
+			before, writes := inliner.mutations(), inliner.view.writes
+			inliner.messages = nil
+			inliner.keyPress(tea.KeyEnter)
+			if diff := cmp.Diff([]string{state.notice}, inliner.infoMessages()); diff != "" {
+				test.Errorf("notices (-want +got):\n%s", diff)
+			}
+			if inliner.mutations() != before || inliner.view.writes != writes {
+				test.Errorf("something was written: %d -> %d mutations, writes %d -> %d", before, inliner.mutations(), writes, inliner.view.writes)
+			}
+		})
 	}
 }

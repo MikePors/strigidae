@@ -34,6 +34,11 @@ func (view *View) pickerKey(message tea.KeyPressMsg) tea.Cmd {
 		checks, target := view.pickerChecks, view.pickerReaction
 		view.picker, view.pickerChecks, view.pickerReaction = nil, nil, nil
 		if target != nil {
+			// Choosing is the re-admission point: a review or merge may
+			// have started while the picker was open.
+			if busy := view.guardState().busy(writeReaction); busy != nil {
+				return busy
+			}
 			return view.toggleReaction(*target, github.ReactionContents[result.Index])
 		}
 		if checks != nil {
