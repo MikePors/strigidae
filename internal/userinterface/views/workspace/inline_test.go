@@ -1428,7 +1428,7 @@ func TestWriteAfterYesIsInFlightUntilItsResult(test *testing.T) {
 	test.Run("top-level comment", func(test *testing.T) {
 		composer := newComposer(test)
 		composer.body = "LGTM"
-		composer.press("c")
+		composer.press("C")
 		confirmation, ok := composer.lastConfirm()
 		if !ok {
 			test.Fatal("no confirmation")
@@ -1570,10 +1570,10 @@ func TestRefusedEditTextGoesToTheThreadOrTheLine(test *testing.T) {
 				test.Errorf("drafts (-want +got):\n%s", diff)
 			}
 			if testCase.wantKey == topKey {
-				// c in the Overview starts from the text.
+				// C in the Overview starts from the text.
 				inliner.press("h", "g g")
 				inliner.openedOn = nil
-				inliner.press("c")
+				inliner.press("C")
 				if diff := cmp.Diff([]string{"my rewrite"}, inliner.openedOn); diff != "" {
 					test.Errorf("c in the Overview opened on (-want +got):\n%s", diff)
 				}
@@ -1826,7 +1826,7 @@ func TestTopLevelCommentIsRefusedWhileAWriteRuns(test *testing.T) {
 	inliner.press("h", "g g") // the Overview
 	inliner.view.writes = 1
 	inliner.messages, inliner.openedOn, inliner.body = nil, nil, "x"
-	inliner.press("c")
+	inliner.press("C")
 	if len(inliner.openedOn) != 0 {
 		test.Error("an editor opened while a write is running")
 	}

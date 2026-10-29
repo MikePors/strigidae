@@ -20,7 +20,8 @@ type bindings struct {
 	NextFile, PreviousFile       key.Binding
 	FilePicker                   key.Binding
 	NextSection, PreviousSection key.Binding
-	Comment, Reply               key.Binding
+	Comment, OverviewComment     key.Binding
+	Reply                        key.Binding
 	Viewed                       key.Binding
 	ReviewHunk                   key.Binding
 	ResolveThread                key.Binding
@@ -42,7 +43,8 @@ func defaultBindings() bindings {
 		FilePicker:      bind("f", "f", "file picker"),
 		NextSection:     bind("]", "]", "next section (overview)"),
 		PreviousSection: bind("[", "[", "previous section (overview)"),
-		Comment:         bind("c", "c", "new comment: on the pull request (overview) or on the diff line / selection"),
+		Comment:         bind("c", "c", "new comment on the diff line / selection (lines only)"),
+		OverviewComment: bind("C", "C", "new top-level comment on the pull request"),
 		Reply:           bind("r", "r", "reply to the comment thread at the cursor (diff pane)"),
 		ResolveThread:   bind("x", "x", "resolve or unresolve the comment thread at the cursor (diff pane; also :resolve, :unresolve)"),
 		Viewed:          bind("v", "v", "toggle file viewed"),
@@ -70,6 +72,7 @@ func (workspaceBindings *bindings) actions() []keys.Action {
 		{Name: "next-section", Binding: &workspaceBindings.NextSection},
 		{Name: "previous-section", Binding: &workspaceBindings.PreviousSection},
 		{Name: "new-comment", Binding: &workspaceBindings.Comment},
+		{Name: "new-overview-comment", Binding: &workspaceBindings.OverviewComment},
 		{Name: "reply", Binding: &workspaceBindings.Reply},
 		{Name: "toggle-viewed", Binding: &workspaceBindings.Viewed},
 		{Name: "toggle-hunk-reviewed", Binding: &workspaceBindings.ReviewHunk},
@@ -104,7 +107,9 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 	case view.selection() == 0 && key.Matches(message, view.bind.PreviousSection):
 		message.Each(view.overview.viewport.YOffset, func() { view.jumpSection(-1) })
 	case key.Matches(message, view.bind.Comment):
-		return view.comment()
+		return view.inlineComment()
+	case key.Matches(message, view.bind.OverviewComment):
+		return view.overviewComment()
 	case key.Matches(message, view.bind.Viewed):
 		return view.toggleViewed()
 	case key.Matches(message, view.bind.ReviewHunk):

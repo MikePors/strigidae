@@ -124,8 +124,8 @@ func TestDraftsAreKeyedByTarget(test *testing.T) {
 	composer.press("r")
 	composer.press("h", "g g") // back to the Files pane, Overview
 	composer.body = "top draft"
-	composer.press("c")
-	composer.press("c")
+	composer.press("C")
+	composer.press("C")
 	if diff := cmp.Diff([]string{"", "", "top draft"}, composer.openedOn); diff != "" {
 		test.Errorf("editor pre-fill (-want +got):\n%s", diff)
 	}
@@ -226,7 +226,7 @@ func TestPostResultAfterNewComposeIsHandled(test *testing.T) {
 	// The user starts another compose before the post returns.
 	composer.body = "second"
 	before := composer.view.commentSequence
-	composer.press("h", "g g", "c")
+	composer.press("h", "g g", "C")
 	if composer.view.commentSequence == before {
 		test.Fatal("setup: no new compose started")
 	}
@@ -342,7 +342,7 @@ func TestReplyWorksFromTheFilesPane(test *testing.T) {
 func TestTopLevelCommentIsPostedFromTheOverview(test *testing.T) {
 	composer := newComposer(test)
 	composer.body = "LGTM, one question\nbelow"
-	composer.press("l", "c")
+	composer.press("l", "C")
 	confirmation, ok := composer.lastConfirm()
 	if !ok || confirmation.Text != `Post comment? "LGTM, one question"` {
 		test.Fatalf("confirmation = %q (%v)", confirmation.Text, ok)
@@ -370,10 +370,61 @@ func TestTopLevelCommentIsPostedFromTheOverview(test *testing.T) {
 	}
 }
 
+// C starts the top-level comment from anywhere: the Overview, the Files pane
+// with a file selected, and the diff pane.
+func TestOverviewCommentKeyWorksFromEveryFocus(test *testing.T) {
+	tests := []struct {
+		name  string
+		setup func(composer *composer)
+	}{
+		{"Overview", func(composer *composer) { composer.press("h", "g g") }},
+		{"Files pane", func(composer *composer) { composer.selectFile(); composer.press("h") }},
+		{"diff pane", func(composer *composer) { composer.selectFile() }},
+	}
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			composer := newComposer(test)
+			composer.body = "top comment"
+			testCase.setup(composer)
+			composer.press("C")
+			confirmation, ok := composer.lastConfirm()
+			if !ok || confirmation.Text != `Post comment? "top comment"` {
+				test.Fatalf("confirmation = %q (%v)", confirmation.Text, ok)
+			}
+			composer.run(confirmation.OnYes)
+			want := []fake.Comment{{Repository: testRepository, Number: 7, Body: "top comment"}}
+			if diff := cmp.Diff(want, composer.client.Comments()); diff != "" {
+				test.Errorf("comments (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// c comments on lines only: with the Overview selected it refuses with the
+// resolver's notice and posts nothing.
+func TestCommentKeyRefusesOnTheOverview(test *testing.T) {
+	composer := newComposer(test)
+	composer.body = "never posted"
+	composer.press("h", "g g")
+	composer.press("c")
+	if len(composer.openedOn) != 0 {
+		test.Errorf("an editor opened: %v", composer.openedOn)
+	}
+	if _, asked := composer.lastConfirm(); asked {
+		test.Error("a confirmation was asked")
+	}
+	if diff := cmp.Diff([]string{"move onto a diff line to comment on it"}, composer.infoMessages()); diff != "" {
+		test.Errorf("notices (-want +got):\n%s", diff)
+	}
+	if comments := composer.client.Comments(); len(comments) != 0 {
+		test.Errorf("posted %v", comments)
+	}
+}
+
 func TestConfirmationTextIsCleanAndFits(test *testing.T) {
 	composer := newComposer(test)
 	composer.body = hostile + strings.Repeat(" long", 60)
-	composer.press("c")
+	composer.press("C")
 	confirmation, _ := composer.lastConfirm()
 	if strings.ContainsFunc(confirmation.Text, func(character rune) bool { return character < 0x20 || (character >= 0x7f && character < 0xa0) }) {
 		test.Errorf("control characters in %q", confirmation.Text)
@@ -388,12 +439,12 @@ func TestReplyAndCommentAreInHelp(test *testing.T) {
 	got := map[string]string{}
 	for _, bindings := range harness.view.FullHelp() {
 		for _, binding := range bindings {
-			if key := binding.Keys(); len(key) == 1 && (key[0] == "r" || key[0] == "c") {
+			if key := binding.Keys(); len(key) == 1 && (key[0] == "r" || key[0] == "c" || key[0] == "C") {
 				got[key[0]] = binding.Help().Desc
 			}
 		}
 	}
-	if len(got) != 2 || got["r"] == "" || got["c"] == "" {
+	if len(got) != 3 || got["r"] == "" || got["c"] == "" || got["C"] == "" {
 		test.Errorf("help = %v", got)
 	}
 }
