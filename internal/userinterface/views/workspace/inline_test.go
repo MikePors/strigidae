@@ -1110,7 +1110,7 @@ func TestCommandsBehaveLikeTheKeys(test *testing.T) {
 		inliner.press("h", "g g") // Files pane, Overview
 		inliner.messages = nil
 		inliner.command("edit-comment")
-		if diff := cmp.Diff([]string{"focus the diff to edit it"}, inliner.infoMessages()); diff != "" {
+		if diff := cmp.Diff([]string{noticeEdit}, inliner.infoMessages()); diff != "" {
 			test.Errorf("infos (-want +got):\n%s", diff)
 		}
 	})
@@ -1317,9 +1317,9 @@ func TestEditAndDeleteUseTheirOwnPermission(test *testing.T) {
 				test.Errorf("offered = %v (editor %v, asked %v), want %v; infos %v", offered, inliner.openedOn, asked, testCase.offered, inliner.infoMessages())
 			}
 			if !testCase.offered {
-				want := noticeEdit
+				want := "you can't edit this comment"
 				if testCase.key == "D" {
-					want = noticeDelete
+					want = "you can't delete this comment"
 				}
 				if diff := cmp.Diff([]string{want}, inliner.infoMessages()); diff != "" {
 					test.Errorf("info (-want +got):\n%s", diff)

@@ -61,9 +61,9 @@ Reserved globally:
 | `/`, `n` / `N` | search the list (Files pane, PR lists), next / previous match; `/` opens the search prompt in the bottom line through `userinterface.Prompter` (the shell opens it in the same update as the key; the view hears `PromptResultMessage` on every change, paste included, on `enter` and on `esc`; currently every row stays and matching rows are marked) |
 | `o` | open the current item in the browser |
 | `R` | refresh |
-| `c` | new comment (top-level, or on the cursor line / visual selection in a diff) |
-| `r` | reply to the comment thread at the cursor (diff pane focused; from the Files pane it says `focus the diff to reply`) |
-| `x` | resolve the comment thread at the cursor, or unresolve it if it is resolved (diff pane focused; asks `y/N`) |
+| `c` | new comment (top-level on the Overview, or on the cursor line / visual selection in a diff) |
+| `r` | reply to the comment thread at the cursor (diff pane on screen) |
+| `x` | resolve the comment thread at the cursor, or unresolve it if it is resolved (diff pane on screen; asks `y/N`) |
 | `:` | command line |
 | `]` / `[` | next / previous chunk of what the pane shows: hunk in a diff, section in the Overview |
 | `}` / `{` | next / previous file |
@@ -85,9 +85,9 @@ Commands (`:` then `enter`):
 | `:checks` | PR workspace: list the head commit's checks (failing first); `enter` opens the selected check's page in the browser |
 | `:merge [merge\|squash\|rebase]` | PR workspace: merge the pull request after a `y/N` confirmation; no argument uses the first method the repo allows (merge commit, squash, rebase) |
 | `:copy-filename` | PR workspace: copy the selected file's path to the clipboard (OSC 52; tmux needs `set -g set-clipboard on`) |
-| `:edit-comment`, `:delete-comment` | PR workspace: change the comment under the diff cursor (same as `e` / `D`), only if it is yours; anywhere else (a thread header, a blank row, a diff line, a folded thread, someone else's comment) it says `move onto a comment of yours to edit it` / `… to delete it`, and from the Files pane `focus the diff to edit it`; deleting always asks `y/N`, editing a published comment asks `y/N` after the editor closes |
-| `:resolve`, `:unresolve` | PR workspace: resolve or unresolve the comment thread at the diff cursor, diff pane focused (`x` does whichever applies); both ask `y/N` naming the file and line, and refuse with a notice when the thread is already in that state |
-| `:react [name]` | PR workspace: react to the comment under the diff cursor (inside an open thread; anywhere else it says `move onto a comment to react to it`, and from the Files pane `focus the diff to react to it`). Alone it opens a picker of GitHub's 8 reactions with counts and `✓` for the ones you have; `enter` toggles the selected one. `:react <name>` toggles directly; names are `+1`, `-1`, `laugh`, `hooray`, `confused`, `heart`, `rocket`, `eyes`, and an unknown one is an error that lists them. No key and no `y/N`; refused while a review is being submitted, a merge is running or a comment is being saved |
+| `:edit-comment`, `:delete-comment` | PR workspace: change the comment under the diff cursor (same as `e` / `D`), only if it is yours; anywhere else (a thread header, a blank row, a diff line, a folded thread, someone else's comment) it says `move onto a comment of yours to edit it` / `… to delete it`, and on your own comment that GitHub does not let you change, `you can't edit this comment` / `you can't delete this comment`; deleting always asks `y/N`, editing a published comment asks `y/N` after the editor closes |
+| `:resolve`, `:unresolve` | PR workspace: resolve or unresolve the comment thread at the diff cursor (`x` does whichever applies); both ask `y/N` naming the file and line, and refuse with a notice when the thread is already in that state |
+| `:react [name]` | PR workspace: react to the comment under the diff cursor (inside an open thread; anywhere else it says `move onto a comment to react to it`). Alone it opens a picker of GitHub's 8 reactions with counts and `✓` for the ones you have; `enter` toggles the selected one. `:react <name>` toggles directly; names are `+1`, `-1`, `laugh`, `hooray`, `confused`, `heart`, `rocket`, `eyes`, and an unknown one is an error that lists them. No key and no `y/N`; refused while a review is being submitted, a merge is running or a comment is being saved |
 | `:discard-review` | PR workspace: delete your pending review and all its draft comments after a `y/N` naming how many drafts go with it; no key; says `no pending review` when there is none; refused while a review is being submitted, a merge is running or a comment is being saved |
 
 **View commands.** The table above is static. A view with commands of its own implements `userinterface.Commander` (`Command(name, args) (tea.Cmd, handled bool)`) and its names are added to `viewCommands` in `command.go`. The root consults only the top view, and only when the static table has no match, so a command never reaches two views the way a broadcast result would. A listed name the top view declines (or a top view that is not a Commander) gives "not available here: name"; any other name gives "not a command: name". List the view's commands in the table above.
@@ -99,7 +99,7 @@ Reserved prefixes:
 | `g …` | goto: `g g` top, `g t` / `g T` next / previous tab |
 | `z …` | folds (expand/collapse threads, files), horizontal scrolling (`z h` / `z l` a few columns, `z H` / `z L` half a screen, as in vim) and screen positioning: `z t` / `z z` / `z b` scroll the cursor line to the top / middle / bottom of the view without moving the cursor (lists with a cursor; they take no count, and the Overview doesn't have them yet) |
 
-**Targets.** Thread and comment actions (`r`, `x`, `e`, `D`, `:react`, `:resolve`, `:unresolve`, `:edit-comment`, `:delete-comment`) work on the diff cursor and need the diff pane focused. The workspace resolves their target in one place (`views/workspace/target.go`), with one notice per level.
+**Targets.** Thread and comment actions (`r`, `x`, `e`, `D`, `:react`, `:resolve`, `:unresolve`, `:edit-comment`, `:delete-comment`) work on the diff cursor, as do `c` on a line, `V` and `m`. They run when the diff pane is on screen, focused or not; in a narrow terminal showing the Files pane they say `focus the diff to <action>`. The workspace resolves their target in one place (`views/workspace/target.go`), with one notice per level. Still outside the resolver: `v` and `:copy-filename` (file level) and `c` on the Overview (pull request level).
 
 Adding a binding or command: make sure it doesn't collide with the tables above or another binding active in the same view, add it with help text and an action name, and **list every new or changed binding in the PR description** so the maintainer can approve it. Any binding an issue marks "TBD" is the maintainer's call; propose one in the PR and ask.
 

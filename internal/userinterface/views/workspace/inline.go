@@ -245,6 +245,9 @@ func (view *View) startVisual() tea.Cmd {
 	if blocked := view.commentBlocked(); blocked != nil {
 		return blocked
 	}
+	if _, command := view.resolveTarget(request{level: levelLines, words: "select lines"}); command != nil {
+		return command
+	}
 	if !view.filePane.VisualStart() {
 		return userinterface.Info("move onto a diff line to select lines")
 	}
@@ -287,7 +290,13 @@ func (view *View) commentAtCursor(change change) (github.ReviewComment, github.R
 	if change == changeDelete {
 		words = "delete it"
 	}
-	resolved, command := view.resolveTarget(request{level: levelComment, words: words, allow: change.allowed})
+	rule := &commentRule{
+		mine:    func(comment github.ReviewComment) bool { return comment.ViewerDidAuthor },
+		allowed: change.allowed,
+		notMine: "move onto a comment of yours to " + words,
+		cannot:  "you can't " + strings.TrimSuffix(words, " it") + " this comment",
+	}
+	resolved, command := view.resolveTarget(request{level: levelComment, words: words, rule: rule})
 	if command != nil {
 		return github.ReviewComment{}, github.ReviewThread{}, command
 	}

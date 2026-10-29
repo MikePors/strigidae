@@ -320,26 +320,22 @@ func TestReplyInOverviewDoesNothing(test *testing.T) {
 	if len(composer.openedOn) != 0 {
 		test.Errorf("opened %v", composer.openedOn)
 	}
-	if diff := cmp.Diff([]string{"focus the diff to reply"}, composer.infoMessages()); diff != "" {
-		test.Errorf("files pane (-want +got):\n%s", diff)
-	}
-	composer.messages = nil
-	composer.press("l", "r") // the Overview has no threads
 	if diff := cmp.Diff([]string{"no comment thread here"}, composer.infoMessages()); diff != "" {
 		test.Errorf("overview (-want +got):\n%s", diff)
 	}
 }
 
-func TestReplyFromTheFilesPaneAsksToFocusTheDiff(test *testing.T) {
+func TestReplyWorksFromTheFilesPane(test *testing.T) {
 	composer := newComposer(test)
 	composer.onThread()
 	composer.body = "from the files pane"
 	composer.press("h", "r") // the diff cursor stays on the thread
-	if composer.view.focus != paneFiles || len(composer.openedOn) != 0 {
+	if composer.view.focus != paneFiles || len(composer.openedOn) != 1 {
 		test.Fatalf("focus %v, editor opened %d times", composer.view.focus, len(composer.openedOn))
 	}
-	if diff := cmp.Diff([]string{"focus the diff to reply"}, composer.infoMessages()); diff != "" {
-		test.Errorf("info (-want +got):\n%s", diff)
+	confirmation, ok := composer.lastConfirm()
+	if !ok || !strings.HasPrefix(confirmation.Text, "Post reply to internal/sync/client.go:12?") {
+		test.Errorf("confirmation = %q (%v)", confirmation.Text, ok)
 	}
 }
 

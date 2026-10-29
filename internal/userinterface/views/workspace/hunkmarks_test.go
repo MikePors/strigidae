@@ -185,16 +185,19 @@ func TestHunkMarkKeyInHelp(test *testing.T) {
 	test.Error("m is not in the help")
 }
 
-// TestMarkHunkWhileDiffHidden: in a narrow terminal with the files pane
-// focused the diff is hidden, so the status message is the only feedback.
+// TestMarkHunkWhileDiffHidden: in a narrow terminal with the Files pane shown
+// the diff is not on screen, so there is no hunk to mark.
 func TestMarkHunkWhileDiffHidden(test *testing.T) {
 	harness := loaded(test, 60, 20)
 	harness.press("j", "m")
 	if strings.Contains(harness.screen(), "@@") {
 		test.Fatal("setup: the diff is on screen")
 	}
-	if got := harness.lastInfo(); got != "hunk 1/2 reviewed" {
-		test.Errorf("status = %q, want hunk 1/2 reviewed", got)
+	if got := harness.lastInfo(); got != "focus the diff to mark the hunk" {
+		test.Errorf("status = %q, want the focus notice", got)
+	}
+	if len(harness.view.hunkMarks.reviewed) != 0 {
+		test.Error("a hunk was marked")
 	}
 }
 
