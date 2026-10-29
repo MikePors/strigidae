@@ -120,7 +120,7 @@ func (view *View) composeMine(origin origin, sequence int) bool {
 
 // reply starts a reply to the thread under the diff cursor.
 func (view *View) reply() tea.Cmd {
-	if notice := view.guardState().ready(); notice != nil {
+	if notice := view.guardState().ready(writeComment); notice != nil {
 		return notice
 	}
 	resolved, command := view.resolveTarget(request{level: levelThread, words: "reply"})
@@ -140,7 +140,7 @@ func (view *View) comment() tea.Cmd {
 	if view.selection() != 0 {
 		return view.inlineComment()
 	}
-	if notice := view.guardState().admit(writeComment); notice != nil {
+	if notice := view.guardState().admit(writeOverviewComment); notice != nil {
 		return notice
 	}
 	return view.compose(target{})
@@ -188,7 +188,15 @@ func (view *View) edited(message editedMessage) tea.Cmd {
 		}
 		return view.sendEdit(message.target, body)
 	}
-	return userinterface.Confirm(view.question(message.target, body), view.agreed(writeComment, view.post(message.target, body)))
+	return userinterface.Confirm(view.question(message.target, body), view.agreed(postKind(message.target), view.post(message.target, body)))
+}
+
+// postKind is the write kind of posting a reply or a top-level comment.
+func postKind(target target) writeKind {
+	if target.kind == kindReply {
+		return writeComment
+	}
+	return writeOverviewComment
 }
 
 // question is the confirmation text: where the text goes and its first line.

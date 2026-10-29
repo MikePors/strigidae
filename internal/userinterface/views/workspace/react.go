@@ -46,7 +46,7 @@ type reactionToggledMessage struct {
 
 // reactCommand handles :react [name].
 func (view *View) reactCommand(name string) tea.Cmd {
-	if notice := view.guardState().ready(); notice != nil {
+	if notice := view.guardState().ready(writeReaction); notice != nil {
 		return notice
 	}
 	var content github.ReactionContent

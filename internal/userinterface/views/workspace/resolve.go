@@ -61,7 +61,7 @@ type threadAction struct {
 
 // resolveThread starts resolving or unresolving the thread at the diff cursor.
 func (view *View) resolveThread(mode resolveMode) tea.Cmd {
-	if notice := view.guardState().ready(); notice != nil {
+	if notice := view.guardState().ready(writeThread); notice != nil {
 		return notice
 	}
 	resolved, command := view.resolveTarget(request{level: levelThread, words: "resolve it"})

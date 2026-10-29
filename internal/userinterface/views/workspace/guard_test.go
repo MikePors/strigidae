@@ -15,7 +15,7 @@ import (
 
 // writeKinds is every kind of write, so a kind added without a row in the
 // tables below fails TestGuardTableCoversEveryKind.
-var writeKinds = []writeKind{writeComment, writeThread, writeReaction, writeReview, writeMerge, writeDiscard}
+var writeKinds = []writeKind{writeComment, writeOverviewComment, writeThread, writeReaction, writeReview, writeMerge, writeDiscard}
 
 // busyCase is one busy state: how to start it, what it is called and the
 // notice it gives; saving says whether it counts as a comment write in flight.
@@ -97,7 +97,7 @@ func press(sequence string) func(inliner *inliner) {
 func guardActions() []guardAction {
 	return []guardAction{
 		{"c on a diff line", writeComment, (*inliner).onDiffLine, press("c")},
-		{"c on the Overview", writeComment, func(inliner *inliner) { inliner.press("h", "g g") }, press("c")},
+		{"c on the Overview", writeOverviewComment, func(inliner *inliner) { inliner.press("h", "g g") }, press("c")},
 		{"V", writeComment, (*inliner).onDiffLine, press("V")},
 		{"r", writeComment, (*inliner).onOwnComment, press("r")},
 		{"e", writeComment, (*inliner).onOwnComment, press("e")},
@@ -148,12 +148,19 @@ func TestGuardStateAnswersPerKind(test *testing.T) {
 		want  string
 	}{
 		{"not loaded", guardState{diffReady: true}, "pull request not loaded yet"},
-		{"diff not loaded", guardState{loaded: true}, "diff not loaded"},
 		{"not loaded wins over diff", guardState{}, "pull request not loaded yet"},
 		{"review submitting", guardState{loaded: true, diffReady: true, submittingReview: true}, "a review is being submitted"},
 		{"merge in progress", guardState{loaded: true, diffReady: true, mergeInProgress: true}, "a merge is in progress"},
 		{"comment saving", guardState{loaded: true, diffReady: true, commentSaving: true}, commentSavingText},
 		{"review before merge before comment", guardState{loaded: true, diffReady: true, submittingReview: true, mergeInProgress: true, commentSaving: true}, "a review is being submitted"},
+	}
+	for _, kind := range writeKinds {
+		notice := (guardState{loaded: true}).admit(kind)
+		if guardTable[kind].needsDiff != (notice != nil) {
+			test.Errorf("kind %d: needsDiff = %v but the diff-less state gave %v", kind, guardTable[kind].needsDiff, notice != nil)
+		} else if notice != nil && infoText(notice()) != "diff not loaded" {
+			test.Errorf("kind %d: notice %q, want diff not loaded", kind, infoText(notice()))
+		}
 	}
 	for _, testCase := range tests {
 		for _, kind := range writeKinds {
@@ -176,6 +183,9 @@ func TestGuardAtTheKey(test *testing.T) {
 	states := append([]busyCase{notLoaded, diffLoading}, busyCases()...)
 	for _, action := range guardActions() {
 		for _, state := range states {
+			if state.name == diffLoading.name && !guardTable[action.kind].needsDiff {
+				continue // asserted in TestGuardWithoutADiff
+			}
 			test.Run(action.name+" while "+state.name, func(test *testing.T) {
 				inliner := guardedInliner(test)
 				action.place(inliner)
@@ -374,6 +384,51 @@ func TestGuardAtReactionPickerChoice(test *testing.T) {
 			}
 			if inliner.mutations() != before || inliner.view.writes != writes {
 				test.Errorf("something was written: %d -> %d mutations, writes %d -> %d", before, inliner.mutations(), writes, inliner.view.writes)
+			}
+		})
+	}
+}
+
+// The top-level comment and :discard-review need only the pull request: with
+// the diff failed to load they still work, while everything on the diff, the
+// review verdicts and :merge say the diff is not loaded.
+func TestGuardWithoutADiff(test *testing.T) {
+	failDiff := func(inliner *inliner) {
+		// What a load that failed with the too-large error leaves behind.
+		inliner.view.diff.Err = github.ErrDiffTooLarge
+		if inliner.view.detail == nil || inliner.view.guardState().diffReady {
+			inliner.test.Fatal("want the pull request loaded and the diff not")
+		}
+		inliner.messages, inliner.openedOn = nil, nil
+	}
+	test.Run("top-level comment opens the editor", func(test *testing.T) {
+		inliner := guardedInliner(test)
+		failDiff(inliner)
+		inliner.press("h", "g g", "c")
+		if len(inliner.openedOn) != 1 {
+			test.Errorf("editor opened %d times, notices %v", len(inliner.openedOn), inliner.infoMessages())
+		}
+	})
+	test.Run(":discard-review asks", func(test *testing.T) {
+		inliner := guardedInliner(test)
+		inliner.addPending("draft")
+		failDiff(inliner)
+		inliner.command("discard-review")
+		if _, asked := inliner.lastConfirm(); !asked {
+			test.Errorf("no question; notices %v", inliner.infoMessages())
+		}
+	})
+	for _, action := range guardActions() {
+		if !guardTable[action.kind].needsDiff {
+			continue
+		}
+		test.Run(action.name+" says the diff is not loaded", func(test *testing.T) {
+			inliner := guardedInliner(test)
+			action.place(inliner)
+			failDiff(inliner)
+			action.start(inliner)
+			if diff := cmp.Diff([]string{"diff not loaded"}, inliner.infoMessages()); diff != "" {
+				test.Errorf("(-want +got):\n%s", diff)
 			}
 		})
 	}

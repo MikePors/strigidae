@@ -209,7 +209,7 @@ func (view *View) reloadPendingComments() tea.Cmd {
 // selected range. The comment remembers the commit of the diff its line
 // numbers come from.
 func (view *View) inlineComment() tea.Cmd {
-	if notice := view.guardState().ready(); notice != nil {
+	if notice := view.guardState().ready(writeComment); notice != nil {
 		return notice
 	}
 	resolved, command := view.resolveTarget(request{level: levelLines, words: "comment on it"})
@@ -230,7 +230,7 @@ func (view *View) inlineComment() tea.Cmd {
 
 // startVisual enters visual-line mode on the diff line under the cursor.
 func (view *View) startVisual() tea.Cmd {
-	if notice := view.guardState().ready(); notice != nil {
+	if notice := view.guardState().ready(writeComment); notice != nil {
 		return notice
 	}
 	if _, command := view.resolveTarget(request{level: levelLines, words: "select lines"}); command != nil {
@@ -274,7 +274,7 @@ func refusal(err error) tea.Cmd {
 // thread. When there is none, or the view cannot change comments now, the
 // command to show why.
 func (view *View) commentAtCursor(change change) (github.ReviewComment, github.ReviewThread, tea.Cmd) {
-	if notice := view.guardState().ready(); notice != nil {
+	if notice := view.guardState().ready(writeComment); notice != nil {
 		return github.ReviewComment{}, github.ReviewThread{}, notice
 	}
 	words := "edit it"

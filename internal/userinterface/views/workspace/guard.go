@@ -19,15 +19,24 @@ const (
 	writeComment writeKind = iota
 	// writeThread: `x`, `:resolve`, `:unresolve`.
 	writeThread
+	// writeOverviewComment: `c` on the Overview (a top-level comment). It
+	// needs no diff.
+	writeOverviewComment
 	// writeReaction: `:react`.
 	writeReaction
 	// writeReview: `:approve`, `:request-changes`, `:review`.
 	writeReview
 	// writeMerge: `:merge`.
 	writeMerge
-	// writeDiscard: `:discard-review`.
+	// writeDiscard: `:discard-review`. It needs no diff.
 	writeDiscard
 )
+
+// guardRule is what one kind of write needs and what blocks it.
+type guardRule struct {
+	needsDiff bool // the diff must be loaded too, not only the pull request
+	busy      busyStates
+}
 
 // busyStates says which busy states block a kind of write.
 type busyStates struct {
@@ -39,16 +48,17 @@ type busyStates struct {
 // allBusy blocks a write in every busy state, the first version of the table.
 var allBusy = busyStates{submittingReview: true, mergeInProgress: true, commentSaving: true}
 
-// guardTable is the one place that says what blocks each kind of write. Keying
-// it by target (reacting to a published comment during a submit, say) is
-// future work.
-var guardTable = map[writeKind]busyStates{
-	writeComment:  allBusy,
-	writeThread:   allBusy,
-	writeReaction: allBusy,
-	writeReview:   allBusy,
-	writeMerge:    allBusy,
-	writeDiscard:  allBusy,
+// guardTable is the one place that says what each kind of write needs
+// loaded and what blocks it. Keying busy by target (reacting to a published
+// comment during a submit, say) is future work.
+var guardTable = map[writeKind]guardRule{
+	writeComment:         {needsDiff: true, busy: allBusy},
+	writeOverviewComment: {busy: allBusy},
+	writeThread:          {needsDiff: true, busy: allBusy},
+	writeReaction:        {needsDiff: true, busy: allBusy},
+	writeReview:          {needsDiff: true, busy: allBusy},
+	writeMerge:           {needsDiff: true, busy: allBusy},
+	writeDiscard:         {busy: allBusy},
 }
 
 // guardState is what the guard looks at, at one moment.
@@ -60,14 +70,14 @@ type guardState struct {
 	commentSaving    bool // a comment write is in flight
 }
 
-// ready returns the notice to show when the pull request or its diff is not
-// loaded, or nil. It comes first, so a notice about what is missing at the
+// ready returns the notice to show when what the kind of write needs is not
+// loaded (the pull request, and the diff when the table says so), or nil. It comes first, so a notice about what is missing at the
 // cursor never stands in for "not loaded".
-func (state guardState) ready() tea.Cmd {
+func (state guardState) ready(kind writeKind) tea.Cmd {
 	switch {
 	case !state.loaded:
 		return userinterface.Info("pull request not loaded yet")
-	case !state.diffReady:
+	case guardTable[kind].needsDiff && !state.diffReady:
 		return userinterface.Info("diff not loaded")
 	}
 	return nil
@@ -76,7 +86,7 @@ func (state guardState) ready() tea.Cmd {
 // busy returns the notice to show when a busy state blocks the kind of write,
 // or nil.
 func (state guardState) busy(kind writeKind) tea.Cmd {
-	blocks := guardTable[kind]
+	blocks := guardTable[kind].busy
 	switch {
 	case blocks.submittingReview && state.submittingReview:
 		return userinterface.Info("a review is being submitted")
@@ -91,7 +101,7 @@ func (state guardState) busy(kind writeKind) tea.Cmd {
 // admit is ready followed by busy, for actions with no target to resolve in
 // between.
 func (state guardState) admit(kind writeKind) tea.Cmd {
-	if notice := state.ready(); notice != nil {
+	if notice := state.ready(kind); notice != nil {
 		return notice
 	}
 	return state.busy(kind)
