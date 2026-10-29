@@ -84,22 +84,17 @@ const (
 	changeDelete
 )
 
-// allowed reports whether the viewer may make the change: they wrote the
+// permits reports whether the viewer may make the change: they wrote the
 // comment and GitHub allows it. Write access makes the can-flags true on other
 // people's comments too, so authorship is checked as well.
-func (change change) allowed(comment github.ReviewComment) bool {
-	return change.permits(reviewCommentTarget(comment, github.ReviewThread{}))
-}
-
-// permits is allowed for a comment target.
-func (change change) permits(target commentTarget) bool {
-	if !target.viewerDidAuthor {
+func (change change) permits(didAuthor, canUpdate, canDelete bool) bool {
+	if !didAuthor {
 		return false
 	}
 	if change == changeDelete {
-		return target.viewerCanDelete
+		return canDelete
 	}
-	return target.viewerCanUpdate
+	return canUpdate
 }
 
 // freshComment re-reads comment identifier and returns it, or a staleError when it is
@@ -114,7 +109,7 @@ func freshComment(ctx context.Context, client github.Client, identifier string, 
 		return comment, fmt.Errorf("check comment: %w", err)
 	case !comment.ViewerDidAuthor:
 		return comment, errNotYours
-	case !change.allowed(comment):
+	case !change.permits(comment.ViewerDidAuthor, comment.ViewerCanUpdate, comment.ViewerCanDelete):
 		return comment, errCannotChange
 	}
 	return comment, nil
@@ -287,8 +282,10 @@ func (view *View) commentAtCursor(change change) (commentTarget, tea.Cmd) {
 		words = "delete it"
 	}
 	rule := &commentRule{
-		mine:    func(target commentTarget) bool { return target.viewerDidAuthor },
-		allowed: change.permits,
+		mine: func(target commentTarget) bool { return target.viewerDidAuthor },
+		allowed: func(target commentTarget) bool {
+			return change.permits(target.viewerDidAuthor, target.viewerCanUpdate, target.viewerCanDelete)
+		},
 		notMine: "move onto a comment of yours to " + words,
 		cannot:  "you can't " + strings.TrimSuffix(words, " it") + " this comment",
 	}
@@ -296,10 +293,22 @@ func (view *View) commentAtCursor(change change) (commentTarget, tea.Cmd) {
 	if command != nil {
 		return commentTarget{}, command
 	}
+	if refusal := reviewCommentOnly(resolved.comment, words); refusal != nil {
+		return commentTarget{}, refusal
+	}
 	if busy := view.guardState().busy(writeComment); busy != nil {
 		return commentTarget{}, busy
 	}
 	return resolved.comment, nil
+}
+
+// reviewCommentOnly refuses a target that is not a comment of a review thread:
+// e and D work through the thread, and the other kinds have no actions yet.
+func reviewCommentOnly(target commentTarget, words string) tea.Cmd {
+	if target.kind == commentReview && target.thread != nil {
+		return nil
+	}
+	return userinterface.Info("you can't " + strings.TrimSuffix(words, " it") + " this comment here")
 }
 
 // editComment re-reads the viewer's comment at the cursor, then opens the

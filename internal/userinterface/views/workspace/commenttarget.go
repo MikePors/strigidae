@@ -10,10 +10,10 @@ const (
 	commentReview commentKind = iota
 	// commentTopLevel is a comment on the pull request itself, outside any
 	// review. Nothing produces it yet.
-	commentTopLevel //nolint:unused // kind for the Overview cursor (#158)
+	commentTopLevel
 	// commentDescription is the pull request's description. Nothing produces
 	// it yet.
-	commentDescription //nolint:unused // kind for the Overview cursor (#158)
+	commentDescription
 )
 
 // commentTarget is a comment an action works on, whichever pane it was picked

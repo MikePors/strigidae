@@ -1278,7 +1278,7 @@ func TestChangeAllowed(test *testing.T) {
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
-			if got := testCase.change.allowed(testCase.comment); got != testCase.want {
+			if got := testCase.change.permits(testCase.comment.ViewerDidAuthor, testCase.comment.ViewerCanUpdate, testCase.comment.ViewerCanDelete); got != testCase.want {
 				test.Errorf("allowed = %v, want %v", got, testCase.want)
 			}
 		})
