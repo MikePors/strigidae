@@ -64,15 +64,15 @@ func (view *View) reactCommand(name string) tea.Cmd {
 	if busy := view.guardState().busy(writeReaction); busy != nil {
 		return busy
 	}
-	reviewComment := resolved.comment()
-	target := reactionTarget{commentIdentifier: reviewComment.Identifier, reactions: reviewComment.Reactions}
+	comment := resolved.comment
+	target := reactionTarget{commentIdentifier: comment.identifier, reactions: comment.reactions}
 	if content != "" {
 		return view.toggleReaction(target, content)
 	}
 	if view.picker != nil || view.review.chooser != nil {
 		return nil
 	}
-	view.openReactionPicker(target, reviewComment.Author)
+	view.openReactionPicker(target, comment.author)
 	return nil
 }
 

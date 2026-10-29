@@ -1,8 +1,11 @@
 package diffview
 
 import (
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/MikePors/strigidae/internal/github"
 )
 
 // TestContextMatchesWhatEachRowShows walks every row of the open
@@ -39,14 +42,16 @@ func TestContextMatchesWhatEachRowShows(test *testing.T) {
 		}
 		seen = append(seen, strings.TrimSpace(text))
 		context := model.Context()
-		index, ok := context.CommentIndex, context.OnComment
+		index, ok := slices.IndexFunc(context.CommentThread.Comments, func(candidate github.ReviewComment) bool {
+			return candidate.Identifier == context.Comment.Identifier && candidate.Author == context.Comment.Author
+		}), context.OnComment
 		if want < 0 {
 			if ok {
 				test.Errorf("row %q reports comment %d, want none", text, index)
 			}
 			continue
 		}
-		if !ok || len(context.Threads) != 1 || context.Threads[0].Identifier != "open" || index != want {
+		if !ok || len(context.Threads) != 1 || context.CommentThread.Identifier != "open" || index != want {
 			test.Errorf("row %q: comment (%d, %v), want %d", text, index, ok, want)
 		}
 	}
@@ -64,10 +69,10 @@ func TestContextNotOnAFoldedThread(test *testing.T) {
 	}
 }
 
-// TestContextCommentAfterFoldWithoutRelayout: SetThreadExpanded changes the
-// fold state before the next SetThreads lays the rows out again; the rows
-// still drawn expanded are then on no comment.
-func TestContextCommentAfterFoldWithoutRelayout(test *testing.T) {
+// TestContextCommentAfterFold: SetThreadExpanded lays the rows out at once, so
+// the context describes what is drawn: a thread folded before any reload is
+// drawn folded and the cursor is on its header, not on a comment.
+func TestContextCommentAfterFold(test *testing.T) {
 	model := threadModel(test, 100, 80)
 	model.goToRow(test, `"log"`)
 	model.CursorDown(2)
@@ -76,6 +81,13 @@ func TestContextCommentAfterFoldWithoutRelayout(test *testing.T) {
 	}
 	model.SetThreadExpanded("open", false)
 	if model.Context().OnComment {
-		test.Error("a thread folded since the last layout reports a comment")
+		test.Error("a thread folded since the last SetThreads reports a comment")
+	}
+	if text := cursorRowText(model); !strings.Contains(text, "comments") {
+		test.Errorf("cursor row = %q, want the folded thread's header", text)
+	}
+	model.SetThreadExpanded("open", true)
+	if !strings.Contains(screen(model), "Yes, for") {
+		test.Error("reopened thread is not drawn open")
 	}
 }

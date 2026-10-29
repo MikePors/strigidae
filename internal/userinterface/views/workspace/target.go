@@ -35,9 +35,9 @@ type request struct {
 // the others.
 type commentRule struct {
 	// mine reports whether the comment is the viewer's.
-	mine func(github.ReviewComment) bool
+	mine func(commentTarget) bool
 	// allowed reports whether the viewer may use their own comment.
-	allowed func(github.ReviewComment) bool
+	allowed func(commentTarget) bool
 	// notMine is said when the cursor is not on one of the viewer's comments.
 	notMine string
 	// cannot is said when it is the viewer's comment but not allowed.
@@ -45,16 +45,11 @@ type commentRule struct {
 }
 
 // resolvedTarget is what the cursor context gives the action. Only the field
-// of the requested level is set; a comment-level target also sets thread.
+// of the requested level is set.
 type resolvedTarget struct {
-	lines        diffview.Range
-	thread       github.ReviewThread
-	commentIndex int
-}
-
-// comment is the comment of a comment-level target.
-func (resolved resolvedTarget) comment() github.ReviewComment {
-	return resolved.thread.Comments[resolved.commentIndex]
+	lines   diffview.Range
+	thread  github.ReviewThread
+	comment commentTarget
 }
 
 // resolveTarget turns the diff cursor into the target the request names, or
@@ -84,18 +79,22 @@ func (view *View) resolveTarget(request request) (resolvedTarget, tea.Cmd) {
 		return resolvedTarget{}, userinterface.Info("several threads on this line: move onto one to " + request.words)
 	}
 	rule := request.rule
+	var comment commentTarget
+	if context.OnComment {
+		comment = reviewCommentTarget(context.Comment, context.CommentThread)
+	}
 	switch {
 	case !context.OnComment:
 		if rule != nil {
 			return resolvedTarget{}, userinterface.Info(rule.notMine)
 		}
 		return resolvedTarget{}, userinterface.Info("move onto a comment to " + request.words)
-	case rule != nil && !rule.mine(context.Threads[0].Comments[context.CommentIndex]):
+	case rule != nil && !rule.mine(comment):
 		return resolvedTarget{}, userinterface.Info(rule.notMine)
-	case rule != nil && !rule.allowed(context.Threads[0].Comments[context.CommentIndex]):
+	case rule != nil && !rule.allowed(comment):
 		return resolvedTarget{}, userinterface.Info(rule.cannot)
 	}
-	return resolvedTarget{thread: context.Threads[0], commentIndex: context.CommentIndex}, nil
+	return resolvedTarget{comment: comment}, nil
 }
 
 // diffHidden returns the notice to show when the diff pane is not on screen (a

@@ -77,7 +77,7 @@ func (inliner *inliner) toCommentOf(identifier string, commentIndex int) {
 	inliner.test.Helper()
 	inliner.cursorTo(fmt.Sprintf("comment %d of thread %s", commentIndex, identifier), func(diffView *diffview.Model) bool {
 		context := diffView.Context()
-		return context.OnComment && context.Threads[0].Identifier == identifier && context.CommentIndex == commentIndex
+		return context.OnComment && context.CommentThread.Identifier == identifier && slices.IndexFunc(context.CommentThread.Comments, func(candidate github.ReviewComment) bool { return candidate.Identifier == context.Comment.Identifier }) == commentIndex
 	})
 }
 
@@ -1278,7 +1278,7 @@ func TestChangeAllowed(test *testing.T) {
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
-			if got := testCase.change.allowed(testCase.comment); got != testCase.want {
+			if got := testCase.change.permits(testCase.comment.ViewerDidAuthor, testCase.comment.ViewerCanUpdate, testCase.comment.ViewerCanDelete); got != testCase.want {
 				test.Errorf("allowed = %v, want %v", got, testCase.want)
 			}
 		})

@@ -33,9 +33,10 @@ type Context struct {
 	// expanded thread; it is false on a header, on the blank rows between
 	// comments, and in a folded thread.
 	OnComment bool
-	// CommentIndex is the index in Threads[0].Comments of the comment the
-	// cursor is on; only meaningful when OnComment.
-	CommentIndex int
+	// Comment is the comment the cursor is on and CommentThread the thread it
+	// belongs to; both are only meaningful when OnComment.
+	Comment       github.ReviewComment
+	CommentThread github.ReviewThread
 }
 
 // Context returns what is at the cursor.
@@ -46,7 +47,10 @@ func (model *Model) Context() Context {
 	for _, threadIndex := range model.threadsAtCursor() {
 		context.Threads = append(context.Threads, model.fileThreads[threadIndex])
 	}
-	context.CommentIndex, context.OnComment = model.cursorComment()
+	if commentIndex, ok := model.cursorComment(); ok {
+		context.CommentThread = model.fileThreads[model.rows[model.window.Cursor()].threadRow.threadIndex]
+		context.Comment, context.OnComment = context.CommentThread.Comments[commentIndex], true
+	}
 	return context
 }
 
@@ -91,11 +95,6 @@ func (model *Model) cursorComment() (commentIndex int, ok bool) {
 		return 0, false
 	}
 	placement := *model.rows[cursor].threadRow
-	// SetThreadExpanded changes the fold state without a relayout, so the
-	// stored owners can describe a layout that is no longer the chosen one.
-	if !model.expanded(model.fileThreads[placement.threadIndex]) {
-		return 0, false
-	}
 	owners := model.owners[placement.threadIndex]
 	if placement.rowInBlock >= len(owners) || owners[placement.rowInBlock] < 0 {
 		return 0, false
