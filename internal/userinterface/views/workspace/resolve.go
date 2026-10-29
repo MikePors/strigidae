@@ -64,13 +64,11 @@ func (view *View) resolveThread(mode resolveMode) tea.Cmd {
 	if blocked := view.commentBlocked(); blocked != nil {
 		return blocked
 	}
-	thread, ok, hint := view.focusedThread(" to resolve it")
-	if !ok {
-		if hint == nil {
-			hint = userinterface.Info("no comment thread here")
-		}
-		return hint
+	resolved, command := view.resolveTarget(request{level: levelThread, words: "resolve it"})
+	if command != nil {
+		return command
 	}
+	thread := resolved.thread
 	switch {
 	case mode == resolveOnly && thread.IsResolved:
 		return userinterface.Info(noticeAlreadyResolved)

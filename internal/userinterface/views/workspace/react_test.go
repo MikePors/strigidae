@@ -82,7 +82,7 @@ func TestReactOnTheBlankRowBetweenCommentsSaysSo(test *testing.T) {
 	inliner := newInliner(test)
 	inliner.toLineContaining("")
 	inliner.react("rocket")
-	if diff := cmp.Diff([]string{noticeNotOnComment}, inliner.infoMessages()); diff != "" {
+	if diff := cmp.Diff([]string{"move onto a comment to react to it"}, inliner.infoMessages()); diff != "" {
 		test.Errorf("info (-want +got):\n%s", diff)
 	}
 	if len(inliner.reactionCalls()) != 0 {
@@ -333,11 +333,7 @@ func TestReactOffACommentSaysSoAndWritesNothing(test *testing.T) {
 			inliner.diffView().CursorDown(1)
 		}},
 		{"folded thread", func(inliner *inliner) { inliner.toThread("t-resolved") }},
-		{"files pane", func(inliner *inliner) {
-			inliner.toComment(0)
-			inliner.press("h")
-		}},
-		{"overview", func(inliner *inliner) { inliner.press("h", "g g") }},
+		{"overview", func(inliner *inliner) { inliner.press("h", "g g", "l") }},
 	}
 	for _, testCase := range tests {
 		for _, argument := range []string{"", "heart"} {
@@ -345,7 +341,7 @@ func TestReactOffACommentSaysSoAndWritesNothing(test *testing.T) {
 				inliner := newInliner(test)
 				testCase.moveTo(inliner)
 				inliner.react(argument)
-				if diff := cmp.Diff([]string{noticeNotOnComment}, inliner.infoMessages()); diff != "" {
+				if diff := cmp.Diff([]string{"move onto a comment to react to it"}, inliner.infoMessages()); diff != "" {
 					test.Errorf("info (-want +got):\n%s", diff)
 				}
 				if len(inliner.reactionCalls()) != 0 || inliner.view.picker != nil {

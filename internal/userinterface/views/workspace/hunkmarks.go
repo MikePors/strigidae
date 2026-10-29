@@ -116,6 +116,9 @@ func (view *View) reviewedHunks(file *diff.File) int {
 // toggleHunkReviewed flips the reviewed mark of the hunk at the diff cursor.
 // Nothing is sent to GitHub.
 func (view *View) toggleHunkReviewed() tea.Cmd {
+	if hidden := view.diffHidden("mark the hunk"); hidden != nil {
+		return hidden
+	}
 	context := view.filePane.Context()
 	file, hunk := context.File, context.Hunk
 	if !context.InHunk || view.diff.Parsed == nil || file != view.diff.Parsed.File(view.selectedPath()) {
@@ -130,8 +133,7 @@ func (view *View) toggleHunkReviewed() tea.Cmd {
 		delete(view.hunkMarks.reviewed, key)
 		state = "not reviewed"
 	}
-	// Said out loud: the diff pane may be hidden (a narrow terminal with the
-	// files pane focused), and then this is the only sign anything changed.
+	// Said out loud: the mark alone is easy to miss.
 	fade := view.hunkMarkChanged(file, hunk, reviewed)
 	command, text := view.followHunks(file, reviewed)
 	switch {

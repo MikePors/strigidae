@@ -276,8 +276,11 @@ func TestReplyWithZeroOneAndSeveralThreads(test *testing.T) {
 
 	composer.press("g g") // a hunk header: no thread
 	composer.press("r")
-	if len(composer.openedOn) != 0 || composer.lastErr() != nil || len(composer.messages) != 0 {
+	if len(composer.openedOn) != 0 || composer.lastErr() != nil {
 		test.Errorf("zero threads: opened %v, msgs %v", composer.openedOn, composer.messages)
+	}
+	if diff := cmp.Diff([]string{"no comment thread here"}, composer.infoMessages()); diff != "" {
+		test.Errorf("zero threads (-want +got):\n%s", diff)
 	}
 
 	composer.press(")") // line 12, one thread
@@ -313,9 +316,12 @@ func TestReplyWithZeroOneAndSeveralThreads(test *testing.T) {
 func TestReplyInOverviewDoesNothing(test *testing.T) {
 	composer := newComposer(test)
 	composer.body = "x"
-	composer.press("r") // Overview selected
-	if len(composer.openedOn) != 0 || len(composer.messages) != 0 {
-		test.Errorf("opened %v, msgs %v", composer.openedOn, composer.messages)
+	composer.press("r") // Overview selected, Files pane focused
+	if len(composer.openedOn) != 0 {
+		test.Errorf("opened %v", composer.openedOn)
+	}
+	if diff := cmp.Diff([]string{"no comment thread here"}, composer.infoMessages()); diff != "" {
+		test.Errorf("overview (-want +got):\n%s", diff)
 	}
 }
 

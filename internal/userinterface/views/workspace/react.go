@@ -19,8 +19,6 @@ import (
 // the command, so :react never asks y/N. Choosing toggles: a reaction the
 // viewer has is removed, otherwise it is added.
 
-const noticeNotOnComment = "move onto a comment to react to it"
-
 // reactionTarget is the comment :react was started on, as the screen showed it.
 type reactionTarget struct {
 	commentIdentifier string
@@ -64,11 +62,11 @@ func (view *View) reactCommand(name string) tea.Cmd {
 		}
 		content = github.ReactionContents[index]
 	}
-	reviewThread, commentIndex, ok := view.focusedComment()
-	if !ok {
-		return userinterface.Info(noticeNotOnComment)
+	resolved, command := view.resolveTarget(request{level: levelComment, words: "react to it"})
+	if command != nil {
+		return command
 	}
-	reviewComment := reviewThread.Comments[commentIndex]
+	reviewComment := resolved.comment()
 	target := reactionTarget{commentIdentifier: reviewComment.Identifier, reactions: reviewComment.Reactions}
 	if content != "" {
 		return view.toggleReaction(target, content)
@@ -86,18 +84,6 @@ func reactionNames() string {
 		names[i] = content.Shortcode()
 	}
 	return strings.Join(names, ", ")
-}
-
-// focusedComment returns the comment under the diff cursor in the right pane.
-func (view *View) focusedComment() (reviewThread github.ReviewThread, commentIndex int, ok bool) {
-	if view.focus != paneRight || view.selection() == 0 {
-		return reviewThread, 0, false
-	}
-	context := view.filePane.Context()
-	if !context.OnComment {
-		return reviewThread, 0, false
-	}
-	return context.Threads[0], context.CommentIndex, true
 }
 
 func (view *View) openReactionPicker(target reactionTarget, author string) {

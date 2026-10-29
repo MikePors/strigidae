@@ -114,22 +114,6 @@ func freshComment(ctx context.Context, client github.Client, identifier string, 
 	return comment, nil
 }
 
-// pickComment is the comment of t that e/D act on: the last one the viewer may
-// change, but a pending comment beats a published one.
-func pickComment(thread github.ReviewThread, change change) (github.ReviewComment, bool) {
-	var picked github.ReviewComment
-	var found bool
-	for _, comment := range thread.Comments {
-		if !change.allowed(comment) {
-			continue
-		}
-		if !found || comment.Pending || !picked.Pending {
-			picked, found = comment, true
-		}
-	}
-	return picked, found
-}
-
 // answer is what the user has agreed to: nothing yet, or a yes to a question
 // asked about a pending (or published) comment.
 type answer struct{ given, pending bool }
@@ -236,22 +220,6 @@ func (view *View) reloadPendingComments() tea.Cmd {
 // diff is not loaded), or returns nil.
 func (view *View) commentBlocked() tea.Cmd { return view.review.blocked(view.reviewEnvironment()) }
 
-// focusedThread returns the one thread under the diff cursor. ok is false when
-// there is none (or the diff is not showing); hint is the message to show when
-// several threads share the line. what finishes that message.
-func (view *View) focusedThread(what string) (thread github.ReviewThread, ok bool, hint tea.Cmd) {
-	if view.selection() == 0 {
-		return thread, false, nil
-	}
-	switch threads := view.filePane.Context().Threads; len(threads) {
-	case 0:
-		return thread, false, nil
-	case 1:
-		return threads[0], true, nil
-	}
-	return thread, false, userinterface.Info("several threads on this line: move onto one" + what)
-}
-
 // inlineComment starts a comment on the diff line under the cursor, or on the
 // selected range. The comment remembers the commit of the diff its line
 // numbers come from.
@@ -259,11 +227,11 @@ func (view *View) inlineComment() tea.Cmd {
 	if blocked := view.commentBlocked(); blocked != nil {
 		return blocked
 	}
-	context := view.filePane.Context()
-	lineRange := context.Lines
-	if !context.HasLines {
-		return userinterface.Info("move onto a diff line to comment on it")
+	resolved, command := view.resolveTarget(request{level: levelLines, words: "comment on it"})
+	if command != nil {
+		return command
 	}
+	lineRange := resolved.lines
 	view.filePane.VisualEnd()
 	in := &github.AddThreadInput{Path: lineRange.Path, Line: lineRange.End, Side: lineRange.Side}
 	if lineRange.Start != lineRange.End {
@@ -276,6 +244,9 @@ func (view *View) inlineComment() tea.Cmd {
 func (view *View) startVisual() tea.Cmd {
 	if blocked := view.commentBlocked(); blocked != nil {
 		return blocked
+	}
+	if _, command := view.resolveTarget(request{level: levelLines, words: "select lines"}); command != nil {
+		return command
 	}
 	if !view.filePane.VisualStart() {
 		return userinterface.Info("move onto a diff line to select lines")
@@ -307,22 +278,29 @@ func refusal(err error) tea.Cmd {
 	return userinterface.Info(err.Error())
 }
 
-// commentAtCursor returns the comment that e/D (or the commands) act on and its
+// commentAtCursor returns the comment under the cursor that e/D (or the
+// commands) act on, if it is the viewer's and the change is allowed, and its
 // thread. When there is none, or the view cannot change comments now, the
 // command to show why.
 func (view *View) commentAtCursor(change change) (github.ReviewComment, github.ReviewThread, tea.Cmd) {
 	if blocked := view.commentBlocked(); blocked != nil {
 		return github.ReviewComment{}, github.ReviewThread{}, blocked
 	}
-	thread, _, hint := view.focusedThread("") // no thread: pickComment finds nothing
-	if hint != nil {
-		return github.ReviewComment{}, github.ReviewThread{}, hint
+	words := "edit it"
+	if change == changeDelete {
+		words = "delete it"
 	}
-	comment, found := pickComment(thread, change)
-	if !found {
-		return github.ReviewComment{}, github.ReviewThread{}, userinterface.Info("no comment of yours here")
+	rule := &commentRule{
+		mine:    func(comment github.ReviewComment) bool { return comment.ViewerDidAuthor },
+		allowed: change.allowed,
+		notMine: "move onto a comment of yours to " + words,
+		cannot:  "you can't " + strings.TrimSuffix(words, " it") + " this comment",
 	}
-	return comment, thread, nil
+	resolved, command := view.resolveTarget(request{level: levelComment, words: words, rule: rule})
+	if command != nil {
+		return github.ReviewComment{}, github.ReviewThread{}, command
+	}
+	return resolved.comment(), resolved.thread, nil
 }
 
 // editComment re-reads the viewer's comment at the cursor, then opens the
