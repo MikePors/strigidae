@@ -38,13 +38,8 @@ type reviewDiscard struct {
 
 // discardReview starts discarding the viewer's pending review.
 func (view *View) discardReview() tea.Cmd {
-	switch {
-	case view.review.submitting:
-		return userinterface.Info("a review is being submitted")
-	case view.merge.merging:
-		return userinterface.Info("a merge is in progress")
-	case view.writes > 0:
-		return userinterface.Info(commentSavingText)
+	if notice := view.guardState().admit(writeDiscard); notice != nil {
+		return notice
 	}
 	discard := reviewDiscard{origin: view.origin(), client: view.client, timeouts: view.timeouts}
 	view.writeStarted()
@@ -68,7 +63,7 @@ func (discard reviewDiscard) check(asked *github.PendingReview) tea.Msg {
 	if asked == nil || asked.Identifier != pending.Identifier || asked.CommentCount != pending.CommentCount {
 		current := *pending
 		again := func() tea.Msg { return discard.check(&current) }
-		return commentCheckedMessage{origin: discard.origin, question: discardQuestion(current), onYes: agreed(discard.origin, again)}
+		return commentCheckedMessage{origin: discard.origin, question: discardQuestion(current), onYes: agreed(discard.origin, writeDiscard, again)}
 	}
 	deleteContext, cancelDelete := discard.timeouts.RequestContext()
 	defer cancelDelete()

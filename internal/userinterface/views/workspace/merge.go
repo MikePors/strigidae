@@ -63,15 +63,8 @@ func (currentFlow *mergeFlow) command(arguments string, environment reviewEnviro
 	if err != nil {
 		return userinterface.Error(err)
 	}
-	switch {
-	case currentFlow.merging:
-		return userinterface.Info("a merge is in progress")
-	case environment.commentWriting:
-		return userinterface.Info(commentSavingText)
-	case !environment.loaded:
-		return userinterface.Info("pull request not loaded yet")
-	case !environment.diffReady:
-		return userinterface.Info("diff not loaded")
+	if notice := environment.guard.admit(writeMerge); notice != nil {
+		return notice
 	}
 	currentFlow.sequence++
 	flow, sequence := currentFlow, currentFlow.sequence
@@ -95,8 +88,8 @@ func (currentFlow *mergeFlow) update(message tea.Msg, environment reviewEnvironm
 		if !currentFlow.same(environment, message.flow, message.repository, message.number) {
 			return nil, true
 		}
-		if environment.commentWriting { // a comment write started since the merge did
-			return userinterface.Info(commentSavingText), true
+		if busy := environment.guard.busy(writeMerge); busy != nil { // something started since the yes was asked for
+			return busy, true
 		}
 		currentFlow.merging = true
 		return tea.Batch(userinterface.Info("Merging…"), currentFlow.merge(environment, message.method, message.status)), true

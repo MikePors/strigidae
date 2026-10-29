@@ -61,12 +61,15 @@ type threadAction struct {
 
 // resolveThread starts resolving or unresolving the thread at the diff cursor.
 func (view *View) resolveThread(mode resolveMode) tea.Cmd {
-	if blocked := view.commentBlocked(); blocked != nil {
-		return blocked
+	if notice := view.guardState().ready(writeThread); notice != nil {
+		return notice
 	}
 	resolved, command := view.resolveTarget(request{level: levelThread, words: "resolve it"})
 	if command != nil {
 		return command
+	}
+	if busy := view.guardState().busy(writeThread); busy != nil {
+		return busy
 	}
 	thread := resolved.thread
 	switch {
@@ -114,7 +117,7 @@ func (action threadAction) check(asked bool) tea.Msg {
 	}
 	if !asked {
 		again := func() tea.Msg { return action.check(true) }
-		return commentCheckedMessage{origin: action.origin, question: action.verb() + " thread on " + action.location + "?", onYes: agreed(action.origin, again)}
+		return commentCheckedMessage{origin: action.origin, question: action.verb() + " thread on " + action.location + "?", onYes: agreed(action.origin, writeThread, again)}
 	}
 	var resolution github.ThreadResolution
 	ctx, cancel := action.timeouts.RequestContext()

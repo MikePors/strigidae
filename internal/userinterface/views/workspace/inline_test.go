@@ -1726,8 +1726,12 @@ func TestEachWriteIsCountedAndExcludesTheNext(test *testing.T) {
 		if len(inliner.openedOn) != 0 {
 			test.Errorf("%s: a second write opened an editor on %v", what, inliner.openedOn)
 		}
+		// The target is resolved before the busy check, so e and D on a line
+		// with no comment of the viewer's say so; the busy notice they get on a
+		// comment is covered in guard_test.go.
 		busy := commentSavingText
-		if diff := cmp.Diff([]string{busy, busy, busy, busy}, inliner.infoMessages()); diff != "" {
+		want := []string{busy, busy, "move onto a comment of yours to edit it", "move onto a comment of yours to delete it"}
+		if diff := cmp.Diff(want, inliner.infoMessages()); diff != "" {
 			test.Errorf("%s: second writes (-want +got):\n%s", what, diff)
 		}
 	}

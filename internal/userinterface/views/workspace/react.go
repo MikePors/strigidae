@@ -46,13 +46,8 @@ type reactionToggledMessage struct {
 
 // reactCommand handles :react [name].
 func (view *View) reactCommand(name string) tea.Cmd {
-	switch {
-	case view.review.submitting:
-		return userinterface.Info("a review is being submitted")
-	case view.merge.merging:
-		return userinterface.Info("a merge is in progress")
-	case view.writes > 0:
-		return userinterface.Info(commentSavingText)
+	if notice := view.guardState().ready(writeReaction); notice != nil {
+		return notice
 	}
 	var content github.ReactionContent
 	if name != "" {
@@ -65,6 +60,9 @@ func (view *View) reactCommand(name string) tea.Cmd {
 	resolved, command := view.resolveTarget(request{level: levelComment, words: "react to it"})
 	if command != nil {
 		return command
+	}
+	if busy := view.guardState().busy(writeReaction); busy != nil {
+		return busy
 	}
 	reviewComment := resolved.comment()
 	target := reactionTarget{commentIdentifier: reviewComment.Identifier, reactions: reviewComment.Reactions}
