@@ -32,6 +32,7 @@ The maintainer's rules for when strig asks before acting:
 - Cancelling happens only at the `y/N`. An empty body is an error, not a cancel, and nothing is written.
 - Keys with a command behind them are welcome (`e` / `D` and `:edit-comment` / `:delete-comment`; `x` and `:resolve` / `:unresolve`).
 - Re-read the state before asking and again after `y`; if it changed, ask again or refuse and refresh. Never write on a stale yes.
+- Every workspace action that writes declares a `writeKind` and is checked by the one guard table (`views/workspace/guard.go`): ready (pull request and diff loaded), then the target, then busy (a review being submitted, a merge in progress, a comment write in flight), then the fresh check; busy is checked again after a yes or a re-read. A new write adds a kind to the table, never its own list.
 
 ## Keybindings
 

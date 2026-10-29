@@ -120,12 +120,15 @@ func (view *View) composeMine(origin origin, sequence int) bool {
 
 // reply starts a reply to the thread under the diff cursor.
 func (view *View) reply() tea.Cmd {
-	if busy := view.writeBusy(); busy != nil {
-		return busy
+	if notice := view.guardState().ready(); notice != nil {
+		return notice
 	}
 	resolved, command := view.resolveTarget(request{level: levelThread, words: "reply"})
 	if command != nil {
 		return command
+	}
+	if busy := view.guardState().busy(writeComment); busy != nil {
+		return busy
 	}
 	thread := resolved.thread
 	return view.compose(target{kind: kindReply, threadIdentifier: thread.Identifier, label: threadLocation(thread)})
@@ -137,8 +140,8 @@ func (view *View) comment() tea.Cmd {
 	if view.selection() != 0 {
 		return view.inlineComment()
 	}
-	if busy := view.writeBusy(); busy != nil {
-		return busy
+	if notice := view.guardState().admit(writeComment); notice != nil {
+		return notice
 	}
 	return view.compose(target{})
 }
@@ -177,17 +180,15 @@ func (view *View) edited(message editedMessage) tea.Cmd {
 	case kindInline, kindEdit:
 		// The diff being reloaded does not matter now: the head check in the
 		// send covers it. The text stays a draft if the send is refused.
-		environment := view.reviewEnvironment()
-		environment.diffReady = true
-		if blocked := view.review.blocked(environment); blocked != nil {
-			return blocked
+		if busy := view.guardState().busy(writeComment); busy != nil {
+			return busy
 		}
 		if message.target.kind == kindInline {
 			return view.sendInline(message.target, body)
 		}
 		return view.sendEdit(message.target, body)
 	}
-	return userinterface.Confirm(view.question(message.target, body), view.agreed(view.post(message.target, body)))
+	return userinterface.Confirm(view.question(message.target, body), view.agreed(writeComment, view.post(message.target, body)))
 }
 
 // question is the confirmation text: where the text goes and its first line.

@@ -40,6 +40,7 @@ type commentCheckedMessage struct {
 // when a review or merge is.
 type commentAgreedMessage struct {
 	origin origin
+	kind   writeKind // what the write is, for the guard
 	run    tea.Cmd
 }
 
@@ -154,7 +155,7 @@ func (write commentWrite) run(given answer) tea.Msg {
 	if query := write.ask(fresh.Pending); query != "" && !given.covers(fresh.Pending) {
 		pending := fresh.Pending
 		again := func() tea.Msg { return write.run(yes(pending)) }
-		return commentCheckedMessage{origin: write.origin, question: query, onYes: agreed(write.origin, again)}
+		return commentCheckedMessage{origin: write.origin, question: query, onYes: agreed(write.origin, writeComment, again)}
 	}
 	writeContext, cancelWrite := write.timeouts.RequestContext()
 	defer cancelWrite()
@@ -166,24 +167,21 @@ func (write commentWrite) run(given answer) tea.Msg {
 }
 
 // agreed wraps the write to run on a yes, so the view sees the yes first.
-func agreed(origin origin, run tea.Cmd) tea.Cmd {
-	return func() tea.Msg { return commentAgreedMessage{origin: origin, run: run} }
+func agreed(origin origin, kind writeKind, run tea.Cmd) tea.Cmd {
+	return func() tea.Msg { return commentAgreedMessage{origin: origin, kind: kind, run: run} }
 }
 
 // agreed is agreed for this view's origin.
-func (view *View) agreed(run tea.Cmd) tea.Cmd { return agreed(view.origin(), run) }
+func (view *View) agreed(kind writeKind, run tea.Cmd) tea.Cmd {
+	return agreed(view.origin(), kind, run)
+}
 
-// commentAgreed starts the write a yes was given for, unless a review is being
-// submitted or a merge is running; the write then counts as in flight until its
-// result arrives.
+// commentAgreed starts the write a yes was given for, unless the guard says
+// something is busy now; the write then counts as in flight until its result
+// arrives.
 func (view *View) commentAgreed(message commentAgreedMessage) tea.Cmd {
-	switch {
-	case view.review.submitting:
-		return userinterface.Info("a review is being submitted")
-	case view.merge.merging:
-		return userinterface.Info("a merge is in progress")
-	case view.writes > 0:
-		return userinterface.Info(commentSavingText)
+	if busy := view.guardState().busy(message.kind); busy != nil {
+		return busy
 	}
 	view.writeStarted()
 	return message.run
@@ -201,35 +199,25 @@ func (view *View) writeStarted() { view.writes++ }
 
 func (view *View) writeDone() { view.writes = max(0, view.writes-1) }
 
-// writeBusy refuses a new comment write while one is in flight.
-func (view *View) writeBusy() tea.Cmd {
-	if view.writes > 0 {
-		return userinterface.Info(commentSavingText)
-	}
-	return nil
-}
-
 // reloadPendingComments refreshes what shows pending comments: the threads in
 // the diff, and the pull request (whose reviews list the pending review).
 func (view *View) reloadPendingComments() tea.Cmd {
 	return tea.Batch(view.reloadPullRequest(), view.reloadThreads())
 }
 
-// commentBlocked says why comments cannot be written or changed now (a review
-// is being submitted, a comment is being saved, or the pull request or its
-// diff is not loaded), or returns nil.
-func (view *View) commentBlocked() tea.Cmd { return view.review.blocked(view.reviewEnvironment()) }
-
 // inlineComment starts a comment on the diff line under the cursor, or on the
 // selected range. The comment remembers the commit of the diff its line
 // numbers come from.
 func (view *View) inlineComment() tea.Cmd {
-	if blocked := view.commentBlocked(); blocked != nil {
-		return blocked
+	if notice := view.guardState().ready(); notice != nil {
+		return notice
 	}
 	resolved, command := view.resolveTarget(request{level: levelLines, words: "comment on it"})
 	if command != nil {
 		return command
+	}
+	if busy := view.guardState().busy(writeComment); busy != nil {
+		return busy
 	}
 	lineRange := resolved.lines
 	view.filePane.VisualEnd()
@@ -242,11 +230,14 @@ func (view *View) inlineComment() tea.Cmd {
 
 // startVisual enters visual-line mode on the diff line under the cursor.
 func (view *View) startVisual() tea.Cmd {
-	if blocked := view.commentBlocked(); blocked != nil {
-		return blocked
+	if notice := view.guardState().ready(); notice != nil {
+		return notice
 	}
 	if _, command := view.resolveTarget(request{level: levelLines, words: "select lines"}); command != nil {
 		return command
+	}
+	if busy := view.guardState().busy(writeComment); busy != nil {
+		return busy
 	}
 	if !view.filePane.VisualStart() {
 		return userinterface.Info("move onto a diff line to select lines")
@@ -283,8 +274,8 @@ func refusal(err error) tea.Cmd {
 // thread. When there is none, or the view cannot change comments now, the
 // command to show why.
 func (view *View) commentAtCursor(change change) (github.ReviewComment, github.ReviewThread, tea.Cmd) {
-	if blocked := view.commentBlocked(); blocked != nil {
-		return github.ReviewComment{}, github.ReviewThread{}, blocked
+	if notice := view.guardState().ready(); notice != nil {
+		return github.ReviewComment{}, github.ReviewThread{}, notice
 	}
 	words := "edit it"
 	if change == changeDelete {
@@ -299,6 +290,9 @@ func (view *View) commentAtCursor(change change) (github.ReviewComment, github.R
 	resolved, command := view.resolveTarget(request{level: levelComment, words: words, rule: rule})
 	if command != nil {
 		return github.ReviewComment{}, github.ReviewThread{}, command
+	}
+	if busy := view.guardState().busy(writeComment); busy != nil {
+		return github.ReviewComment{}, github.ReviewThread{}, busy
 	}
 	return resolved.comment(), resolved.thread, nil
 }
@@ -357,8 +351,8 @@ func (view *View) commentRead(message commentReadMessage) tea.Cmd {
 	if message.err != nil {
 		return view.refuse(message.err, "read comment")
 	}
-	if blocked := view.commentBlocked(); blocked != nil {
-		return blocked
+	if busy := view.guardState().busy(writeComment); busy != nil {
+		return busy
 	}
 	return view.compose(message.target)
 }

@@ -4,11 +4,9 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/google/go-cmp/cmp"
 
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/github/fake"
-	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
@@ -19,37 +17,7 @@ func flowEnvironment(client github.Client) reviewEnvironment {
 		client: client, repository: testRepository, number: 7, theme: theme.Default(),
 		edit:   func(string, func(string, error) tea.Msg) tea.Cmd { return nil },
 		reload: func() tea.Cmd { return nil },
-		loaded: true, diffReady: true, diffHead: "h1",
-	}
-}
-
-func TestReviewFlowBlocked(test *testing.T) {
-	tests := []struct {
-		name   string
-		mutate func(*reviewFlow, *reviewEnvironment)
-		want   string // "" means not blocked
-	}{
-		{"ready", func(*reviewFlow, *reviewEnvironment) {}, ""},
-		{"submitting", func(flow *reviewFlow, _ *reviewEnvironment) { flow.submitting = true }, "a review is being submitted"},
-		{"not loaded", func(_ *reviewFlow, environment *reviewEnvironment) { environment.loaded = false }, "pull request not loaded yet"},
-		{"diff not ready", func(_ *reviewFlow, environment *reviewEnvironment) { environment.diffReady = false }, "diff not loaded"},
-	}
-	for _, testCase := range tests {
-		test.Run(testCase.name, func(test *testing.T) {
-			var flow reviewFlow
-			environment := flowEnvironment(fake.New())
-			testCase.mutate(&flow, &environment)
-			command := flow.blocked(environment)
-			if testCase.want == "" {
-				if command != nil {
-					test.Fatalf("blocked: %#v", command())
-				}
-				return
-			}
-			if diff := cmp.Diff(tea.Msg(userinterface.InfoMessage{Text: testCase.want}), command()); diff != "" {
-				test.Errorf("(-want +got):\n%s", diff)
-			}
-		})
+		guard:  guardState{loaded: true, diffReady: true}, diffHead: "h1",
 	}
 }
 

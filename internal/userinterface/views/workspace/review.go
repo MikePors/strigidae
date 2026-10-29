@@ -36,13 +36,10 @@ type reviewEnvironment struct {
 	theme          theme.Theme
 	edit           EditFunction
 	reload         func() tea.Cmd // reloads the workspace
-	loaded         bool           // the pull request detail has loaded
 	ownPullRequest bool           // the viewer authored the pull request
 	diffHead       string         // head SHA the diff on screen was loaded for
 	diffPending    bool           // a diff load is in flight
-	diffReady      bool           // a diff is loaded and shown
-	// commentWriting is set while a comment is being saved.
-	commentWriting bool
+	guard          guardState     // what the guard table looks at (see guard.go)
 }
 
 // Results carry the identity of the flow, repo and number that asked. The
@@ -109,13 +106,10 @@ func (view *View) reviewEnvironment() reviewEnvironment {
 	return reviewEnvironment{
 		client: view.client, timeouts: view.timeouts, repository: view.repository, number: view.number, theme: view.theme,
 		edit: view.edit, reload: view.load,
-		loaded:         view.detail != nil,
 		ownPullRequest: view.detail != nil && view.detail.ViewerDidAuthor,
 		diffHead:       view.diffHead,
 		diffPending:    view.diffPending,
-		diffReady:      !view.diffPending && view.diff.Parsed != nil && view.diff.Err == nil,
-
-		commentWriting: view.writes > 0,
+		guard:          view.guardState(),
 	}
 }
 
@@ -188,8 +182,8 @@ func (currentFlow *reviewFlow) update(message tea.Msg, environment reviewEnviron
 		if !currentFlow.same(environment, message.flow, message.repository, message.number) {
 			return nil, true
 		}
-		if environment.commentWriting { // a comment write started since the review did
-			return userinterface.Info(commentSavingText), true
+		if busy := environment.guard.busy(writeReview); busy != nil { // something started since the yes was asked for
+			return busy, true
 		}
 		currentFlow.submitting = true
 		return tea.Batch(userinterface.Info("Submitting review…"), currentFlow.submit(environment, message.event, message.body, message.status)), true
@@ -207,26 +201,10 @@ func (currentFlow *reviewFlow) update(message tea.Msg, environment reviewEnviron
 	return nil, false
 }
 
-// blocked says why a review cannot start now, or returns nil. The diff must
-// be on screen: the review's commit is the one the diff shows.
-func (currentFlow *reviewFlow) blocked(environment reviewEnvironment) tea.Cmd {
-	switch {
-	case currentFlow.submitting:
-		return userinterface.Info("a review is being submitted")
-	case environment.commentWriting:
-		return userinterface.Info(commentSavingText)
-	case !environment.loaded:
-		return userinterface.Info("pull request not loaded yet")
-	case !environment.diffReady:
-		return userinterface.Info("diff not loaded")
-	}
-	return nil
-}
-
 // openChooser shows the verdict chooser.
 func (currentFlow *reviewFlow) openChooser(environment reviewEnvironment) tea.Cmd {
-	if blocked := currentFlow.blocked(environment); blocked != nil {
-		return blocked
+	if notice := environment.guard.admit(writeReview); notice != nil {
+		return notice
 	}
 	currentFlow.chooserVerdicts = currentFlow.chooserVerdicts[:0]
 	var items []string
@@ -261,8 +239,8 @@ func (currentFlow *reviewFlow) chooserKey(message tea.KeyPressMsg, environment r
 // start fetches the pending review (whose body pre-fills the editor); the
 // editor opens when it arrives.
 func (currentFlow *reviewFlow) start(environment reviewEnvironment, event github.ReviewEvent) tea.Cmd {
-	if blocked := currentFlow.blocked(environment); blocked != nil {
-		return blocked
+	if notice := environment.guard.admit(writeReview); notice != nil {
+		return notice
 	}
 	if environment.ownPullRequest && event != github.ReviewEventComment {
 		return userinterface.Info(ownPullRequestText)
