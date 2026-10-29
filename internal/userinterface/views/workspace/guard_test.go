@@ -389,47 +389,101 @@ func TestGuardAtReactionPickerChoice(test *testing.T) {
 	}
 }
 
-// The top-level comment and :discard-review need only the pull request: with
-// the diff failed to load they still work, while everything on the diff, the
-// review verdicts and :merge say the diff is not loaded.
-func TestGuardWithoutADiff(test *testing.T) {
-	failDiff := func(inliner *inliner) {
-		// What a load that failed with the too-large error leaves behind.
-		inliner.view.diff.Err = github.ErrDiffTooLarge
-		if inliner.view.detail == nil || inliner.view.guardState().diffReady {
-			inliner.test.Fatal("want the pull request loaded and the diff not")
-		}
-		inliner.messages, inliner.openedOn = nil, nil
+// noDiff is a diff state as load.go leaves it: a load in flight (nothing parsed
+// yet), or one that failed (too large, nothing parsed).
+type noDiff struct {
+	name  string
+	apply func(inliner *inliner)
+}
+
+func noDiffStates() []noDiff {
+	return []noDiff{
+		{"diff loading", func(inliner *inliner) {
+			inliner.view.diff = DiffState{Loading: true}
+			inliner.view.diffPending = true
+		}},
+		{"diff failed", func(inliner *inliner) {
+			inliner.view.diff = DiffState{Err: github.ErrDiffTooLarge}
+			inliner.view.diffPending = false
+		}},
 	}
-	test.Run("top-level comment opens the editor", func(test *testing.T) {
-		inliner := guardedInliner(test)
-		failDiff(inliner)
-		inliner.press("h", "g g", "c")
-		if len(inliner.openedOn) != 1 {
-			test.Errorf("editor opened %d times, notices %v", len(inliner.openedOn), inliner.infoMessages())
-		}
-	})
-	test.Run(":discard-review asks", func(test *testing.T) {
-		inliner := guardedInliner(test)
-		inliner.addPending("draft")
-		failDiff(inliner)
-		inliner.command("discard-review")
-		if _, asked := inliner.lastConfirm(); !asked {
-			test.Errorf("no question; notices %v", inliner.infoMessages())
-		}
-	})
-	for _, action := range guardActions() {
-		if !guardTable[action.kind].needsDiff {
-			continue
-		}
-		test.Run(action.name+" says the diff is not loaded", func(test *testing.T) {
+}
+
+// removeDiff leaves the pull request loaded and the diff absent.
+func (state noDiff) removeDiff(inliner *inliner) {
+	state.apply(inliner)
+	inliner.view.filePane.SetDiff(inliner.view.diff)
+	inliner.view.layout()
+	if inliner.view.detail == nil || inliner.view.diff.Parsed != nil || inliner.view.guardState().diffReady {
+		inliner.test.Fatal("want the pull request loaded and no diff")
+	}
+	inliner.messages, inliner.openedOn = nil, nil
+}
+
+// The top-level comment and :discard-review need only the pull request: with
+// no diff (still loading, or failed) they run through their yes, while
+// everything on the diff, the review verdicts and :merge say the diff is not
+// loaded.
+func TestGuardWithoutADiff(test *testing.T) {
+	for _, state := range noDiffStates() {
+		test.Run(state.name+" top-level comment is posted", func(test *testing.T) {
 			inliner := guardedInliner(test)
-			action.place(inliner)
-			failDiff(inliner)
-			action.start(inliner)
-			if diff := cmp.Diff([]string{"diff not loaded"}, inliner.infoMessages()); diff != "" {
-				test.Errorf("(-want +got):\n%s", diff)
+			inliner.press("h", "g g")
+			state.removeDiff(inliner)
+			inliner.press("c")
+			if len(inliner.openedOn) != 1 {
+				test.Fatalf("editor opened %d times, notices %v", len(inliner.openedOn), inliner.infoMessages())
+			}
+			inliner.run(askedYes(inliner))
+			if got := inliner.methods(fake.MethodAddComment); len(got) != 1 {
+				test.Errorf("AddComment calls = %v, notices %v", got, inliner.infoMessages())
 			}
 		})
+		test.Run(state.name+" :discard-review deletes", func(test *testing.T) {
+			inliner := guardedInliner(test)
+			inliner.addPending("draft")
+			state.removeDiff(inliner)
+			inliner.run(inliner.askDiscard().OnYes)
+			if got := inliner.discardCalls(); len(got) != 1 {
+				test.Errorf("DeleteReview calls = %v, notices %v", got, inliner.infoMessages())
+			}
+		})
+		for _, action := range guardActions() {
+			if !guardTable[action.kind].needsDiff {
+				continue
+			}
+			test.Run(state.name+" "+action.name+" says the diff is not loaded", func(test *testing.T) {
+				inliner := guardedInliner(test)
+				action.place(inliner)
+				state.removeDiff(inliner)
+				action.start(inliner)
+				if diff := cmp.Diff([]string{"diff not loaded"}, inliner.infoMessages()); diff != "" {
+					test.Errorf("(-want +got):\n%s", diff)
+				}
+			})
+		}
+	}
+}
+
+// postKind picks the table row of a post's yes: a reply is a diff comment, a
+// top-level comment needs no diff.
+func TestPostKind(test *testing.T) {
+	tests := []struct {
+		name   string
+		target target
+		want   writeKind
+	}{
+		{"reply", target{kind: kindReply}, writeComment},
+		{"top-level comment", target{}, writeOverviewComment},
+	}
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			if got := postKind(testCase.target); got != testCase.want {
+				test.Errorf("postKind = %d, want %d", got, testCase.want)
+			}
+		})
+	}
+	if guardTable[writeComment].needsDiff == guardTable[writeOverviewComment].needsDiff {
+		test.Error("the two comment kinds no longer differ in what they need loaded")
 	}
 }

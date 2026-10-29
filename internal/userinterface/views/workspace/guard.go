@@ -14,8 +14,8 @@ import (
 type writeKind int
 
 const (
-	// writeComment: `c` (new comment, top-level or inline), `V` (starts an
-	// inline comment), `r`, `e` / `:edit-comment`, `D` / `:delete-comment`.
+	// writeComment: `c` on a diff line, `V` (starts an inline comment), `r`,
+	// `e` / `:edit-comment`, `D` / `:delete-comment`, and the reply's yes.
 	writeComment writeKind = iota
 	// writeThread: `x`, `:resolve`, `:unresolve`.
 	writeThread
@@ -71,8 +71,9 @@ type guardState struct {
 }
 
 // ready returns the notice to show when what the kind of write needs is not
-// loaded (the pull request, and the diff when the table says so), or nil. It comes first, so a notice about what is missing at the
-// cursor never stands in for "not loaded".
+// loaded (the pull request, and the diff when the table says so), or nil. It
+// comes first, so a notice about what is missing at the cursor never stands
+// in for "not loaded".
 func (state guardState) ready(kind writeKind) tea.Cmd {
 	switch {
 	case !state.loaded:
