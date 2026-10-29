@@ -30,6 +30,7 @@ The maintainer's rules for when strig asks before acting:
 - A reaction is confirmed by choosing it (in the picker, or by naming it in `:react <name>`); no single keypress ever adds one, and it has no `y/N`.
 - **Every deletion asks `y/N`**, draft or published.
 - Cancelling happens only at the `y/N`. An empty body is an error, not a cancel, and nothing is written.
+- Thread and comment actions (`r`, `x`, `e`, `D`, `:react`, `:resolve`, `:unresolve`, `:edit-comment`, `:delete-comment`) work on the diff cursor and need the diff pane focused. The workspace resolves their target in one place (`views/workspace/target.go`), with one notice per level.
 - Keys with a command behind them are welcome (`e` / `D` and `:edit-comment` / `:delete-comment`; `x` and `:resolve` / `:unresolve`).
 - Re-read the state before asking and again after `y`; if it changed, ask again or refuse and refresh. Never write on a stale yes.
 
@@ -62,8 +63,8 @@ Reserved globally:
 | `o` | open the current item in the browser |
 | `R` | refresh |
 | `c` | new comment (top-level, or on the cursor line / visual selection in a diff) |
-| `r` | reply to the focused comment thread |
-| `x` | resolve the comment thread at the cursor, or unresolve it if it is resolved (diff; asks `y/N`) |
+| `r` | reply to the comment thread at the cursor (diff pane focused; from the Files pane it says `focus the diff to reply`) |
+| `x` | resolve the comment thread at the cursor, or unresolve it if it is resolved (diff pane focused; asks `y/N`) |
 | `:` | command line |
 | `]` / `[` | next / previous chunk of what the pane shows: hunk in a diff, section in the Overview |
 | `}` / `{` | next / previous file |
@@ -85,9 +86,9 @@ Commands (`:` then `enter`):
 | `:checks` | PR workspace: list the head commit's checks (failing first); `enter` opens the selected check's page in the browser |
 | `:merge [merge\|squash\|rebase]` | PR workspace: merge the pull request after a `y/N` confirmation; no argument uses the first method the repo allows (merge commit, squash, rebase) |
 | `:copy-filename` | PR workspace: copy the selected file's path to the clipboard (OSC 52; tmux needs `set -g set-clipboard on`) |
-| `:edit-comment`, `:delete-comment` | PR workspace: change your comment at the diff cursor (same as `e` / `D`): the last comment of the focused thread you may change, pending ones first; deleting always asks `y/N`, editing a published comment asks `y/N` after the editor closes |
-| `:resolve`, `:unresolve` | PR workspace: resolve or unresolve the comment thread at the diff cursor (`x` does whichever applies); both ask `y/N` naming the file and line, and refuse with a notice when the thread is already in that state |
-| `:react [name]` | PR workspace: react to the comment under the diff cursor (inside an open thread; anywhere else it says `move onto a comment to react to it`). Alone it opens a picker of GitHub's 8 reactions with counts and `✓` for the ones you have; `enter` toggles the selected one. `:react <name>` toggles directly; names are `+1`, `-1`, `laugh`, `hooray`, `confused`, `heart`, `rocket`, `eyes`, and an unknown one is an error that lists them. No key and no `y/N`; refused while a review is being submitted, a merge is running or a comment is being saved |
+| `:edit-comment`, `:delete-comment` | PR workspace: change the comment under the diff cursor (same as `e` / `D`), only if it is yours; anywhere else (a thread header, a blank row, a diff line, a folded thread, someone else's comment) it says `move onto a comment of yours to edit it` / `… to delete it`, and from the Files pane `focus the diff to edit it`; deleting always asks `y/N`, editing a published comment asks `y/N` after the editor closes |
+| `:resolve`, `:unresolve` | PR workspace: resolve or unresolve the comment thread at the diff cursor, diff pane focused (`x` does whichever applies); both ask `y/N` naming the file and line, and refuse with a notice when the thread is already in that state |
+| `:react [name]` | PR workspace: react to the comment under the diff cursor (inside an open thread; anywhere else it says `move onto a comment to react to it`, and from the Files pane `focus the diff to react to it`). Alone it opens a picker of GitHub's 8 reactions with counts and `✓` for the ones you have; `enter` toggles the selected one. `:react <name>` toggles directly; names are `+1`, `-1`, `laugh`, `hooray`, `confused`, `heart`, `rocket`, `eyes`, and an unknown one is an error that lists them. No key and no `y/N`; refused while a review is being submitted, a merge is running or a comment is being saved |
 | `:discard-review` | PR workspace: delete your pending review and all its draft comments after a `y/N` naming how many drafts go with it; no key; says `no pending review` when there is none; refused while a review is being submitted, a merge is running or a comment is being saved |
 
 **View commands.** The table above is static. A view with commands of its own implements `userinterface.Commander` (`Command(name, args) (tea.Cmd, handled bool)`) and its names are added to `viewCommands` in `command.go`. The root consults only the top view, and only when the static table has no match, so a command never reaches two views the way a broadcast result would. A listed name the top view declines (or a top view that is not a Commander) gives "not available here: name"; any other name gives "not a command: name". List the view's commands in the table above.

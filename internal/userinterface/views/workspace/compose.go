@@ -123,10 +123,11 @@ func (view *View) reply() tea.Cmd {
 	if busy := view.writeBusy(); busy != nil {
 		return busy
 	}
-	thread, ok, hint := view.focusedThread(" to reply")
-	if !ok {
-		return hint
+	resolved, command := view.resolveTarget(request{level: levelThread, words: "reply"})
+	if command != nil {
+		return command
 	}
+	thread := resolved.thread
 	return view.compose(target{kind: kindReply, threadIdentifier: thread.Identifier, label: threadLocation(thread)})
 }
 

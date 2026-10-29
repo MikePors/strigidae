@@ -71,6 +71,39 @@ func (inliner *inliner) toThread(identifier string) {
 	})
 }
 
+// toOwnComment puts the cursor on a row of the viewer's comment in the thread
+// that e and D act on: the last of the viewer's comments, a pending one before
+// a published one.
+func (inliner *inliner) toOwnComment(identifier string) {
+	inliner.test.Helper()
+	inliner.toThread(identifier)
+	diffView := inliner.diffView()
+	best, bestPending := -1, false
+	for step := 0; ; step++ {
+		context := diffView.Context()
+		if len(context.Threads) != 1 || context.Threads[0].Identifier != identifier {
+			if step > 0 {
+				break
+			}
+		}
+		if context.OnComment {
+			comment := context.Threads[0].Comments[context.CommentIndex]
+			if comment.ViewerDidAuthor && (best < 0 || comment.Pending || !bestPending) {
+				best, bestPending = step, comment.Pending
+			}
+		}
+		if step > 200 {
+			break
+		}
+		diffView.CursorDown(1)
+	}
+	if best < 0 {
+		inliner.test.Fatalf("no comment of the viewer's in thread %s", identifier)
+	}
+	inliner.toThread(identifier)
+	diffView.CursorDown(best)
+}
+
 // methods returns the recorded calls of the given fake methods.
 func (inliner *inliner) methods(names ...string) []string {
 	var out []string
@@ -363,7 +396,7 @@ func (inliner *inliner) addPending(body string) github.ReviewThread {
 	inliner.moveTo(github.SideRight, 10)
 	inliner.press("c")
 	thread := inliner.pendingThread()
-	inliner.toThread(thread.Identifier)
+	inliner.toOwnComment(thread.Identifier)
 	return thread
 }
 
@@ -418,8 +451,7 @@ func TestEditAndDeleteOnlyYourComments(test *testing.T) {
 	inliner.messages = nil
 	inliner.press("e")
 	inliner.press("D")
-	none := "no comment of yours here"
-	if diff := cmp.Diff([]string{none, none}, inliner.infoMessages()); diff != "" {
+	if diff := cmp.Diff([]string{noticeEdit, noticeDelete}, inliner.infoMessages()); diff != "" {
 		test.Errorf("infos (-want +got):\n%s", diff)
 	}
 	if len(inliner.openedOn) != 0 {
@@ -428,7 +460,7 @@ func TestEditAndDeleteOnlyYourComments(test *testing.T) {
 	inliner.diffView().GotoTop() // a hunk header: no thread at all
 	inliner.messages = nil
 	inliner.press("e")
-	if diff := cmp.Diff([]string{none}, inliner.infoMessages()); diff != "" {
+	if diff := cmp.Diff([]string{noticeEdit}, inliner.infoMessages()); diff != "" {
 		test.Errorf("infos on a line without a thread (-want +got):\n%s", diff)
 	}
 }
@@ -548,7 +580,7 @@ func (inliner *inliner) deletes() []string { return inliner.methods(fake.MethodD
 func TestEditPublishedCommentAsksAfterTheEditor(test *testing.T) {
 	inliner := newInliner(test)
 	inliner.seed(inliner.mine(true, true))
-	inliner.toThread(mineIdentifier)
+	inliner.toOwnComment(mineIdentifier)
 	inliner.messages, inliner.body = nil, "published, revised"
 	inliner.press("e")
 	if diff := cmp.Diff([]string{"published note"}, inliner.openedOn); diff != "" {
@@ -573,7 +605,7 @@ func TestEditPublishedCommentAsksAfterTheEditor(test *testing.T) {
 func TestDeletePublishedCommentAsks(test *testing.T) {
 	inliner := newInliner(test)
 	inliner.seed(inliner.mine(true, true))
-	inliner.toThread(mineIdentifier)
+	inliner.toOwnComment(mineIdentifier)
 	inliner.messages = nil
 	inliner.press("D")
 	confirmation, ok := inliner.lastConfirm()
@@ -592,7 +624,7 @@ func TestDeletePublishedCommentAsks(test *testing.T) {
 func TestEditPublishedUnchangedWithATrailingNewline(test *testing.T) {
 	inliner := newInliner(test)
 	inliner.seed(inliner.mine(true, true, github.ReviewComment{Identifier: "c-mine", Body: "published note\n"}))
-	inliner.toThread(mineIdentifier)
+	inliner.toOwnComment(mineIdentifier)
 	inliner.messages, inliner.body = nil, "published note\n" // saved as it was offered
 	inliner.press("e")
 	if _, asked := inliner.lastConfirm(); asked || len(inliner.updates()) != 0 {
@@ -688,7 +720,7 @@ func TestGoneOrCannotChangeIsRefusedAndRefreshed(test *testing.T) {
 		prepare := func(test *testing.T) *inliner {
 			inliner := newInliner(test)
 			inliner.seed(inliner.mine(true, true))
-			inliner.toThread(mineIdentifier)
+			inliner.toOwnComment(mineIdentifier)
 			inliner.retitle()
 			inliner.messages = nil
 			return inliner
@@ -782,7 +814,7 @@ func TestRefusedEditKeepsTheText(test *testing.T) {
 	setup := func(test *testing.T) *inliner {
 		inliner := newInliner(test)
 		inliner.seed(theirsFirst(inliner))
-		inliner.toThread(mineIdentifier)
+		inliner.toOwnComment(mineIdentifier)
 		inliner.messages = nil
 		return inliner
 	}
@@ -873,7 +905,7 @@ func TestRefusedEditKeepsTheText(test *testing.T) {
 func TestEditOpensOnTheFreshBody(test *testing.T) {
 	inliner := newInliner(test)
 	inliner.seed(inliner.mine(true, true))
-	inliner.toThread(mineIdentifier)
+	inliner.toOwnComment(mineIdentifier)
 	// The body was changed on github.com since the threads were loaded.
 	thread := inliner.mine(true, true, github.ReviewComment{Identifier: "c-mine", Body: "edited on the web"})
 	inliner.client.SetReviewThreads(testRepository, 7, append(testThreads(), thread))
@@ -885,7 +917,7 @@ func TestEditOpensOnTheFreshBody(test *testing.T) {
 	// And a comment that is already gone is refused before the editor.
 	secondInliner := newInliner(test)
 	secondInliner.seed(secondInliner.mine(true, true))
-	secondInliner.toThread(mineIdentifier)
+	secondInliner.toOwnComment(mineIdentifier)
 	if err := secondInliner.client.DeleteReviewComment(test.Context(), "c-mine"); err != nil {
 		test.Fatal(err)
 	}
@@ -1053,7 +1085,7 @@ func TestCommentWriteFlagClears(test *testing.T) {
 	if inliner.view.writes > 0 {
 		test.Error("the flag stayed set after a failed write")
 	}
-	inliner.toThread(inliner.pendingThread().Identifier)
+	inliner.toOwnComment(inliner.pendingThread().Identifier)
 	inliner.messages = nil
 	inliner.press("D")
 	if _, asked := inliner.lastConfirm(); !asked || (inliner.view.writes > 0) {
@@ -1080,7 +1112,7 @@ func TestCommandsBehaveLikeTheKeys(test *testing.T) {
 	test.Run("edit published", func(test *testing.T) {
 		inliner := newInliner(test)
 		inliner.seed(inliner.mine(true, true))
-		inliner.toThread(mineIdentifier)
+		inliner.toOwnComment(mineIdentifier)
 		inliner.messages, inliner.body = nil, "revised"
 		inliner.command("edit-comment")
 		if confirmation, ok := inliner.lastConfirm(); !ok || !strings.HasPrefix(confirmation.Text, "Update your published comment") {
@@ -1101,7 +1133,7 @@ func TestCommandsBehaveLikeTheKeys(test *testing.T) {
 		inliner.press("h", "g g") // Files pane, Overview
 		inliner.messages = nil
 		inliner.command("edit-comment")
-		if diff := cmp.Diff([]string{"no comment of yours here"}, inliner.infoMessages()); diff != "" {
+		if diff := cmp.Diff([]string{"focus the diff to edit it"}, inliner.infoMessages()); diff != "" {
 			test.Errorf("infos (-want +got):\n%s", diff)
 		}
 	})
@@ -1139,12 +1171,11 @@ func TestOtherPeoplesCommentsAreNeverTargeted(test *testing.T) {
 	test.Run("only their comment in the thread", func(test *testing.T) {
 		inliner := newInliner(test)
 		inliner.seed(github.ReviewThread{Identifier: mineIdentifier, Path: clientPath, Line: 10, DiffSide: github.SideRight, Comments: []github.ReviewComment{theirs("c-bob")}})
-		inliner.toThread(mineIdentifier)
+		inliner.toLineContaining("theirs")
 		inliner.messages = nil
 		inliner.press("e")
 		inliner.press("D")
-		none := "no comment of yours here"
-		if diff := cmp.Diff([]string{none, none}, inliner.infoMessages()); diff != "" {
+		if diff := cmp.Diff([]string{noticeEdit, noticeDelete}, inliner.infoMessages()); diff != "" {
 			test.Errorf("infos (-want +got):\n%s", diff)
 		}
 		if _, asked := inliner.lastConfirm(); asked || len(inliner.openedOn) != 0 {
@@ -1156,7 +1187,7 @@ func TestOtherPeoplesCommentsAreNeverTargeted(test *testing.T) {
 		thread := inliner.mine(true, true, github.ReviewComment{Identifier: "c-mine", Body: "mine"})
 		thread.Comments = append(thread.Comments, theirs("c-bob-reply"))
 		inliner.seed(thread)
-		inliner.toThread(mineIdentifier)
+		inliner.toOwnComment(mineIdentifier)
 		inliner.messages = nil
 		inliner.press("D")
 		confirmation, ok := inliner.lastConfirm()
@@ -1168,7 +1199,7 @@ func TestOtherPeoplesCommentsAreNeverTargeted(test *testing.T) {
 			test.Errorf("deleted (-want +got):\n%s", diff)
 		}
 		inliner.seed(thread)
-		inliner.toThread(mineIdentifier)
+		inliner.toOwnComment(mineIdentifier)
 		inliner.body = "mine, edited"
 		inliner.press("e")
 		if diff := cmp.Diff([]string{"mine"}, inliner.openedOn); diff != "" {
@@ -1178,7 +1209,7 @@ func TestOtherPeoplesCommentsAreNeverTargeted(test *testing.T) {
 	test.Run("the fresh read shows it is not yours", func(test *testing.T) {
 		inliner := newInliner(test)
 		inliner.seed(inliner.mine(true, true))
-		inliner.toThread(mineIdentifier)
+		inliner.toOwnComment(mineIdentifier)
 		// On the server the comment is somebody else's now.
 		other := github.ReviewThread{Identifier: mineIdentifier, Path: clientPath, Line: 10, DiffSide: github.SideRight, Comments: []github.ReviewComment{theirs("c-mine")}}
 		inliner.client.SetReviewThreads(testRepository, 7, append(testThreads(), other))
@@ -1194,7 +1225,7 @@ func TestOtherPeoplesCommentsAreNeverTargeted(test *testing.T) {
 		// it stale again for the edit path.
 		inliner.client.SetReviewThreads(testRepository, 7, append(testThreads(), inliner.mine(true, true)))
 		inliner.press("R")
-		inliner.toThread(mineIdentifier)
+		inliner.toOwnComment(mineIdentifier)
 		inliner.client.SetReviewThreads(testRepository, 7, append(testThreads(), other))
 		inliner.messages = nil
 		inliner.press("e")
@@ -1238,39 +1269,39 @@ func TestPublishedEditPromptIsDroppedWhenTheViewChanged(test *testing.T) {
 	}
 }
 
-func TestPickComment(test *testing.T) {
-	mine := func(identifier string, pending bool) github.ReviewComment {
-		return github.ReviewComment{Identifier: identifier, Pending: pending, ViewerDidAuthor: true, ViewerCanUpdate: true, ViewerCanDelete: true}
-	}
+func TestChangeAllowed(test *testing.T) {
+	mine := github.ReviewComment{ViewerDidAuthor: true, ViewerCanUpdate: true, ViewerCanDelete: true}
 	// A maintainer's flags are true on other people's comments.
-	theirs := github.ReviewComment{Identifier: "theirs", ViewerCanUpdate: true, ViewerCanDelete: true}
-	noFlags := github.ReviewComment{Identifier: "no-flags", ViewerDidAuthor: true}
+	theirs := github.ReviewComment{ViewerCanUpdate: true, ViewerCanDelete: true}
+	noFlags := github.ReviewComment{ViewerDidAuthor: true}
+	updateOnly := github.ReviewComment{ViewerDidAuthor: true, ViewerCanUpdate: true}
 	tests := []struct {
-		name     string
-		comments []github.ReviewComment
-		change   change
-		want     string // "" for none
+		name    string
+		comment github.ReviewComment
+		change  change
+		want    bool
 	}{
-		{"empty thread", nil, changeEdit, ""},
-		{"the only comment", []github.ReviewComment{mine("a", false)}, changeEdit, "a"},
-		{"the last one", []github.ReviewComment{mine("a", false), mine("b", false)}, changeEdit, "b"},
-		{"pending beats a later published one", []github.ReviewComment{mine("a", false), mine("b", true), mine("c", false)}, changeEdit, "b"},
-		{"the last pending one", []github.ReviewComment{mine("a", true), mine("b", true), mine("c", false)}, changeDelete, "b"},
-		{"another author's last comment is skipped", []github.ReviewComment{mine("a", false), theirs}, changeDelete, "a"},
-		{"only another author's", []github.ReviewComment{theirs}, changeEdit, ""},
-		{"flags false", []github.ReviewComment{noFlags}, changeEdit, ""},
-		{"flags false is skipped", []github.ReviewComment{mine("a", false), noFlags}, changeDelete, "a"},
-		{"delete needs the delete flag", []github.ReviewComment{{Identifier: "a", ViewerDidAuthor: true, ViewerCanUpdate: true}}, changeDelete, ""},
+		{"own comment, edit", mine, changeEdit, true},
+		{"own comment, delete", mine, changeDelete, true},
+		{"another author's, edit", theirs, changeEdit, false},
+		{"another author's, delete", theirs, changeDelete, false},
+		{"flags false", noFlags, changeEdit, false},
+		{"delete needs the delete flag", updateOnly, changeDelete, false},
+		{"edit needs only the update flag", updateOnly, changeEdit, true},
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
-			got, ok := pickComment(github.ReviewThread{Comments: testCase.comments}, testCase.change)
-			if (testCase.want != "") != ok || got.Identifier != testCase.want {
-				test.Errorf("picked %q (%v), want %q", got.Identifier, ok, testCase.want)
+			if got := testCase.change.allowed(testCase.comment); got != testCase.want {
+				test.Errorf("allowed = %v, want %v", got, testCase.want)
 			}
 		})
 	}
 }
+
+const (
+	noticeEdit   = "move onto a comment of yours to edit it"
+	noticeDelete = "move onto a comment of yours to delete it"
+)
 
 // e and D each ask for their own permission: a comment that may be updated but
 // not deleted (and the reverse) is offered by one key only.
@@ -1290,7 +1321,7 @@ func TestEditAndDeleteUseTheirOwnPermission(test *testing.T) {
 		test.Run(testCase.name, func(test *testing.T) {
 			inliner := newInliner(test)
 			inliner.seed(inliner.mine(testCase.canUpdate, testCase.canDelete))
-			inliner.toThread(mineIdentifier)
+			inliner.toOwnComment(mineIdentifier)
 			inliner.messages, inliner.openedOn, inliner.body = nil, nil, "x"
 			inliner.press(testCase.key)
 			_, asked := inliner.lastConfirm()
@@ -1299,7 +1330,11 @@ func TestEditAndDeleteUseTheirOwnPermission(test *testing.T) {
 				test.Errorf("offered = %v (editor %v, asked %v), want %v; infos %v", offered, inliner.openedOn, asked, testCase.offered, inliner.infoMessages())
 			}
 			if !testCase.offered {
-				if diff := cmp.Diff([]string{"no comment of yours here"}, inliner.infoMessages()); diff != "" {
+				want := noticeEdit
+				if testCase.key == "D" {
+					want = noticeDelete
+				}
+				if diff := cmp.Diff([]string{want}, inliner.infoMessages()); diff != "" {
 					test.Errorf("info (-want +got):\n%s", diff)
 				}
 			}
@@ -1348,7 +1383,7 @@ func TestWriteAfterYesIsInFlightUntilItsResult(test *testing.T) {
 	test.Run("published edit", func(test *testing.T) {
 		inliner := newInliner(test)
 		inliner.seed(inliner.mine(true, true))
-		inliner.toThread(mineIdentifier)
+		inliner.toOwnComment(mineIdentifier)
 		inliner.messages, inliner.body = nil, "revised"
 		inliner.press("e")
 		confirmation, _ := inliner.lastConfirm()
@@ -1526,7 +1561,7 @@ func TestRefusedEditTextGoesToTheThreadOrTheLine(test *testing.T) {
 		test.Run(testCase.name, func(test *testing.T) {
 			inliner := newInliner(test)
 			inliner.seed(testCase.thread(inliner))
-			inliner.toThread(mineIdentifier)
+			inliner.toOwnComment(mineIdentifier)
 			inliner.messages = nil
 			first := true
 			inliner.view.edit = func(initial string, done func(string, error) tea.Msg) tea.Cmd {
@@ -1572,7 +1607,7 @@ func TestRefusedEditTextGoesToTheThreadOrTheLine(test *testing.T) {
 	test.Run("the write finds it gone", func(test *testing.T) {
 		inliner := newInliner(test)
 		inliner.seed(single(inliner))
-		inliner.toThread(mineIdentifier)
+		inliner.toOwnComment(mineIdentifier)
 		inliner.body = "my rewrite"
 		inliner.client.SetError(fake.MethodUpdateReviewComment, github.ErrNotFound)
 		inliner.press("e")
@@ -1590,7 +1625,7 @@ func TestRefusedEditTextGoesToTheThreadOrTheLine(test *testing.T) {
 	test.Run("the thread list cannot be read: the line draft is always reachable", func(test *testing.T) {
 		inliner := newInliner(test)
 		inliner.seed(twoComments(inliner))
-		inliner.toThread(mineIdentifier)
+		inliner.toOwnComment(mineIdentifier)
 		inliner.body = "my rewrite"
 		inliner.press("e")
 		confirmation, _ := inliner.lastConfirm()
@@ -1604,7 +1639,7 @@ func TestRefusedEditTextGoesToTheThreadOrTheLine(test *testing.T) {
 	test.Run("joined with an existing draft once", func(test *testing.T) {
 		inliner := newInliner(test)
 		inliner.seed(twoComments(inliner))
-		inliner.toThread(mineIdentifier)
+		inliner.toOwnComment(mineIdentifier)
 		inliner.view.drafts[replyKey] = "half a reply"
 		inliner.body = "my rewrite"
 		inliner.press("e")
@@ -1628,7 +1663,7 @@ func TestRefusedEditTextGoesToTheThreadOrTheLine(test *testing.T) {
 func TestSupersededReadDoesNotOpenAnEditor(test *testing.T) {
 	inliner := newInliner(test)
 	inliner.seed(inliner.mine(true, true))
-	inliner.toThread(mineIdentifier)
+	inliner.toOwnComment(mineIdentifier)
 	// e: the read is in flight (held).
 	_, read := inliner.view.Update(keys.Message{Sequence: "e"})
 	if read == nil {
@@ -1650,7 +1685,7 @@ func TestSupersededReadDoesNotOpenAnEditor(test *testing.T) {
 	// And pressing e twice opens one editor, on the second read.
 	secondInliner := newInliner(test)
 	secondInliner.seed(secondInliner.mine(true, true))
-	secondInliner.toThread(mineIdentifier)
+	secondInliner.toOwnComment(mineIdentifier)
 	_, first := secondInliner.view.Update(keys.Message{Sequence: "e"})
 	_, second := secondInliner.view.Update(keys.Message{Sequence: "e"})
 	secondInliner.openedOn, secondInliner.body = nil, "published note"
@@ -1667,7 +1702,7 @@ func TestSupersededReadDoesNotOpenAnEditor(test *testing.T) {
 func TestReadIsRefusedWhenAReviewStartedMeanwhile(test *testing.T) {
 	inliner := newInliner(test)
 	inliner.seed(inliner.mine(true, true))
-	inliner.toThread(mineIdentifier)
+	inliner.toOwnComment(mineIdentifier)
 	_, read := inliner.view.Update(keys.Message{Sequence: "e"})
 	inliner.view.review.submitting = true
 	inliner.messages, inliner.openedOn = nil, nil
