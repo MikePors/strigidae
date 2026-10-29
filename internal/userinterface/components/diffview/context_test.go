@@ -20,14 +20,15 @@ type contextView struct {
 	Lines        Range
 	Threads      []string
 	OnComment    bool
-	CommentIndex int
+	Author       string // of the comment, when OnComment
+	CommentOwner string // identifier of the thread the comment belongs to
 }
 
 func viewOf(context Context) contextView {
 	view := contextView{
 		HasFile: context.File != nil, InHunk: context.InHunk, Hunk: context.Hunk,
 		HasLines: context.HasLines, Lines: context.Lines,
-		OnComment: context.OnComment, CommentIndex: context.CommentIndex,
+		OnComment: context.OnComment, Author: context.Comment.Author, CommentOwner: context.CommentThread.Identifier,
 	}
 	for _, reviewThread := range context.Threads {
 		view.Threads = append(view.Threads, reviewThread.Identifier)
@@ -92,12 +93,12 @@ func TestContext(test *testing.T) {
 			model := onLog(test)
 			model.CursorDown(2)
 			return model
-		}, contextView{HasFile: true, InHunk: true, Threads: []string{"open"}, OnComment: true}},
+		}, contextView{HasFile: true, InHunk: true, Threads: []string{"open"}, OnComment: true, Author: "alice", CommentOwner: "open"}},
 		{"second comment row", func(test *testing.T) *Model {
 			model := onLog(test)
 			model.CursorDown(1 + separatorOffset(test, model) + 1)
 			return model
-		}, contextView{HasFile: true, InHunk: true, Threads: []string{"open"}, OnComment: true, CommentIndex: 1}},
+		}, contextView{HasFile: true, InHunk: true, Threads: []string{"open"}, OnComment: true, Author: "bob", CommentOwner: "open"}},
 		{"separator row between comments", func(test *testing.T) *Model {
 			model := onLog(test)
 			model.CursorDown(1 + separatorOffset(test, model))
@@ -127,7 +128,7 @@ func TestContext(test *testing.T) {
 			model := threadModel(test, 100, 80)
 			model.GotoBottom()
 			return model
-		}, contextView{HasFile: true, Threads: []string{"gone"}, OnComment: true}},
+		}, contextView{HasFile: true, Threads: []string{"gone"}, OnComment: true, Author: "frank", CommentOwner: "gone"}},
 		{"notice row", func(test *testing.T) *Model {
 			model := New(theme.New(true), WithClock(func() time.Time { return threadNow }))
 			model.SetSize(60, 10)
@@ -142,7 +143,7 @@ func TestContext(test *testing.T) {
 			model.SetThreads([]github.ReviewThread{binaryThread()})
 			model.GotoBottom()
 			return model
-		}, contextView{HasFile: true, Threads: []string{"bin"}, OnComment: true}},
+		}, contextView{HasFile: true, Threads: []string{"bin"}, OnComment: true, Author: "hank", CommentOwner: "bin"}},
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {

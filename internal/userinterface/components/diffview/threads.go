@@ -30,10 +30,12 @@ func (model *Model) SetThreads(threads []github.ReviewThread) {
 }
 
 // SetThreadExpanded folds the thread with the given identifier open or closed,
-// replacing what the user chose before. It takes effect with the next
-// SetThreads, which the caller makes once the thread's data has changed.
+// replacing what the user chose before. The rows are laid out again at once,
+// so the cursor context always matches what is drawn; the caller's later
+// SetThreads keeps the choice.
 func (model *Model) SetThreadExpanded(identifier string, expanded bool) {
 	model.open[identifier] = expanded
+	model.layout()
 }
 
 // placeThreads picks the threads on the shown file and anchors each to a row

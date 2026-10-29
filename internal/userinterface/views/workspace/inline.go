@@ -88,13 +88,18 @@ const (
 // comment and GitHub allows it. Write access makes the can-flags true on other
 // people's comments too, so authorship is checked as well.
 func (change change) allowed(comment github.ReviewComment) bool {
-	if !comment.ViewerDidAuthor {
+	return change.permits(reviewCommentTarget(comment, github.ReviewThread{}))
+}
+
+// permits is allowed for a comment target.
+func (change change) permits(target commentTarget) bool {
+	if !target.viewerDidAuthor {
 		return false
 	}
 	if change == changeDelete {
-		return comment.ViewerCanDelete
+		return target.viewerCanDelete
 	}
-	return comment.ViewerCanUpdate
+	return target.viewerCanUpdate
 }
 
 // freshComment re-reads comment identifier and returns it, or a staleError when it is
@@ -273,39 +278,40 @@ func refusal(err error) tea.Cmd {
 // commands) act on, if it is the viewer's and the change is allowed, and its
 // thread. When there is none, or the view cannot change comments now, the
 // command to show why.
-func (view *View) commentAtCursor(change change) (github.ReviewComment, github.ReviewThread, tea.Cmd) {
+func (view *View) commentAtCursor(change change) (commentTarget, tea.Cmd) {
 	if notice := view.guardState().ready(writeComment); notice != nil {
-		return github.ReviewComment{}, github.ReviewThread{}, notice
+		return commentTarget{}, notice
 	}
 	words := "edit it"
 	if change == changeDelete {
 		words = "delete it"
 	}
 	rule := &commentRule{
-		mine:    func(comment github.ReviewComment) bool { return comment.ViewerDidAuthor },
-		allowed: change.allowed,
+		mine:    func(target commentTarget) bool { return target.viewerDidAuthor },
+		allowed: change.permits,
 		notMine: "move onto a comment of yours to " + words,
 		cannot:  "you can't " + strings.TrimSuffix(words, " it") + " this comment",
 	}
 	resolved, command := view.resolveTarget(request{level: levelComment, words: words, rule: rule})
 	if command != nil {
-		return github.ReviewComment{}, github.ReviewThread{}, command
+		return commentTarget{}, command
 	}
 	if busy := view.guardState().busy(writeComment); busy != nil {
-		return github.ReviewComment{}, github.ReviewThread{}, busy
+		return commentTarget{}, busy
 	}
-	return resolved.comment(), resolved.thread, nil
+	return resolved.comment, nil
 }
 
 // editComment re-reads the viewer's comment at the cursor, then opens the
 // editor on its current body, so edits made elsewhere are not overwritten.
 func (view *View) editComment() tea.Cmd {
-	comment, thread, command := view.commentAtCursor(changeEdit)
+	comment, command := view.commentAtCursor(changeEdit)
 	if command != nil {
 		return command
 	}
+	thread := *comment.thread
 	origin, client, timeouts := view.origin(), view.client, view.timeouts
-	currentTarget := target{kind: kindEdit, commentIdentifier: comment.Identifier, threadIdentifier: thread.Identifier, label: threadLocation(thread), home: view.reachableHome(thread)}
+	currentTarget := target{kind: kindEdit, commentIdentifier: comment.identifier, threadIdentifier: thread.Identifier, label: threadLocation(thread), home: view.reachableHome(thread)}
 	view.commentSequence++ // a compose started meanwhile supersedes this read
 	sequence := view.commentSequence
 	return func() tea.Msg {
@@ -370,11 +376,11 @@ func (view *View) refuse(err error, what string) tea.Cmd {
 // deleteComment re-reads the comment at the cursor, then asks before deleting
 // it. The question says whether it is pending or published.
 func (view *View) deleteComment() tea.Cmd {
-	comment, thread, command := view.commentAtCursor(changeDelete)
+	comment, command := view.commentAtCursor(changeDelete)
 	if command != nil {
 		return command
 	}
-	origin, identifier, label := view.origin(), comment.Identifier, terminaltext.Clean(threadLocation(thread))
+	origin, identifier, label := view.origin(), comment.identifier, terminaltext.Clean(threadLocation(*comment.thread))
 	write := commentWrite{
 		origin: origin, client: view.client, timeouts: view.timeouts, identifier: identifier, change: changeDelete,
 		ask: func(pending bool) string {
