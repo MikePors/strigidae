@@ -5,15 +5,15 @@ import (
 	"testing"
 )
 
-// TestCommentAtCursorMatchesWhatEachRowShows walks every row of the open
-// thread and compares the comment CommentAtCursor reports with the one the
+// TestContextMatchesWhatEachRowShows walks every row of the open
+// thread and compares the comment Context reports with the one the
 // rendered row belongs to, read from the row's own text: the diff line, the
 // header and the blank row between comments are on no comment; alice's
 // header and body rows are on comment 0 and bob's on comment 1.
-func TestCommentAtCursorMatchesWhatEachRowShows(test *testing.T) {
+func TestContextMatchesWhatEachRowShows(test *testing.T) {
 	model := threadModel(test, 100, 80)
 	model.goToRow(test, `"log"`)
-	if _, _, ok := model.CommentAtCursor(); ok {
+	if model.Context().OnComment {
 		test.Fatal("the diff line reports a comment")
 	}
 	classify := func(text string) (want int, known bool) {
@@ -38,14 +38,15 @@ func TestCommentAtCursorMatchesWhatEachRowShows(test *testing.T) {
 			break // left the thread
 		}
 		seen = append(seen, strings.TrimSpace(text))
-		reviewThread, index, ok := model.CommentAtCursor()
+		context := model.Context()
+		index, ok := context.CommentIndex, context.OnComment
 		if want < 0 {
 			if ok {
 				test.Errorf("row %q reports comment %d, want none", text, index)
 			}
 			continue
 		}
-		if !ok || reviewThread.Identifier != "open" || index != want {
+		if !ok || len(context.Threads) != 1 || context.Threads[0].Identifier != "open" || index != want {
 			test.Errorf("row %q: comment (%d, %v), want %d", text, index, ok, want)
 		}
 	}
@@ -54,11 +55,27 @@ func TestCommentAtCursorMatchesWhatEachRowShows(test *testing.T) {
 	}
 }
 
-func TestCommentAtCursorNotOnAFoldedThread(test *testing.T) {
+func TestContextNotOnAFoldedThread(test *testing.T) {
 	model := threadModel(test, 100, 80)
 	model.goToRow(test, `"log"`)
 	model.CloseThread()
-	if _, _, ok := model.CommentAtCursor(); ok {
+	if model.Context().OnComment {
 		test.Error("a folded thread reports a comment")
+	}
+}
+
+// TestContextCommentAfterFoldWithoutRelayout: SetThreadExpanded changes the
+// fold state before the next SetThreads lays the rows out again; the rows
+// still drawn expanded are then on no comment.
+func TestContextCommentAfterFoldWithoutRelayout(test *testing.T) {
+	model := threadModel(test, 100, 80)
+	model.goToRow(test, `"log"`)
+	model.CursorDown(2)
+	if !model.Context().OnComment {
+		test.Fatal("setup: the cursor is not on a comment row")
+	}
+	model.SetThreadExpanded("open", false)
+	if model.Context().OnComment {
+		test.Error("a thread folded since the last layout reports a comment")
 	}
 }

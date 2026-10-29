@@ -117,8 +117,6 @@ func (pane *diffPane) SetThreadFade(fade func(identifier string) (step int, fadi
 
 func (pane *diffPane) ThreadFadesChanged() { pane.diffView.ThreadFadesChanged() }
 
-func (pane *diffPane) CursorHunk() (*diff.File, int, bool) { return pane.diffView.CursorHunk() }
-
 func (pane *diffPane) SetThreadExpanded(identifier string, expanded bool) {
 	pane.diffView.SetThreadExpanded(identifier, expanded)
 }
@@ -231,13 +229,7 @@ func (pane *diffPane) moveThread(message keys.Message, forward bool) tea.Cmd {
 	return nil
 }
 
-func (pane *diffPane) FocusedThreads() []github.ReviewThread { return pane.diffView.ThreadsAtCursor() }
-
-func (pane *diffPane) FocusedComment() (github.ReviewThread, int, bool) {
-	return pane.diffView.CommentAtCursor()
-}
-
-func (pane *diffPane) CommentRange() (diffview.Range, bool) { return pane.diffView.Anchor() }
+func (pane *diffPane) Context() diffview.Context { return pane.diffView.Context() }
 
 func (pane *diffPane) VisualStart() bool          { return pane.diffView.VisualStart() }
 func (pane *diffPane) VisualActive() bool         { return pane.diffView.VisualActive() }

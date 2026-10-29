@@ -166,7 +166,8 @@ func TestWrapVisualSelection(test *testing.T) {
 	if err := model.VisualMove(1); err != nil {
 		test.Fatal(err)
 	}
-	got, ok := model.Anchor()
+	context := model.Context()
+	got, ok := context.Lines, context.HasLines
 	if !ok || got.Start != 1 || got.End != 2 {
 		test.Errorf("selection = %+v, want new lines 1 to 2", got)
 	}

@@ -124,7 +124,8 @@ type Model struct {
 	hideResolved     bool                  // see SetHideResolved
 	skipResolved     bool                  // see SetSkipResolved
 	blocks           [][]string            // rendered lines of each fileThreads entry
-	blockCache       map[blockKey][]string // rendered threads; dropped by SetThreads and when width or theme change
+	owners           [][]int               // for each line of each block, the comment it belongs to or -1
+	blockCache       map[blockKey]block    // rendered threads; dropped by SetThreads and when width or theme change
 	blockSignature   blockSignature
 	renders          int // thread blocks rendered, for tests
 	wrappedRows      int // screen rows of wrapped lines drawn, for tests
@@ -245,7 +246,7 @@ func (model *Model) reset() {
 	model.blockCache = nil
 	model.visual = false // base rows are about to change
 	model.base, model.rows, model.hunkRow = nil, nil, nil
-	model.fileThreads, model.attach, model.orphans, model.blocks = nil, nil, nil, nil
+	model.fileThreads, model.attach, model.orphans, model.blocks, model.owners = nil, nil, nil, nil, nil
 	model.cache = map[int][]Span{}
 	model.wrapStarts = nil
 	model.window.Reset()
@@ -388,8 +389,10 @@ func (model *Model) relayout(key cursorKey, found bool) {
 	model.rows = model.rows[:0]
 	model.hunkRow = model.hunkRow[:0]
 	model.blocks = make([][]string, len(model.fileThreads))
+	model.owners = make([][]int, len(model.fileThreads))
 	for i := range model.fileThreads {
-		model.blocks[i] = model.renderBlock(i)
+		built := model.renderBlock(i)
+		model.blocks[i], model.owners[i] = built.lines, built.owners
 	}
 	base := model.base
 	// Counted after hiding: a notice whose threads are all hidden is drawn

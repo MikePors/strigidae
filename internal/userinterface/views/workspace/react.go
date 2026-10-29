@@ -93,7 +93,11 @@ func (view *View) focusedComment() (reviewThread github.ReviewThread, commentInd
 	if view.focus != paneRight || view.selection() == 0 {
 		return reviewThread, 0, false
 	}
-	return view.filePane.FocusedComment()
+	context := view.filePane.Context()
+	if !context.OnComment {
+		return reviewThread, 0, false
+	}
+	return context.Threads[0], context.CommentIndex, true
 }
 
 func (view *View) openReactionPicker(target reactionTarget, author string) {

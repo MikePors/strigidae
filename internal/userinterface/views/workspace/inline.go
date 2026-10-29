@@ -243,7 +243,7 @@ func (view *View) focusedThread(what string) (thread github.ReviewThread, ok boo
 	if view.selection() == 0 {
 		return thread, false, nil
 	}
-	switch threads := view.filePane.FocusedThreads(); len(threads) {
+	switch threads := view.filePane.Context().Threads; len(threads) {
 	case 0:
 		return thread, false, nil
 	case 1:
@@ -259,8 +259,9 @@ func (view *View) inlineComment() tea.Cmd {
 	if blocked := view.commentBlocked(); blocked != nil {
 		return blocked
 	}
-	lineRange, ok := view.filePane.CommentRange()
-	if !ok {
+	context := view.filePane.Context()
+	lineRange := context.Lines
+	if !context.HasLines {
 		return userinterface.Info("move onto a diff line to comment on it")
 	}
 	view.filePane.VisualEnd()

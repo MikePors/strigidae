@@ -294,11 +294,11 @@ func TestReplyWithZeroOneAndSeveralThreads(test *testing.T) {
 	composer.messages = nil
 	for range 12 { // walk the diff until the cursor is on line 14, two threads
 		composer.press("j")
-		if len(composer.view.filePane.FocusedThreads()) == 2 {
+		if len(composer.view.filePane.Context().Threads) == 2 {
 			break
 		}
 	}
-	if count := len(composer.view.filePane.FocusedThreads()); count != 2 {
+	if count := len(composer.view.filePane.Context().Threads); count != 2 {
 		test.Fatalf("setup: %d threads at the cursor", count)
 	}
 	composer.press("r")

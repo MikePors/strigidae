@@ -26,11 +26,11 @@ type stubPane struct {
 
 func (pane *stubPane) SetTheme(theme.Theme) {}
 
-func (pane *stubPane) CommentRange() (diffview.Range, bool) { return diffview.Range{}, false }
-func (pane *stubPane) VisualStart() bool                    { return false }
-func (pane *stubPane) VisualActive() bool                   { return false }
-func (pane *stubPane) VisualMove(int) error                 { return nil }
-func (pane *stubPane) VisualEnd()                           {}
+func (pane *stubPane) Context() diffview.Context { return diffview.Context{} }
+func (pane *stubPane) VisualStart() bool         { return false }
+func (pane *stubPane) VisualActive() bool        { return false }
+func (pane *stubPane) VisualMove(int) error      { return nil }
+func (pane *stubPane) VisualEnd()                {}
 
 func (pane *stubPane) SetDiff(DiffState) {}
 
@@ -39,7 +39,6 @@ func (pane *stubPane) SetHideResolved(bool)                       {}
 func (pane *stubPane) SetSkipResolved(bool)                       {}
 func (pane *stubPane) SetRelativeNumber(bool)                     {}
 func (pane *stubPane) SetHunkReviewed(func(*diff.File, int) bool) {}
-func (pane *stubPane) CursorHunk() (*diff.File, int, bool)        { return nil, 0, false }
 
 func (pane *stubPane) SetHunkHiding(func(*diff.File, int) bool, func(*diff.File, int) int) {}
 func (pane *stubPane) HiddenHunksChanged()                                                 {}
@@ -48,12 +47,7 @@ func (pane *stubPane) ThreadFadesChanged()                                      
 
 func (pane *stubPane) SetThreadExpanded(string, bool) {}
 
-func (pane *stubPane) SetThreads([]github.ReviewThread)      {}
-func (pane *stubPane) FocusedThreads() []github.ReviewThread { return nil }
-
-func (pane *stubPane) FocusedComment() (github.ReviewThread, int, bool) {
-	return github.ReviewThread{}, 0, false
-}
+func (pane *stubPane) SetThreads([]github.ReviewThread) {}
 
 func (pane *stubPane) SetFile(file github.ChangedFile) { pane.files = append(pane.files, file.Path) }
 

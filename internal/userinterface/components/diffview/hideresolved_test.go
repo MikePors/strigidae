@@ -37,8 +37,8 @@ func TestHideResolvedLeavesThreadOutButKeepsMarker(test *testing.T) {
 	if len(marked) != 3 || !strings.Contains(marked[0], markerQuiet) {
 		test.Errorf("the hidden thread's line should keep its hollow marker:\n%s", strings.Join(marked, "\n"))
 	}
-	if threads := model.ThreadsAtCursor(); len(threads) != 0 {
-		test.Errorf("ThreadsAtCursor on a line with only hidden threads = %v, want none", threads)
+	if threads := model.Context().Threads; len(threads) != 0 {
+		test.Errorf("Context threads on a line with only hidden threads = %v, want none", threads)
 	}
 	model.ToggleThread()
 	if _, chosen := model.open["resolved"]; chosen {

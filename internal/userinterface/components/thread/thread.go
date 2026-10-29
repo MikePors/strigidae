@@ -49,12 +49,11 @@ func Lines(environment Environment, thread github.ReviewThread, width int, optio
 	return lines
 }
 
-// CommentRows says which comment each line of Lines belongs to: its index in
-// thread.Comments, or -1 for the header line and the blank rows between comments. The arguments are those given to
-// Lines.
-func CommentRows(environment Environment, thread github.ReviewThread, width int, options Options) []int {
-	_, owners := build(environment, thread, width, options)
-	return owners
+// Layout is Lines together with the owner of each line, built in one pass: the lines and,
+// parallel to them, the index in thread.Comments each belongs to (-1 for the
+// header line and the blank rows between comments).
+func Layout(environment Environment, thread github.ReviewThread, width int, options Options) (lines []string, owners []int) {
+	return build(environment, thread, width, options)
 }
 
 // build returns the lines and, parallel to them, the comment each belongs to.
