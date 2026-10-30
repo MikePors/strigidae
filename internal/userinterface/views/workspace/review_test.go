@@ -161,7 +161,7 @@ func TestReviewChooserCancels(test *testing.T) {
 // key routing is covered too.
 func TestReviewChooserReleasesOnEsc(test *testing.T) {
 	harness := loaded(test, 100, 24)
-	model := userinterface.New(harness.view, theme.New(true), userinterface.Options{})
+	model := userinterface.New(harness.view, theme.New(true), userinterface.Options{ViewCommands: Commands()})
 	step := func(message tea.Msg) { _, _ = model.Update(message) }
 	step(tea.WindowSizeMsg{Width: 100, Height: 25})
 	step(tea.KeyPressMsg{Code: ':', Text: ":"})

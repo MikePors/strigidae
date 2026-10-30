@@ -255,7 +255,7 @@ func TestVisualOnHunkHeaderDoesNotStart(test *testing.T) {
 func TestVisualReleasesOnEscThroughRoot(test *testing.T) {
 	inliner := newInliner(test)
 	noTick := func(time.Duration, func(time.Time) tea.Msg) tea.Cmd { return nil }
-	model := userinterface.New(inliner.view, theme.New(true), userinterface.Options{Tick: noTick})
+	model := userinterface.New(inliner.view, theme.New(true), userinterface.Options{Tick: noTick, ViewCommands: Commands()})
 	step := func(message tea.Msg) { _, _ = model.Update(message) }
 	step(tea.WindowSizeMsg{Width: 110, Height: 41})
 	inliner.moveTo(github.SideRight, 10)
@@ -1811,7 +1811,7 @@ func TestAYesIsRefusedWhileAnotherWriteRuns(test *testing.T) {
 	inliner := newInliner(test)
 	inliner.view.writes = 1
 	ran := false
-	_, command := inliner.view.Update(commentAgreedMessage{origin: inliner.view.origin(), run: func() tea.Msg { ran = true; return nil }})
+	_, command := inliner.view.Update(commentAgreedMessage{origin: inliner.view.origin(), kind: writeComment, run: func() tea.Msg { ran = true; return nil }})
 	inliner.run(command)
 	if ran || inliner.view.writes != 1 {
 		test.Errorf("the write ran %v, writes = %d", ran, inliner.view.writes)

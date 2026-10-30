@@ -35,7 +35,9 @@ func TestActionsCoverEveryBinding(test *testing.T) {
 		test.Run(testCase.name, func(test *testing.T) {
 			named := map[uintptr]int{}
 			for _, action := range testCase.actions {
-				named[reflect.ValueOf(action.Binding).Pointer()]++
+				if action.Binding != nil { // a command without keys
+					named[reflect.ValueOf(action.Binding).Pointer()]++
+				}
 			}
 			value := reflect.ValueOf(testCase.bindings).Elem()
 			for i := range value.NumField() {

@@ -102,7 +102,7 @@ func TestFilePaneContractThroughRoot(test *testing.T) {
 	pane := &stubPane{}
 	view := New(client, testRepository, 7, WithTheme(theme.New(true)), WithFilePane(pane))
 	noTick := func(time.Duration, func(time.Time) tea.Msg) tea.Cmd { return nil }
-	model := userinterface.New(view, theme.New(true), userinterface.Options{Tick: noTick})
+	model := userinterface.New(view, theme.New(true), userinterface.Options{Tick: noTick, ViewCommands: Commands()})
 	testHarness := &harness{test: test, view: view, client: client}
 
 	step := func(message tea.Msg) { _, _ = model.Update(message) }
