@@ -6,11 +6,15 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"os/exec"
+	"runtime"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	cliBrowser "github.com/cli/browser"
 
+	"github.com/MikePors/strigidae/internal/clipboard"
+	"github.com/MikePors/strigidae/internal/environment"
 	"github.com/MikePors/strigidae/internal/logging"
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/theme/terminalpalette"
@@ -72,9 +76,25 @@ func askTerminal() (terminalpalette.Reply, error) {
 // or in one with no GitHub remote), else the repository's pull request list.
 func firstView(application application) userinterface.View {
 	if application.dashboard {
-		return dashboard.New(application.client, application.config.Tabs, application.theme, dashboard.Options{Notice: application.notice, Timeouts: application.timeouts()})
+		return dashboard.New(application.client, application.config.Tabs, application.theme, dashboard.Options{Notice: application.notice, Timeouts: application.timeouts(), Clipboard: systemClipboard()})
 	}
-	return pullrequestlist.New(application.client, application.repository, application.theme, pullrequestlist.Options{Timeouts: application.timeouts()})
+	return pullrequestlist.New(application.client, application.repository, application.theme, pullrequestlist.Options{Timeouts: application.timeouts(), Clipboard: systemClipboard()})
+}
+
+// systemClipboard is the real clipboard tool lookup.
+func systemClipboard() clipboard.Copier {
+	return clipboard.New(clipboardOptions(os.Environ()))
+}
+
+// clipboardOptions gives the tool the same scrubbed environment as every
+// program strig starts.
+func clipboardOptions(variables []string) clipboard.Options {
+	return clipboard.Options{
+		Platform:       runtime.GOOS,
+		GetEnvironment: os.Getenv,
+		LookPath:       exec.LookPath,
+		Environment:    environment.Scrub(variables),
+	}
 }
 
 // timeouts hands the config file's deadlines to the views; a field the file

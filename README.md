@@ -34,7 +34,7 @@ In a pull request, the Overview lists the head commit's checks (failing first) i
 
 ## Clipboard
 
-`:copy-filename` copies the selected file's path using the OSC 52 terminal escape, which also works over SSH. Terminals that ignore OSC 52 copy nothing. Inside tmux, add `set -g set-clipboard on` to `~/.tmux.conf`.
+`:copy-filename` copies the selected file's path in two ways. It sends the OSC 52 terminal escape, which also works over SSH, and it pipes the path to the first clipboard tool found on `PATH`: `pbcopy` on macOS; on Linux `wl-copy` (when `WAYLAND_DISPLAY` is set), then `xclip -selection clipboard`, then `xsel --clipboard --input`. With no tool, only OSC 52 is used; a terminal that ignores OSC 52 then copies nothing. Over SSH the remote machine's tool fills the remote clipboard, so OSC 52 is what reaches your local one: inside tmux add `set -g set-clipboard on` to `~/.tmux.conf`, and allow OSC 52 in your terminal.
 
 ## Configuration
 
