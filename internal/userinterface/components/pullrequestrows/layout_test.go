@@ -77,7 +77,7 @@ func TestBranchColumnsDropHeadFirstThenBase(test *testing.T) {
 
 	tests := []struct {
 		width                      int
-		wantHead, wantBase, author int
+		wantHead, wantBase, wantAuthor int
 	}{
 		{120, maximumHead, maximumBase, 8},
 		{70, 0, maximumBase, 8},
@@ -86,8 +86,8 @@ func TestBranchColumnsDropHeadFirstThenBase(test *testing.T) {
 	}
 	for _, testCase := range tests {
 		layout := table.Layout(pullRequests, testCase.width-MarkerColumns)
-		if layout.head != testCase.wantHead || layout.base != testCase.wantBase || layout.author != testCase.author {
-			test.Errorf("width %d: head %d base %d author %d, want %d %d %d", testCase.width, layout.head, layout.base, layout.author, testCase.wantHead, testCase.wantBase, testCase.author)
+		if layout.head != testCase.wantHead || layout.base != testCase.wantBase || layout.author != testCase.wantAuthor {
+			test.Errorf("width %d: head %d base %d author %d, want %d %d %d", testCase.width, layout.head, layout.base, layout.author, testCase.wantHead, testCase.wantBase, testCase.wantAuthor)
 		}
 	}
 	if layout := New(theme.Default(), time.Now, Options{}).Layout(pullRequests, 120); layout.head != 0 || layout.base != 0 {
@@ -97,7 +97,7 @@ func TestBranchColumnsDropHeadFirstThenBase(test *testing.T) {
 
 func TestBranchCellsAreTruncatedAndCleaned(test *testing.T) {
 	pullRequests := []github.PullRequest{{
-		Number: 1, Title: "T", HeadBranch: "feature/a-branch-name-that-is-far-too-long",
+		Number: 1, Title: "T", HeadBranch: "feature/\x07a-branch-name-that-is-far-too-long‮",
 		BaseBranch: "base\x1b]52;c;aGk=\x07\x1b[2J\u202e",
 	}}
 	table := New(theme.Default(), time.Now, Options{Branches: true})
@@ -107,6 +107,6 @@ func TestBranchCellsAreTruncatedAndCleaned(test *testing.T) {
 		test.Errorf("head not truncated to %d columns with an ellipsis: %q", maximumHead, row)
 	}
 	if strings.ContainsAny(row, "\x1b\x07\u202e") || !strings.Contains(row, "base") {
-		test.Errorf("hostile base branch not cleaned: %q", row)
+		test.Errorf("hostile branch not cleaned: %q", row)
 	}
 }
