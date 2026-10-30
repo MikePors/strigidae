@@ -44,6 +44,7 @@ internal/config/                        config file loading and validation
 internal/options/                       yes/no options shared by the config file and `:set` (non-UI)
 internal/editor/                        $EDITOR handoff for writing comments
 internal/environment/                   environment for programs strig starts (token variables removed)
+internal/beefis/                        strig as a beefis unit: `:ask` questions out, answers in (non-UI)
 internal/logging/                       log file setup
 internal/golden/                        golden-file test helper
 internal/userinterface/                 app shell, View interface, status bar, command line (see its CLAUDE.md)
@@ -63,7 +64,7 @@ cmd/strig ──► userinterface/views/* ──► userinterface/components ─
 ```
 
 - `internal/userinterface`, `userinterface/keys`, `userinterface/theme` and `userinterface/components` **never import `userinterface/views/*`**. Views may import other views, without cycles.
-- Non-UI packages (`github`, `diff`, `config`, `options`, `editor`, `environment`, `gitrepository`, `logging`, `version`) never import UI packages.
+- Non-UI packages (`github`, `beefis`, `diff`, `config`, `options`, `editor`, `environment`, `gitrepository`, `logging`, `version`) never import UI packages.
 - Only `cmd/strig` imports `internal/github/network`.
 
 ## Process-wide rules

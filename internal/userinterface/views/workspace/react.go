@@ -166,7 +166,7 @@ func (view *View) applyReaction(message reactionToggledMessage) {
 		reviewComment := &threads[i].Comments[index]
 		reviewComment.Reactions = github.WithViewerReaction(reviewComment.Reactions, message.content, !message.removed)
 		view.threads = threads
-		view.filePane.SetThreads(view.threads)
+		view.showThreads()
 		view.overview.invalidate()
 		view.layout()
 		return

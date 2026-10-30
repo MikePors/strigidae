@@ -51,6 +51,8 @@ type Options struct {
 	Open func(url string) error
 	// Timeouts are the deadlines of the GitHub calls; zero fields select the defaults.
 	Timeouts userinterface.Timeouts
+	// Questions, if set, lets the workspaces it opens ask about lines (:ask).
+	Questions *workspace.Questions
 	// Clipboard is the system clipboard tool the workspaces copy with besides
 	// OSC 52; nil means OSC 52 only.
 	Clipboard clipboard.Copier
@@ -90,6 +92,7 @@ type View struct {
 	// hunkMarks keeps the hunks marked reviewed in every workspace opened
 	// from here, so they survive closing and reopening a pull request.
 	hunkMarks *workspace.HunkMarks
+	questions *workspace.Questions
 	bindings  bindings
 
 	tabs          []tab
@@ -161,6 +164,7 @@ func New(client github.Client, repository github.Repository, configured []config
 		open:      options.Open,
 		timeouts:  options.Timeouts,
 		clipboard: options.Clipboard,
+		questions: options.Questions,
 		hunkMarks: workspace.NewHunkMarks(),
 		tabs:      tabs,
 	}
@@ -430,6 +434,7 @@ func (view *View) openSelected() tea.Cmd {
 		workspace.WithHunkMarks(view.hunkMarks),
 		workspace.WithWrap(view.options.Wrap()),
 		workspace.WithTimeouts(view.timeouts),
+		workspace.WithQuestions(view.questions),
 		workspace.WithClipboard(view.clipboard),
 	))
 }
