@@ -6,6 +6,7 @@ import (
 
 	"github.com/MikePors/strigidae/internal/diff"
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/components/diffview"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
@@ -124,4 +125,15 @@ type FilePane interface {
 	SetThreadFade(fade func(identifier string) (step int, fading bool))
 	// ThreadFadesChanged says a thread stopped fading.
 	ThreadFadesChanged()
+	// StartSearch begins a "/" search in the pane; TakeSearchRequest then
+	// reports true once, so the workspace opens the prompt. SearchPrompt takes
+	// the prompt's results and SearchStep serves n / N. ClearSearch drops the
+	// search. SetHighlightSearch is the hlsearch option. Panes without
+	// searchable rows may do nothing.
+	StartSearch() tea.Cmd
+	TakeSearchRequest() bool
+	SearchPrompt(result userinterface.PromptResultMessage) tea.Cmd
+	SearchStep(message keys.Message, forward, wrapScan bool) tea.Cmd
+	ClearSearch()
+	SetHighlightSearch(on bool)
 }

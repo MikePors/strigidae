@@ -17,16 +17,15 @@ const (
 
 // PromptRequest implements userinterface.Prompter.
 func (view *View) PromptRequest() (prefix string, ok bool) {
-	return search.Prefix, view.search.TakeRequest()
+	return search.Prefix, view.search.TakeRequest() || view.filePane.TakeSearchRequest()
 }
 
-// searchHelp lists the search keys, which act only with the Files pane
-// focused, under help text that says so.
+// searchHelp lists the search keys, which act on the focused pane.
 func (view *View) searchHelp() []key.Binding {
 	searchKey, next, previous := view.globalKeys.Search, view.globalKeys.NextMatch, view.globalKeys.PreviousMatch
-	searchKey.SetHelp("/", "search the Files pane")
-	next.SetHelp("n", "next Files pane match")
-	previous.SetHelp("N", "previous Files pane match")
+	searchKey.SetHelp("/", "search the focused pane (Files or diff)")
+	next.SetHelp("n", "next match in the focused pane")
+	previous.SetHelp("N", "previous match in the focused pane")
 	return []key.Binding{searchKey, next, previous}
 }
 

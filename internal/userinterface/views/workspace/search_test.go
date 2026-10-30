@@ -62,13 +62,13 @@ func TestSubmitJumpsToTheFirstMatchAtOrAfterTheOriginInTheFilesPane(test *testin
 	}
 }
 
-func TestHelpSaysTheSearchKeysSearchTheFilesPane(test *testing.T) {
+func TestHelpSaysTheSearchKeysActOnTheFocusedPane(test *testing.T) {
 	var descriptions []string
 	for _, group := range loaded(test, 100, 30).view.searchHelp() {
 		descriptions = append(descriptions, group.Help().Desc)
 	}
 	for _, description := range descriptions {
-		if !strings.Contains(description, "Files pane") {
+		if !strings.Contains(description, "focused pane") {
 			test.Errorf("help %q does not say what is searched", description)
 		}
 	}

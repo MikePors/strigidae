@@ -68,7 +68,17 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 		return view.invoke(chosen, invocation{message: message})
 	}
 	switch {
+	case view.diffSearchFocused() && key.Matches(message, view.globalKeys.Search):
+		view.searchPane = paneRight
+		return view.filePane.StartSearch()
+	case view.diffSearchFocused() && key.Matches(message, view.globalKeys.NextMatch):
+		return view.filePane.SearchStep(message, true, view.options.WrapScan())
+	case view.diffSearchFocused() && key.Matches(message, view.globalKeys.PreviousMatch):
+		return view.filePane.SearchStep(message, false, view.options.WrapScan())
+	case view.diffSearchFocused() && key.Matches(message, view.globalKeys.Cancel):
+		view.filePane.ClearSearch()
 	case view.focus == paneFiles && key.Matches(message, view.globalKeys.Search):
+		view.searchPane = paneFiles
 		return view.search.Start(view.searchList())
 	case view.focus == paneFiles && key.Matches(message, view.globalKeys.NextMatch):
 		return view.search.Step(message, true, view.searchList(), view.options.WrapScan())
@@ -91,6 +101,10 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 	view.layout()
 	return nil
 }
+
+// diffSearchFocused reports whether the search keys act on the diff pane: it
+// has focus and a file is shown.
+func (view *View) diffSearchFocused() bool { return view.focus == paneRight && view.selection() > 0 }
 
 // stepFile moves to the next or previous file. It never lands on Overview.
 func (view *View) stepFile(delta int) {
