@@ -134,12 +134,9 @@ func (view *View) reply() tea.Cmd {
 	return view.compose(target{kind: kindReply, threadIdentifier: thread.Identifier, label: threadLocation(thread)})
 }
 
-// comment starts a top-level comment from the Overview, or an inline one on a
-// diff line.
-func (view *View) comment() tea.Cmd {
-	if view.selection() != 0 {
-		return view.inlineComment()
-	}
+// overviewComment starts a top-level comment on the pull request, whatever is
+// selected or focused.
+func (view *View) overviewComment() tea.Cmd {
 	if notice := view.guardState().admit(writeOverviewComment); notice != nil {
 		return notice
 	}

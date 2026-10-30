@@ -62,7 +62,8 @@ Reserved globally:
 | `/`, `n` / `N` | search the list (Files pane, PR lists), next / previous match; `/` opens the search prompt in the bottom line through `userinterface.Prompter` (the shell opens it in the same update as the key; the view hears `PromptResultMessage` on every change, paste included, on `enter` and on `esc`; currently every row stays and matching rows are marked) |
 | `o` | open the current item in the browser |
 | `R` | refresh |
-| `c` | new comment (top-level on the Overview, or on the cursor line / visual selection in a diff) |
+| `c` | new comment on the cursor line / visual selection in a diff (lines only; on the Overview it says `move onto a diff line to comment on it`) |
+| `C` | new top-level comment on the pull request, from anywhere in the workspace |
 | `r` | reply to the comment thread at the cursor (diff pane on screen) |
 | `x` | resolve the comment thread at the cursor, or unresolve it if it is resolved (diff pane on screen; asks `y/N`) |
 | `:` | command line |
@@ -100,7 +101,7 @@ Reserved prefixes:
 | `g …` | goto: `g g` top, `g t` / `g T` next / previous tab |
 | `z …` | folds (expand/collapse threads, files), horizontal scrolling (`z h` / `z l` a few columns, `z H` / `z L` half a screen, as in vim) and screen positioning: `z t` / `z z` / `z b` scroll the cursor line to the top / middle / bottom of the view without moving the cursor (lists with a cursor; they take no count, and the Overview doesn't have them yet) |
 
-**Targets.** Thread and comment actions (`r`, `x`, `e`, `D`, `:react`, `:resolve`, `:unresolve`, `:edit-comment`, `:delete-comment`) work on the diff cursor, as do `c` on a line, `V` and `m`. They run when the diff pane is on screen, focused or not; in a narrow terminal showing the Files pane they say `focus the diff to <action>`. The workspace resolves their target in one place (`views/workspace/target.go`), with one notice per level. A comment-level target is a `commentTarget` (`views/workspace/commenttarget.go`: kind, identifier, author, reactions, the viewer's rights, pending, the review thread if any), so it does not depend on the pane that produced it. Still outside the resolver: `v` and `:copy-filename` (file level) and `c` on the Overview (pull request level).
+**Targets.** Thread and comment actions (`r`, `x`, `e`, `D`, `:react`, `:resolve`, `:unresolve`, `:edit-comment`, `:delete-comment`) work on the diff cursor, as do `c`, `V` and `m`. They run when the diff pane is on screen, focused or not; in a narrow terminal showing the Files pane they say `focus the diff to <action>`. The workspace resolves their target in one place (`views/workspace/target.go`), with one notice per level. A comment-level target is a `commentTarget` (`views/workspace/commenttarget.go`: kind, identifier, author, reactions, the viewer's rights, pending, the review thread if any), so it does not depend on the pane that produced it. Still outside the resolver: `v` and `:copy-filename` (file level) and `C` (pull request level).
 
 Adding a binding or command: make sure it doesn't collide with the tables above or another binding active in the same view, add it with help text and an action name, and **list every new or changed binding in the PR description** so the maintainer can approve it. Any binding an issue marks "TBD" is the maintainer's call; propose one in the PR and ask.
 

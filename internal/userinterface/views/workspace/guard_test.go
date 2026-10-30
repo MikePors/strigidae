@@ -97,7 +97,7 @@ func press(sequence string) func(inliner *inliner) {
 func guardActions() []guardAction {
 	return []guardAction{
 		{"c on a diff line", writeComment, (*inliner).onDiffLine, press("c")},
-		{"c on the Overview", writeOverviewComment, func(inliner *inliner) { inliner.press("h", "g g") }, press("c")},
+		{"C on the Overview", writeOverviewComment, func(inliner *inliner) { inliner.press("h", "g g") }, press("C")},
 		{"V", writeComment, (*inliner).onDiffLine, press("V")},
 		{"r", writeComment, (*inliner).onOwnComment, press("r")},
 		{"e", writeComment, (*inliner).onOwnComment, press("e")},
@@ -279,7 +279,7 @@ func readmissions() []readmission {
 		{"yes to a top-level comment", writeComment, func(inliner *inliner) tea.Cmd {
 			inliner.press("h", "g g")
 			inliner.messages = nil
-			inliner.press("c")
+			inliner.press("C")
 			return askedYes(inliner)
 		}},
 		{"yes to a reply", writeComment, func(inliner *inliner) tea.Cmd {
@@ -430,7 +430,7 @@ func TestGuardWithoutADiff(test *testing.T) {
 			inliner := guardedInliner(test)
 			inliner.press("h", "g g")
 			state.removeDiff(inliner)
-			inliner.press("c")
+			inliner.press("C")
 			if len(inliner.openedOn) != 1 {
 				test.Fatalf("editor opened %d times, notices %v", len(inliner.openedOn), inliner.infoMessages())
 			}
