@@ -299,6 +299,9 @@ func (view *View) keyEntry(message keys.Message) (actionEntry, bool) {
 
 // commandEntry returns the entry that has the command, if any.
 func (view *View) commandEntry(name string) (actionEntry, bool) {
+	if name == "" { // most entries have no command
+		return actionEntry{}, false
+	}
 	for _, candidate := range view.bind.entries() {
 		if candidate.Command == name {
 			return candidate, true

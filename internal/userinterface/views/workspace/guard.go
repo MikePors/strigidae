@@ -63,6 +63,17 @@ var guardTable = map[writeKind]guardRule{
 	writeDiscard:         {busy: allBusy},
 }
 
+// ruleFor is the rule of a kind. writeNone means "no guard" only to the
+// dispatcher, which skips the guard for such entries; asked directly (a
+// message that forgot its kind) it is the strictest rule, so the answer is a
+// refusal and never a silent admission.
+func ruleFor(kind writeKind) guardRule {
+	if kind == writeNone {
+		return guardRule{needsDiff: true, busy: allBusy}
+	}
+	return guardTable[kind]
+}
+
 // guardState is what the guard looks at, at one moment.
 type guardState struct {
 	loaded           bool // the pull request detail has loaded
@@ -80,7 +91,7 @@ func (state guardState) ready(kind writeKind) tea.Cmd {
 	switch {
 	case !state.loaded:
 		return userinterface.Info("pull request not loaded yet")
-	case guardTable[kind].needsDiff && !state.diffReady:
+	case ruleFor(kind).needsDiff && !state.diffReady:
 		return userinterface.Info("diff not loaded")
 	}
 	return nil
@@ -89,7 +100,7 @@ func (state guardState) ready(kind writeKind) tea.Cmd {
 // busy returns the notice to show when a busy state blocks the kind of write,
 // or nil.
 func (state guardState) busy(kind writeKind) tea.Cmd {
-	blocks := guardTable[kind].busy
+	blocks := ruleFor(kind).busy
 	switch {
 	case blocks.submittingReview && state.submittingReview:
 		return userinterface.Info("a review is being submitted")

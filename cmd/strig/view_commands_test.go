@@ -3,6 +3,8 @@ package main
 import (
 	"slices"
 	"testing"
+
+	"github.com/MikePors/strigidae/internal/userinterface"
 )
 
 // The shell is told the commands of every view, so ":merge" on the dashboard
@@ -16,7 +18,7 @@ func TestViewCommandsAreCollectedFromTheViews(test *testing.T) {
 	}
 	// The shell's own commands win, so a view command with the same name
 	// could never be reached.
-	for _, name := range []string{"q", "quit", "qa", "qall", "quitall", "set", "theme"} {
+	for _, name := range userinterface.CommandNames() {
 		if slices.Contains(got, name) {
 			test.Errorf("view command %q is also a shell command", name)
 		}

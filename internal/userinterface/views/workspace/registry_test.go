@@ -2,12 +2,83 @@ package workspace
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
 )
+
+// The argument check comes before the guard: a bad method is reported even
+// before the pull request has loaded.
+func TestMergeArgumentsAreCheckedBeforeTheGuard(test *testing.T) {
+	view := newHarness(test, 100, 24).view // Init not run: nothing loaded
+	command, handled := view.Command("merge", "foo")
+	if !handled {
+		test.Fatal("merge not handled")
+	}
+	got := messages(command)
+	if len(got) != 1 {
+		test.Fatalf("messages = %v", got)
+	}
+	failure, ok := got[0].(userinterface.ErrorMessage)
+	if !ok || !strings.Contains(failure.Err.Error(), "unknown merge method") {
+		test.Errorf("message = %#v, want the merge method error", got[0])
+	}
+}
+
+// A kind that was forgotten is refused, never admitted.
+func TestForgottenWriteKindIsRefused(test *testing.T) {
+	states := []guardState{
+		{loaded: true}, // the strictest kind needs the diff too
+		{diffReady: true},
+		{},
+		{loaded: true, diffReady: true, commentSaving: true},
+	}
+	for _, state := range states {
+		if state.admit(writeNone) == nil {
+			test.Errorf("writeNone admitted in %+v", state)
+		}
+	}
+	for _, busy := range []guardState{{submittingReview: true}, {mergeInProgress: true}, {commentSaving: true}} {
+		if busy.busy(writeNone) == nil {
+			test.Errorf("writeNone not blocked in %+v", busy)
+		}
+	}
+}
+
+func TestCommandEntryOfNothingIsNothing(test *testing.T) {
+	view := newHarness(test, 100, 24).view
+	if found, ok := view.commandEntry(""); ok {
+		test.Errorf("commandEntry(\"\") = %q", found.Name)
+	}
+}
+
+// A rule can refuse a comment the viewer may otherwise use.
+func TestResolveTargetAppliesTheRulesUnsupportedRefusal(test *testing.T) {
+	inliner := newInliner(test)
+	inliner.seedTargets()
+	inliner.toLineContaining("first mine")
+	rule := &commentRule{
+		mine:        func(commentTarget) bool { return true },
+		allowed:     func(commentTarget) bool { return true },
+		unsupported: func(commentTarget) tea.Cmd { return userinterface.Info("unsupported here") },
+	}
+	_, command := inliner.view.resolveTarget(request{level: levelComment, words: "edit it", rule: rule})
+	if command == nil {
+		test.Fatal("the unsupported refusal was not applied")
+	}
+	if got, ok := command().(userinterface.InfoMessage); !ok || got.Text != "unsupported here" {
+		test.Errorf("refusal = %#v", command())
+	}
+	rule.unsupported = func(commentTarget) tea.Cmd { return nil }
+	if _, command := inliner.view.resolveTarget(request{level: levelComment, words: "edit it", rule: rule}); command != nil {
+		test.Error("a rule that supports the comment refused it")
+	}
+}
 
 // A key and its command reach the same entry.
 func TestKeyAndCommandReachTheSameEntry(test *testing.T) {

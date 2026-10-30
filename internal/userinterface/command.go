@@ -28,6 +28,16 @@ func commandTable() []commandDefinition {
 	}
 }
 
+// CommandNames lists the commands the shell itself handles, so the wiring can
+// check that no view command shadows one.
+func CommandNames() []string {
+	var names []string
+	for _, definition := range commandTable() {
+		names = append(names, definition.names...)
+	}
+	return names
+}
+
 // parseCommand turns a command line (without the ":") into a command. An
 // empty line does nothing. The static table is consulted first; then top, if
 // it is a Commander and the name is in viewCommands (the names every view
