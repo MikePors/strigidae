@@ -11,9 +11,14 @@ import (
 
 func copyCommand(test *testing.T, view *View) []tea.Msg {
 	test.Helper()
-	command, ok := view.Command("copy-filename", "")
+	return commandMessages(test, view, "copy-filename")
+}
+
+func commandMessages(test *testing.T, view *View, name string) []tea.Msg {
+	test.Helper()
+	command, ok := view.Command(name, "")
 	if !ok {
-		test.Fatal("copy-filename not handled")
+		test.Fatalf("%s not handled", name)
 	}
 	return messages(command)
 }
@@ -56,6 +61,66 @@ func TestCopyFilenameOverview(test *testing.T) {
 	}
 	if errorMessage, ok := messages[0].(userinterface.ErrorMessage); !ok || errorMessage.Err.Error() != "no file to copy" {
 		test.Errorf("msg = %#v", messages[0])
+	}
+}
+
+func TestCopyURL(test *testing.T) {
+	const want = "https://example.test/acme/widgets/pull/7"
+	for _, pressed := range [][]string{nil, {"j"}, {"j", "l"}} {
+		harness := loaded(test, 120, 30)
+		copier := &fakeCopier{}
+		WithClipboard(copier)(harness.view)
+		harness.press(pressed...)
+		messages := commandMessages(test, harness.view, "copy-url")
+		if len(messages) == 0 || messages[0] != tea.SetClipboard(want)() {
+			test.Fatalf("keys %v: msgs = %#v, want clipboard %q first", pressed, messages, want)
+		}
+		var notice string
+		for _, message := range messages {
+			if info, ok := message.(userinterface.InfoMessage); ok {
+				notice = info.Text
+			}
+		}
+		if notice != "Copied "+want {
+			test.Errorf("keys %v: status = %q", pressed, notice)
+		}
+		if len(copier.texts) != 1 || copier.texts[0] != want {
+			test.Errorf("keys %v: tool received %q", pressed, copier.texts)
+		}
+	}
+}
+
+func TestCopyURLNotLoaded(test *testing.T) {
+	copier := &fakeCopier{}
+	view := newHarness(test, 100, 24).view
+	WithClipboard(copier)(view)
+	messages := commandMessages(test, view, "copy-url")
+	if len(messages) != 1 {
+		test.Fatalf("msgs = %#v", messages)
+	}
+	if errorMessage, ok := messages[0].(userinterface.ErrorMessage); !ok || errorMessage.Err.Error() != "no pull request URL to copy" {
+		test.Errorf("msg = %#v", messages[0])
+	}
+	if len(copier.texts) != 0 {
+		test.Errorf("tool received %q", copier.texts)
+	}
+}
+
+func TestCopyURLRefusesControlCharacters(test *testing.T) {
+	harness := loaded(test, 120, 30)
+	copier := &fakeCopier{}
+	WithClipboard(copier)(harness.view)
+	harness.view.detail.URL = "https://x/\x1b]52;c;x\x07y"
+	messages := commandMessages(test, harness.view, "copy-url")
+	if len(messages) != 1 {
+		test.Fatalf("msgs = %#v", messages)
+	}
+	errorMessage, ok := messages[0].(userinterface.ErrorMessage)
+	if !ok || !strings.Contains(errorMessage.Err.Error(), "control characters") || strings.ContainsAny(errorMessage.Err.Error(), "\x1b\x07") {
+		test.Errorf("msg = %#v", messages[0])
+	}
+	if len(copier.texts) != 0 {
+		test.Errorf("tool received %q", copier.texts)
 	}
 }
 

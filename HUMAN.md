@@ -4,8 +4,8 @@ Checks only the maintainer can do, such as live verification against real GitHub
 
 ## Live checks
 
-- [ ] **`:copy-filename` reaches the system clipboard** (#172). Only the fake copier is tested.
-  1. On macOS, inside tmux with no `set-clipboard` setting in your tmux config, open a pull request, select a file and run `:copy-filename`, then paste elsewhere. Report whether it pasted.
+- [ ] **`:copy-filename` and `:copy-url` reach the system clipboard** (#172, #171). Only the fake copier is tested.
+  1. On macOS, inside tmux with no `set-clipboard` setting in your tmux config, open a pull request, select a file and run `:copy-filename` and `:copy-url`, then paste elsewhere. Report whether it pasted.
   2. On Linux (Wayland with `wl-copy`, and X11 with `xclip` or `xsel` if you can), do the same inside and outside tmux. Report which tool was used and whether it pasted.
   3. Check nothing was printed on the screen, and `strig --log-path` shows no clipboard error.
 
