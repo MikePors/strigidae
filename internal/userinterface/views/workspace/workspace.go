@@ -120,17 +120,20 @@ type View struct {
 	hunkMarks        *HunkMarks       // hunks marked reviewed; shared with other workspaces by WithHunkMarks
 	hunkFingerprints fingerprintCache // fingerprints of the last file asked about
 
-	window   scroll.Window  // Files pane: over rows
-	rows     []int          // the entry each Files pane row shows; see hideviewed.go
-	current  int            // the entry the right pane shows
-	fades    fader          // viewed files about to leave the Files pane
-	search   search.State   // over the same rows; Overview never matches
-	options  options.Values // the `:set` options, sent by the root
-	focus    pane
-	overview overview
-	picker   *picker.Model // non-nil while the file picker is open
-	review   reviewFlow    // submitting a review (see review.go)
-	merge    mergeFlow     // merging the pull request (see merge.go)
+	window  scroll.Window  // Files pane: over rows
+	rows    []int          // the entry each Files pane row shows; see hideviewed.go
+	current int            // the entry the right pane shows
+	fades   fader          // viewed files about to leave the Files pane
+	search  search.State   // over the same rows; Overview never matches
+	options options.Values // the `:set` options, sent by the root
+	focus   pane
+	// searchPane is the pane the search being typed belongs to; the prompt's
+	// results go to it.
+	searchPane pane
+	overview   overview
+	picker     *picker.Model // non-nil while the file picker is open
+	review     reviewFlow    // submitting a review (see review.go)
+	merge      mergeFlow     // merging the pull request (see merge.go)
 	// pickerItems are the paths the picker was built from; a choice is
 	// resolved by path because a refresh may replace the file list meanwhile.
 	pickerItems []string
@@ -186,6 +189,7 @@ func New(client github.Client, repository github.Repository, number int, options
 		view.filePane = newDiffPane(view.theme, func() time.Time { return view.now() }, view.wrap)
 	}
 	view.filePane.SetTheme(view.theme)
+	view.filePane.SetHighlightSearch(view.options.HighlightSearch())
 	view.filePane.SetHunkReviewed(view.hunkReviewed)
 	view.filePane.SetHunkHiding(view.hunkHidden, view.hunkFade)
 	view.filePane.SetThreadFade(view.threadFade)
@@ -252,6 +256,7 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		view.filePane.SetHideResolved(message.Values.HideResolved())
 		view.filePane.SetSkipResolved(message.Values.SkipResolved())
 		view.filePane.SetRelativeNumber(message.Values.RelativeNumber())
+		view.filePane.SetHighlightSearch(message.Values.HighlightSearch())
 		view.optionsChanged()
 	case userinterface.ThemeMessage:
 		view.theme = message.Theme
@@ -350,6 +355,9 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		}
 		return view, view.commentRead(message)
 	case userinterface.PromptResultMessage:
+		if view.searchPane == paneRight {
+			return view, view.filePane.SearchPrompt(message)
+		}
 		return view, view.search.Prompt(message, view.searchList())
 	case keys.Message:
 		return view, view.handleKey(message)

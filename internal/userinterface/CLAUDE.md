@@ -59,7 +59,7 @@ Reserved globally:
 | `enter` | open / select |
 | `esc` | cancel or clear state inside the view (filter, selection, pending keys, popups). **Never navigates.** |
 | `?` | help overlay |
-| `/`, `n` / `N` | search the list (Files pane, PR lists), next / previous match; `/` opens the search prompt in the bottom line through `userinterface.Prompter` (the shell opens it in the same update as the key; the view hears `PromptResultMessage` on every change, paste included, on `enter` and on `esc`; currently every row stays and matching rows are marked) |
+| `/`, `n` / `N` | search the list (Files pane, PR lists) or, in a pull request, the focused pane: the Files pane or the shown file's diff rows and drawn comment-thread rows (each pane has its own query; another file clears the diff's), next / previous match; `/` opens the search prompt in the bottom line through `userinterface.Prompter` (the shell opens it in the same update as the key; the view hears `PromptResultMessage` on every change, paste included, on `enter` and on `esc`; currently every row stays and matching rows are marked) |
 | `o` | open the current item in the browser |
 | `R` | refresh |
 | `c` | new comment on the cursor line / visual selection in a diff (lines only; on the Overview it says `move onto a diff line to comment on it`) |

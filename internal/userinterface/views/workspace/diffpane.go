@@ -229,6 +229,18 @@ func (pane *diffPane) moveThread(message keys.Message, forward bool) tea.Cmd {
 	return nil
 }
 
+func (pane *diffPane) StartSearch() tea.Cmd    { return pane.diffView.StartSearch() }
+func (pane *diffPane) TakeSearchRequest() bool { return pane.diffView.TakeSearchRequest() }
+func (pane *diffPane) SearchPrompt(result userinterface.PromptResultMessage) tea.Cmd {
+	return pane.diffView.SearchPrompt(result)
+}
+
+func (pane *diffPane) SearchStep(message keys.Message, forward, wrapScan bool) tea.Cmd {
+	return pane.diffView.SearchStep(message, forward, wrapScan)
+}
+func (pane *diffPane) ClearSearch()               { pane.diffView.ClearSearch() }
+func (pane *diffPane) SetHighlightSearch(on bool) { pane.diffView.SetHighlightSearch(on) }
+
 func (pane *diffPane) Context() diffview.Context { return pane.diffView.Context() }
 
 func (pane *diffPane) VisualStart() bool          { return pane.diffView.VisualStart() }

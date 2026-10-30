@@ -34,6 +34,13 @@ func (pane *stubPane) VisualEnd()                {}
 
 func (pane *stubPane) SetDiff(DiffState) {}
 
+func (pane *stubPane) StartSearch() tea.Cmd                                   { return nil }
+func (pane *stubPane) TakeSearchRequest() bool                                { return false }
+func (pane *stubPane) SearchPrompt(userinterface.PromptResultMessage) tea.Cmd { return nil }
+func (pane *stubPane) SearchStep(keys.Message, bool, bool) tea.Cmd            { return nil }
+func (pane *stubPane) ClearSearch()                                           {}
+func (pane *stubPane) SetHighlightSearch(bool)                                {}
+
 func (pane *stubPane) SetWrap(bool)                               {}
 func (pane *stubPane) SetHideResolved(bool)                       {}
 func (pane *stubPane) SetSkipResolved(bool)                       {}
