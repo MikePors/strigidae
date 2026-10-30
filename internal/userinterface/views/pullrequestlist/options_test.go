@@ -40,7 +40,7 @@ func searchedView(test *testing.T) *View {
 
 func TestHighlightSearchOptionHidesAndRestoresTheMarks(test *testing.T) {
 	view := searchedView(test)
-	shown := func() bool { return strings.Contains(ansi.Strip(view.Render(80, 12)), search.Glyph) }
+	shown := func() bool { return strings.Contains(ansi.Strip(view.Render(80, 13)), search.Glyph) }
 	if !shown() {
 		test.Fatal("marks are not drawn by default")
 	}
@@ -49,7 +49,7 @@ func TestHighlightSearchOptionHidesAndRestoresTheMarks(test *testing.T) {
 		test.Error("nohlsearch still draws the marks")
 	}
 	press(view, "n")
-	if got := view.window.Cursor(); got != 3 {
+	if got := view.current().window.Cursor(); got != 3 {
 		test.Errorf("n with nohlsearch: cursor = %d, want 3", got)
 	}
 	view.Update(userinterface.OptionsMessage{Values: options.Values{options.HighlightSearch: true}})
@@ -63,7 +63,7 @@ func TestWrapScanOptionDecidesWhetherNAndNWrap(test *testing.T) {
 	view.Update(userinterface.OptionsMessage{Values: options.Values{options.WrapScan: false}})
 
 	press(view, "N")
-	if got := view.window.Cursor(); got != 1 {
+	if got := view.current().window.Cursor(); got != 1 {
 		test.Errorf("N on the first match moved to %d", got)
 	}
 	if got := infoTexts(press(view, "N")); len(got) != 1 || got[0] != "no more matches above" {
@@ -71,19 +71,19 @@ func TestWrapScanOptionDecidesWhetherNAndNWrap(test *testing.T) {
 	}
 	press(view, "n")
 	press(view, "n")
-	if got := view.window.Cursor(); got != 5 {
+	if got := view.current().window.Cursor(); got != 5 {
 		test.Fatalf("cursor = %d, want 5", got)
 	}
 	if got := infoTexts(press(view, "n")); len(got) != 1 || got[0] != "no more matches below" {
 		test.Errorf("n on the last match said %q", got)
 	}
-	if got := view.window.Cursor(); got != 5 {
+	if got := view.current().window.Cursor(); got != 5 {
 		test.Errorf("n on the last match moved to %d", got)
 	}
 
 	view.Update(userinterface.OptionsMessage{Values: options.Values{options.WrapScan: true}})
 	press(view, "n")
-	if got := view.window.Cursor(); got != 1 {
+	if got := view.current().window.Cursor(); got != 1 {
 		test.Errorf("n with wrapscan: cursor = %d, want it wrapped to 1", got)
 	}
 }

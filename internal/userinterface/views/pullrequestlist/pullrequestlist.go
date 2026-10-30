@@ -11,6 +11,7 @@ import (
 	"github.com/cli/go-gh/v2/pkg/browser"
 
 	"github.com/MikePors/strigidae/internal/clipboard"
+	"github.com/MikePors/strigidae/internal/config"
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/options"
 	"github.com/MikePors/strigidae/internal/userinterface"
@@ -28,11 +29,12 @@ const (
 	loadMoreMargin = 5
 )
 
-// pullRequestsLoadedMessage is the result of a ListPullRequests call. repo and seq identify
-// the request: every view receives every command result, and a refresh
-// supersedes any page still in flight.
+// pullRequestsLoadedMessage is the result of a ListPullRequests or search call.
+// The repository, tab and sequence identify the request: every view receives
+// every command result, and a refresh supersedes any page still in flight.
 type pullRequestsLoadedMessage struct {
 	repository github.Repository
+	tab        int
 	sequence   int
 	// more is true for a next-page fetch that is appended to the list, false
 	// for a first-page fetch that replaces it.
@@ -54,6 +56,27 @@ type Options struct {
 	Clipboard clipboard.Copier
 }
 
+// tab is one list of the repository's open pull requests with its own rows,
+// cursor and search. The first tab is every author's; the others hold one
+// author's pull requests, found by a search query.
+type tab struct {
+	name      string
+	query     string // empty for the repository's own list
+	author    string // who the tab is about, empty for the first tab
+	requested bool   // the rows were asked for at least once
+
+	pullRequests []github.PullRequest
+	next         string // cursor of the next page, empty when all are loaded
+	sequence     int    // latest request; older results are ignored
+	loading      bool   // a first-page (re)load is in flight
+	loadingMore  bool   // a next-page load is in flight
+	err          error  // the last failed load, cleared by the next success
+	moreFailed   bool   // the last next-page load failed; no auto-retry until R
+
+	window scroll.Window // cursor and top row over pullRequests
+	search search.State
+}
+
 // View lists one repository's open pull requests.
 type View struct {
 	client     github.Client
@@ -67,19 +90,36 @@ type View struct {
 	// hunkMarks keeps the hunks marked reviewed in every workspace opened
 	// from here, so they survive closing and reopening a pull request.
 	hunkMarks *workspace.HunkMarks
+	bindings  bindings
 
-	pullRequests []github.PullRequest
-	next         string // cursor of the next page, empty when all are loaded
-	sequence     int    // latest request; older results are ignored
-	loading      bool   // a first-page (re)load is in flight
-	loadingMore  bool   // a next-page load is in flight
-	err          error  // the last failed load, cleared by the next success
-	moreFailed   bool   // the last next-page load failed; no auto-retry until R
-
-	window        scroll.Window // cursor and top row over prs
-	search        search.State
+	tabs          []tab
+	active        int
 	options       options.Values // the `:set` options, sent by the root
 	width, height int
+}
+
+type bindings struct {
+	nextTab, previousTab key.Binding
+}
+
+// actions names the list's own bindings, in the namespace of the global ones
+// (keys.Global.Actions).
+func (listBindings *bindings) actions() []keys.Action {
+	return []keys.Action{
+		{Name: "next-tab", Binding: &listBindings.nextTab},
+		{Name: "previous-tab", Binding: &listBindings.previousTab},
+	}
+}
+
+// ActionNames lists the action names of the pull request list, for the check
+// that views don't reuse each other's names by accident.
+func ActionNames() []string {
+	listBindings := View{}.bindings
+	var names []string
+	for _, action := range listBindings.actions() {
+		names = append(names, action.Name)
+	}
+	return names
 }
 
 var (
@@ -89,27 +129,52 @@ var (
 )
 
 // New returns the PR list for repository. It starts loading when pushed (Init).
-func New(client github.Client, repository github.Repository, activeTheme theme.Theme, options Options) *View {
+// The tabs are "All", then one per configured tab showing that tab's user's
+// pull requests in this repository; the tabs' sections are not used here.
+func New(client github.Client, repository github.Repository, configured []config.Tab, activeTheme theme.Theme, options Options) *View {
 	if options.Now == nil {
 		options.Now = time.Now
 	}
 	if options.Open == nil {
 		options.Open = openInBrowser
 	}
+	tabs := []tab{{name: "All"}}
+	for _, current := range configured {
+		// The config only allows a GitHub login or @me, so Clean changes nothing
+		// there; it guards tabs built some other way.
+		author := terminaltext.Clean(current.User)
+		if author == "" {
+			author = config.Me
+		}
+		tabs = append(tabs, tab{name: current.Name, author: author, query: authorQuery(repository, author)})
+	}
 	return &View{
 		client:     client,
 		repository: repository,
 		theme:      activeTheme,
 		globalKeys: keys.DefaultGlobal(),
-		now:        options.Now,
-		open:       options.Open,
-		timeouts:   options.Timeouts,
-		clipboard:  options.Clipboard,
-		sequence:   1,
-		loading:    true,
-		hunkMarks:  workspace.NewHunkMarks(),
+		bindings: bindings{
+			nextTab:     key.NewBinding(key.WithKeys("g t"), key.WithHelp("gt", "next tab")),
+			previousTab: key.NewBinding(key.WithKeys("g T"), key.WithHelp("gT", "previous tab")),
+		},
+		now:       options.Now,
+		open:      options.Open,
+		timeouts:  options.Timeouts,
+		clipboard: options.Clipboard,
+		hunkMarks: workspace.NewHunkMarks(),
+		tabs:      tabs,
 	}
 }
+
+// authorQuery finds the open pull requests of one author in the repository,
+// newest update first like the All tab. The sort is a qualifier, as in the
+// dashboard's sections.
+func authorQuery(repository github.Repository, author string) string {
+	return fmt.Sprintf("is:pr is:open repo:%s author:%s sort:%s-%s", repository, author, config.SortUpdated, config.OrderDescending)
+}
+
+// current is the tab being shown.
+func (view *View) current() *tab { return &view.tabs[view.active] }
 
 // openInBrowser discards the launcher's output: it must not touch the screen
 // the TUI owns. This covers a configured launcher; the default fallback writes
@@ -119,7 +184,10 @@ func openInBrowser(url string) error {
 }
 
 // Loading implements userinterface.Loader.
-func (view *View) Loading() bool { return view.loading || view.loadingMore }
+func (view *View) Loading() bool {
+	current := view.current()
+	return current.loading || current.loadingMore
+}
 
 // Title implements userinterface.View.
 func (view *View) Title() string { return view.repositoryName() }
@@ -129,27 +197,63 @@ func (view *View) repositoryName() string { return terminaltext.Clean(view.repos
 
 // ShortHelp implements userinterface.View.
 func (view *View) ShortHelp() []key.Binding {
-	return []key.Binding{view.globalKeys.Select, view.globalKeys.Open, view.globalKeys.Refresh}
+	return []key.Binding{view.globalKeys.Select, view.globalKeys.Open, view.globalKeys.Refresh, view.bindings.nextTab}
 }
 
 // FullHelp implements userinterface.View. The search keys are global ones that
 // only views with a list to search list.
 func (view *View) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{view.globalKeys.Search, view.globalKeys.NextMatch, view.globalKeys.PreviousMatch}}
+	return [][]key.Binding{
+		{view.bindings.nextTab, view.bindings.previousTab},
+		{view.globalKeys.Search, view.globalKeys.NextMatch, view.globalKeys.PreviousMatch},
+	}
 }
 
 // Init implements userinterface.View.
-func (view *View) Init() tea.Cmd { return view.fetch(github.PageRequest{}, false) }
+func (view *View) Init() tea.Cmd { return view.show(view.active) }
 
-// fetch loads one page. The closure captures copies, so it shares no state
+// show loads the tab's rows the first time it is shown.
+func (view *View) show(index int) tea.Cmd {
+	current := &view.tabs[index]
+	if current.requested {
+		return nil
+	}
+	return view.reload(index)
+}
+
+// reload requests a tab's first page. Rows already shown stay until the new
+// ones arrive.
+func (view *View) reload(index int) tea.Cmd {
+	current := &view.tabs[index]
+	current.requested = true
+	current.sequence++
+	current.loading, current.loadingMore, current.moreFailed = true, false, false
+	// Intentional limit: the API caps a page at 100 rows, so past row 100 the
+	// refreshed list is shorter than the old one and the selection falls back
+	// to the same row index, which may be a different PR. The rest pages in
+	// lazily as before.
+	// Ask for as many rows as are loaded (up to the API maximum) so the rows
+	// the user has paged through survive; zero means the default size.
+	return view.fetch(index, github.PageRequest{Limit: min(len(current.pullRequests), github.MaximumPageSize)}, false)
+}
+
+// fetch loads one page of a tab: the repository's list for the first tab, a
+// search for the others. The closure captures copies, so it shares no state
 // with the view.
-func (view *View) fetch(pageRequest github.PageRequest, more bool) tea.Cmd {
-	client, repository, sequence, timeouts := view.client, view.repository, view.sequence, view.timeouts
+func (view *View) fetch(index int, pageRequest github.PageRequest, more bool) tea.Cmd {
+	client, repository, timeouts := view.client, view.repository, view.timeouts
+	query, sequence := view.tabs[index].query, view.tabs[index].sequence
 	return func() tea.Msg {
 		ctx, cancel := timeouts.LoadContext()
 		defer cancel()
-		page, err := client.ListPullRequests(ctx, repository, pageRequest)
-		return pullRequestsLoadedMessage{repository: repository, sequence: sequence, more: more, page: page, err: err}
+		var page github.Page[github.PullRequest]
+		var err error
+		if query == "" {
+			page, err = client.ListPullRequests(ctx, repository, pageRequest)
+		} else {
+			page, err = client.SearchPullRequests(ctx, query, pageRequest)
+		}
+		return pullRequestsLoadedMessage{repository: repository, tab: index, sequence: sequence, more: more, page: page, err: err}
 	}
 }
 
@@ -158,7 +262,7 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 	switch message := message.(type) {
 	case tea.WindowSizeMsg:
 		view.width, view.height = message.Width, message.Height
-		view.window.SetSize(view.listHeight())
+		view.current().window.SetSize(view.listHeight())
 		return view, nil
 	case userinterface.OptionsMessage:
 		view.options = message.Values
@@ -167,7 +271,7 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 	case pullRequestsLoadedMessage:
 		return view, view.loaded(message)
 	case userinterface.PromptResultMessage:
-		return view, view.search.Prompt(message, view.searchList())
+		return view, view.current().search.Prompt(message, view.searchList())
 	case keys.Message:
 		return view, view.handleKey(message)
 	}
@@ -175,134 +279,147 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 }
 
 func (view *View) loaded(message pullRequestsLoadedMessage) tea.Cmd {
-	if message.repository != view.repository || message.sequence != view.sequence {
-		return nil // meant for another view, or superseded by a refresh
+	if message.repository != view.repository || message.tab >= len(view.tabs) {
+		return nil // meant for another view
+	}
+	current := &view.tabs[message.tab]
+	if message.sequence != current.sequence {
+		return nil // superseded by a refresh
 	}
 	if message.more {
-		view.loadingMore = false
+		current.loadingMore = false
 	} else {
-		view.loading = false
+		current.loading = false
 	}
 	if message.err != nil {
-		view.err = message.err
-		view.moreFailed = message.more // stop auto-paging until R
+		current.err = message.err
+		current.moreFailed = message.more // stop auto-paging until R
 
-		return userinterface.Error(terminaltext.SafeError(fmt.Errorf("load pull requests in %s: %w", view.repository, message.err)))
+		failure := fmt.Errorf("load pull requests in %s: %w", view.repository, message.err)
+		if message.tab != view.active {
+			failure = fmt.Errorf("%s: %w", terminaltext.Clean(current.name), failure)
+		}
+		return userinterface.Error(terminaltext.SafeError(failure))
 	}
-	view.err = nil
-	view.next = message.page.Next
+	current.err = nil
+	current.next = message.page.Next
 	if message.more {
-		view.pullRequests = append(view.pullRequests, message.page.Items...)
+		current.pullRequests = append(current.pullRequests, message.page.Items...)
 	} else {
-		view.replace(message.page.Items)
+		current.replace(message.page.Items)
 	}
-	view.window.SetRows(len(view.pullRequests))
-	view.search.Refresh(view.searchList())
+	current.window.SetRows(len(current.pullRequests))
+	current.search.Refresh(view.searchListOf(current))
+	if message.tab != view.active {
+		return nil // paging resumes when it is shown
+	}
 	return view.maybeLoadMore()
 }
 
 // replace swaps in a fresh first page, keeping the selection on the same pull
 // request when it is still listed.
-func (view *View) replace(items []github.PullRequest) {
+func (current *tab) replace(items []github.PullRequest) {
 	var selected int
-	if pullRequest, ok := view.selected(); ok {
+	if pullRequest, ok := current.selected(); ok {
 		selected = pullRequest.Number
 	}
-	view.pullRequests = items
+	current.pullRequests = items
 	// If the selected PR is gone, stay on the same row (the window clamps it).
-	view.window.SetRows(len(items))
+	current.window.SetRows(len(items))
 	for i, pullRequest := range items {
 		if selected != 0 && pullRequest.Number == selected {
-			view.window.Restore(i, view.window.Top(), 0)
+			current.window.Restore(i, current.window.Top(), 0)
 			break
 		}
 	}
 }
 
-func (view *View) selected() (github.PullRequest, bool) {
-	if view.window.Cursor() >= len(view.pullRequests) {
+func (current *tab) selected() (github.PullRequest, bool) {
+	if current.window.Cursor() >= len(current.pullRequests) {
 		return github.PullRequest{}, false
 	}
-	return view.pullRequests[view.window.Cursor()], true
+	return current.pullRequests[current.window.Cursor()], true
 }
 
 func (view *View) handleKey(message keys.Message) tea.Cmd {
+	current := view.current()
 	switch {
+	case key.Matches(message, view.bindings.nextTab):
+		return view.switchTab(1)
+	case key.Matches(message, view.bindings.previousTab):
+		return view.switchTab(-1)
 	case key.Matches(message, view.globalKeys.Down):
-		view.window.Down(message.Repeat())
+		current.window.Down(message.Repeat())
 	case key.Matches(message, view.globalKeys.Up):
-		view.window.Up(message.Repeat())
+		current.window.Up(message.Repeat())
 	case key.Matches(message, view.globalKeys.Top):
-		view.window.GotoTop()
+		current.window.GotoTop()
 	case key.Matches(message, view.globalKeys.Bottom):
 		if message.Count > 0 {
-			view.window.GotoRow(message.Count - 1)
+			current.window.GotoRow(message.Count - 1)
 		} else {
-			view.window.GotoBottom()
+			current.window.GotoBottom()
 		}
 	case key.Matches(message, view.globalKeys.HalfDown):
-		message.Each(view.window.Cursor, view.window.HalfPageDown)
+		message.Each(current.window.Cursor, current.window.HalfPageDown)
 	case key.Matches(message, view.globalKeys.HalfUp):
-		message.Each(view.window.Cursor, view.window.HalfPageUp)
+		message.Each(current.window.Cursor, current.window.HalfPageUp)
 	case key.Matches(message, view.globalKeys.PageDown):
-		message.Each(view.window.Cursor, view.window.PageDown)
+		message.Each(current.window.Cursor, current.window.PageDown)
 	case key.Matches(message, view.globalKeys.PageUp):
-		message.Each(view.window.Cursor, view.window.PageUp)
+		message.Each(current.window.Cursor, current.window.PageUp)
 	case key.Matches(message, view.globalKeys.ScrollCursorTop):
-		view.window.ScrollCursorTop()
+		current.window.ScrollCursorTop()
 	case key.Matches(message, view.globalKeys.ScrollCursorMiddle):
-		view.window.ScrollCursorMiddle()
+		current.window.ScrollCursorMiddle()
 	case key.Matches(message, view.globalKeys.ScrollCursorBottom):
-		view.window.ScrollCursorBottom()
+		current.window.ScrollCursorBottom()
 	case key.Matches(message, view.globalKeys.Search):
-		return view.search.Start(view.searchList())
+		return current.search.Start(view.searchList())
 	case key.Matches(message, view.globalKeys.NextMatch):
-		return view.search.Step(message, true, view.searchList(), view.options.WrapScan())
+		return current.search.Step(message, true, view.searchList(), view.options.WrapScan())
 	case key.Matches(message, view.globalKeys.PreviousMatch):
-		return view.search.Step(message, false, view.searchList(), view.options.WrapScan())
+		return current.search.Step(message, false, view.searchList(), view.options.WrapScan())
 	case key.Matches(message, view.globalKeys.Cancel):
-		view.search.Clear()
+		current.search.Clear()
 	case key.Matches(message, view.globalKeys.Select):
 		return view.openSelected()
 	case key.Matches(message, view.globalKeys.Open):
 		return view.browseSelected()
 	case key.Matches(message, view.globalKeys.Refresh):
-		return view.refresh()
+		return view.reload(view.active)
 	default:
 		return nil
 	}
 	return view.maybeLoadMore()
 }
 
-// refresh reloads from the first page. The old rows stay visible until the
-// new ones arrive.
-func (view *View) refresh() tea.Cmd {
-	view.sequence++
-	view.loading, view.loadingMore, view.moreFailed = true, false, false
-	// Intentional limit: the API caps a page at 100 rows, so past row 100 the
-	// refreshed list is shorter than the old one and the selection falls back
-	// to the same row index, which may be a different PR. The rest pages in
-	// lazily as before.
-	// Ask for as many rows as are loaded (up to the API maximum) so the rows
-	// the user has paged through survive; zero means the default size.
-	return view.fetch(github.PageRequest{Limit: min(len(view.pullRequests), github.MaximumPageSize)}, false)
+// switchTab moves to the next (or previous) tab, wrapping around.
+func (view *View) switchTab(step int) tea.Cmd {
+	view.active = (view.active + step + len(view.tabs)) % len(view.tabs)
+	view.current().window.SetSize(view.listHeight())
+	if !view.current().requested {
+		return view.show(view.active)
+	}
+	return view.maybeLoadMore()
 }
 
 // maybeLoadMore requests the next page when the selection is near the end of
 // what is loaded.
 func (view *View) maybeLoadMore() tea.Cmd {
-	if view.next == "" || view.loading || view.moreFailed || view.loadingMore || view.window.Cursor() < len(view.pullRequests)-1-loadMoreMargin {
+	current := view.current()
+	if current.next == "" || current.loading || current.moreFailed || current.loadingMore || current.window.Cursor() < len(current.pullRequests)-1-loadMoreMargin {
 		return nil
 	}
-	view.loadingMore = true
-	return view.fetch(github.PageRequest{After: view.next}, true)
+	current.loadingMore = true
+	return view.fetch(view.active, github.PageRequest{After: current.next}, true)
 }
 
 // openSelected pushes the PR workspace for the selected pull request. It
 // hands over the list's theme, clock and browser opener so the workspace looks
 // and behaves like its parent (and tests stay deterministic).
 func (view *View) openSelected() tea.Cmd {
-	pullRequest, ok := view.selected()
+	pullRequest, ok := view.current().selected()
 	if !ok {
 		return nil
 	}
@@ -318,7 +435,7 @@ func (view *View) openSelected() tea.Cmd {
 }
 
 func (view *View) browseSelected() tea.Cmd {
-	pullRequest, ok := view.selected()
+	pullRequest, ok := view.current().selected()
 	if !ok {
 		return nil
 	}
@@ -334,4 +451,4 @@ func (view *View) browseSelected() tea.Cmd {
 	}
 }
 
-func (view *View) listHeight() int { return max(0, view.height-1) } // minus the header row
+func (view *View) listHeight() int { return max(0, view.height-2) } // minus the tab bar and the header row

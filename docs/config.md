@@ -211,6 +211,12 @@ A non-empty list. Tab names must be unique.
 | `user` | no | GitHub login the sections are about. Default `@me`, the signed-in user |
 | `sections` | no | The tab's sections. Default: the default sections below |
 
+The same list also gives the tabs of the repository pull request list (shown
+inside a checkout, or with `-R`): **All** first, then one tab per entry, in
+order, with the repository's open pull requests whose author is the tab's
+`user` (`@me` when it has none). Only `name` and `user` are used there;
+`sections` are not.
+
 ### `sections`
 
 Each section is one PR list driven by a GitHub search query.

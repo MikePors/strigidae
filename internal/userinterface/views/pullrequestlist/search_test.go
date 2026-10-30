@@ -71,15 +71,15 @@ func TestTypingMovesTheCursorLive(test *testing.T) {
 	press(view, "j") // row 2
 	press(view, "/")
 	typeSearch(view, "fix")
-	if got := view.window.Cursor(); got != 3 {
+	if got := view.current().window.Cursor(); got != 3 {
 		test.Errorf("cursor = %d, want the first match after row 2 (3)", got)
 	}
 	typeSearch(view, "fix p") // narrows to row 1 and 5; from row 2 the next is 5
-	if got := view.window.Cursor(); got != 5 {
+	if got := view.current().window.Cursor(); got != 5 {
 		test.Errorf("cursor = %d, want 5", got)
 	}
 	typeSearch(view, "zzz")
-	if got := view.window.Cursor(); got != 2 {
+	if got := view.current().window.Cursor(); got != 2 {
 		test.Errorf("cursor = %d with no match, want it back on 2", got)
 	}
 }
@@ -90,10 +90,10 @@ func TestEscWhileTypingRestoresTheCursor(test *testing.T) {
 	press(view, "/")
 	typeSearch(view, "fix l")
 	finishSearch(view, "fix l", userinterface.PromptCancelled)
-	if got := view.window.Cursor(); got != 1 {
+	if got := view.current().window.Cursor(); got != 1 {
 		test.Errorf("cursor = %d, want 1", got)
 	}
-	if view.search.Active() {
+	if view.current().search.Active() {
 		test.Error("a cancelled search is still active")
 	}
 }
@@ -103,11 +103,11 @@ func TestEnterKeepsTheSearchAndEscClearsIt(test *testing.T) {
 	press(view, "/")
 	typeSearch(view, "fix")
 	finishSearch(view, "fix", userinterface.PromptSubmitted)
-	if !view.search.Marked(1) || !view.search.Marked(3) || !view.search.Marked(5) || view.search.Marked(0) {
+	if !view.current().search.Marked(1) || !view.current().search.Marked(3) || !view.current().search.Marked(5) || view.current().search.Marked(0) {
 		test.Error("enter did not keep the marks")
 	}
 	press(view, "esc")
-	if view.search.Active() || view.search.Marked(1) {
+	if view.current().search.Active() || view.current().search.Marked(1) {
 		test.Error("esc in the list did not clear the search")
 	}
 }
@@ -118,24 +118,24 @@ func TestNextAndPreviousWrapAndTakeACount(test *testing.T) {
 	typeSearch(view, "fix")
 	finishSearch(view, "fix", userinterface.PromptSubmitted) // cursor on 1
 	press(view, "n")
-	if got := view.window.Cursor(); got != 3 {
+	if got := view.current().window.Cursor(); got != 3 {
 		test.Errorf("n: cursor = %d, want 3", got)
 	}
 	press(view, "n")
 	press(view, "n") // wraps
-	if got := view.window.Cursor(); got != 1 {
+	if got := view.current().window.Cursor(); got != 1 {
 		test.Errorf("n wrap: cursor = %d, want 1", got)
 	}
 	press(view, "N") // wraps back
-	if got := view.window.Cursor(); got != 5 {
+	if got := view.current().window.Cursor(); got != 5 {
 		test.Errorf("N wrap: cursor = %d, want 5", got)
 	}
 	view.Update(keys.Message{Sequence: "n", Count: 3})
-	if got := view.window.Cursor(); got != 5 {
+	if got := view.current().window.Cursor(); got != 5 {
 		test.Errorf("3n: cursor = %d, want 5 (three matches round the ring)", got)
 	}
 	view.Update(keys.Message{Sequence: "n", Count: 2})
-	if got := view.window.Cursor(); got != 3 {
+	if got := view.current().window.Cursor(); got != 3 {
 		test.Errorf("2n: cursor = %d, want 3", got)
 	}
 }
@@ -155,7 +155,7 @@ func TestNoMatchSaysSoAndKeepsTheCursor(test *testing.T) {
 	if len(info) != 1 || info[0] != "no match: zzz" {
 		test.Errorf("info = %q, want [no match: zzz]", info)
 	}
-	if got := view.window.Cursor(); got != 1 {
+	if got := view.current().window.Cursor(); got != 1 {
 		test.Errorf("cursor = %d, want 1", got)
 	}
 }
@@ -172,11 +172,11 @@ func TestRefreshKeepsTheSearchAndRecomputesTheMarks(test *testing.T) {
 	fresh[3].Title = "Lexer"     // no longer matches
 	client.SetPullRequests(testRepository, fresh)
 	deliver(test, view, press(view, "R"))
-	if !view.search.Marked(0) || view.search.Marked(3) || !view.search.Marked(1) {
+	if !view.current().search.Marked(0) || view.current().search.Marked(3) || !view.current().search.Marked(1) {
 		test.Error("marks were not recomputed after the refresh")
 	}
-	if view.search.Query() != "fix" {
-		test.Errorf("query = %q", view.search.Query())
+	if view.current().search.Query() != "fix" {
+		test.Errorf("query = %q", view.current().search.Query())
 	}
 }
 
@@ -186,7 +186,7 @@ func TestMatchingRowsCarryTheMarker(test *testing.T) {
 	typeSearch(view, "fix")
 	finishSearch(view, "fix", userinterface.PromptSubmitted) // cursor on row 1
 	marker := theme.Default().SearchMarker.Render(search.Glyph)
-	lines := strings.Split(view.Render(80, 12), "\n")
+	lines := strings.Split(view.Render(80, 13), "\n")[1:] // under the tab bar
 	// Header, then rows 0.. : row 3 is a match that is not selected.
 	if !strings.HasPrefix(lines[4], marker) {
 		test.Errorf("row 3 = %q, want it to start with the styled marker %q", lines[4], marker)
@@ -201,12 +201,12 @@ func TestMatchingRowsCarryTheMarker(test *testing.T) {
 		test.Error("the selected row draws the marker in the accent colour, which vanishes on its background")
 	}
 	press(view, "j") // row 2 does not match
-	if line := ansi.Strip(strings.Split(view.Render(80, 12), "\n")[3]); !strings.HasPrefix(line, "> ") {
+	if line := ansi.Strip(strings.Split(view.Render(80, 13), "\n")[4]); !strings.HasPrefix(line, "> ") {
 		test.Errorf("selected row without a match = %q", line)
 	}
 	press(view, "k")
 	press(view, "esc")
-	if strings.Contains(ansi.Strip(view.Render(80, 12)), search.Glyph) {
+	if strings.Contains(ansi.Strip(view.Render(80, 13)), search.Glyph) {
 		test.Error("marks survive esc")
 	}
 }
@@ -218,7 +218,7 @@ func TestHelpListsTheSearchKeys(test *testing.T) {
 			got = append(got, binding.Help().Key)
 		}
 	}
-	if strings.Join(got, " ") != "/ n N" {
+	if strings.Join(got, " ") != "gt gT / n N" {
 		test.Errorf("help keys = %q", got)
 	}
 }
@@ -235,7 +235,7 @@ func TestRestoreFollowsThePullRequestWhenRowsChange(test *testing.T) {
 	client.SetPullRequests(testRepository, fresh)
 	deliver(test, view, press(view, "R"))
 	finishSearch(view, "fix", userinterface.PromptCancelled)
-	if pullRequest, _ := view.selected(); pullRequest.Title != "Tidy docs" {
+	if pullRequest, _ := view.current().selected(); pullRequest.Title != "Tidy docs" {
 		test.Errorf("esc restored %q, want Tidy docs", pullRequest.Title)
 	}
 }
@@ -247,7 +247,7 @@ func TestSubmitJumpsToTheFirstMatchAtOrAfterTheOrigin(test *testing.T) {
 	press(view, "/")
 	// A paste is reported as one change; nothing moved the cursor yet.
 	finishSearch(view, "fix", userinterface.PromptSubmitted)
-	if got := view.window.Cursor(); got != 3 {
+	if got := view.current().window.Cursor(); got != 3 {
 		test.Errorf("cursor = %d, want 3", got)
 	}
 }
@@ -257,7 +257,7 @@ func TestWhitespaceQueryIsNoSearch(test *testing.T) {
 	press(view, "/")
 	typeSearch(view, "  ")
 	messages := finishSearch(view, "  ", userinterface.PromptSubmitted)
-	if view.search.Active() {
+	if view.current().search.Active() {
 		test.Error("a blank query is an active search")
 	}
 	for _, message := range messages {
@@ -270,7 +270,7 @@ func TestWhitespaceQueryIsNoSearch(test *testing.T) {
 func TestEnterOnAnEmptyPromptRepeatsTheLastSearch(test *testing.T) {
 	view := searchView(test)
 	finishSearch(view, "", userinterface.PromptSubmitted)
-	if view.search.Active() {
+	if view.current().search.Active() {
 		test.Fatal("an empty prompt with no previous search started one")
 	}
 	press(view, "/")
@@ -280,10 +280,10 @@ func TestEnterOnAnEmptyPromptRepeatsTheLastSearch(test *testing.T) {
 	press(view, "j") // row 2
 	press(view, "/")
 	finishSearch(view, "", userinterface.PromptSubmitted)
-	if view.search.Query() != "fix" || !view.search.Marked(3) {
-		test.Errorf("query = %q, marks not restored", view.search.Query())
+	if view.current().search.Query() != "fix" || !view.current().search.Marked(3) {
+		test.Errorf("query = %q, marks not restored", view.current().search.Query())
 	}
-	if got := view.window.Cursor(); got != 3 {
+	if got := view.current().window.Cursor(); got != 3 {
 		test.Errorf("cursor = %d, want the first match at or after row 2", got)
 	}
 }
