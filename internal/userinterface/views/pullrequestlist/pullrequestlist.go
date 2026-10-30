@@ -71,7 +71,13 @@ type tab struct {
 	author    string // who the tab is about, empty for the first tab
 	requested bool   // the rows were asked for at least once
 
+	// loaded holds the rows as the API returned them; pullRequests holds the
+	// same rows in the order drawn (stacks under their parents, see
+	// stackOrder), with the indent depth of each in depths. Everything the
+	// user sees or selects goes through pullRequests.
+	loaded       []github.PullRequest
 	pullRequests []github.PullRequest
+	depths       []int
 	next         string // cursor of the next page, empty when all are loaded
 	sequence     int    // latest request; older results are ignored
 	loading      bool   // a first-page (re)load is in flight
@@ -334,9 +340,9 @@ func (view *View) loaded(message pullRequestsLoadedMessage) tea.Cmd {
 	current.err = nil
 	current.next = message.page.Next
 	if message.more {
-		current.pullRequests = append(current.pullRequests, message.page.Items...)
+		current.setLoaded(append(current.loaded, message.page.Items...))
 	} else {
-		current.replace(message.page.Items)
+		current.setLoaded(message.page.Items)
 	}
 	current.window.SetRows(len(current.pullRequests))
 	current.search.Refresh(view.searchListOf(current))
@@ -346,17 +352,18 @@ func (view *View) loaded(message pullRequestsLoadedMessage) tea.Cmd {
 	return view.maybeLoadMore()
 }
 
-// replace swaps in a fresh first page, keeping the selection on the same pull
-// request when it is still listed.
-func (current *tab) replace(items []github.PullRequest) {
+// setLoaded swaps in the loaded rows and arranges them for drawing, keeping
+// the selection on the same pull request when it is still listed.
+func (current *tab) setLoaded(items []github.PullRequest) {
 	var selected int
 	if pullRequest, ok := current.selected(); ok {
 		selected = pullRequest.Number
 	}
-	current.pullRequests = items
+	current.loaded = items
+	current.pullRequests, current.depths = stackOrder(items)
 	// If the selected PR is gone, stay on the same row (the window clamps it).
-	current.window.SetRows(len(items))
-	for i, pullRequest := range items {
+	current.window.SetRows(len(current.pullRequests))
+	for i, pullRequest := range current.pullRequests {
 		if selected != 0 && pullRequest.Number == selected {
 			current.window.Restore(i, current.window.Top(), 0)
 			break
