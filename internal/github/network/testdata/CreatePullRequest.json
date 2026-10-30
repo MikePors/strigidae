@@ -11,6 +11,7 @@
   "baseRefName": "main",
   "headRefName": "feat/new-thing",
   "headRefOid": "0000000000000000000000000000000000002222",
+  "isCrossRepository": false,
   "statusCheckRollup": null,
   "author": {"login": "MikePors"},
   "commentCount": {"totalCount": 0},

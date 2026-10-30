@@ -22,7 +22,7 @@ const reactionSelection = `reactionGroups { content viewerHasReacted reactors { 
 const pullRequestFields = `
 fragment PullRequestFields on PullRequest {
   id number title url isDraft state createdAt updatedAt reviewDecision
-  baseRefName headRefName headRefOid
+  baseRefName headRefName headRefOid isCrossRepository
   statusCheckRollup { state }
   author { login }
   commentCount: comments { totalCount }
