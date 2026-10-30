@@ -233,6 +233,11 @@ func (workspaceBindings *bindings) entries() []actionEntry {
 			level:  levelFile,
 			run:    func(view *View, _ invocation) tea.Cmd { return view.copyFilename() },
 		},
+		{
+			Action: keys.Action{Name: "copy-url", Command: "copy-url"},
+			level:  levelPullRequest,
+			run:    func(view *View, _ invocation) tea.Cmd { return view.copyURL() },
+		},
 	}
 }
 
