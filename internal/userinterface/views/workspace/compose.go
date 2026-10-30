@@ -264,9 +264,9 @@ func threadLocation(thread github.ReviewThread) string {
 	return thread.Path + ":" + strconv.Itoa(line)
 }
 
-// execEditor is the default EditFunction: a temporary file opened in the user's
+// ExecEditor is the default EditFunction (also used by the pull request list): a temporary file opened in the user's
 // editor, with the TUI suspended meanwhile.
-func execEditor(initial string, done func(string, error) tea.Msg) tea.Cmd {
+func ExecEditor(initial string, done func(string, error) tea.Msg) tea.Cmd {
 	return func() tea.Msg {
 		session, err := editor.New(initial, os.Getenv)
 		if err != nil {

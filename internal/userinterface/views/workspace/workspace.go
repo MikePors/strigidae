@@ -173,7 +173,7 @@ func New(client github.Client, repository github.Repository, number int, options
 		globalKeys:     keys.DefaultGlobal(),
 		bind:           defaultBindings(),
 		navigationBind: defaultDiffBindings(),
-		edit:           execEditor,
+		edit:           ExecEditor,
 		drafts:         map[string]string{},
 		viewedState:    map[string]*viewedToggle{},
 	}

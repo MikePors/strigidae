@@ -58,7 +58,7 @@ func (application application) userInterfaceOptions(logger *slog.Logger, notice 
 // shell can tell a command another view owns from a word that is no command.
 // A view with commands adds its Commands here.
 func viewCommands() []string {
-	return workspace.Commands()
+	return append(workspace.Commands(), pullrequestlist.Commands()...)
 }
 
 // askTerminal asks the controlling terminal for its palette, before the
@@ -78,7 +78,7 @@ func firstView(application application) userinterface.View {
 	if application.dashboard {
 		return dashboard.New(application.client, application.config.Tabs, application.theme, dashboard.Options{Notice: application.notice, Timeouts: application.timeouts(), Clipboard: systemClipboard()})
 	}
-	return pullrequestlist.New(application.client, application.repository, application.config.Tabs, application.theme, pullrequestlist.Options{Timeouts: application.timeouts(), Clipboard: systemClipboard()})
+	return pullrequestlist.New(application.client, application.repository, application.config.Tabs, application.theme, pullrequestlist.Options{Timeouts: application.timeouts(), Clipboard: systemClipboard(), CurrentBranch: application.currentBranch})
 }
 
 // systemClipboard is the real clipboard tool lookup.
