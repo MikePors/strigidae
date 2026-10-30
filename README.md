@@ -32,6 +32,10 @@ Run `strig` outside a git checkout, or in one with no GitHub remote (and without
 
 In a pull request, the Overview lists the head commit's checks (failing first) in a "Checks (N)" section, reached with `]` / `[`. `:checks` opens the same list as a picker; `enter` opens the selected check in the browser. The header shows conflicts, "behind base" or "blocked" when one stands in the way of merging, and each reviewer with a mark: `✓` approved, `✗` changes requested, `•` commented, `?` requested and not yet reviewed.
 
+## Editing the title and body
+
+`:edit-pull-request` (in a pull request, whatever pane has focus) opens `$VISUAL` / `$EDITOR` on the pull request's current title and body: the title on the first line, a blank line, then the body. When you close the editor it asks `y/N`, then updates both on GitHub. An empty title is an error, unchanged text says `no changes`, and GitHub must allow you to edit the pull request (`you can't edit this pull request` otherwise).
+
 ## Clipboard
 
 `:copy-filename` copies the selected file's path using the OSC 52 terminal escape, which also works over SSH. Terminals that ignore OSC 52 copy nothing. Inside tmux, add `set -g set-clipboard on` to `~/.tmux.conf`.

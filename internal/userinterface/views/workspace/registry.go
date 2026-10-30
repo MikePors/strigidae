@@ -219,6 +219,11 @@ func (workspaceBindings *bindings) entries() []actionEntry {
 			run: func(view *View, _ invocation) tea.Cmd { return view.discardReview() },
 		},
 		{
+			Action: keys.Action{Name: "edit-pull-request", Command: "edit-pull-request"},
+			level:  levelPullRequest, guard: writePullRequest, fresh: freshTarget,
+			run: func(view *View, _ invocation) tea.Cmd { return view.editPullRequest() },
+		},
+		{
 			Action: keys.Action{Name: "checks", Command: "checks"},
 			level:  levelPullRequest,
 			run:    func(view *View, _ invocation) tea.Cmd { return view.checksCommand() },

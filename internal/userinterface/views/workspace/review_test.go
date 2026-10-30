@@ -24,6 +24,7 @@ func newReviewer(test *testing.T) *composer {
 	composer := newComposer(test)
 	detail := testDetail()
 	detail.Identifier = pullRequestNodeIdentifier
+	detail.ViewerCanUpdate = true
 	composer.client.SetPullRequest(detail)
 	composer.setHead(headSHA)
 	return composer
