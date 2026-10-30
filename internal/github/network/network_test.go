@@ -251,6 +251,7 @@ func TestGetPullRequest(test *testing.T) {
 			URL: "https://github.com/MikePors/strigidae/pull/27", HeadBranch: "feat/4-github-client", BaseBranch: "main",
 		},
 		ViewerDidAuthor: true,
+		ViewerCanUpdate: true,
 		Body:            "Closes #4\n\n## Summary\nAdds the client layer.\n",
 		Reactions:       []github.ReactionSummary{{Content: github.ReactionHeart, Count: 3, ViewerReacted: true}},
 		Additions:       120, Deletions: 7,
@@ -292,6 +293,9 @@ func TestGetPullRequest(test *testing.T) {
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		test.Errorf("mismatch (-want +got):\n%s", diff)
+	}
+	if query := testServer.Calls()[0].Query; !strings.Contains(query, "viewerCanUpdate") {
+		test.Error("the detail query does not ask for viewerCanUpdate")
 	}
 	if count := len(testServer.Calls()); count != 4 {
 		test.Errorf("got %d requests, want 4 (detail + remaining files, comments, reviews)", count)

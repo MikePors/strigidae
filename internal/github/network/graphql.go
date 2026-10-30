@@ -145,6 +145,7 @@ type graphqlReview struct {
 type graphqlPullRequestDetail struct {
 	graphqlPullRequest
 	ViewerDidAuthor bool
+	ViewerCanUpdate bool
 	Body            string
 	ReactionGroups  []graphqlReactionGroup
 	Additions       int
@@ -299,6 +300,7 @@ func mapDetail(node graphqlPullRequestDetail, files []graphqlFile, comments []gr
 	detail := github.PullRequestDetail{
 		PullRequest:     pullRequest,
 		ViewerDidAuthor: node.ViewerDidAuthor,
+		ViewerCanUpdate: node.ViewerCanUpdate,
 		Body:            node.Body,
 		Reactions:       mapReactions(node.ReactionGroups),
 		Additions:       node.Additions,
