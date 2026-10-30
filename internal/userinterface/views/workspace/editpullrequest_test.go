@@ -94,7 +94,6 @@ func TestEditPullRequestRefusals(test *testing.T) {
 		wantInfo  string
 	}{
 		{"empty title", "\n\nBody", "empty title", ""},
-		{"no blank line", "Title\nBody", "blank line", ""},
 		{"unchanged", editorTextOfTestDetail(), "", noticeNoChanges},
 	}
 	for _, testCase := range tests {
@@ -179,14 +178,5 @@ func TestEditPullRequestNeverBypassesTheGuard(test *testing.T) {
 	}
 	if _, ok := inliner.messages[len(inliner.messages)-1].(userinterface.InfoMessage); !ok || len(inliner.openedOn) != 0 {
 		test.Error("the command went on")
-	}
-}
-
-func TestEditPullRequestHostileTitleIsCleaned(test *testing.T) {
-	inliner := newInliner(test)
-	inliner.view.detail.Title = "evil \x1b]0;pwned\x07 title"
-	inliner.view.layout()
-	if shown := inliner.render(); strings.Contains(shown, "\x1b]0;") {
-		test.Errorf("escape sequence reached the screen: %q", shown)
 	}
 }

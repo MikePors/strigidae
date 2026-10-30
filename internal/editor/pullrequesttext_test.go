@@ -22,8 +22,10 @@ func TestParsePullRequestText(test *testing.T) {
 		{"leading blank line is an empty title", "\nTitle\n\nBody", "", "", ErrEmptyTitle},
 		{"empty text", "", "", "", ErrEmptyTitle},
 		{"blank title", "   \n\nBody", "", "", ErrEmptyTitle},
-		{"no blank line after the title", "Title\nBody", "", "", ErrMissingBlankLine},
-		{"body keeps leading blank lines after the separator", "Title\n\n\nBody", "Title", "\nBody", nil},
+		{"body on the line after the title", "Title\nBody\nMore", "Title", "Body\nMore", nil},
+		{"one blank line is the separator", "Title\n\nBody", "Title", "Body", nil},
+		{"only one blank line is stripped", "Title\n\n\nBody", "Title", "\nBody", nil},
+		{"whitespace-only second line counts as blank", "Title\n  \nBody", "Title", "Body", nil},
 	} {
 		test.Run(testCase.name, func(test *testing.T) {
 			title, body, err := ParsePullRequestText(testCase.text)

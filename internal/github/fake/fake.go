@@ -71,8 +71,6 @@ type Call struct {
 type Reply struct {
 	ThreadIdentifier string
 	Body             string
-	// Title is set by UpdatePullRequest.
-	Title string
 }
 
 // Comment is a recorded successful AddComment call.

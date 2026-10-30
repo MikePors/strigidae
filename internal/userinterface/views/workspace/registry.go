@@ -15,7 +15,7 @@ type freshCheck int
 
 const (
 	freshNone   freshCheck = iota // nothing to re-read
-	freshTarget                   // re-read the target (the comment, the thread, the pending review)
+	freshTarget                   // re-read the target (the comment, the thread, the pending review, the pull request)
 	freshHead                     // check that the head commit is still the one on screen
 )
 
