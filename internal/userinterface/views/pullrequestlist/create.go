@@ -89,10 +89,8 @@ func (view *View) CapturesKeys() bool { return view.creating != nil && view.crea
 // startCreate loads the branches; the head picker opens when they arrive. A
 // second command while one is running replaces it.
 func (view *View) startCreate(draft bool) tea.Cmd {
-	sequence := 1
-	if view.creating != nil {
-		sequence = view.creating.sequence + 1
-	}
+	view.createSequence++ // only ever increases, so a late result is never taken for a newer flow's
+	sequence := view.createSequence
 	view.creating = &createFlow{sequence: sequence, draft: draft, loading: true}
 	owner, client, repository, timeouts := view, view.client, view.repository, view.timeouts
 	return func() tea.Msg {
@@ -122,7 +120,7 @@ func (view *View) mine(owner *View, sequence int) bool {
 
 // branchesLoaded opens the head picker.
 func (view *View) branchesLoaded(message branchesLoadedMessage) tea.Cmd {
-	if !view.mine(message.owner, message.sequence) {
+	if !view.mine(message.owner, message.sequence) || !view.creating.loading {
 		return nil
 	}
 	flow := view.creating
@@ -229,8 +227,10 @@ func (view *View) createEdited(message createTextMessage) tea.Cmd {
 	if input.Draft {
 		return view.create(input)
 	}
-	question := fmt.Sprintf("Create pull request %q from %s into %s?", title, message.head, message.base)
-	return userinterface.Confirm(terminaltext.Clean(question), view.create(input))
+	// Each part is cleaned on its own: the title and branch names come from the
+	// editor and from GitHub.
+	question := fmt.Sprintf("Create pull request \"%s\" from %s into %s?", terminaltext.Clean(title), terminaltext.Clean(message.head), terminaltext.Clean(message.base))
+	return userinterface.Confirm(question, view.create(input))
 }
 
 // create is the command that runs the create call.
@@ -274,6 +274,9 @@ func (view *View) overlayPicker(screen string, width, height int) string {
 		return screen
 	}
 	rows := strings.Split(screen, "\n")
+	for len(rows) < height { // a short or empty list leaves rows the picker must still draw over
+		rows = append(rows, "")
+	}
 	boxLines := strings.Split(box, "\n")
 	boxWidth := ansi.StringWidth(boxLines[0])
 	column := max(0, (width-boxWidth)/2)

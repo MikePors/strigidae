@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/MikePors/strigidae/internal/config"
@@ -38,7 +39,12 @@ type createHarness struct {
 
 func newCreateHarness(test *testing.T, currentBranch, editorText string) *createHarness {
 	test.Helper()
-	client := fakeWith(makePullRequests(2))
+	return newCreateHarnessWith(test, 2, currentBranch, editorText)
+}
+
+func newCreateHarnessWith(test *testing.T, pullRequests int, currentBranch, editorText string) *createHarness {
+	test.Helper()
+	client := fakeWith(makePullRequests(pullRequests))
 	client.SetBranches(testRepository, testBranches)
 	harness := &createHarness{client: client}
 	harness.view = New(client, testRepository, config.Default().Tabs, theme.Default(), Options{
@@ -375,6 +381,92 @@ func TestEditorFailureCreatesNothing(test *testing.T) {
 	}
 	if len(harness.client.CreatedPullRequests()) != 0 {
 		test.Error("created after the editor failed")
+	}
+}
+
+// A branch result from an earlier :create must never be taken for a later
+// flow's, also after a cancel: the reviewer got one pick used as head and base.
+func TestLateBranchResultsFromEarlierFlowsAreIgnored(test *testing.T) {
+	harness := newCreateHarness(test, "", "Title")
+	first, _ := harness.view.Command("create", "")
+	second, _ := harness.view.Command("create", "") // supersedes the first
+	deliver(test, harness.view, second)
+	if !harness.view.CapturesKeys() {
+		test.Fatal("the second flow's branches should open the head picker")
+	}
+	escape(harness.view) // cancel
+	third, _ := harness.view.Command("create", "")
+
+	deliver(test, harness.view, first)  // late result of the first flow
+	deliver(test, harness.view, second) // late duplicate of the cancelled one
+	if harness.view.CapturesKeys() {
+		test.Fatal("a late result of an earlier flow opened a picker for the third")
+	}
+	deliver(test, harness.view, third)
+	if !harness.view.CapturesKeys() {
+		test.Fatal("the third flow's own result should open the head picker")
+	}
+	if command := enter(harness.view); command != nil { // the head is chosen
+		test.Fatal("choosing the head should open the base picker")
+	}
+	deliver(test, harness.view, third) // a repeat while the flow is past loading
+	command := enter(harness.view)
+	if command == nil {
+		test.Fatal("choosing the base should open the editor")
+	}
+	message, ok := command().(createTextMessage)
+	if !ok {
+		test.Fatalf("got %T, want the editor result", command())
+	}
+	if message.head != "feat/a" || message.base == message.head || message.base == "" {
+		test.Errorf("head, base = %q, %q; want distinct branches", message.head, message.base)
+	}
+}
+
+func TestQuestionCleansBranchesAndTitle(test *testing.T) {
+	harness := newCreateHarness(test, "", "T\x1b[31mitle\x07\n")
+	harness.client.SetBranches(testRepository, []github.Branch{
+		{Name: "head\x1b]52;c;aGk=\x07x"}, {Name: "base\x1b[2Jy", Default: true},
+	})
+	harness.command(test, "create")
+	_, command := harness.view.Update(harness.chooseBoth(test))
+	confirm, ok := command().(userinterface.ConfirmMessage)
+	if !ok {
+		test.Fatalf("got %T, want a question", command())
+	}
+	if strings.ContainsAny(confirm.Text, "\x1b\x07") {
+		test.Errorf("question carries control characters: %q", confirm.Text)
+	}
+	for _, want := range []string{"head", "base", "itle"} {
+		if !strings.Contains(confirm.Text, want) {
+			test.Errorf("question %q lacks %q", confirm.Text, want)
+		}
+	}
+}
+
+func TestSuccessMarksOtherTabsForReload(test *testing.T) {
+	harness := newCreateHarness(test, "", "Title")
+	press(harness.view, "g t") // the second tab loads once
+	press(harness.view, "g T")
+	if !harness.view.tabs[1].requested {
+		test.Fatal("setup: the second tab should have been requested")
+	}
+	harness.view.Update(pullRequestCreatedMessage{owner: harness.view, pullRequest: github.PullRequest{Number: 3}})
+	if harness.view.tabs[1].requested {
+		test.Error("the other tab would show its old rows; it must reload when shown")
+	}
+}
+
+func TestPickerIsWholeOverShortLists(test *testing.T) {
+	for _, pullRequests := range []int{0, 1} {
+		harness := newCreateHarnessWith(test, pullRequests, "feat/a", "Title")
+		harness.command(test, "create")
+		screen := ansi.Strip(harness.view.Render(80, 20))
+		for _, want := range []string{"Head branch", "feat/a", "feat/b", "main", "╰"} {
+			if !strings.Contains(screen, want) {
+				test.Errorf("%d pull requests: the picker is cut off, %q is missing:\n%s", pullRequests, want, screen)
+			}
+		}
 	}
 }
 

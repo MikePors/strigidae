@@ -98,9 +98,10 @@ type View struct {
 	hunkMarks *workspace.HunkMarks
 	bindings  bindings
 
-	currentBranch string
-	edit          workspace.EditFunction
-	creating      *createFlow // the :create or :create-draft in progress, if any
+	currentBranch  string
+	edit           workspace.EditFunction
+	createSequence int         // numbers every :create flow and is never reused
+	creating       *createFlow // the :create or :create-draft in progress, if any
 
 	tabs          []tab
 	active        int
