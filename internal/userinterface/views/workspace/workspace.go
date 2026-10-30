@@ -318,6 +318,21 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 			return view, nil
 		}
 		return view, view.reviewDiscarded(message)
+	case pullRequestReadMessage:
+		if !view.composeMine(message.origin, message.sequence) {
+			return view, nil
+		}
+		return view, view.pullRequestRead(message)
+	case pullRequestTextMessage:
+		if !view.composeMine(message.origin, message.sequence) {
+			return view, nil
+		}
+		return view, view.pullRequestEdited(message)
+	case pullRequestUpdatedMessage:
+		if !view.owns(message.origin) {
+			return view, nil
+		}
+		return view, view.pullRequestUpdated(message)
 	case commentCheckedMessage:
 		if !view.owns(message.origin) {
 			return view, nil

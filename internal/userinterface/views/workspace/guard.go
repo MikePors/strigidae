@@ -32,6 +32,8 @@ const (
 	writeMerge
 	// writeDiscard: `:discard-review`. It needs no diff.
 	writeDiscard
+	// writePullRequest: `:edit-pull-request`. It needs no diff.
+	writePullRequest
 )
 
 // guardRule is what one kind of write needs and what blocks it.
@@ -61,6 +63,7 @@ var guardTable = map[writeKind]guardRule{
 	writeReview:          {needsDiff: true, busy: allBusy},
 	writeMerge:           {needsDiff: true, busy: allBusy},
 	writeDiscard:         {busy: allBusy},
+	writePullRequest:     {busy: allBusy},
 }
 
 // ruleFor is the rule of a kind. writeNone means "no guard" only to the

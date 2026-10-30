@@ -19,6 +19,7 @@
         "commentCount": {"totalCount": 2},
         "repository": {"nameWithOwner": "MikePors/strigidae"},
         "viewerDidAuthor": true,
+        "viewerCanUpdate": true,
         "body": "Closes #4\n\n## Summary\nAdds the client layer.\n",
         "reactionGroups": [
           {"content": "HEART", "viewerHasReacted": true, "reactors": {"totalCount": 3}},

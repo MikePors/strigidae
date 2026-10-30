@@ -40,6 +40,7 @@ const (
 	MethodSetFileViewed      = "SetFileViewed"
 	MethodGetMergeStatus     = "GetMergeStatus"
 	MethodMergePullRequest   = "MergePullRequest"
+	MethodUpdatePullRequest  = "UpdatePullRequest"
 )
 
 // Call is one recorded call with the arguments that apply to its method.
@@ -51,6 +52,8 @@ type Call struct {
 	Page             github.PageRequest
 	ThreadIdentifier string
 	Body             string
+	// Title is set by UpdatePullRequest.
+	Title string
 	// ReviewIdentifier is set by DeleteReview.
 	ReviewIdentifier string
 	// PullRequestIdentifier, Path and Viewed are set by the methods that take them:
@@ -106,6 +109,7 @@ type Client struct {
 	nextIdentifier int
 	merge          map[github.Repository]MergeSettings
 	merges         []Merge
+	updates        []github.UpdatePullRequestInput
 	added          []github.AddThreadInput
 	started        []StartedReview
 	deleted        []string

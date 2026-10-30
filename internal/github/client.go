@@ -47,6 +47,10 @@ type Client interface {
 	// default commit title and message. GitHub's refusal (failing checks,
 	// conflicts, a moved head) comes back as an error.
 	MergePullRequest(ctx context.Context, in MergeInput) error
+	// UpdatePullRequest sets the title and body of the pull request. GitHub
+	// decides by permissions (see PullRequestDetail.ViewerCanUpdate); a refusal
+	// comes back as an error.
+	UpdatePullRequest(ctx context.Context, in UpdatePullRequestInput) error
 	// StartReview creates the viewer's pending review on in.CommitObjectIdentifier and
 	// returns it. GitHub allows one pending review per user per pull request,
 	// so this fails when one exists; call GetReviewStatus first.

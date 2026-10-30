@@ -15,7 +15,7 @@ type freshCheck int
 
 const (
 	freshNone   freshCheck = iota // nothing to re-read
-	freshTarget                   // re-read the target (the comment, the thread, the pending review)
+	freshTarget                   // re-read the target (the comment, the thread, the pending review, the pull request)
 	freshHead                     // check that the head commit is still the one on screen
 )
 
@@ -217,6 +217,11 @@ func (workspaceBindings *bindings) entries() []actionEntry {
 			Action: keys.Action{Name: "discard-review", Command: "discard-review"},
 			level:  levelPullRequest, guard: writeDiscard, fresh: freshTarget,
 			run: func(view *View, _ invocation) tea.Cmd { return view.discardReview() },
+		},
+		{
+			Action: keys.Action{Name: "edit-pull-request", Command: "edit-pull-request"},
+			level:  levelPullRequest, guard: writePullRequest, fresh: freshTarget,
+			run: func(view *View, _ invocation) tea.Cmd { return view.editPullRequest() },
 		},
 		{
 			Action: keys.Action{Name: "checks", Command: "checks"},
