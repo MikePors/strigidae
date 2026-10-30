@@ -8,15 +8,23 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/components/diffview"
 )
 
-// level is the kind of thing an action works on, from the diff pane's cursor
-// context outwards.
+// level is the kind of thing an action works on. Each action has one. The
+// resolver below handles the diff cursor's levels (lines, thread, comment);
+// the others are declared in the registry and resolved by the action itself.
 type level int
 
 const (
-	levelLines   level = iota // the line or selection a new comment goes on
-	levelThread               // the comment thread under the cursor
-	levelComment              // one comment of an open thread
+	levelNone        level = iota // moves around; works on nothing
+	levelPullRequest              // the pull request as a whole
+	levelFile                     // the selected file
+	levelHunk                     // the hunk under the diff cursor
+	levelLines                    // the line or selection a new comment goes on
+	levelThread                   // the comment thread under the cursor
+	levelComment                  // one comment of an open thread
 )
+
+// resolved reports whether the resolver turns the level into a target.
+func (level level) resolved() bool { return level >= levelLines }
 
 // request is what an action asks the resolver for.
 type request struct {
@@ -42,6 +50,9 @@ type commentRule struct {
 	notMine string
 	// cannot is said when it is the viewer's comment but not allowed.
 	cannot string
+	// unsupported, if set, refuses a comment of a kind the action cannot
+	// change yet; it comes last, after the rights.
+	unsupported func(commentTarget) tea.Cmd
 }
 
 // resolvedTarget is what the cursor context gives the action. Only the field
@@ -53,12 +64,9 @@ type resolvedTarget struct {
 }
 
 // resolveTarget turns the diff cursor into the target the request names, or
-// returns the command that tells why there is none. Every level needs the
-// diff pane on screen, focused or not.
+// returns the command that tells why there is none. The caller has checked
+// that the diff pane is on screen (diffHidden) where the action needs it.
 func (view *View) resolveTarget(request request) (resolvedTarget, tea.Cmd) {
-	if hidden := view.diffHidden(request.words); hidden != nil {
-		return resolvedTarget{}, hidden
-	}
 	var context diffview.Context
 	if view.selection() > 0 { // the Overview has no diff cursor
 		context = view.filePane.Context()
@@ -93,6 +101,11 @@ func (view *View) resolveTarget(request request) (resolvedTarget, tea.Cmd) {
 		return resolvedTarget{}, userinterface.Info(rule.notMine)
 	case rule != nil && !rule.allowed(comment):
 		return resolvedTarget{}, userinterface.Info(rule.cannot)
+	}
+	if rule != nil && rule.unsupported != nil {
+		if refusal := rule.unsupported(comment); refusal != nil {
+			return resolvedTarget{}, refusal
+		}
 	}
 	return resolvedTarget{comment: comment}, nil
 }

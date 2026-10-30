@@ -4,7 +4,10 @@ import (
 	"fmt"
 	"strings"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/terminaltext"
 )
 
@@ -39,6 +42,14 @@ func parseMergeArguments(arguments string) (github.MergeMethod, error) {
 		return method, nil
 	}
 	return "", fmt.Errorf("unknown merge method %q (use merge, squash or rebase)", terminaltext.Clean(arguments))
+}
+
+// checkMergeArguments refuses an unknown merge method before anything else.
+func checkMergeArguments(arguments string) tea.Cmd {
+	if _, err := parseMergeArguments(arguments); err != nil {
+		return userinterface.Error(err)
+	}
+	return nil
 }
 
 // resolveMethod picks the method to merge with: the requested one if the repo

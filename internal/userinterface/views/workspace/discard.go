@@ -38,9 +38,6 @@ type reviewDiscard struct {
 
 // discardReview starts discarding the viewer's pending review.
 func (view *View) discardReview() tea.Cmd {
-	if notice := view.guardState().admit(writeDiscard); notice != nil {
-		return notice
-	}
 	discard := reviewDiscard{origin: view.origin(), client: view.client, timeouts: view.timeouts}
 	view.writeStarted()
 	return func() tea.Msg { return discard.check(nil) }

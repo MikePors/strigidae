@@ -116,9 +116,6 @@ func (view *View) reviewedHunks(file *diff.File) int {
 // toggleHunkReviewed flips the reviewed mark of the hunk at the diff cursor.
 // Nothing is sent to GitHub.
 func (view *View) toggleHunkReviewed() tea.Cmd {
-	if hidden := view.diffHidden("mark the hunk"); hidden != nil {
-		return hidden
-	}
 	context := view.filePane.Context()
 	file, hunk := context.File, context.Hunk
 	if !context.InHunk || view.diff.Parsed == nil || file != view.diff.Parsed.File(view.selectedPath()) {

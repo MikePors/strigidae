@@ -16,6 +16,7 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/theme/terminalpalette"
 	"github.com/MikePors/strigidae/internal/userinterface/views/dashboard"
 	"github.com/MikePors/strigidae/internal/userinterface/views/pullrequestlist"
+	"github.com/MikePors/strigidae/internal/userinterface/views/workspace"
 	"github.com/MikePors/strigidae/internal/version"
 )
 
@@ -46,7 +47,14 @@ func runTerminalInterface(application application, stderr io.Writer) error {
 // userInterfaceOptions is what the shell starts with: the logger, the startup
 // notice, and the options the config file set.
 func (application application) userInterfaceOptions(logger *slog.Logger, notice string) userinterface.Options {
-	return userinterface.Options{Logger: logger, Notice: notice, StartingOptions: application.config.Options}
+	return userinterface.Options{Logger: logger, Notice: notice, StartingOptions: application.config.Options, ViewCommands: viewCommands()}
+}
+
+// viewCommands collects the command names every view package declares, so the
+// shell can tell a command another view owns from a word that is no command.
+// A view with commands adds its Commands here.
+func viewCommands() []string {
+	return workspace.Commands()
 }
 
 // askTerminal asks the controlling terminal for its palette, before the

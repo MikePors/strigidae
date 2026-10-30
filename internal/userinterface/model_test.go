@@ -75,8 +75,11 @@ func instantTick(_ time.Duration, function func(time.Time) tea.Msg) tea.Cmd {
 	return func() tea.Msg { return function(time.Time{}) }
 }
 
+// testViewCommands stands in for the names cmd/strig collects from the views.
+var testViewCommands = []string{"approve", "merge", "review", "copy-filename", "resolve", "unresolve"}
+
 func newModel(root View) *Model {
-	model := New(root, theme.Default(), Options{Tick: instantTick})
+	model := New(root, theme.Default(), Options{Tick: instantTick, ViewCommands: testViewCommands})
 	model.Update(tea.WindowSizeMsg{Width: 60, Height: 12})
 	return model
 }
@@ -242,7 +245,7 @@ func TestParseCommand(test *testing.T) {
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.line, func(test *testing.T) {
-			got := parseCommand(testCase.line, nil)()
+			got := parseCommand(testCase.line, nil, testViewCommands)()
 			if testCase.want == nil {
 				errorMessage, ok := got.(ErrorMessage)
 				if !ok || errorMessage.Err.Error() != "not a command: "+testCase.name {
@@ -255,7 +258,7 @@ func TestParseCommand(test *testing.T) {
 			}
 		})
 	}
-	if parseCommand("   ", nil) != nil {
+	if parseCommand("   ", nil, testViewCommands) != nil {
 		test.Error("blank line should do nothing")
 	}
 }

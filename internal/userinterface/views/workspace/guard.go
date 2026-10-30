@@ -14,9 +14,11 @@ import (
 type writeKind int
 
 const (
+	// writeNone: the action writes nothing and has no guard.
+	writeNone writeKind = iota
 	// writeComment: `c` (lines only), `V` (starts an inline comment), `r`,
 	// `e` / `:edit-comment`, `D` / `:delete-comment`, and the reply's yes.
-	writeComment writeKind = iota
+	writeComment
 	// writeThread: `x`, `:resolve`, `:unresolve`.
 	writeThread
 	// writeOverviewComment: `C` (a top-level comment) from anywhere in the

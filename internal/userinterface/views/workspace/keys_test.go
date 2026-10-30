@@ -34,7 +34,7 @@ func terminalKeys(text string, base rune) map[string]tea.KeyPressMsg {
 func rootFor(harness *harness) (model *userinterface.Model, timers *int) {
 	timers = new(int)
 	tick := func(time.Duration, func(time.Time) tea.Msg) tea.Cmd { *timers++; return nil }
-	model = userinterface.New(harness.view, theme.New(true), userinterface.Options{Tick: tick})
+	model = userinterface.New(harness.view, theme.New(true), userinterface.Options{Tick: tick, ViewCommands: Commands()})
 	_, _ = model.Update(tea.WindowSizeMsg{Width: harness.view.width, Height: harness.view.height + 1})
 	return model, timers
 }

@@ -44,27 +44,32 @@ type reactionToggledMessage struct {
 	err               error
 }
 
-// reactCommand handles :react [name].
-func (view *View) reactCommand(name string) tea.Cmd {
-	if notice := view.guardState().ready(writeReaction); notice != nil {
-		return notice
+// reactionNamed finds the reaction a :react argument names.
+func reactionNamed(name string) (github.ReactionContent, error) {
+	index := slices.IndexFunc(github.ReactionContents, func(candidate github.ReactionContent) bool { return candidate.Shortcode() == name })
+	if index < 0 {
+		return "", fmt.Errorf("not a reaction: %s (use %s)", terminaltext.Clean(name), reactionNames())
 	}
+	return github.ReactionContents[index], nil
+}
+
+// checkReaction refuses an unknown reaction name; no name is fine.
+func checkReaction(name string) tea.Cmd {
+	if name == "" {
+		return nil
+	}
+	if _, err := reactionNamed(name); err != nil {
+		return userinterface.Error(err)
+	}
+	return nil
+}
+
+// reactCommand handles :react [name] once the comment at the cursor is found.
+func (view *View) reactCommand(name string, comment commentTarget) tea.Cmd {
 	var content github.ReactionContent
 	if name != "" {
-		index := slices.IndexFunc(github.ReactionContents, func(candidate github.ReactionContent) bool { return candidate.Shortcode() == name })
-		if index < 0 {
-			return userinterface.Error(fmt.Errorf("not a reaction: %s (use %s)", terminaltext.Clean(name), reactionNames()))
-		}
-		content = github.ReactionContents[index]
+		content, _ = reactionNamed(name) // checked by checkReaction
 	}
-	resolved, command := view.resolveTarget(request{level: levelComment, words: "react to it"})
-	if command != nil {
-		return command
-	}
-	if busy := view.guardState().busy(writeReaction); busy != nil {
-		return busy
-	}
-	comment := resolved.comment
 	target := reactionTarget{commentIdentifier: comment.identifier, reactions: comment.reactions}
 	if content != "" {
 		return view.toggleReaction(target, content)

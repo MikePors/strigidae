@@ -64,7 +64,7 @@ func TestThemeCommandSwitchesTheme(test *testing.T) {
 	tokyoNight := bundled(test, "tokyo-night")
 	model, asked := themeModel(root, func(string) (scheme.Scheme, error) { return tokyoNight, nil })
 
-	drive(model, parseCommand("theme  tokyo-night ", model.top()))
+	drive(model, parseCommand("theme  tokyo-night ", model.top(), model.viewCommands))
 
 	if len(*asked) != 1 || (*asked)[0] != "tokyo-night" {
 		test.Fatalf("loader asked for %q, want [tokyo-night]", *asked)
@@ -101,7 +101,7 @@ func TestThemeCommandErrorKeepsTheme(test *testing.T) {
 	before := model.theme.Identifier
 	seen := len(root.got)
 
-	drive(model, parseCommand("theme nope", model.top()))
+	drive(model, parseCommand("theme nope", model.top(), model.viewCommands))
 
 	if model.theme.Identifier != before {
 		test.Error("a failed :theme changed the theme")
@@ -119,7 +119,7 @@ func TestThemeCommandErrorKeepsTheme(test *testing.T) {
 
 func TestThemeCommandWithoutValue(test *testing.T) {
 	model, asked := themeModel(newFake("v"), func(string) (scheme.Scheme, error) { return scheme.Scheme{}, nil })
-	drive(model, parseCommand("theme", model.top()))
+	drive(model, parseCommand("theme", model.top(), model.viewCommands))
 	if len(*asked) != 0 {
 		test.Error("the loader ran without a value")
 	}
@@ -173,7 +173,7 @@ func TestThemeCommandTerminalOnlyInConfig(test *testing.T) {
 	model.Update(tea.WindowSizeMsg{Width: 200, Height: 12})
 	before := model.theme.Identifier
 
-	drive(model, parseCommand("theme Terminal", model.top()))
+	drive(model, parseCommand("theme Terminal", model.top(), model.viewCommands))
 
 	if len(*asked) != 0 {
 		test.Error("the loader ran for :theme terminal")
@@ -199,7 +199,7 @@ func TestThemeCommandXresourcesFile(test *testing.T) {
 	}
 	model, _ := themeModel(newFake("v"), LoadThemeFromWorkingDirectory)
 
-	drive(model, parseCommand("theme "+path, model.top()))
+	drive(model, parseCommand("theme "+path, model.top(), model.viewCommands))
 
 	if !model.theme.Chosen {
 		test.Errorf("the Xresources theme was not applied; status row = %q", ansi.Strip(model.bottomRow()))

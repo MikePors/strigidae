@@ -30,9 +30,10 @@ func commandTable() []commandDefinition {
 
 // parseCommand turns a command line (without the ":") into a command. An
 // empty line does nothing. The static table is consulted first; then top, if
-// it is a Commander and the name is in viewCommands. A name nobody handles
-// yields an error message.
-func parseCommand(line string, top View) tea.Cmd {
+// it is a Commander and the name is in viewCommands (the names every view
+// declares, from Options.ViewCommands). A name nobody handles yields an error
+// message.
+func parseCommand(line string, top View, viewCommands []string) tea.Cmd {
 	line = strings.TrimSpace(line)
 	if line == "" {
 		return nil
@@ -56,11 +57,6 @@ func parseCommand(line string, top View) tea.Cmd {
 	}
 	return Error(fmt.Errorf("not a command: %s", name))
 }
-
-// viewCommands are the names that views may handle through Commander. The
-// shell keeps the list so it can tell "a command this view lacks" from a
-// typo. Add a name here when a view starts handling it.
-var viewCommands = []string{"approve", "checks", "copy-filename", "delete-comment", "discard-review", "edit-comment", "merge", "react", "request-changes", "resolve", "review", "unresolve"}
 
 // commandLine is the ":" prompt drawn in the status bar row. It is the
 // reference pattern for key-capturing input: while active it reports
