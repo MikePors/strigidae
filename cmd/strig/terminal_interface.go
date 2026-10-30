@@ -6,16 +6,20 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	cliBrowser "github.com/cli/browser"
 
+	"github.com/MikePors/strigidae/internal/beefis"
+	"github.com/MikePors/strigidae/internal/environment"
 	"github.com/MikePors/strigidae/internal/logging"
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/theme/terminalpalette"
 	"github.com/MikePors/strigidae/internal/userinterface/views/dashboard"
 	"github.com/MikePors/strigidae/internal/userinterface/views/pullrequestlist"
+	"github.com/MikePors/strigidae/internal/userinterface/views/workspace"
 	"github.com/MikePors/strigidae/internal/version"
 )
 
@@ -34,6 +38,18 @@ func runTerminalInterface(application application, stderr io.Writer) error {
 
 	built, notice := application.buildTheme(logger, askTerminal)
 	application.theme = built
+	if application.beefis {
+		unit, err := beefis.Start("beefis", environment.Scrub(os.Environ()), logLines{logger: logger})
+		if err != nil {
+			return err
+		}
+		defer func() {
+			if err := unit.Close(); err != nil {
+				logger.Warn("beefis unit ended", "err", err)
+			}
+		}()
+		application.questions = workspace.NewQuestions(unit)
+	}
 	model := userinterface.New(firstView(application), application.theme, application.userInterfaceOptions(logger, notice))
 	if _, err := tea.NewProgram(model).Run(); err != nil {
 		logger.Error("program failed", "err", err)
@@ -46,7 +62,20 @@ func runTerminalInterface(application application, stderr io.Writer) error {
 // userInterfaceOptions is what the shell starts with: the logger, the startup
 // notice, and the options the config file set.
 func (application application) userInterfaceOptions(logger *slog.Logger, notice string) userinterface.Options {
-	return userinterface.Options{Logger: logger, Notice: notice, StartingOptions: application.config.Options}
+	userInterfaceOptions := userinterface.Options{Logger: logger, Notice: notice, StartingOptions: application.config.Options}
+	if application.questions != nil {
+		userInterfaceOptions.Companion = application.questions
+	}
+	return userInterfaceOptions
+}
+
+// logLines logs what a program strig started writes to stderr, which must
+// never reach the terminal the TUI owns.
+type logLines struct{ logger *slog.Logger }
+
+func (writer logLines) Write(text []byte) (int, error) {
+	writer.logger.Info("beefis", "stderr", strings.TrimRight(string(text), "\n"))
+	return len(text), nil
 }
 
 // askTerminal asks the controlling terminal for its palette, before the
@@ -64,9 +93,9 @@ func askTerminal() (terminalpalette.Reply, error) {
 // or in one with no GitHub remote), else the repository's pull request list.
 func firstView(application application) userinterface.View {
 	if application.dashboard {
-		return dashboard.New(application.client, application.config.Tabs, application.theme, dashboard.Options{Notice: application.notice, Timeouts: application.timeouts()})
+		return dashboard.New(application.client, application.config.Tabs, application.theme, dashboard.Options{Notice: application.notice, Timeouts: application.timeouts(), Questions: application.questions})
 	}
-	return pullrequestlist.New(application.client, application.repository, application.theme, pullrequestlist.Options{Timeouts: application.timeouts()})
+	return pullrequestlist.New(application.client, application.repository, application.theme, pullrequestlist.Options{Timeouts: application.timeouts(), Questions: application.questions})
 }
 
 // timeouts hands the config file's deadlines to the views; a field the file

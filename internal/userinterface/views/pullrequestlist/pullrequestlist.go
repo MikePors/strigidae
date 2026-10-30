@@ -48,6 +48,8 @@ type Options struct {
 	Open func(url string) error
 	// Timeouts are the deadlines of the GitHub calls; zero fields select the defaults.
 	Timeouts userinterface.Timeouts
+	// Questions, if set, lets the workspaces it opens ask about lines (:ask).
+	Questions *workspace.Questions
 }
 
 // View lists one repository's open pull requests.
@@ -62,6 +64,7 @@ type View struct {
 	// hunkMarks keeps the hunks marked reviewed in every workspace opened
 	// from here, so they survive closing and reopening a pull request.
 	hunkMarks *workspace.HunkMarks
+	questions *workspace.Questions
 
 	pullRequests []github.PullRequest
 	next         string // cursor of the next page, empty when all are loaded
@@ -99,6 +102,7 @@ func New(client github.Client, repository github.Repository, activeTheme theme.T
 		now:        options.Now,
 		open:       options.Open,
 		timeouts:   options.Timeouts,
+		questions:  options.Questions,
 		sequence:   1,
 		loading:    true,
 		hunkMarks:  workspace.NewHunkMarks(),
@@ -307,6 +311,7 @@ func (view *View) openSelected() tea.Cmd {
 		workspace.WithHunkMarks(view.hunkMarks),
 		workspace.WithWrap(view.options.Wrap()),
 		workspace.WithTimeouts(view.timeouts),
+		workspace.WithQuestions(view.questions),
 	))
 }
 

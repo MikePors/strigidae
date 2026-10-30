@@ -117,6 +117,8 @@ func (view *View) reviewEnvironment() reviewEnvironment {
 // :checks, :merge, :copy-filename, :edit-comment, :delete-comment, :discard-review, :react, :resolve and :unresolve.
 func (view *View) Command(name, arguments string) (tea.Cmd, bool) {
 	switch name {
+	case "ask":
+		return view.ask(arguments), true
 	case "copy-filename":
 		return view.copyFilename(), true
 	case "checks":
