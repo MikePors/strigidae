@@ -5,8 +5,30 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/github/fake"
 	"github.com/MikePors/strigidae/internal/userinterface"
+	"github.com/MikePors/strigidae/internal/userinterface/theme"
+	"github.com/MikePors/strigidae/internal/userinterface/views/dashboard"
+	"github.com/MikePors/strigidae/internal/userinterface/views/workspace"
 )
+
+// ":create" belongs to the repository list: elsewhere the shell says "not
+// available here" because the top view declines it or is no Commander.
+func TestCreateIsNotAvailableOutsideTheList(test *testing.T) {
+	if !slices.Contains(viewCommands(), "create") {
+		test.Fatal(`the shell is not told about "create"`)
+	}
+	if _, ok := any(dashboard.New(fake.New(), nil, theme.Default(), dashboard.Options{})).(userinterface.Commander); ok {
+		test.Error("the dashboard is a Commander, so it could take :create")
+	}
+	view := workspace.New(fake.New(), github.Repository{Owner: "o", Name: "r"}, 1)
+	for _, name := range []string{"create", "create-draft"} {
+		if command, handled := view.Command(name, ""); handled || command != nil {
+			test.Errorf("the workspace handled :%s", name)
+		}
+	}
+}
 
 // The checkout's branch is the head the list preselects; with -R the checkout
 // need not be the repository shown, so there is none.
