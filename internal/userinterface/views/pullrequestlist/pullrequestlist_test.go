@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/MikePors/strigidae/internal/config"
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/github/fake"
 	"github.com/MikePors/strigidae/internal/golden"
@@ -44,7 +45,7 @@ func makePullRequests(count int) []github.PullRequest {
 }
 
 func newView(client github.Client, open func(string) error) *View {
-	view := New(client, testRepository, nil, theme.Default(), Options{Now: func() time.Time { return testNow }, Open: open})
+	view := New(client, testRepository, config.Default().Tabs, theme.Default(), Options{Now: func() time.Time { return testNow }, Open: open})
 	view.Update(tea.WindowSizeMsg{Width: 80, Height: 13})
 	return view
 }
@@ -211,7 +212,7 @@ func TestUntrustedTextIsCleaned(test *testing.T) {
 	repository := github.Repository{Owner: "ev\x1b[2Jil", Name: "re\x07po"}
 	client := fake.New()
 	client.SetError(fake.MethodListPullRequests, errors.New("boom\x1b]52;c;aGk=\x07\u202e\u009b"))
-	view := New(client, repository, nil, theme.Default(), Options{})
+	view := New(client, repository, config.Default().Tabs, theme.Default(), Options{})
 	view.Update(tea.WindowSizeMsg{Width: 80, Height: 8})
 
 	if strings.ContainsAny(view.Title(), "\x1b\x07") {
@@ -572,7 +573,7 @@ func (stubCopier) Copy(context.Context, string) error { return nil }
 
 func TestClipboardPassedToWorkspaces(test *testing.T) {
 	copier := stubCopier{}
-	view := New(fakeWith(makePullRequests(1)), testRepository, nil, theme.Default(), Options{Clipboard: copier})
+	view := New(fakeWith(makePullRequests(1)), testRepository, config.Default().Tabs, theme.Default(), Options{Clipboard: copier})
 	view.Update(tea.WindowSizeMsg{Width: 80, Height: 13})
 	deliver(test, view, view.Init())
 	push, ok := press(view, "enter")().(userinterface.PushMessage)
@@ -586,7 +587,7 @@ func TestClipboardPassedToWorkspaces(test *testing.T) {
 
 func TestWrapPassedToWorkspaces(test *testing.T) {
 	for _, wrap := range []bool{false, true} {
-		view := New(fakeWith(makePullRequests(1)), testRepository, nil, theme.Default(), Options{})
+		view := New(fakeWith(makePullRequests(1)), testRepository, config.Default().Tabs, theme.Default(), Options{})
 		view.Update(userinterface.OptionsMessage{Values: options.Values{options.Wrap: wrap}})
 		view.Update(tea.WindowSizeMsg{Width: 80, Height: 13})
 		deliver(test, view, view.Init())

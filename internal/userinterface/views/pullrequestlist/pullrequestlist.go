@@ -140,6 +140,8 @@ func New(client github.Client, repository github.Repository, configured []config
 	}
 	tabs := []tab{{name: "All"}}
 	for _, current := range configured {
+		// The config only allows a GitHub login or @me, so Clean changes nothing
+		// there; it guards tabs built some other way.
 		author := terminaltext.Clean(current.User)
 		if author == "" {
 			author = config.Me
@@ -164,9 +166,11 @@ func New(client github.Client, repository github.Repository, configured []config
 	}
 }
 
-// authorQuery finds the open pull requests of one author in the repository.
+// authorQuery finds the open pull requests of one author in the repository,
+// newest update first like the All tab. The sort is a qualifier, as in the
+// dashboard's sections.
 func authorQuery(repository github.Repository, author string) string {
-	return fmt.Sprintf("is:pr is:open repo:%s author:%s", repository, author)
+	return fmt.Sprintf("is:pr is:open repo:%s author:%s sort:%s-%s", repository, author, config.SortUpdated, config.OrderDescending)
 }
 
 // current is the tab being shown.
@@ -291,7 +295,11 @@ func (view *View) loaded(message pullRequestsLoadedMessage) tea.Cmd {
 		current.err = message.err
 		current.moreFailed = message.more // stop auto-paging until R
 
-		return userinterface.Error(terminaltext.SafeError(fmt.Errorf("load pull requests in %s: %w", view.repository, message.err)))
+		failure := fmt.Errorf("load pull requests in %s: %w", view.repository, message.err)
+		if message.tab != view.active {
+			failure = fmt.Errorf("%s: %w", terminaltext.Clean(current.name), failure)
+		}
+		return userinterface.Error(terminaltext.SafeError(failure))
 	}
 	current.err = nil
 	current.next = message.page.Next
@@ -301,10 +309,10 @@ func (view *View) loaded(message pullRequestsLoadedMessage) tea.Cmd {
 		current.replace(message.page.Items)
 	}
 	current.window.SetRows(len(current.pullRequests))
+	current.search.Refresh(view.searchListOf(current))
 	if message.tab != view.active {
-		return nil // its search and paging resume when it is shown
+		return nil // paging resumes when it is shown
 	}
-	current.search.Refresh(view.searchList())
 	return view.maybeLoadMore()
 }
 

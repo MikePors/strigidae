@@ -10,17 +10,21 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/components/search"
 )
 
-// searchList lets the search read and move the rows.
-func (view *View) searchList() search.List {
+// searchList lets the search read and move the shown tab's rows.
+func (view *View) searchList() search.List { return view.searchListOf(view.current()) }
+
+// searchListOf is searchList for any tab, so rows arriving in a hidden tab can
+// refresh its search marks.
+func (view *View) searchListOf(current *tab) search.List {
 	return search.List{
 		Items: func() []search.Item {
-			return pullrequestrows.SearchItems(view.current().pullRequests, func(_ int, pullRequest github.PullRequest) string {
+			return pullrequestrows.SearchItems(current.pullRequests, func(_ int, pullRequest github.PullRequest) string {
 				return strconv.Itoa(pullRequest.Number)
 			})
 		},
-		Cursor: view.current().window.Cursor,
+		Cursor: current.window.Cursor,
 		GoTo: func(row int) tea.Cmd {
-			view.current().window.GotoRow(row)
+			current.window.GotoRow(row)
 			return view.maybeLoadMore()
 		},
 	}

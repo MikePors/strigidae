@@ -2,6 +2,8 @@ package pullrequestlist
 
 import (
 	"errors"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -64,16 +66,16 @@ func TestTabsFromConfig(test *testing.T) {
 		wantQuery  []string
 	}{
 		{"no tabs", nil, []string{"All"}, []string{""}},
-		{"default config", config.Default().Tabs, []string{"All", "Me"}, []string{"", "is:pr is:open repo:acme/widgets author:@me"}},
+		{"default config", config.Default().Tabs, []string{"All", "Me"}, []string{"", "is:pr is:open repo:acme/widgets author:@me sort:updated-desc"}},
 		{
 			"configured order and users",
 			[]config.Tab{{Name: "Alice", User: "alice"}, {Name: "Bob", User: "bob-b"}, {Name: "No user"}},
 			[]string{"All", "Alice", "Bob", "No user"},
 			[]string{
 				"",
-				"is:pr is:open repo:acme/widgets author:alice",
-				"is:pr is:open repo:acme/widgets author:bob-b",
-				"is:pr is:open repo:acme/widgets author:@me",
+				"is:pr is:open repo:acme/widgets author:alice sort:updated-desc",
+				"is:pr is:open repo:acme/widgets author:bob-b sort:updated-desc",
+				"is:pr is:open repo:acme/widgets author:@me sort:updated-desc",
 			},
 		},
 	} {
@@ -108,8 +110,8 @@ func TestSwitchingTabsWraps(test *testing.T) {
 
 func TestTabsLoadWhenFirstShown(test *testing.T) {
 	client := fakeWith(makePullRequests(2))
-	client.SetSearchResults("is:pr is:open repo:acme/widgets author:alice", authored("alice", 21, 22, 23))
-	client.SetSearchResults("is:pr is:open repo:acme/widgets author:bob", authored("bob", 31))
+	client.SetSearchResults("is:pr is:open repo:acme/widgets author:alice sort:updated-desc", authored("alice", 21, 22, 23))
+	client.SetSearchResults("is:pr is:open repo:acme/widgets author:bob sort:updated-desc", authored("bob", 31))
 	view := tabbedWith(test, client, config.Tab{Name: "Alice", User: "alice"}, config.Tab{Name: "Bob", User: "bob"})
 
 	wantCalls := []fake.Call{{Method: fake.MethodListPullRequests, Repository: testRepository}}
@@ -125,7 +127,7 @@ func TestTabsLoadWhenFirstShown(test *testing.T) {
 	if len(view.current().pullRequests) != 3 {
 		test.Fatalf("alice rows = %d, want 3", len(view.current().pullRequests))
 	}
-	wantCalls = append(wantCalls, fake.Call{Method: fake.MethodSearchPullRequests, Query: "is:pr is:open repo:acme/widgets author:alice"})
+	wantCalls = append(wantCalls, fake.Call{Method: fake.MethodSearchPullRequests, Query: "is:pr is:open repo:acme/widgets author:alice sort:updated-desc"})
 	if diff := cmp.Diff(wantCalls, client.Calls()); diff != "" {
 		test.Errorf("calls (-want +got):\n%s", diff)
 	}
@@ -140,7 +142,7 @@ func TestTabsLoadWhenFirstShown(test *testing.T) {
 
 	// R refreshes only the shown tab.
 	deliver(test, view, press(view, "R"))
-	wantCalls = append(wantCalls, fake.Call{Method: fake.MethodSearchPullRequests, Query: "is:pr is:open repo:acme/widgets author:alice", Page: github.PageRequest{Limit: 3}})
+	wantCalls = append(wantCalls, fake.Call{Method: fake.MethodSearchPullRequests, Query: "is:pr is:open repo:acme/widgets author:alice sort:updated-desc", Page: github.PageRequest{Limit: 3}})
 	if diff := cmp.Diff(wantCalls, client.Calls()); diff != "" {
 		test.Errorf("calls after R (-want +got):\n%s", diff)
 	}
@@ -151,7 +153,7 @@ func TestTabsLoadWhenFirstShown(test *testing.T) {
 
 func TestEachTabKeepsItsCursorAndSearch(test *testing.T) {
 	client := fakeWith(makePullRequests(5))
-	client.SetSearchResults("is:pr is:open repo:acme/widgets author:alice", authored("alice", 21, 22, 23, 24))
+	client.SetSearchResults("is:pr is:open repo:acme/widgets author:alice sort:updated-desc", authored("alice", 21, 22, 23, 24))
 	view := tabbedWith(test, client, config.Tab{Name: "Alice", User: "alice"})
 
 	press(view, "j")
@@ -185,7 +187,7 @@ func TestEachTabKeepsItsCursorAndSearch(test *testing.T) {
 
 func TestEnterAndOpenUseTheShownTab(test *testing.T) {
 	client := fakeWith(makePullRequests(2))
-	client.SetSearchResults("is:pr is:open repo:acme/widgets author:alice", authored("alice", 21, 22))
+	client.SetSearchResults("is:pr is:open repo:acme/widgets author:alice sort:updated-desc", authored("alice", 21, 22))
 	var opened []string
 	view := tabbedWith(test, client, config.Tab{Name: "Alice", User: "alice"})
 	view.open = func(url string) error {
@@ -243,7 +245,7 @@ func TestTabStates(test *testing.T) {
 
 	test.Run("late result lands in its own tab", func(test *testing.T) {
 		client := fakeWith(makePullRequests(2))
-		client.SetSearchResults("is:pr is:open repo:acme/widgets author:alice", authored("alice", 21))
+		client.SetSearchResults("is:pr is:open repo:acme/widgets author:alice sort:updated-desc", authored("alice", 21))
 		view := tabbedWith(test, client, configured)
 		command := press(view, "g t")
 		press(view, "g T") // leave before the answer arrives
@@ -256,13 +258,59 @@ func TestTabStates(test *testing.T) {
 
 func TestHostileTabNameAndUser(test *testing.T) {
 	view := tabbedView(config.Tab{Name: "Al\x1b]52;c;aGk=\x07ice", User: "al\x1b[2Jice"})
-	for _, character := range ansi.Strip(view.Render(80, 13)) {
-		if character == '\x1b' || character == '\x07' {
-			test.Fatalf("control character reached the screen")
-		}
+	// Colour codes are the theme's own; any other escape or BEL is hostile.
+	raw := regexp.MustCompile("\x1b\\[[0-9;]*m").ReplaceAllString(view.Render(80, 13), "")
+	if strings.ContainsAny(raw, "\x1b\x07") {
+		test.Errorf("control characters reached the screen: %q", raw)
 	}
 	if strings.ContainsAny(view.tabs[1].query, "\x1b\x07") {
 		test.Errorf("query carries control characters: %q", view.tabs[1].query)
+	}
+}
+
+func TestSearchMarksFollowRowsThatArriveInAHiddenTab(test *testing.T) {
+	client := fakeWith(makePullRequests(5)) // #5 ... #1
+	view := tabbedWith(test, client, config.Tab{Name: "Alice", User: "alice"})
+	press(view, "/")
+	typeSearch(view, "number 2")
+	finishSearch(view, "number 2", userinterface.PromptSubmitted)
+	if !view.current().search.Marked(3) {
+		test.Fatal("setup: #2 should be marked on row 3")
+	}
+
+	refresh := press(view, "R")
+	press(view, "g t") // leave before the answer arrives
+	reversed := makePullRequests(5)
+	slices.Reverse(reversed)
+	for i := range reversed {
+		reversed[i].UpdatedAt = testNow.Add(-time.Duration(i) * time.Hour) // the fake lists newest first
+	}
+	client.SetPullRequests(testRepository, reversed) // #1 ... #5, newest first
+	deliver(test, view, refresh)
+	press(view, "g T")
+
+	if !view.current().search.Marked(1) || view.current().search.Marked(3) {
+		test.Errorf("marks: row 1 %v, row 3 %v; want #2 (now row 1) marked and row 3 not", view.current().search.Marked(1), view.current().search.Marked(3))
+	}
+}
+
+func TestHiddenTabErrorNamesTheTab(test *testing.T) {
+	client := fakeWith(makePullRequests(2))
+	client.SetError(fake.MethodSearchPullRequests, errors.New("search broke"))
+	view := tabbedWith(test, client, config.Tab{Name: "Al\x1b[2Jice", User: "alice"})
+	command := press(view, "g t")
+	press(view, "g T")
+	_, next := view.Update(command())
+	status := next().(userinterface.ErrorMessage).Err.Error()
+	if want := "Al [2Jice: load pull requests in acme/widgets: search broke"; status != want {
+		test.Errorf("status = %q, want %q", status, want)
+	}
+
+	// The shown tab's own error does not repeat its name.
+	press(view, "g t")
+	_, next = view.Update(pullRequestsLoadedMessage{repository: testRepository, tab: 1, sequence: view.tabs[1].sequence, err: errors.New("again")})
+	if status := next().(userinterface.ErrorMessage).Err.Error(); strings.HasPrefix(status, "Al") {
+		test.Errorf("status = %q, want no tab name on the shown tab", status)
 	}
 }
 
@@ -270,7 +318,7 @@ func TestTabGoldens(test *testing.T) {
 	configured := []config.Tab{{Name: "Alice", User: "alice"}, {Name: "Bob", User: "bob"}}
 	test.Run("second_tab", func(test *testing.T) {
 		client := fakeWith(makePullRequests(3))
-		client.SetSearchResults("is:pr is:open repo:acme/widgets author:alice", authored("alice", 21, 22))
+		client.SetSearchResults("is:pr is:open repo:acme/widgets author:alice sort:updated-desc", authored("alice", 21, 22))
 		view := tabbedWith(test, client, configured...)
 		deliver(test, view, press(view, "g t"))
 		golden.Assert(test, "second_tab", view.Render(60, 8), false)
