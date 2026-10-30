@@ -54,6 +54,12 @@ type Options struct {
 	// Clipboard is the system clipboard tool the workspaces copy with besides
 	// OSC 52; nil means OSC 52 only.
 	Clipboard clipboard.Copier
+	// CurrentBranch is the checkout's branch, preselected as the head of a new
+	// pull request; empty when there is none.
+	CurrentBranch string
+	// Edit opens $EDITOR for the text of a new pull request; nil selects the
+	// real editor.
+	Edit workspace.EditFunction
 }
 
 // tab is one list of the repository's open pull requests with its own rows,
@@ -92,6 +98,11 @@ type View struct {
 	hunkMarks *workspace.HunkMarks
 	bindings  bindings
 
+	currentBranch  string
+	edit           workspace.EditFunction
+	createSequence int         // numbers every :create flow and is never reused
+	creating       *createFlow // the :create or :create-draft in progress, if any
+
 	tabs          []tab
 	active        int
 	options       options.Values // the `:set` options, sent by the root
@@ -108,6 +119,8 @@ func (listBindings *bindings) actions() []keys.Action {
 	return []keys.Action{
 		{Name: "next-tab", Binding: &listBindings.nextTab},
 		{Name: "previous-tab", Binding: &listBindings.previousTab},
+		{Name: commandCreate, Command: commandCreate},
+		{Name: commandCreateDraft, Command: commandCreateDraft},
 	}
 }
 
@@ -123,9 +136,11 @@ func ActionNames() []string {
 }
 
 var (
-	_ userinterface.View     = (*View)(nil)
-	_ userinterface.Loader   = (*View)(nil)
-	_ userinterface.Prompter = (*View)(nil)
+	_ userinterface.View        = (*View)(nil)
+	_ userinterface.Loader      = (*View)(nil)
+	_ userinterface.Prompter    = (*View)(nil)
+	_ userinterface.Commander   = (*View)(nil)
+	_ userinterface.KeyCapturer = (*View)(nil)
 )
 
 // New returns the PR list for repository. It starts loading when pushed (Init).
@@ -137,6 +152,9 @@ func New(client github.Client, repository github.Repository, configured []config
 	}
 	if options.Open == nil {
 		options.Open = openInBrowser
+	}
+	if options.Edit == nil {
+		options.Edit = workspace.ExecEditor
 	}
 	tabs := []tab{{name: "All"}}
 	for _, current := range configured {
@@ -157,12 +175,14 @@ func New(client github.Client, repository github.Repository, configured []config
 			nextTab:     key.NewBinding(key.WithKeys("g t"), key.WithHelp("gt", "next tab")),
 			previousTab: key.NewBinding(key.WithKeys("g T"), key.WithHelp("gT", "previous tab")),
 		},
-		now:       options.Now,
-		open:      options.Open,
-		timeouts:  options.Timeouts,
-		clipboard: options.Clipboard,
-		hunkMarks: workspace.NewHunkMarks(),
-		tabs:      tabs,
+		now:           options.Now,
+		open:          options.Open,
+		timeouts:      options.Timeouts,
+		clipboard:     options.Clipboard,
+		currentBranch: options.CurrentBranch,
+		edit:          options.Edit,
+		hunkMarks:     workspace.NewHunkMarks(),
+		tabs:          tabs,
 	}
 }
 
@@ -186,7 +206,7 @@ func openInBrowser(url string) error {
 // Loading implements userinterface.Loader.
 func (view *View) Loading() bool {
 	current := view.current()
-	return current.loading || current.loadingMore
+	return current.loading || current.loadingMore || (view.creating != nil && view.creating.loading)
 }
 
 // Title implements userinterface.View.
@@ -270,6 +290,16 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		view.theme = message.Theme
 	case pullRequestsLoadedMessage:
 		return view, view.loaded(message)
+	case branchesLoadedMessage:
+		return view, view.branchesLoaded(message)
+	case createTextMessage:
+		return view, view.createEdited(message)
+	case pullRequestCreatedMessage:
+		return view, view.pullRequestCreated(message)
+	case tea.KeyPressMsg:
+		if view.CapturesKeys() {
+			return view, view.createKey(message)
+		}
 	case userinterface.PromptResultMessage:
 		return view, view.current().search.Prompt(message, view.searchList())
 	case keys.Message:
@@ -423,7 +453,12 @@ func (view *View) openSelected() tea.Cmd {
 	if !ok {
 		return nil
 	}
-	return userinterface.Push(workspace.New(view.client, view.repository, pullRequest.Number,
+	return view.openPullRequest(pullRequest.Number)
+}
+
+// openPullRequest pushes the workspace for one pull request.
+func (view *View) openPullRequest(number int) tea.Cmd {
+	return userinterface.Push(workspace.New(view.client, view.repository, number,
 		workspace.WithTheme(view.theme),
 		workspace.WithClock(view.now),
 		workspace.WithOpener(view.open),

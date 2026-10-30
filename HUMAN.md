@@ -4,6 +4,14 @@ Checks only the maintainer can do, such as live verification against real GitHub
 
 ## Live checks
 
+- [ ] **`:create` and `:create-draft` create pull requests on GitHub** (#173). The `createPullRequest` mutation and the branch listing have only been tested against the fake client and fixtures.
+  1. In a test repository, push a branch with at least one commit that differs from `main`. Run `strig` in the checkout and open the pull request list.
+  2. Run `:create`. The head picker should open with your current branch under the cursor; `enter`. The base picker should not list that branch and should have the default branch under the cursor; `enter`. The editor opens empty: write a title, a blank line and a body, close it, answer `y`. The new pull request should open in strig and appear in the list; check title, body, head, base and that it is not a draft on github.com.
+  3. Push a second branch and run `:create-draft`. No `y/N` should be asked; check on github.com that it is a draft.
+  4. Run `strig -R <owner>/<repo>` from outside the checkout (or with `-R`) and run `:create`: no head should be preselected.
+  5. `esc` in each picker should cancel quietly; an empty title in the editor should show an error and create nothing.
+  6. **Error case:** run `:create` again with the same head as step 2 (a pull request is already open) and, separately, a head branch that has no commits beyond the base (create one with `git branch no-commits main` and push it). The status bar should show GitHub's message. Report the wording.
+
 - [ ] **`:edit-pull-request` edits a pull request's title and body on GitHub** (#174). The `updatePullRequest` mutation and the `viewerCanUpdate` field have only been tested against the fake client and fixtures.
   1. Open a test PR you may edit in strig and run `:edit-pull-request`. The editor should open with the title, a blank line, then the body.
   2. Change both, close the editor, and answer `y`. strig should say `Pull request updated` and the Overview should show the new title and description; check both on github.com.

@@ -32,7 +32,7 @@ func (view *View) Render(width, height int) string {
 	default:
 		out = view.table(width, height)
 	}
-	return fit(view.tabBar(width)+"\n"+out, width, height)
+	return view.overlayPicker(fit(view.tabBar(width)+"\n"+out, width, height), width, height)
 }
 
 // tabBar draws the tab names.
