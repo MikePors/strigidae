@@ -31,10 +31,31 @@ func TestCheckActions(test *testing.T) {
 		test.Run(testCase.name, func(test *testing.T) {
 			var actions []Action
 			for _, name := range testCase.names {
-				actions = append(actions, Action{name, &binding})
+				actions = append(actions, Action{Name: name, Binding: &binding})
 			}
 			if err := CheckActions(actions); (err == nil) != testCase.valid {
 				test.Errorf("CheckActions(%q) = %v, want valid %v", testCase.names, err, testCase.valid)
+			}
+		})
+	}
+}
+
+func TestCheckActionsCommands(test *testing.T) {
+	tests := []struct {
+		name    string
+		actions []Action
+		valid   bool
+	}{
+		{"command named like its action", []Action{{Name: "merge", Command: "merge"}}, true},
+		{"command with another name", []Action{{Name: "resolve-thread", Command: "resolve"}}, true},
+		{"no command", []Action{{Name: "down"}}, true},
+		{"two actions share a command", []Action{{Name: "resolve", Command: "resolve"}, {Name: "resolve-thread", Command: "resolve"}}, false},
+		{"bad command name", []Action{{Name: "merge", Command: "Merge"}}, false},
+	}
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			if err := CheckActions(testCase.actions); (err == nil) != testCase.valid {
+				test.Errorf("CheckActions = %v, want valid %v", err, testCase.valid)
 			}
 		})
 	}

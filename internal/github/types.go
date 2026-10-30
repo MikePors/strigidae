@@ -147,6 +147,9 @@ type PullRequestDetail struct {
 	// ViewerDidAuthor is set when the viewer opened the pull request. GitHub
 	// refuses to approve or request changes on your own pull request.
 	ViewerDidAuthor bool
+	// ViewerCanUpdate says whether GitHub lets the viewer change the title and
+	// body (the author, and people with write access).
+	ViewerCanUpdate bool
 	Body            string
 	// Reactions are the reactions on the description (Body).
 	Reactions []ReactionSummary
@@ -431,4 +434,15 @@ type AddThreadInput struct {
 	StartLine               int
 	StartSide               DiffSide
 	Body                    string
+}
+
+// UpdatePullRequestInput is what UpdatePullRequest changes: the title and the
+// body, both always sent.
+type UpdatePullRequestInput struct {
+	Repository Repository
+	Number     int
+	// PullRequestIdentifier is PullRequest.Identifier.
+	PullRequestIdentifier string
+	Title                 string
+	Body                  string
 }

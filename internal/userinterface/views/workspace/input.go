@@ -20,7 +20,8 @@ type bindings struct {
 	NextFile, PreviousFile       key.Binding
 	FilePicker                   key.Binding
 	NextSection, PreviousSection key.Binding
-	Comment, Reply               key.Binding
+	Comment, OverviewComment     key.Binding
+	Reply                        key.Binding
 	Viewed                       key.Binding
 	ReviewHunk                   key.Binding
 	ResolveThread                key.Binding
@@ -42,7 +43,8 @@ func defaultBindings() bindings {
 		FilePicker:      bind("f", "f", "file picker"),
 		NextSection:     bind("]", "]", "next section (overview)"),
 		PreviousSection: bind("[", "[", "previous section (overview)"),
-		Comment:         bind("c", "c", "new comment: on the pull request (overview) or on the diff line / selection"),
+		Comment:         bind("c", "c", "new comment on the diff line / selection (lines only)"),
+		OverviewComment: bind("C", "C", "new top-level comment on the pull request"),
 		Reply:           bind("r", "r", "reply to the comment thread at the cursor (diff pane)"),
 		ResolveThread:   bind("x", "x", "resolve or unresolve the comment thread at the cursor (diff pane; also :resolve, :unresolve)"),
 		Viewed:          bind("v", "v", "toggle file viewed"),
@@ -57,69 +59,26 @@ func defaultBindings() bindings {
 	}
 }
 
-// actions names the workspace's own bindings, in the namespace of the global
-// ones (keys.Global.Actions). Next and previous section are the dashboard's
-// names too: the same action in another view.
-func (workspaceBindings *bindings) actions() []keys.Action {
-	return []keys.Action{
-		{Name: "focus-files-pane", Binding: &workspaceBindings.PaneLeft},
-		{Name: "focus-right-pane", Binding: &workspaceBindings.PaneRight},
-		{Name: "next-file", Binding: &workspaceBindings.NextFile},
-		{Name: "previous-file", Binding: &workspaceBindings.PreviousFile},
-		{Name: "file-picker", Binding: &workspaceBindings.FilePicker},
-		{Name: "next-section", Binding: &workspaceBindings.NextSection},
-		{Name: "previous-section", Binding: &workspaceBindings.PreviousSection},
-		{Name: "new-comment", Binding: &workspaceBindings.Comment},
-		{Name: "reply", Binding: &workspaceBindings.Reply},
-		{Name: "toggle-viewed", Binding: &workspaceBindings.Viewed},
-		{Name: "toggle-hunk-reviewed", Binding: &workspaceBindings.ReviewHunk},
-		{Name: "resolve-thread", Binding: &workspaceBindings.ResolveThread},
-		{Name: "start-visual-mode", Binding: &workspaceBindings.Visual},
-		{Name: "edit-comment", Binding: &workspaceBindings.EditComment},
-		{Name: "delete-comment", Binding: &workspaceBindings.DeleteComment},
-		{Name: "extend-selection-down", Binding: &workspaceBindings.VisualDown},
-		{Name: "extend-selection-up", Binding: &workspaceBindings.VisualUp},
-		{Name: "leave-visual-mode", Binding: &workspaceBindings.VisualExit},
-	}
-}
-
 func openInBrowser(url string) error {
 	return browser.New("", io.Discard, io.Discard).Browse(url)
 }
 
 func (view *View) handleKey(message keys.Message) tea.Cmd {
+	if chosen, ok := view.keyEntry(message); ok {
+		return view.invoke(chosen, invocation{message: message})
+	}
 	switch {
-	case key.Matches(message, view.bind.PaneLeft):
-		view.focus = paneFiles
-	case key.Matches(message, view.bind.PaneRight):
-		view.focus = paneRight
-	case key.Matches(message, view.bind.NextFile):
-		view.stepFile(message.Repeat())
-	case key.Matches(message, view.bind.PreviousFile):
-		view.stepFile(-message.Repeat())
-	case key.Matches(message, view.bind.FilePicker):
-		view.openPicker()
-	case view.selection() == 0 && key.Matches(message, view.bind.NextSection):
-		message.Each(view.overview.viewport.YOffset, func() { view.jumpSection(1) })
-	case view.selection() == 0 && key.Matches(message, view.bind.PreviousSection):
-		message.Each(view.overview.viewport.YOffset, func() { view.jumpSection(-1) })
-	case key.Matches(message, view.bind.Comment):
-		return view.comment()
-	case key.Matches(message, view.bind.Viewed):
-		return view.toggleViewed()
-	case key.Matches(message, view.bind.ReviewHunk):
-		return view.toggleHunkReviewed()
-	case key.Matches(message, view.bind.Reply):
-		return view.reply()
-	case key.Matches(message, view.bind.ResolveThread):
-		return view.resolveThread(resolveToggle)
-	case view.selection() > 0 && key.Matches(message, view.bind.Visual):
-		return view.startVisual()
-	case key.Matches(message, view.bind.EditComment):
-		return view.editComment()
-	case key.Matches(message, view.bind.DeleteComment):
-		return view.deleteComment()
+	case view.diffSearchFocused() && key.Matches(message, view.globalKeys.Search):
+		view.searchPane = paneRight
+		return view.filePane.StartSearch()
+	case view.diffSearchFocused() && key.Matches(message, view.globalKeys.NextMatch):
+		return view.filePane.SearchStep(message, true, view.options.WrapScan())
+	case view.diffSearchFocused() && key.Matches(message, view.globalKeys.PreviousMatch):
+		return view.filePane.SearchStep(message, false, view.options.WrapScan())
+	case view.diffSearchFocused() && key.Matches(message, view.globalKeys.Cancel):
+		view.filePane.ClearSearch()
 	case view.focus == paneFiles && key.Matches(message, view.globalKeys.Search):
+		view.searchPane = paneFiles
 		return view.search.Start(view.searchList())
 	case view.focus == paneFiles && key.Matches(message, view.globalKeys.NextMatch):
 		return view.search.Step(message, true, view.searchList(), view.options.WrapScan())
@@ -142,6 +101,10 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 	view.layout()
 	return nil
 }
+
+// diffSearchFocused reports whether the search keys act on the diff pane: it
+// has focus and a file is shown.
+func (view *View) diffSearchFocused() bool { return view.focus == paneRight && view.selection() > 0 }
 
 // stepFile moves to the next or previous file. It never lands on Overview.
 func (view *View) stepFile(delta int) {

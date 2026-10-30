@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MikePors/strigidae/internal/userinterface/components/pullrequestrows"
+	"github.com/MikePors/strigidae/internal/userinterface/components/tabbar"
 	"github.com/MikePors/strigidae/internal/userinterface/terminaltext"
 )
 
@@ -32,6 +33,15 @@ func (view *View) Render(width, height int) string {
 		out = append(out, view.drawLine(table, layout, current, entry, selectedIndex, width))
 	}
 	return clip(strings.Join(out, "\n"), width, height)
+}
+
+// tabBar draws the tab names.
+func (view *View) tabBar(width int) string {
+	names := make([]string, len(view.tabs))
+	for i, current := range view.tabs {
+		names[i] = current.name
+	}
+	return tabbar.Render(view.theme, names, view.active, width)
 }
 
 // drawLine draws one line of the scrolling area.

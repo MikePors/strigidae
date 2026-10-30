@@ -97,7 +97,7 @@ func TestSetCommandChangesOptionsForEveryView(test *testing.T) {
 	model := setModel(below, nil)
 	drive(model, Push(top))
 
-	drive(model, parseCommand("set nowrapscan", model.top()))
+	drive(model, parseCommand("set nowrapscan", model.top(), model.viewCommands))
 
 	want := []options.Values{{"wrapscan": false}}
 	for name, view := range map[string]*fakeView{"below": below, "top": top} {
@@ -109,7 +109,7 @@ func TestSetCommandChangesOptionsForEveryView(test *testing.T) {
 		test.Errorf("status = %+v, want the new value", model.status)
 	}
 
-	drive(model, parseCommand("set", model.top()))
+	drive(model, parseCommand("set", model.top(), model.viewCommands))
 	if model.status.text != "nowrapscan hlsearch nowrap nohideviewed nohidereviewed noautoviewed nohideresolved noskipresolved norelativenumber" {
 		test.Errorf("bare :set shows %q", model.status.text)
 	}
@@ -121,7 +121,7 @@ func TestSetCommandChangesOptionsForEveryView(test *testing.T) {
 func TestSetErrorChangesNothing(test *testing.T) {
 	root := newFake("v")
 	model := setModel(root, nil)
-	drive(model, parseCommand("set foo", model.top()))
+	drive(model, parseCommand("set foo", model.top(), model.viewCommands))
 	if model.status.text != "unknown option: foo" || model.status.kind != statusError {
 		test.Errorf("status = %+v", model.status)
 	}
@@ -155,8 +155,8 @@ func TestOptionsReachTheRootViewAtStartAndPushedViews(test *testing.T) {
 func TestSetWrapReachesViews(test *testing.T) {
 	root := newFake("v")
 	model := setModel(root, nil)
-	drive(model, parseCommand("set wrap", model.top()))
-	drive(model, parseCommand("set nowrap", model.top()))
+	drive(model, parseCommand("set wrap", model.top(), model.viewCommands))
+	drive(model, parseCommand("set nowrap", model.top(), model.viewCommands))
 	want := []options.Values{{"wrap": true}, {"wrap": false}}
 	if diff := cmp.Diff(want, optionsSeen(root)); diff != "" {
 		test.Errorf("options messages (-want +got):\n%s", diff)
@@ -165,7 +165,7 @@ func TestSetWrapReachesViews(test *testing.T) {
 
 func TestSetIsAStaticCommandInEveryView(test *testing.T) {
 	model := setModel(newFake("not a commander"), nil)
-	drive(model, parseCommand("set hlsearch?", model.top()))
+	drive(model, parseCommand("set hlsearch?", model.top(), model.viewCommands))
 	if model.status.text != "hlsearch" {
 		test.Errorf("status = %q", model.status.text)
 	}

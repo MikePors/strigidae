@@ -119,30 +119,13 @@ func (view *View) composeMine(origin origin, sequence int) bool {
 }
 
 // reply starts a reply to the thread under the diff cursor.
-func (view *View) reply() tea.Cmd {
-	if notice := view.guardState().ready(writeComment); notice != nil {
-		return notice
-	}
-	resolved, command := view.resolveTarget(request{level: levelThread, words: "reply"})
-	if command != nil {
-		return command
-	}
-	if busy := view.guardState().busy(writeComment); busy != nil {
-		return busy
-	}
-	thread := resolved.thread
+func (view *View) reply(thread github.ReviewThread) tea.Cmd {
 	return view.compose(target{kind: kindReply, threadIdentifier: thread.Identifier, label: threadLocation(thread)})
 }
 
-// comment starts a top-level comment from the Overview, or an inline one on a
-// diff line.
-func (view *View) comment() tea.Cmd {
-	if view.selection() != 0 {
-		return view.inlineComment()
-	}
-	if notice := view.guardState().admit(writeOverviewComment); notice != nil {
-		return notice
-	}
+// overviewComment starts a top-level comment on the pull request, whatever is
+// selected or focused.
+func (view *View) overviewComment() tea.Cmd {
 	return view.compose(target{})
 }
 

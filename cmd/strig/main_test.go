@@ -452,3 +452,10 @@ func TestRunBeefis(test *testing.T) {
 		})
 	}
 }
+
+func TestClipboardToolGetsScrubbedEnvironment(test *testing.T) {
+	options := clipboardOptions([]string{"PATH=/bin", "GH_TOKEN=secret", "GITHUB_TOKEN=secret", "HOME=/h"})
+	if diff := cmp.Diff([]string{"PATH=/bin", "HOME=/h"}, options.Environment); diff != "" {
+		test.Errorf("environment (-want +got):\n%s", diff)
+	}
+}

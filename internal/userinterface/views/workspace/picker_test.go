@@ -78,7 +78,7 @@ func TestFilePickerNoMatchEnter(test *testing.T) {
 func TestCapturerReleasesOnEsc(test *testing.T) {
 	harness := loaded(test, 100, 24)
 	noTick := func(time.Duration, func(time.Time) tea.Msg) tea.Cmd { return nil }
-	model := userinterface.New(harness.view, theme.New(true), userinterface.Options{Tick: noTick})
+	model := userinterface.New(harness.view, theme.New(true), userinterface.Options{Tick: noTick, ViewCommands: Commands()})
 	step := func(message tea.Msg) {
 		test.Helper()
 		_, _ = model.Update(message) // commands (timers, spinner) are not run

@@ -34,6 +34,13 @@ func (pane *stubPane) VisualEnd()                {}
 
 func (pane *stubPane) SetDiff(DiffState) {}
 
+func (pane *stubPane) StartSearch() tea.Cmd                                   { return nil }
+func (pane *stubPane) TakeSearchRequest() bool                                { return false }
+func (pane *stubPane) SearchPrompt(userinterface.PromptResultMessage) tea.Cmd { return nil }
+func (pane *stubPane) SearchStep(keys.Message, bool, bool) tea.Cmd            { return nil }
+func (pane *stubPane) ClearSearch()                                           {}
+func (pane *stubPane) SetHighlightSearch(bool)                                {}
+
 func (pane *stubPane) SetWrap(bool)                               {}
 func (pane *stubPane) SetHideResolved(bool)                       {}
 func (pane *stubPane) SetSkipResolved(bool)                       {}
@@ -102,7 +109,7 @@ func TestFilePaneContractThroughRoot(test *testing.T) {
 	pane := &stubPane{}
 	view := New(client, testRepository, 7, WithTheme(theme.New(true)), WithFilePane(pane))
 	noTick := func(time.Duration, func(time.Time) tea.Msg) tea.Cmd { return nil }
-	model := userinterface.New(view, theme.New(true), userinterface.Options{Tick: noTick})
+	model := userinterface.New(view, theme.New(true), userinterface.Options{Tick: noTick, ViewCommands: Commands()})
 	testHarness := &harness{test: test, view: view, client: client}
 
 	step := func(message tea.Msg) { _, _ = model.Update(message) }

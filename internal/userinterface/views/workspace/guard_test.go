@@ -15,7 +15,7 @@ import (
 
 // writeKinds is every kind of write, so a kind added without a row in the
 // tables below fails TestGuardTableCoversEveryKind.
-var writeKinds = []writeKind{writeComment, writeOverviewComment, writeThread, writeReaction, writeReview, writeMerge, writeDiscard}
+var writeKinds = []writeKind{writeComment, writeOverviewComment, writeThread, writeReaction, writeReview, writeMerge, writeDiscard, writePullRequest}
 
 // busyCase is one busy state: how to start it, what it is called and the
 // notice it gives; saving says whether it counts as a comment write in flight.
@@ -41,6 +41,7 @@ func (inliner *inliner) mutations() int {
 		fake.MethodDeleteReview, fake.MethodReplyToThread, fake.MethodAddComment, fake.MethodSubmitReview,
 		fake.MethodMergePullRequest, fake.MethodAddReaction, fake.MethodRemoveReaction,
 		fake.MethodResolveReviewThread, fake.MethodUnresolveReviewThread,
+		fake.MethodUpdatePullRequest,
 	}
 	count := 0
 	for _, call := range inliner.client.Calls() {
@@ -97,7 +98,7 @@ func press(sequence string) func(inliner *inliner) {
 func guardActions() []guardAction {
 	return []guardAction{
 		{"c on a diff line", writeComment, (*inliner).onDiffLine, press("c")},
-		{"c on the Overview", writeOverviewComment, func(inliner *inliner) { inliner.press("h", "g g") }, press("c")},
+		{"C on the Overview", writeOverviewComment, func(inliner *inliner) { inliner.press("h", "g g") }, press("C")},
 		{"V", writeComment, (*inliner).onDiffLine, press("V")},
 		{"r", writeComment, (*inliner).onOwnComment, press("r")},
 		{"e", writeComment, (*inliner).onOwnComment, press("e")},
@@ -114,6 +115,7 @@ func guardActions() []guardAction {
 		{":review", writeReview, func(*inliner) {}, command("review", "")},
 		{":merge", writeMerge, func(*inliner) {}, command("merge", "")},
 		{":discard-review", writeDiscard, func(*inliner) {}, command("discard-review", "")},
+		{":edit-pull-request", writePullRequest, func(*inliner) {}, command("edit-pull-request", "")},
 	}
 }
 
@@ -279,7 +281,7 @@ func readmissions() []readmission {
 		{"yes to a top-level comment", writeComment, func(inliner *inliner) tea.Cmd {
 			inliner.press("h", "g g")
 			inliner.messages = nil
-			inliner.press("c")
+			inliner.press("C")
 			return askedYes(inliner)
 		}},
 		{"yes to a reply", writeComment, func(inliner *inliner) tea.Cmd {
@@ -318,6 +320,22 @@ func readmissions() []readmission {
 		{"yes to a review", writeReview, func(inliner *inliner) tea.Cmd {
 			inliner.messages = nil
 			inliner.command("approve")
+			return askedYes(inliner)
+		}},
+		{"re-read before the pull request editor opens", writePullRequest, func(inliner *inliner) tea.Cmd {
+			read, _ := inliner.view.Command("edit-pull-request", "")
+			return read
+		}},
+		{"editor closed on a pull request edit", writePullRequest, func(inliner *inliner) tea.Cmd {
+			inliner.body = "Changed\n\nbody"
+			read, _ := inliner.view.Command("edit-pull-request", "")
+			_, opened := inliner.view.Update(read())
+			return opened
+		}},
+		{"yes to a pull request edit", writePullRequest, func(inliner *inliner) tea.Cmd {
+			inliner.body = "Changed\n\nbody"
+			inliner.messages = nil
+			inliner.command("edit-pull-request")
 			return askedYes(inliner)
 		}},
 		{"yes to a merge", writeMerge, func(inliner *inliner) tea.Cmd {
@@ -430,7 +448,7 @@ func TestGuardWithoutADiff(test *testing.T) {
 			inliner := guardedInliner(test)
 			inliner.press("h", "g g")
 			state.removeDiff(inliner)
-			inliner.press("c")
+			inliner.press("C")
 			if len(inliner.openedOn) != 1 {
 				test.Fatalf("editor opened %d times, notices %v", len(inliner.openedOn), inliner.infoMessages())
 			}

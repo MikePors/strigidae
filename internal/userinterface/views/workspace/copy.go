@@ -3,9 +3,11 @@ package workspace
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/MikePors/strigidae/internal/clipboard"
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/terminaltext"
 )
@@ -24,5 +26,45 @@ func (view *View) copyFilename() tea.Cmd {
 	if terminaltext.Clean(path) != path {
 		return userinterface.Error(fmt.Errorf("not copied: %s contains control characters", terminaltext.Clean(path)))
 	}
-	return tea.Batch(tea.SetClipboard(path), userinterface.Info("Copied "+terminaltext.Clean(path)))
+	return view.copyText(path, "Copied "+terminaltext.Clean(path))
+}
+
+// copyURL copies the open pull request's URL to the clipboard, whatever pane
+// has focus.
+func (view *View) copyURL() tea.Cmd {
+	if view.detail == nil || view.detail.URL == "" {
+		return userinterface.Error(errors.New("no pull request URL to copy"))
+	}
+	url := view.detail.URL
+	// Refused like a path in copyFilename: a pasted control character or
+	// line break must not reach a shell or a chat as input.
+	if terminaltext.Clean(url) != url {
+		return userinterface.Error(fmt.Errorf("not copied: %s contains control characters", terminaltext.Clean(url)))
+	}
+	return view.copyText(url, "Copied "+terminaltext.Clean(url))
+}
+
+// copyText sends text to the clipboard through OSC 52 and, when there is a
+// clipboard tool, through that too: OSC 52 works over SSH but tmux and some
+// terminals drop it. A failing tool is only logged, because OSC 52 may have
+// worked.
+func (view *View) copyText(text, notice string) tea.Cmd {
+	return tea.Batch(tea.SetClipboard(text), view.copyToTool(text), userinterface.Info(notice))
+}
+
+// copyToTool pipes text to the system clipboard tool, if the view has a copier.
+func (view *View) copyToTool(text string) tea.Cmd {
+	copier := view.clipboard
+	if copier == nil {
+		return nil
+	}
+	timeouts := view.timeouts
+	return func() tea.Msg {
+		ctx, cancel := timeouts.RequestContext()
+		defer cancel()
+		if err := copier.Copy(ctx, text); err != nil && !errors.Is(err, clipboard.ErrNoTool) {
+			slog.Warn("copy with clipboard tool", "err", err)
+		}
+		return nil
+	}
 }

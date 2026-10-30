@@ -131,6 +131,11 @@ func (pane *diffPane) SetDiff(diffState DiffState) {
 }
 
 func (pane *diffPane) SetFile(file github.ChangedFile) {
+	if !pane.hasFile || pane.file.Path != file.Path {
+		// Another file, even one that shows only a message: the query
+		// belonged to the last one and must not come back with it.
+		pane.diffView.ClearSearch()
+	}
 	pane.file, pane.hasFile = file, true
 	pane.show()
 }
@@ -228,6 +233,18 @@ func (pane *diffPane) moveThread(message keys.Message, forward bool) tea.Cmd {
 	}
 	return nil
 }
+
+func (pane *diffPane) StartSearch() tea.Cmd    { return pane.diffView.StartSearch() }
+func (pane *diffPane) TakeSearchRequest() bool { return pane.diffView.TakeSearchRequest() }
+func (pane *diffPane) SearchPrompt(result userinterface.PromptResultMessage) tea.Cmd {
+	return pane.diffView.SearchPrompt(result)
+}
+
+func (pane *diffPane) SearchStep(message keys.Message, forward, wrapScan bool) tea.Cmd {
+	return pane.diffView.SearchStep(message, forward, wrapScan)
+}
+func (pane *diffPane) ClearSearch()               { pane.diffView.ClearSearch() }
+func (pane *diffPane) SetHighlightSearch(on bool) { pane.diffView.SetHighlightSearch(on) }
 
 func (pane *diffPane) Context() diffview.Context { return pane.diffView.Context() }
 

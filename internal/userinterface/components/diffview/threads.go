@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/userinterface/components/search"
 	"github.com/MikePors/strigidae/internal/userinterface/components/thread"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
@@ -346,8 +347,11 @@ func (model *Model) threadGlyph(baseIndex int) (glyph string, open bool) {
 
 func (model *Model) renderThreadRow(i int, row row) string {
 	lead := " "
-	if i == model.window.Cursor() {
+	switch {
+	case i == model.window.Cursor():
 		lead = ">"
+	case model.searchMarked(i):
+		lead = model.theme.SearchMarker.Render(search.Glyph)
 	}
 	lead += model.relativeCell(i) + spaces(model.lineNumbersWidth())
 	text := ansi.Truncate(lead+model.blocks[row.threadRow.threadIndex][row.threadRow.rowInBlock], model.width, "")

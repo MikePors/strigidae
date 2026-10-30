@@ -13,6 +13,7 @@ import (
 
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/userinterface"
+	"github.com/MikePors/strigidae/internal/userinterface/components/diffview"
 	"github.com/MikePors/strigidae/internal/userinterface/terminaltext"
 )
 
@@ -208,18 +209,7 @@ func (view *View) reloadPendingComments() tea.Cmd {
 // inlineComment starts a comment on the diff line under the cursor, or on the
 // selected range. The comment remembers the commit of the diff its line
 // numbers come from.
-func (view *View) inlineComment() tea.Cmd {
-	if notice := view.guardState().ready(writeComment); notice != nil {
-		return notice
-	}
-	resolved, command := view.resolveTarget(request{level: levelLines, words: "comment on it"})
-	if command != nil {
-		return command
-	}
-	if busy := view.guardState().busy(writeComment); busy != nil {
-		return busy
-	}
-	lineRange := resolved.lines
+func (view *View) inlineComment(lineRange diffview.Range) tea.Cmd {
 	view.filePane.VisualEnd()
 	in := &github.AddThreadInput{Path: lineRange.Path, Line: lineRange.End, Side: lineRange.Side}
 	if lineRange.Start != lineRange.End {
@@ -230,15 +220,6 @@ func (view *View) inlineComment() tea.Cmd {
 
 // startVisual enters visual-line mode on the diff line under the cursor.
 func (view *View) startVisual() tea.Cmd {
-	if notice := view.guardState().ready(writeComment); notice != nil {
-		return notice
-	}
-	if _, command := view.resolveTarget(request{level: levelLines, words: "select lines"}); command != nil {
-		return command
-	}
-	if busy := view.guardState().busy(writeComment); busy != nil {
-		return busy
-	}
 	if !view.filePane.VisualStart() {
 		return userinterface.Info("move onto a diff line to select lines")
 	}
@@ -257,7 +238,7 @@ func (view *View) visualKey(message tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(message, view.bind.VisualUp):
 		return refusal(view.filePane.VisualMove(-1))
 	case key.Matches(message, view.bind.Comment):
-		return view.inlineComment()
+		return view.invoke(view.entryNamed("new-comment"), invocation{})
 	}
 	return nil
 }
@@ -269,37 +250,23 @@ func refusal(err error) tea.Cmd {
 	return userinterface.Info(err.Error())
 }
 
-// commentAtCursor returns the comment under the cursor that e/D (or the
-// commands) act on, if it is the viewer's and the change is allowed, and its
-// thread. When there is none, or the view cannot change comments now, the
-// command to show why.
-func (view *View) commentAtCursor(change change) (commentTarget, tea.Cmd) {
-	if notice := view.guardState().ready(writeComment); notice != nil {
-		return commentTarget{}, notice
-	}
+// commentRuleFor says which comments e and D (and the commands) may change
+// and what to tell about the others: only the viewer's own, where GitHub lets
+// them make the change, and only comments of a review thread.
+func commentRuleFor(change change) *commentRule {
 	words := "edit it"
 	if change == changeDelete {
 		words = "delete it"
 	}
-	rule := &commentRule{
+	return &commentRule{
 		mine: func(target commentTarget) bool { return target.viewerDidAuthor },
 		allowed: func(target commentTarget) bool {
 			return change.permits(target.viewerDidAuthor, target.viewerCanUpdate, target.viewerCanDelete)
 		},
-		notMine: "move onto a comment of yours to " + words,
-		cannot:  "you can't " + strings.TrimSuffix(words, " it") + " this comment",
+		notMine:     "move onto a comment of yours to " + words,
+		cannot:      "you can't " + strings.TrimSuffix(words, " it") + " this comment",
+		unsupported: func(target commentTarget) tea.Cmd { return reviewCommentOnly(target, words) },
 	}
-	resolved, command := view.resolveTarget(request{level: levelComment, words: words, rule: rule})
-	if command != nil {
-		return commentTarget{}, command
-	}
-	if refusal := reviewCommentOnly(resolved.comment, words); refusal != nil {
-		return commentTarget{}, refusal
-	}
-	if busy := view.guardState().busy(writeComment); busy != nil {
-		return commentTarget{}, busy
-	}
-	return resolved.comment, nil
 }
 
 // reviewCommentOnly refuses a target that is not a comment of a review thread:
@@ -313,11 +280,7 @@ func reviewCommentOnly(target commentTarget, words string) tea.Cmd {
 
 // editComment re-reads the viewer's comment at the cursor, then opens the
 // editor on its current body, so edits made elsewhere are not overwritten.
-func (view *View) editComment() tea.Cmd {
-	comment, command := view.commentAtCursor(changeEdit)
-	if command != nil {
-		return command
-	}
+func (view *View) editComment(comment commentTarget) tea.Cmd {
 	thread := *comment.thread
 	origin, client, timeouts := view.origin(), view.client, view.timeouts
 	currentTarget := target{kind: kindEdit, commentIdentifier: comment.identifier, threadIdentifier: thread.Identifier, label: threadLocation(thread), home: view.reachableHome(thread)}
@@ -384,11 +347,7 @@ func (view *View) refuse(err error, what string) tea.Cmd {
 
 // deleteComment re-reads the comment at the cursor, then asks before deleting
 // it. The question says whether it is pending or published.
-func (view *View) deleteComment() tea.Cmd {
-	comment, command := view.commentAtCursor(changeDelete)
-	if command != nil {
-		return command
-	}
+func (view *View) deleteComment(comment commentTarget) tea.Cmd {
 	origin, identifier, label := view.origin(), comment.identifier, terminaltext.Clean(threadLocation(*comment.thread))
 	write := commentWrite{
 		origin: origin, client: view.client, timeouts: view.timeouts, identifier: identifier, change: changeDelete,

@@ -75,7 +75,7 @@ query ` + operationPullRequestDetail + `($owner: String!, $name: String!, $numbe
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
       ...PullRequestFields
-      body additions deletions viewerDidAuthor mergeStateStatus
+      body additions deletions viewerDidAuthor viewerCanUpdate mergeStateStatus
       ` + reactionSelection + `
       statusCheckRollup { contexts(first: 100) { totalCount nodes {
         __typename

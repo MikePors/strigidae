@@ -60,18 +60,7 @@ type threadAction struct {
 }
 
 // resolveThread starts resolving or unresolving the thread at the diff cursor.
-func (view *View) resolveThread(mode resolveMode) tea.Cmd {
-	if notice := view.guardState().ready(writeThread); notice != nil {
-		return notice
-	}
-	resolved, command := view.resolveTarget(request{level: levelThread, words: "resolve it"})
-	if command != nil {
-		return command
-	}
-	if busy := view.guardState().busy(writeThread); busy != nil {
-		return busy
-	}
-	thread := resolved.thread
+func (view *View) resolveThread(mode resolveMode, thread github.ReviewThread) tea.Cmd {
 	switch {
 	case mode == resolveOnly && thread.IsResolved:
 		return userinterface.Info(noticeAlreadyResolved)

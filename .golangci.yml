@@ -44,6 +44,7 @@ linters:
             - "**/internal/config/**"
             - "**/internal/options/**"
             - "**/internal/editor/**"
+            - "**/internal/clipboard/**"
             - "**/internal/environment/**"
             - "**/internal/gitrepository/**"
             - "**/internal/logging/**"

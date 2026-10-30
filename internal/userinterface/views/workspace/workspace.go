@@ -11,6 +11,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/MikePors/strigidae/internal/clipboard"
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/options"
 	"github.com/MikePors/strigidae/internal/userinterface"
@@ -50,6 +51,15 @@ func WithTimeouts(timeouts userinterface.Timeouts) Option {
 	return func(view *View) { view.timeouts = timeouts }
 }
 
+// WithClipboard sets the system clipboard tool that copy commands use besides
+// OSC 52. Without it only OSC 52 is sent.
+func WithClipboard(copier clipboard.Copier) Option {
+	return func(view *View) { view.clipboard = copier }
+}
+
+// Clipboard returns the clipboard tool the view copies with, nil for OSC 52 only.
+func (view *View) Clipboard() clipboard.Copier { return view.clipboard }
+
 // WithWrap makes the diff pane wrap long lines instead of cutting them off.
 func WithWrap(wrap bool) Option { return func(view *View) { view.wrap = wrap } }
 
@@ -81,6 +91,7 @@ type View struct {
 	markdownRenderer *markdown.Renderer
 	filePane         FilePane
 	edit             EditFunction
+	clipboard        clipboard.Copier // nil: OSC 52 only
 
 	sequence           int // latest load request; older results are stale
 	pullRequestPending bool
@@ -110,17 +121,20 @@ type View struct {
 	questions        *Questions       // questions asked with :ask; nil when asking is off
 	hunkFingerprints fingerprintCache // fingerprints of the last file asked about
 
-	window   scroll.Window  // Files pane: over rows
-	rows     []int          // the entry each Files pane row shows; see hideviewed.go
-	current  int            // the entry the right pane shows
-	fades    fader          // viewed files about to leave the Files pane
-	search   search.State   // over the same rows; Overview never matches
-	options  options.Values // the `:set` options, sent by the root
-	focus    pane
-	overview overview
-	picker   *picker.Model // non-nil while the file picker is open
-	review   reviewFlow    // submitting a review (see review.go)
-	merge    mergeFlow     // merging the pull request (see merge.go)
+	window  scroll.Window  // Files pane: over rows
+	rows    []int          // the entry each Files pane row shows; see hideviewed.go
+	current int            // the entry the right pane shows
+	fades   fader          // viewed files about to leave the Files pane
+	search  search.State   // over the same rows; Overview never matches
+	options options.Values // the `:set` options, sent by the root
+	focus   pane
+	// searchPane is the pane the search being typed belongs to; the prompt's
+	// results go to it.
+	searchPane pane
+	overview   overview
+	picker     *picker.Model // non-nil while the file picker is open
+	review     reviewFlow    // submitting a review (see review.go)
+	merge      mergeFlow     // merging the pull request (see merge.go)
 	// pickerItems are the paths the picker was built from; a choice is
 	// resolved by path because a refresh may replace the file list meanwhile.
 	pickerItems []string
@@ -176,6 +190,7 @@ func New(client github.Client, repository github.Repository, number int, options
 		view.filePane = newDiffPane(view.theme, func() time.Time { return view.now() }, view.wrap)
 	}
 	view.filePane.SetTheme(view.theme)
+	view.filePane.SetHighlightSearch(view.options.HighlightSearch())
 	view.filePane.SetHunkReviewed(view.hunkReviewed)
 	view.filePane.SetHunkHiding(view.hunkHidden, view.hunkFade)
 	view.filePane.SetThreadFade(view.threadFade)
@@ -216,7 +231,7 @@ func (view *View) ShortHelp() []key.Binding {
 func (view *View) FullHelp() [][]key.Binding {
 	out := [][]key.Binding{
 		{view.bind.PaneLeft, view.bind.PaneRight, view.bind.NextFile, view.bind.PreviousFile, view.bind.FilePicker},
-		{view.bind.NextSection, view.bind.PreviousSection, view.bind.Comment, view.bind.Reply, view.bind.Viewed, view.bind.ReviewHunk},
+		{view.bind.NextSection, view.bind.PreviousSection, view.bind.Comment, view.bind.OverviewComment, view.bind.Reply, view.bind.Viewed, view.bind.ReviewHunk},
 		{view.bind.Visual, view.bind.EditComment, view.bind.DeleteComment, view.bind.ResolveThread},
 		view.searchHelp(),
 	}
@@ -242,6 +257,7 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		view.filePane.SetHideResolved(message.Values.HideResolved())
 		view.filePane.SetSkipResolved(message.Values.SkipResolved())
 		view.filePane.SetRelativeNumber(message.Values.RelativeNumber())
+		view.filePane.SetHighlightSearch(message.Values.HighlightSearch())
 		view.optionsChanged()
 	case userinterface.ThemeMessage:
 		view.theme = message.Theme
@@ -313,6 +329,21 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 			return view, nil
 		}
 		return view, view.reviewDiscarded(message)
+	case pullRequestReadMessage:
+		if !view.composeMine(message.origin, message.sequence) {
+			return view, nil
+		}
+		return view, view.pullRequestRead(message)
+	case pullRequestTextMessage:
+		if !view.composeMine(message.origin, message.sequence) {
+			return view, nil
+		}
+		return view, view.pullRequestEdited(message)
+	case pullRequestUpdatedMessage:
+		if !view.owns(message.origin) {
+			return view, nil
+		}
+		return view, view.pullRequestUpdated(message)
 	case commentCheckedMessage:
 		if !view.owns(message.origin) {
 			return view, nil
@@ -330,6 +361,9 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		}
 		return view, view.commentRead(message)
 	case userinterface.PromptResultMessage:
+		if view.searchPane == paneRight {
+			return view, view.filePane.SearchPrompt(message)
+		}
 		return view, view.search.Prompt(message, view.searchList())
 	case keys.Message:
 		return view, view.handleKey(message)

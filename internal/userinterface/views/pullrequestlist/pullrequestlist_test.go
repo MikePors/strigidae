@@ -1,6 +1,7 @@
 package pullrequestlist
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/MikePors/strigidae/internal/config"
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/github/fake"
 	"github.com/MikePors/strigidae/internal/golden"
@@ -43,8 +45,8 @@ func makePullRequests(count int) []github.PullRequest {
 }
 
 func newView(client github.Client, open func(string) error) *View {
-	view := New(client, testRepository, theme.Default(), Options{Now: func() time.Time { return testNow }, Open: open})
-	view.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
+	view := New(client, testRepository, config.Default().Tabs, theme.Default(), Options{Now: func() time.Time { return testNow }, Open: open})
+	view.Update(tea.WindowSizeMsg{Width: 80, Height: 13})
 	return view
 }
 
@@ -79,17 +81,18 @@ func fakeWith(pullRequests []github.PullRequest) *fake.Client {
 func TestFirstLoad(test *testing.T) {
 	client := fakeWith(makePullRequests(3))
 	view := newView(client, nil)
+	command := view.Init()
 	if !view.Loading() {
-		test.Fatal("new view should be loading")
+		test.Fatal("view should be loading once started")
 	}
 	if view.Title() != "acme/widgets" {
 		test.Errorf("title = %q", view.Title())
 	}
-	if command := deliver(test, view, view.Init()); command != nil {
+	if next := deliver(test, view, command); next != nil {
 		test.Errorf("single page should not trigger more loading")
 	}
-	if view.Loading() || len(view.pullRequests) != 3 {
-		test.Errorf("loading=%v prs=%d, want loaded with 3", view.Loading(), len(view.pullRequests))
+	if view.Loading() || len(view.current().pullRequests) != 3 {
+		test.Errorf("loading=%v prs=%d, want loaded with 3", view.Loading(), len(view.current().pullRequests))
 	}
 	want := []fake.Call{{Method: fake.MethodListPullRequests, Repository: testRepository}}
 	if diff := cmp.Diff(want, client.Calls()); diff != "" {
@@ -100,8 +103,8 @@ func TestFirstLoad(test *testing.T) {
 func TestPaginationTrigger(test *testing.T) {
 	client := fakeWith(makePullRequests(45))
 	view := loadedView(test, client, nil)
-	if len(view.pullRequests) != 30 || view.next == "" {
-		test.Fatalf("first page: prs=%d next=%q", len(view.pullRequests), view.next)
+	if len(view.current().pullRequests) != 30 || view.current().next == "" {
+		test.Fatalf("first page: prs=%d next=%q", len(view.current().pullRequests), view.current().next)
 	}
 
 	// Far from the end: no request.
@@ -117,8 +120,8 @@ func TestPaginationTrigger(test *testing.T) {
 		test.Error("a load is in flight; no second request")
 	}
 	deliver(test, view, command)
-	if len(view.pullRequests) != 45 || view.next != "" {
-		test.Errorf("after page 2: prs=%d next=%q", len(view.pullRequests), view.next)
+	if len(view.current().pullRequests) != 45 || view.current().next != "" {
+		test.Errorf("after page 2: prs=%d next=%q", len(view.current().pullRequests), view.current().next)
 	}
 	calls := client.Calls()
 	if len(calls) != 2 || calls[1].Page.After != "30" {
@@ -140,17 +143,17 @@ func TestStaleResultsIgnored(test *testing.T) {
 	}
 	// The first load finishes after the refresh was requested.
 	deliver(test, view, first)
-	if len(view.pullRequests) != 0 || !view.Loading() {
-		test.Errorf("stale result applied: prs=%d loading=%v", len(view.pullRequests), view.Loading())
+	if len(view.current().pullRequests) != 0 || !view.Loading() {
+		test.Errorf("stale result applied: prs=%d loading=%v", len(view.current().pullRequests), view.Loading())
 	}
 	// A result for another repository is not ours either.
-	view.Update(pullRequestsLoadedMessage{repository: github.Repository{Owner: "x", Name: "y"}, sequence: view.sequence, page: github.Page[github.PullRequest]{Items: makePullRequests(1)}})
-	if len(view.pullRequests) != 0 {
+	view.Update(pullRequestsLoadedMessage{repository: github.Repository{Owner: "x", Name: "y"}, sequence: view.current().sequence, page: github.Page[github.PullRequest]{Items: makePullRequests(1)}})
+	if len(view.current().pullRequests) != 0 {
 		test.Error("other repo's result applied")
 	}
 	deliver(test, view, refresh)
-	if len(view.pullRequests) != 3 || view.Loading() {
-		test.Errorf("refresh result not applied: prs=%d", len(view.pullRequests))
+	if len(view.current().pullRequests) != 3 || view.Loading() {
+		test.Errorf("refresh result not applied: prs=%d", len(view.current().pullRequests))
 	}
 }
 
@@ -159,9 +162,9 @@ func TestRefreshKeepsSelection(test *testing.T) {
 	view := loadedView(test, client, nil)
 	press(view, "j")
 	press(view, "j")
-	want := view.pullRequests[view.window.Cursor()].Number
+	want := view.current().pullRequests[view.current().window.Cursor()].Number
 	deliver(test, view, press(view, "R"))
-	if got := view.pullRequests[view.window.Cursor()].Number; got != want {
+	if got := view.current().pullRequests[view.current().window.Cursor()].Number; got != want {
 		test.Errorf("selected #%d after refresh, want #%d", got, want)
 	}
 }
@@ -171,28 +174,28 @@ func TestRefreshKeepsSelectionPastFirstPage(test *testing.T) {
 	view := loadedView(test, client, nil)
 	deliver(test, view, press(view, "G"))
 	press(view, "G")
-	if len(view.pullRequests) != 45 || view.window.Cursor() != 44 {
-		test.Fatalf("setup: prs=%d cursor=%d", len(view.pullRequests), view.window.Cursor())
+	if len(view.current().pullRequests) != 45 || view.current().window.Cursor() != 44 {
+		test.Fatalf("setup: prs=%d cursor=%d", len(view.current().pullRequests), view.current().window.Cursor())
 	}
-	want := view.pullRequests[view.window.Cursor()].Number
+	want := view.current().pullRequests[view.current().window.Cursor()].Number
 
 	deliver(test, view, press(view, "R"))
 	calls := client.Calls()
 	if got := calls[len(calls)-1].Page.Limit; got != 45 {
 		test.Errorf("refresh limit = %d, want 45", got)
 	}
-	if len(view.pullRequests) != 45 || view.pullRequests[view.window.Cursor()].Number != want {
-		test.Errorf("after refresh: prs=%d selected #%d, want 45 rows and #%d", len(view.pullRequests), view.pullRequests[view.window.Cursor()].Number, want)
+	if len(view.current().pullRequests) != 45 || view.current().pullRequests[view.current().window.Cursor()].Number != want {
+		test.Errorf("after refresh: prs=%d selected #%d, want 45 rows and #%d", len(view.current().pullRequests), view.current().pullRequests[view.current().window.Cursor()].Number, want)
 	}
 }
 
 func TestRefreshCapsAtMaximumPageSize(test *testing.T) {
 	client := fakeWith(makePullRequests(250))
 	view := loadedView(test, client, nil)
-	for len(view.pullRequests) < 150 {
+	for len(view.current().pullRequests) < 150 {
 		deliver(test, view, press(view, "G"))
 	}
-	view.window.Restore(120, 0, 0)
+	view.current().window.Restore(120, 0, 0)
 	deliver(test, view, press(view, "R"))
 	calls := client.Calls()
 	if got := calls[len(calls)-1].Page.Limit; got != github.MaximumPageSize {
@@ -200,8 +203,8 @@ func TestRefreshCapsAtMaximumPageSize(test *testing.T) {
 	}
 	// Pinned: only the first 100 rows are reloaded and the cursor keeps its
 	// index (clamped), even though that may now be a different PR.
-	if len(view.pullRequests) != 100 || view.window.Cursor() != 99 {
-		test.Errorf("after refresh: prs=%d cursor=%d, want 100 and 99", len(view.pullRequests), view.window.Cursor())
+	if len(view.current().pullRequests) != 100 || view.current().window.Cursor() != 99 {
+		test.Errorf("after refresh: prs=%d cursor=%d, want 100 and 99", len(view.current().pullRequests), view.current().window.Cursor())
 	}
 }
 
@@ -209,7 +212,7 @@ func TestUntrustedTextIsCleaned(test *testing.T) {
 	repository := github.Repository{Owner: "ev\x1b[2Jil", Name: "re\x07po"}
 	client := fake.New()
 	client.SetError(fake.MethodListPullRequests, errors.New("boom\x1b]52;c;aGk=\x07\u202e\u009b"))
-	view := New(client, repository, theme.Default(), Options{})
+	view := New(client, repository, config.Default().Tabs, theme.Default(), Options{})
 	view.Update(tea.WindowSizeMsg{Width: 80, Height: 8})
 
 	if strings.ContainsAny(view.Title(), "\x1b\x07") {
@@ -243,9 +246,9 @@ func TestRefreshSelectionGone(test *testing.T) {
 	// The selected PR disappears from the list; the row index is kept.
 	client.SetPullRequests(testRepository, makePullRequests(10)[:3])
 	press(view, "R")
-	view.Update(pullRequestsLoadedMessage{repository: testRepository, sequence: view.sequence, page: github.Page[github.PullRequest]{Items: makePullRequests(3)}})
-	if view.window.Cursor() != 2 {
-		test.Errorf("cursor = %d, want 2 (clamped)", view.window.Cursor())
+	view.Update(pullRequestsLoadedMessage{repository: testRepository, sequence: view.current().sequence, page: github.Page[github.PullRequest]{Items: makePullRequests(3)}})
+	if view.current().window.Cursor() != 2 {
+		test.Errorf("cursor = %d, want 2 (clamped)", view.current().window.Cursor())
 	}
 }
 
@@ -367,8 +370,8 @@ func TestNavigation(test *testing.T) {
 		for _, key := range testCase.keys {
 			press(view, key)
 		}
-		if view.window.Cursor() != testCase.want {
-			test.Errorf("keys %v: cursor = %d, want %d", testCase.keys, view.window.Cursor(), testCase.want)
+		if view.current().window.Cursor() != testCase.want {
+			test.Errorf("keys %v: cursor = %d, want %d", testCase.keys, view.current().window.Cursor(), testCase.want)
 		}
 	}
 }
@@ -431,7 +434,11 @@ func TestGolden(test *testing.T) {
 		{"narrow", func(test *testing.T) *View {
 			return loadedView(test, fakeWith(goldenPullRequests()), nil)
 		}, 36, 10},
-		{"loading", func(*testing.T) *View { return newView(fakeWith(nil), nil) }, 80, 6},
+		{"loading", func(*testing.T) *View {
+			view := newView(fakeWith(nil), nil)
+			view.Init()
+			return view
+		}, 80, 6},
 		{"empty", func(test *testing.T) *View { return loadedView(test, fakeWith(nil), nil) }, 80, 6},
 		{"error", func(test *testing.T) *View {
 			client := fakeWith(nil)
@@ -498,10 +505,10 @@ func TestPagingKeysAtTheEnds(test *testing.T) {
 				press(view, key)
 			}
 			press(view, testCase.key)
-			if got := view.window.Cursor(); got != testCase.want {
+			if got := view.current().window.Cursor(); got != testCase.want {
 				test.Errorf("cursor = %d, want %d", got, testCase.want)
 			}
-			if got := view.window.Top(); got != testCase.wantTop {
+			if got := view.current().window.Top(); got != testCase.wantTop {
 				test.Errorf("top = %d, want %d", got, testCase.wantTop)
 			}
 		})
@@ -516,27 +523,27 @@ func TestPagingNearTheEndLoadsMore(test *testing.T) {
 			var command tea.Cmd
 			for i := 0; i < 10 && command == nil; i++ {
 				command = press(view, key)
-				if command == nil && view.window.Cursor() >= len(view.pullRequests)-1-loadMoreMargin {
-					test.Fatalf("%s reached cursor %d inside the margin without loading", key, view.window.Cursor())
+				if command == nil && view.current().window.Cursor() >= len(view.current().pullRequests)-1-loadMoreMargin {
+					test.Fatalf("%s reached cursor %d inside the margin without loading", key, view.current().window.Cursor())
 				}
 			}
 			if command == nil || !view.Loading() {
 				test.Fatalf("%s into the margin should load the next page", key)
 			}
-			cursor, top := view.window.Cursor(), view.window.Top()
+			cursor, top := view.current().window.Cursor(), view.current().window.Top()
 			deliver(test, view, command)
-			if len(view.pullRequests) != 45 {
-				test.Fatalf("rows after next page = %d, want 45", len(view.pullRequests))
+			if len(view.current().pullRequests) != 45 {
+				test.Fatalf("rows after next page = %d, want 45", len(view.current().pullRequests))
 			}
 			calls := client.Calls()
 			if calls[len(calls)-1].Page.After == "" {
 				test.Errorf("last call = %+v, want a next-page fetch", calls[len(calls)-1])
 			}
-			if view.window.Cursor() != cursor || view.window.Top() != top {
-				test.Errorf("append moved the window: cursor %d->%d top %d->%d", cursor, view.window.Cursor(), top, view.window.Top())
+			if view.current().window.Cursor() != cursor || view.current().window.Top() != top {
+				test.Errorf("append moved the window: cursor %d->%d top %d->%d", cursor, view.current().window.Cursor(), top, view.current().window.Top())
 			}
 			press(view, "G")
-			if got := view.window.Cursor(); got != 44 {
+			if got := view.current().window.Cursor(); got != 44 {
 				test.Errorf("G after append: cursor = %d, want 44 (window must know the new row count)", got)
 			}
 		})
@@ -560,11 +567,29 @@ func TestWorkspacesShareHunkMarks(test *testing.T) {
 	}
 }
 
+type stubCopier struct{}
+
+func (stubCopier) Copy(context.Context, string) error { return nil }
+
+func TestClipboardPassedToWorkspaces(test *testing.T) {
+	copier := stubCopier{}
+	view := New(fakeWith(makePullRequests(1)), testRepository, config.Default().Tabs, theme.Default(), Options{Clipboard: copier})
+	view.Update(tea.WindowSizeMsg{Width: 80, Height: 13})
+	deliver(test, view, view.Init())
+	push, ok := press(view, "enter")().(userinterface.PushMessage)
+	if !ok {
+		test.Fatal("enter should push a view")
+	}
+	if got := push.View.(*workspace.View).Clipboard(); got != copier {
+		test.Errorf("workspace clipboard = %#v, want the list's", got)
+	}
+}
+
 func TestWrapPassedToWorkspaces(test *testing.T) {
 	for _, wrap := range []bool{false, true} {
-		view := New(fakeWith(makePullRequests(1)), testRepository, theme.Default(), Options{})
+		view := New(fakeWith(makePullRequests(1)), testRepository, config.Default().Tabs, theme.Default(), Options{})
 		view.Update(userinterface.OptionsMessage{Values: options.Values{options.Wrap: wrap}})
-		view.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
+		view.Update(tea.WindowSizeMsg{Width: 80, Height: 13})
 		deliver(test, view, view.Init())
 		push, ok := press(view, "enter")().(userinterface.PushMessage)
 		if !ok {

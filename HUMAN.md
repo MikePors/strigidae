@@ -4,6 +4,18 @@ Checks only the maintainer can do, such as live verification against real GitHub
 
 ## Live checks
 
+- [ ] **`:edit-pull-request` edits a pull request's title and body on GitHub** (#174). The `updatePullRequest` mutation and the `viewerCanUpdate` field have only been tested against the fake client and fixtures.
+  1. Open a test PR you may edit in strig and run `:edit-pull-request`. The editor should open with the title, a blank line, then the body.
+  2. Change both, close the editor, and answer `y`. strig should say `Pull request updated` and the Overview should show the new title and description; check both on github.com.
+  3. Run it again and close the editor without changes. It should say `no changes`.
+  4. Delete the title line's text and close. It should show an error and send nothing.
+  5. Open a pull request you can't edit (someone else's, in a repo where you only have read access) and run the command. It should say `you can't edit this pull request` before opening an editor.
+
+- [ ] **`:copy-filename` and `:copy-url` reach the system clipboard** (#172, #171). Only the fake copier is tested.
+  1. On macOS, inside tmux with no `set-clipboard` setting in your tmux config, open a pull request, select a file and run `:copy-filename` and `:copy-url`, then paste elsewhere. Report whether it pasted.
+  2. On Linux (Wayland with `wl-copy`, and X11 with `xclip` or `xsel` if you can), do the same inside and outside tmux. Report which tool was used and whether it pasted.
+  3. Check nothing was printed on the screen, and `strig --log-path` shows no clipboard error.
+
 - [ ] **`:discard-review` deletes a pending review on GitHub** (#139, merged in #143). The delete call (GraphQL `deletePullRequestReview`) has only been tested against the fake client.
   1. On a test PR, add two or three inline draft comments, so you have a pending review.
   2. Run `:discard-review`. The question should name the number of drafts. Answer `y`.

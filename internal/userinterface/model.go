@@ -40,6 +40,11 @@ type Options struct {
 	// StartingOptions are the starting values of the `:set` options, normally
 	// from the config file. The zero value is every option at its default.
 	StartingOptions options.Values
+	// ViewCommands are the names of the commands the views handle through
+	// Commander, collected by cmd/strig from each view package. They let the
+	// shell tell a command the top view lacks ("not available here") from a
+	// word that is no command at all.
+	ViewCommands []string
 	// Companion, if set, is listened to from the start (see Companion).
 	Companion Companion
 }
@@ -77,6 +82,7 @@ type Model struct {
 	companion       Companion
 	themeSequence   int // the latest `:theme` load; older results are ignored
 	options         options.Values
+	viewCommands    []string
 
 	width, height      int
 	matcher            keys.Matcher
@@ -129,6 +135,7 @@ func New(root View, activeTheme theme.Theme, startup Options) *Model {
 		themeLoader:     startup.LoadTheme,
 		companion:       startup.Companion,
 		options:         startup.StartingOptions,
+		viewCommands:    startup.ViewCommands,
 		commandLine:     newCommandLine(activeTheme),
 		spin:            spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(activeTheme.Spinner)),
 	}
@@ -336,7 +343,7 @@ func (model *Model) handleKey(message tea.KeyPressMsg) tea.Cmd {
 	if model.commandLine.active {
 		line, ok, command := model.commandLine.handleKey(message)
 		if ok {
-			return parseCommand(line, model.top())
+			return parseCommand(line, model.top(), model.viewCommands)
 		}
 		return command
 	}

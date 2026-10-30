@@ -214,23 +214,23 @@ func (view *View) showThreads() {
 	view.filePane.SetThreads(threads)
 }
 
+// checkQuestion refuses :ask without a question.
+func checkQuestion(arguments string) tea.Cmd {
+	if strings.TrimSpace(arguments) == "" {
+		return userinterface.Info("usage: :ask <question>")
+	}
+	return nil
+}
+
 // ask sends a question about the line or selection under the diff cursor
 // and shows it there, waiting for its answer.
-func (view *View) ask(text string) tea.Cmd {
+func (view *View) ask(text string, lines diffview.Range) tea.Cmd {
 	if view.questions == nil {
 		return userinterface.Info("asking needs strig started with --beefis in a beefis pane")
 	}
 	if view.questions.closed {
 		return userinterface.Info("beefis closed the connection: restart strig to ask again")
 	}
-	if strings.TrimSpace(text) == "" {
-		return userinterface.Info("usage: :ask <question>")
-	}
-	resolved, command := view.resolveTarget(request{level: levelLines, words: "ask about it"})
-	if command != nil {
-		return command
-	}
-	lines := resolved.lines
 	question := beefis.Question{
 		Repository: view.repository.String(), Number: view.number, Head: view.diffHead,
 		Path: lines.Path, Side: string(lines.Side), Line: lines.End, Question: text,

@@ -255,7 +255,7 @@ func TestVisualOnHunkHeaderDoesNotStart(test *testing.T) {
 func TestVisualReleasesOnEscThroughRoot(test *testing.T) {
 	inliner := newInliner(test)
 	noTick := func(time.Duration, func(time.Time) tea.Msg) tea.Cmd { return nil }
-	model := userinterface.New(inliner.view, theme.New(true), userinterface.Options{Tick: noTick})
+	model := userinterface.New(inliner.view, theme.New(true), userinterface.Options{Tick: noTick, ViewCommands: Commands()})
 	step := func(message tea.Msg) { _, _ = model.Update(message) }
 	step(tea.WindowSizeMsg{Width: 110, Height: 41})
 	inliner.moveTo(github.SideRight, 10)
@@ -1428,7 +1428,7 @@ func TestWriteAfterYesIsInFlightUntilItsResult(test *testing.T) {
 	test.Run("top-level comment", func(test *testing.T) {
 		composer := newComposer(test)
 		composer.body = "LGTM"
-		composer.press("c")
+		composer.press("C")
 		confirmation, ok := composer.lastConfirm()
 		if !ok {
 			test.Fatal("no confirmation")
@@ -1570,12 +1570,12 @@ func TestRefusedEditTextGoesToTheThreadOrTheLine(test *testing.T) {
 				test.Errorf("drafts (-want +got):\n%s", diff)
 			}
 			if testCase.wantKey == topKey {
-				// c in the Overview starts from the text.
+				// C in the Overview starts from the text.
 				inliner.press("h", "g g")
 				inliner.openedOn = nil
-				inliner.press("c")
+				inliner.press("C")
 				if diff := cmp.Diff([]string{"my rewrite"}, inliner.openedOn); diff != "" {
-					test.Errorf("c in the Overview opened on (-want +got):\n%s", diff)
+					test.Errorf("C in the Overview opened on (-want +got):\n%s", diff)
 				}
 			}
 			if testCase.wantKey == lineKey {
@@ -1811,7 +1811,7 @@ func TestAYesIsRefusedWhileAnotherWriteRuns(test *testing.T) {
 	inliner := newInliner(test)
 	inliner.view.writes = 1
 	ran := false
-	_, command := inliner.view.Update(commentAgreedMessage{origin: inliner.view.origin(), run: func() tea.Msg { ran = true; return nil }})
+	_, command := inliner.view.Update(commentAgreedMessage{origin: inliner.view.origin(), kind: writeComment, run: func() tea.Msg { ran = true; return nil }})
 	inliner.run(command)
 	if ran || inliner.view.writes != 1 {
 		test.Errorf("the write ran %v, writes = %d", ran, inliner.view.writes)
@@ -1826,7 +1826,7 @@ func TestTopLevelCommentIsRefusedWhileAWriteRuns(test *testing.T) {
 	inliner.press("h", "g g") // the Overview
 	inliner.view.writes = 1
 	inliner.messages, inliner.openedOn, inliner.body = nil, nil, "x"
-	inliner.press("c")
+	inliner.press("C")
 	if len(inliner.openedOn) != 0 {
 		test.Error("an editor opened while a write is running")
 	}

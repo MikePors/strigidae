@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MikePors/strigidae/internal/diff"
+	"github.com/MikePors/strigidae/internal/userinterface/components/search"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
@@ -31,6 +32,7 @@ type variant struct {
 	fill   lipgloss.Style                      // pads the code area to full width
 	gutter lipgloss.Style
 	thread [2]lipgloss.Style // gutter marker: [0] quiet thread, [1] open thread
+	search lipgloss.Style    // the match marker in the cursor column
 }
 
 // styleSet precomputes every style combination so rendering never builds
@@ -59,6 +61,7 @@ func newStyleSet(activeTheme theme.Theme) styleSet {
 			variantStyles := variant{fill: base, gutter: gutter}
 			variantStyles.thread[0] = activeTheme.Muted.Background(gutter.GetBackground())
 			variantStyles.thread[1] = activeTheme.ThreadMarker.Background(gutter.GetBackground())
+			variantStyles.search = activeTheme.SearchMarker.Background(gutter.GetBackground())
 			variantStyles.code = make(map[chroma.TokenType]lipgloss.Style, len(foreground))
 			for tokenType, style := range foreground {
 				variantStyles.code[tokenType] = style.Background(base.GetBackground())
@@ -134,6 +137,8 @@ func (model *Model) rowStyle(i int) (*variant, string) {
 		mark = ">"
 	case model.selected(row.baseIndex):
 		mark, current = markSelected, 1 // the selection takes the cursor tint
+	case model.searchMarked(i):
+		mark = search.Glyph
 	}
 	return &model.styles.variants[current][kind], mark
 }
@@ -181,7 +186,11 @@ func (model *Model) gutterText(i int, mark string, variantStyles *variant) strin
 			titleStyle = variantStyles.thread[1]
 		}
 	}
-	return variantStyles.gutter.Render(mark+model.relativeCell(i)+numberCell(line.Old, model.numberWidth)+" "+numberCell(line.New, model.numberWidth)+" ") +
+	head := ""
+	if mark == search.Glyph {
+		head, mark = variantStyles.search.Render(mark), "" // only a match is drawn apart from the gutter
+	}
+	return head + variantStyles.gutter.Render(mark+model.relativeCell(i)+numberCell(line.Old, model.numberWidth)+" "+numberCell(line.New, model.numberWidth)+" ") +
 		titleStyle.Render(glyph) + variantStyles.gutter.Render(marker)
 }
 

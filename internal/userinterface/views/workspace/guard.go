@@ -10,17 +10,19 @@ import (
 // writes declares its kind and asks the guard before it starts, and again at
 // each point where it is re-admitted (after a yes, or after a re-read).
 // Actions that write nothing to GitHub (`m`, folds, navigation,
-// `:copy-filename`, `:checks`) have no kind and no guard.
+// `:copy-filename`, `:copy-url`, `:checks`, `:ask`) have no kind and no guard.
 type writeKind int
 
 const (
-	// writeComment: `c` on a diff line, `V` (starts an inline comment), `r`,
+	// writeNone: the action writes nothing and has no guard.
+	writeNone writeKind = iota
+	// writeComment: `c` (lines only), `V` (starts an inline comment), `r`,
 	// `e` / `:edit-comment`, `D` / `:delete-comment`, and the reply's yes.
-	writeComment writeKind = iota
+	writeComment
 	// writeThread: `x`, `:resolve`, `:unresolve`.
 	writeThread
-	// writeOverviewComment: `c` on the Overview (a top-level comment). It
-	// needs no diff.
+	// writeOverviewComment: `C` (a top-level comment) from anywhere in the
+	// workspace. It needs no diff.
 	writeOverviewComment
 	// writeReaction: `:react`.
 	writeReaction
@@ -30,6 +32,8 @@ const (
 	writeMerge
 	// writeDiscard: `:discard-review`. It needs no diff.
 	writeDiscard
+	// writePullRequest: `:edit-pull-request`. It needs no diff.
+	writePullRequest
 )
 
 // guardRule is what one kind of write needs and what blocks it.
@@ -59,6 +63,18 @@ var guardTable = map[writeKind]guardRule{
 	writeReview:          {needsDiff: true, busy: allBusy},
 	writeMerge:           {needsDiff: true, busy: allBusy},
 	writeDiscard:         {busy: allBusy},
+	writePullRequest:     {busy: allBusy},
+}
+
+// ruleFor is the rule of a kind. writeNone means "no guard" only to the
+// dispatcher, which skips the guard for such entries; asked directly (a
+// message that forgot its kind) it is the strictest rule, so the answer is a
+// refusal and never a silent admission.
+func ruleFor(kind writeKind) guardRule {
+	if kind == writeNone {
+		return guardRule{needsDiff: true, busy: allBusy}
+	}
+	return guardTable[kind]
 }
 
 // guardState is what the guard looks at, at one moment.
@@ -78,7 +94,7 @@ func (state guardState) ready(kind writeKind) tea.Cmd {
 	switch {
 	case !state.loaded:
 		return userinterface.Info("pull request not loaded yet")
-	case guardTable[kind].needsDiff && !state.diffReady:
+	case ruleFor(kind).needsDiff && !state.diffReady:
 		return userinterface.Info("diff not loaded")
 	}
 	return nil
@@ -87,7 +103,7 @@ func (state guardState) ready(kind writeKind) tea.Cmd {
 // busy returns the notice to show when a busy state blocks the kind of write,
 // or nil.
 func (state guardState) busy(kind writeKind) tea.Cmd {
-	blocks := guardTable[kind].busy
+	blocks := ruleFor(kind).busy
 	switch {
 	case blocks.submittingReview && state.submittingReview:
 		return userinterface.Info("a review is being submitted")

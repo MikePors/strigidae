@@ -6,6 +6,8 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 	cliBrowser "github.com/cli/browser"
 
 	"github.com/MikePors/strigidae/internal/beefis"
+	"github.com/MikePors/strigidae/internal/clipboard"
 	"github.com/MikePors/strigidae/internal/environment"
 	"github.com/MikePors/strigidae/internal/logging"
 	"github.com/MikePors/strigidae/internal/userinterface"
@@ -62,7 +65,7 @@ func runTerminalInterface(application application, stderr io.Writer) error {
 // userInterfaceOptions is what the shell starts with: the logger, the startup
 // notice, and the options the config file set.
 func (application application) userInterfaceOptions(logger *slog.Logger, notice string) userinterface.Options {
-	userInterfaceOptions := userinterface.Options{Logger: logger, Notice: notice, StartingOptions: application.config.Options}
+	userInterfaceOptions := userinterface.Options{Logger: logger, Notice: notice, StartingOptions: application.config.Options, ViewCommands: viewCommands()}
 	if application.questions != nil {
 		userInterfaceOptions.Companion = application.questions
 	}
@@ -76,6 +79,13 @@ type logLines struct{ logger *slog.Logger }
 func (writer logLines) Write(text []byte) (int, error) {
 	writer.logger.Info("beefis", "stderr", strings.TrimRight(string(text), "\n"))
 	return len(text), nil
+}
+
+// viewCommands collects the command names every view package declares, so the
+// shell can tell a command another view owns from a word that is no command.
+// A view with commands adds its Commands here.
+func viewCommands() []string {
+	return workspace.Commands()
 }
 
 // askTerminal asks the controlling terminal for its palette, before the
@@ -93,9 +103,25 @@ func askTerminal() (terminalpalette.Reply, error) {
 // or in one with no GitHub remote), else the repository's pull request list.
 func firstView(application application) userinterface.View {
 	if application.dashboard {
-		return dashboard.New(application.client, application.config.Tabs, application.theme, dashboard.Options{Notice: application.notice, Timeouts: application.timeouts(), Questions: application.questions})
+		return dashboard.New(application.client, application.config.Tabs, application.theme, dashboard.Options{Notice: application.notice, Timeouts: application.timeouts(), Clipboard: systemClipboard(), Questions: application.questions})
 	}
-	return pullrequestlist.New(application.client, application.repository, application.theme, pullrequestlist.Options{Timeouts: application.timeouts(), Questions: application.questions})
+	return pullrequestlist.New(application.client, application.repository, application.config.Tabs, application.theme, pullrequestlist.Options{Timeouts: application.timeouts(), Clipboard: systemClipboard(), Questions: application.questions})
+}
+
+// systemClipboard is the real clipboard tool lookup.
+func systemClipboard() clipboard.Copier {
+	return clipboard.New(clipboardOptions(os.Environ()))
+}
+
+// clipboardOptions gives the tool the same scrubbed environment as every
+// program strig starts.
+func clipboardOptions(variables []string) clipboard.Options {
+	return clipboard.Options{
+		Platform:       runtime.GOOS,
+		GetEnvironment: os.Getenv,
+		LookPath:       exec.LookPath,
+		Environment:    environment.Scrub(variables),
+	}
 }
 
 // timeouts hands the config file's deadlines to the views; a field the file

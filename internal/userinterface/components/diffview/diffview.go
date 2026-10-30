@@ -42,6 +42,7 @@ import (
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/userinterface/components/markdown"
 	"github.com/MikePors/strigidae/internal/userinterface/components/scroll"
+	"github.com/MikePors/strigidae/internal/userinterface/components/search"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
@@ -148,6 +149,9 @@ type Model struct {
 
 	window scroll.Window // cursor, top row and horizontal offset
 
+	search          search.State // over rows; see search.go
+	highlightSearch bool         // matching rows are marked
+
 	wrap           bool // long lines continue on the next screen rows; see wrap.go
 	relativeNumber bool // the gutter numbers rows by distance from the cursor; see relative.go
 	// wrapStarts caches, per base row, the column each of its screen rows
@@ -200,6 +204,9 @@ func (model *Model) SetFile(file *diff.File) {
 	model.saved = nil
 	model.file, model.message = file, ""
 	model.reset()
+	if previous == nil {
+		model.search.Clear() // another file: the query belonged to the last one
+	}
 	if file == nil {
 		return
 	}
@@ -252,6 +259,7 @@ func (model *Model) reset() {
 	model.window.Reset()
 	model.maximumWidth, model.numberWidth = 0, 0
 	model.sync()
+	model.search.Refresh(model.searchList())
 }
 
 func (model *Model) build(file *diff.File) {
@@ -435,6 +443,7 @@ func (model *Model) relayout(key cursorKey, found bool) {
 		model.visual = false // its first line is gone
 	}
 	model.sync()
+	model.search.Refresh(model.searchList()) // the rows moved; the query stays
 	if found && len(model.rows) > 0 {
 		cursorRow := model.keyRow(key)
 		model.window.Restore(cursorRow, cursorRow-cursorOffset, model.window.HorizontalOffset())

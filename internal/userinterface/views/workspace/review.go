@@ -113,44 +113,14 @@ func (view *View) reviewEnvironment() reviewEnvironment {
 	}
 }
 
-// Command implements userinterface.Commander: :approve, :request-changes, :review,
-// :checks, :merge, :copy-filename, :edit-comment, :delete-comment, :discard-review, :react, :resolve and :unresolve.
+// Command implements userinterface.Commander for every command in the
+// registry (see Commands): the entry that has the name runs as a key would.
 func (view *View) Command(name, arguments string) (tea.Cmd, bool) {
-	switch name {
-	case "ask":
-		return view.ask(arguments), true
-	case "copy-filename":
-		return view.copyFilename(), true
-	case "checks":
-		return view.checksCommand(), true
-	case "merge":
-		return view.merge.command(arguments, view.reviewEnvironment()), true
-	case "edit-comment":
-		return view.editComment(), true
-	case "delete-comment":
-		return view.deleteComment(), true
-	case "discard-review":
-		return view.discardReview(), true
-	case "react":
-		return view.reactCommand(arguments), true
-	case "resolve":
-		return view.resolveThread(resolveOnly), true
-	case "unresolve":
-		return view.resolveThread(unresolveOnly), true
+	chosen, ok := view.commandEntry(name)
+	if !ok {
+		return nil, false
 	}
-	return view.review.command(name, view.reviewEnvironment())
-}
-
-func (currentFlow *reviewFlow) command(name string, environment reviewEnvironment) (tea.Cmd, bool) {
-	switch name {
-	case "approve":
-		return currentFlow.start(environment, github.ReviewEventApprove), true
-	case "request-changes":
-		return currentFlow.start(environment, github.ReviewEventRequestChanges), true
-	case "review":
-		return currentFlow.openChooser(environment), true
-	}
-	return nil, false
+	return view.invoke(chosen, invocation{arguments: arguments}), true
 }
 
 // mine reports whether a result belongs to this flow's latest attempt.
