@@ -131,6 +131,11 @@ func (pane *diffPane) SetDiff(diffState DiffState) {
 }
 
 func (pane *diffPane) SetFile(file github.ChangedFile) {
+	if !pane.hasFile || pane.file.Path != file.Path {
+		// Another file, even one that shows only a message: the query
+		// belonged to the last one and must not come back with it.
+		pane.diffView.ClearSearch()
+	}
 	pane.file, pane.hasFile = file, true
 	pane.show()
 }

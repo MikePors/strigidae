@@ -7,9 +7,54 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/MikePors/strigidae/internal/options"
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/components/search"
 )
+
+func TestDiffSearchDoesNotComeBackAfterAFileWithoutADiff(test *testing.T) {
+	harness := diffSearching(test)
+	harness.press("h", "G") // README.md has no diff: the pane shows a message
+	if got := harness.view.selectedPath(); got != "README.md" {
+		test.Fatalf("selected %q", got)
+	}
+	harness.press("g g", "j", "l", "g g") // client.go again (via Overview, which shows no file)
+	if got := harness.view.selectedPath(); got != "internal/sync/client.go" {
+		test.Fatalf("selected %q", got)
+	}
+	if marked := harness.diffMarked(); len(marked) != 0 {
+		test.Errorf("the earlier query came back: %q", marked)
+	}
+}
+
+func TestSlashInTheFilesPaneAfterADiffSearchSearchesTheFilesPane(test *testing.T) {
+	harness := diffSearching(test)
+	harness.press("h", "/")
+	harness.searchFor("retry", userinterface.PromptChanged)
+	harness.searchFor("retry", userinterface.PromptSubmitted)
+	if got := harness.view.search.Query(); got != "retry" {
+		test.Errorf("Files query = %q", got)
+	}
+	if got := harness.view.selection(); got != 2 {
+		test.Errorf("selection = %d, want 2", got)
+	}
+}
+
+func TestSetHighlightSearchReachesTheDiffPane(test *testing.T) {
+	harness := diffSearching(test)
+	harness.press("g g")
+	if len(harness.diffMarked()) == 0 {
+		test.Fatal("no marks")
+	}
+	harness.send(userinterface.OptionsMessage{Values: options.Values{}.With(options.HighlightSearch, false)})
+	if marked := harness.diffMarked(); len(marked) != 0 {
+		test.Errorf("marks with hlsearch off: %q", marked)
+	}
+	harness.send(userinterface.OptionsMessage{Values: options.Values{}.With(options.HighlightSearch, true)})
+	if len(harness.diffMarked()) == 0 {
+		test.Error("marks did not come back with hlsearch on")
+	}
+}
 
 // diffMarked returns the diff pane's rows drawn with the match marker.
 func (harness *harness) diffMarked() []string {
@@ -34,7 +79,8 @@ func (harness *harness) cursorLine() string {
 }
 
 // diffSearching opens client.go, focuses the diff pane and searches it.
-func diffSearching(test *testing.T, text string) *harness {
+func diffSearching(test *testing.T) *harness {
+	const text = "ctx"
 	test.Helper()
 	harness := loaded(test, 100, 30)
 	harness.press("j", "l")
@@ -68,7 +114,7 @@ func TestSlashInTheDiffPaneAsksForThePromptAndSearchesTheDiff(test *testing.T) {
 }
 
 func TestDiffSearchNextPreviousAndEsc(test *testing.T) {
-	harness := diffSearching(test, "ctx")
+	harness := diffSearching(test)
 	cursor := harness.cursorLine
 	first := cursor()
 	harness.press("n")
@@ -111,7 +157,7 @@ func TestDiffAndFilesSearchesKeepTheirOwnQueries(test *testing.T) {
 }
 
 func TestChangingFileClearsTheDiffSearch(test *testing.T) {
-	harness := diffSearching(test, "ctx")
+	harness := diffSearching(test)
 	harness.press("g g")
 	if len(harness.diffMarked()) == 0 {
 		test.Fatal("no marks before changing file")
