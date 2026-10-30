@@ -72,7 +72,7 @@ func (view *View) errorState(width int) string {
 
 func (view *View) table(width, height int) string {
 	current := view.current()
-	table := pullrequestrows.New(view.theme, view.now, false)
+	table := pullrequestrows.New(view.theme, view.now, pullrequestrows.Options{Branches: true})
 	layout := table.Layout(current.pullRequests, width-pullrequestrows.MarkerColumns)
 	lines := make([]string, 0, height)
 	lines = append(lines, table.Header(layout, width))
