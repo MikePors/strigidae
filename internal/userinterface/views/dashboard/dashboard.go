@@ -13,6 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/cli/go-gh/v2/pkg/browser"
 
+	"github.com/MikePors/strigidae/internal/clipboard"
 	"github.com/MikePors/strigidae/internal/config"
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/options"
@@ -45,6 +46,9 @@ type Options struct {
 	Notice string
 	// Timeouts are the deadlines of the GitHub calls; zero fields select the defaults.
 	Timeouts userinterface.Timeouts
+	// Clipboard is the system clipboard tool the workspaces copy with besides
+	// OSC 52; nil means OSC 52 only.
+	Clipboard clipboard.Copier
 }
 
 // section is one search and what it found.
@@ -81,6 +85,7 @@ type View struct {
 	now        func() time.Time
 	open       func(url string) error
 	timeouts   userinterface.Timeouts
+	clipboard  clipboard.Copier
 	// hunkMarks keeps the hunks marked reviewed in every workspace opened
 	// from here, so they survive closing and reopening a pull request.
 	hunkMarks *workspace.HunkMarks
@@ -138,6 +143,7 @@ func New(client github.Client, tabs []config.Tab, activeTheme theme.Theme, optio
 		open:      options.Open,
 		notice:    options.Notice,
 		timeouts:  options.Timeouts,
+		clipboard: options.Clipboard,
 		hunkMarks: workspace.NewHunkMarks(),
 	}
 	for _, configured := range tabs {
@@ -384,6 +390,7 @@ func (view *View) openSelected() tea.Cmd {
 		workspace.WithHunkMarks(view.hunkMarks),
 		workspace.WithWrap(view.options.Wrap()),
 		workspace.WithTimeouts(view.timeouts),
+		workspace.WithClipboard(view.clipboard),
 	))
 }
 

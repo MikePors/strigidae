@@ -1,6 +1,7 @@
 package pullrequestlist
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -557,6 +558,24 @@ func TestWorkspacesShareHunkMarks(test *testing.T) {
 	first, second := opened(), opened()
 	if first == nil || first != second || first != view.hunkMarks {
 		test.Error("two workspaces opened from the list do not share the list's hunk marks")
+	}
+}
+
+type stubCopier struct{}
+
+func (stubCopier) Copy(context.Context, string) error { return nil }
+
+func TestClipboardPassedToWorkspaces(test *testing.T) {
+	copier := stubCopier{}
+	view := New(fakeWith(makePullRequests(1)), testRepository, theme.Default(), Options{Clipboard: copier})
+	view.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
+	deliver(test, view, view.Init())
+	push, ok := press(view, "enter")().(userinterface.PushMessage)
+	if !ok {
+		test.Fatal("enter should push a view")
+	}
+	if got := push.View.(*workspace.View).Clipboard(); got != copier {
+		test.Errorf("workspace clipboard = %#v, want the list's", got)
 	}
 }
 
