@@ -41,7 +41,7 @@ func TestCounts(test *testing.T) {
 				press(view, key)
 			}
 			pressCounted(view, testCase.key, testCase.count)
-			if got := view.window.Cursor(); got != testCase.want {
+			if got := view.current().window.Cursor(); got != testCase.want {
 				test.Errorf("cursor = %d, want %d", got, testCase.want)
 			}
 		})
@@ -51,15 +51,15 @@ func TestCounts(test *testing.T) {
 func TestCountOnRefreshActsOnce(test *testing.T) {
 	view := loadedView(test, fakeWith(makePullRequests(25)), nil)
 	press(view, "j")
-	before := view.sequence
+	before := view.current().sequence
 	if command := pressCounted(view, "R", 5); command == nil {
 		test.Fatal("R with a count should still refresh")
 	}
-	if got := view.sequence - before; got != 1 {
+	if got := view.current().sequence - before; got != 1 {
 		test.Errorf("5R started %d refreshes, want 1", got)
 	}
-	if view.window.Cursor() != 1 {
-		test.Errorf("cursor = %d, want 1", view.window.Cursor())
+	if view.current().window.Cursor() != 1 {
+		test.Errorf("cursor = %d, want 1", view.current().window.Cursor())
 	}
 }
 
