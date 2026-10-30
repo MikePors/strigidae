@@ -14,13 +14,13 @@ import (
 func (view *View) searchList() search.List {
 	return search.List{
 		Items: func() []search.Item {
-			return pullrequestrows.SearchItems(view.pullRequests, func(_ int, pullRequest github.PullRequest) string {
+			return pullrequestrows.SearchItems(view.current().pullRequests, func(_ int, pullRequest github.PullRequest) string {
 				return strconv.Itoa(pullRequest.Number)
 			})
 		},
-		Cursor: view.window.Cursor,
+		Cursor: view.current().window.Cursor,
 		GoTo: func(row int) tea.Cmd {
-			view.window.GotoRow(row)
+			view.current().window.GotoRow(row)
 			return view.maybeLoadMore()
 		},
 	}
@@ -28,5 +28,5 @@ func (view *View) searchList() search.List {
 
 // PromptRequest implements userinterface.Prompter.
 func (view *View) PromptRequest() (prefix string, ok bool) {
-	return search.Prefix, view.search.TakeRequest()
+	return search.Prefix, view.current().search.TakeRequest()
 }

@@ -4,15 +4,18 @@ import (
 	"testing"
 
 	"github.com/MikePors/strigidae/internal/userinterface/views/dashboard"
+	"github.com/MikePors/strigidae/internal/userinterface/views/pullrequestlist"
 	"github.com/MikePors/strigidae/internal/userinterface/views/workspace"
 )
 
 // sharedActionNames are names more than one view uses on purpose: the same
 // action in another view, so a config override rebinds both. Any other name in
-// two views is a clash. The pull request list declares no bindings of its own.
+// two views is a clash.
 var sharedActionNames = map[string]bool{
 	"next-section":     true, // workspace Overview and dashboard: next section
 	"previous-section": true,
+	"next-tab":         true, // dashboard and pull request list: next tab
+	"previous-tab":     true,
 }
 
 // This lives in cmd/strig because it is the one package that imports every
@@ -21,6 +24,7 @@ func TestActionNamesAreUniqueAcrossViews(test *testing.T) {
 	views := map[string][]string{
 		"workspace": workspace.ActionNames(),
 		"dashboard": dashboard.ActionNames(),
+		"list":      pullrequestlist.ActionNames(),
 	}
 	usedBy := map[string][]string{}
 	for view, names := range views {

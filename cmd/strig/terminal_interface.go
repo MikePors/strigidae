@@ -78,7 +78,7 @@ func firstView(application application) userinterface.View {
 	if application.dashboard {
 		return dashboard.New(application.client, application.config.Tabs, application.theme, dashboard.Options{Notice: application.notice, Timeouts: application.timeouts(), Clipboard: systemClipboard()})
 	}
-	return pullrequestlist.New(application.client, application.repository, application.theme, pullrequestlist.Options{Timeouts: application.timeouts(), Clipboard: systemClipboard()})
+	return pullrequestlist.New(application.client, application.repository, application.config.Tabs, application.theme, pullrequestlist.Options{Timeouts: application.timeouts(), Clipboard: systemClipboard()})
 }
 
 // systemClipboard is the real clipboard tool lookup.
