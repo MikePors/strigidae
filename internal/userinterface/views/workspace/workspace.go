@@ -57,6 +57,9 @@ func WithClipboard(copier clipboard.Copier) Option {
 	return func(view *View) { view.clipboard = copier }
 }
 
+// Clipboard returns the clipboard tool the view copies with, nil for OSC 52 only.
+func (view *View) Clipboard() clipboard.Copier { return view.clipboard }
+
 // WithWrap makes the diff pane wrap long lines instead of cutting them off.
 func WithWrap(wrap bool) Option { return func(view *View) { view.wrap = wrap } }
 

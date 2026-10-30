@@ -6,6 +6,7 @@ import (
 	"io"
 	"os/exec"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -29,9 +30,11 @@ func TestCopyChoosesTool(test *testing.T) {
 	}{
 		{"macos", "darwin", nil, []string{"pbcopy", "xclip"}, call{Path: "/bin/pbcopy"}, nil},
 		{"wayland", "linux", map[string]string{"WAYLAND_DISPLAY": "wayland-0"}, []string{"wl-copy", "xclip", "xsel"}, call{Path: "/bin/wl-copy"}, nil},
-		{"wayland without wl-copy falls back to xclip", "linux", map[string]string{"WAYLAND_DISPLAY": "wayland-0"}, []string{"xclip"}, call{Path: "/bin/xclip", Arguments: []string{"-selection", "clipboard"}}, nil},
-		{"x11 prefers xclip", "linux", nil, []string{"wl-copy", "xclip", "xsel"}, call{Path: "/bin/xclip", Arguments: []string{"-selection", "clipboard"}}, nil},
-		{"only xsel", "linux", nil, []string{"xsel"}, call{Path: "/bin/xsel", Arguments: []string{"--clipboard", "--input"}}, nil},
+		{"wayland without wl-copy falls back to xclip", "linux", map[string]string{"WAYLAND_DISPLAY": "wayland-0", "DISPLAY": ":0"}, []string{"xclip"}, call{Path: "/bin/xclip", Arguments: []string{"-selection", "clipboard"}}, nil},
+		{"x11 prefers xclip", "linux", map[string]string{"DISPLAY": ":0"}, []string{"wl-copy", "xclip", "xsel"}, call{Path: "/bin/xclip", Arguments: []string{"-selection", "clipboard"}}, nil},
+		{"only xsel", "linux", map[string]string{"DISPLAY": ":0"}, []string{"xsel"}, call{Path: "/bin/xsel", Arguments: []string{"--clipboard", "--input"}}, nil},
+		{"no display, no x11 tool", "linux", nil, []string{"xclip", "xsel"}, call{}, ErrNoTool},
+		{"wayland without wl-copy ignores x11 tools without DISPLAY", "linux", map[string]string{"WAYLAND_DISPLAY": "w"}, []string{"xclip"}, call{}, ErrNoTool},
 		{"none on linux", "linux", nil, nil, call{}, ErrNoTool},
 		{"pbcopy is not tried on linux", "linux", nil, []string{"pbcopy"}, call{}, ErrNoTool},
 		{"unknown platform", "windows", nil, []string{"xclip", "pbcopy"}, call{}, ErrNoTool},
@@ -73,6 +76,22 @@ func TestCopyChoosesTool(test *testing.T) {
 				test.Errorf("calls (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestCopyBoundsWaitForForkedChildren(test *testing.T) {
+	var delay time.Duration
+	system := New(Options{
+		Platform:       "darwin",
+		GetEnvironment: func(string) string { return "" },
+		LookPath:       func(name string) (string, error) { return "/bin/" + name, nil },
+		Run:            func(command *exec.Cmd) error { delay = command.WaitDelay; return nil },
+	})
+	if err := system.Copy(context.Background(), "x"); err != nil {
+		test.Fatal(err)
+	}
+	if delay <= 0 {
+		test.Error("WaitDelay not set: a forked child holding stdin could outlast the deadline")
 	}
 }
 

@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -589,6 +590,27 @@ func TestWorkspacesShareHunkMarks(test *testing.T) {
 	first, second := opened(), opened()
 	if first == nil || first != second || first != view.hunkMarks {
 		test.Error("two workspaces opened from the dashboard do not share its hunk marks")
+	}
+}
+
+type stubCopier struct{}
+
+func (stubCopier) Copy(context.Context, string) error { return nil }
+
+func TestClipboardPassedToWorkspaces(test *testing.T) {
+	tabs := testTabs(test)
+	client := fake.New()
+	seed(test, client, tabs)
+	copier := stubCopier{}
+	view := New(client, tabs, theme.Default(), Options{Clipboard: copier})
+	view.Update(tea.WindowSizeMsg{Width: 80, Height: 16})
+	settle(view, view.Init())
+	push, ok := press(view, "enter")().(userinterface.PushMessage)
+	if !ok {
+		test.Fatal("enter should push a view")
+	}
+	if got := push.View.(*workspace.View).Clipboard(); got != copier {
+		test.Errorf("workspace clipboard = %#v, want the dashboard's", got)
 	}
 }
 

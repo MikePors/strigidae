@@ -9,6 +9,7 @@ import (
 	"errors"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 // ErrNoTool is returned by Copy when no clipboard tool is available.
@@ -19,6 +20,9 @@ type Copier interface {
 	// Copy returns ErrNoTool when there is no tool to hand the text to.
 	Copy(ctx context.Context, text string) error
 }
+
+// waitDelay is how long Copy waits for a killed or finished tool's I/O.
+const waitDelay = time.Second
 
 // Options are the things a System depends on, injected so tests never look
 // for or run a real program.
@@ -61,10 +65,13 @@ func (system *System) candidates() []tool {
 		if system.options.GetEnvironment != nil && system.options.GetEnvironment("WAYLAND_DISPLAY") != "" {
 			tools = append(tools, tool{name: "wl-copy"})
 		}
-		return append(tools,
-			tool{name: "xclip", arguments: []string{"-selection", "clipboard"}},
-			tool{name: "xsel", arguments: []string{"--clipboard", "--input"}},
-		)
+		if system.options.GetEnvironment != nil && system.options.GetEnvironment("DISPLAY") != "" {
+			tools = append(tools,
+				tool{name: "xclip", arguments: []string{"-selection", "clipboard"}},
+				tool{name: "xsel", arguments: []string{"--clipboard", "--input"}},
+			)
+		}
+		return tools
 	}
 	return nil
 }
@@ -85,6 +92,9 @@ func (system *System) Copy(ctx context.Context, text string) error {
 		command := exec.CommandContext(ctx, path, candidate.arguments...)
 		command.Stdin = strings.NewReader(text)
 		command.Env = system.options.Environment
+		// A tool that forks a child keeping its stdin open must not hold Copy
+		// past the context's deadline.
+		command.WaitDelay = waitDelay
 		run := system.options.Run
 		if run == nil {
 			run = (*exec.Cmd).Run
