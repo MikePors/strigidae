@@ -76,7 +76,7 @@ func TestBranchColumnsDropHeadFirstThenBase(test *testing.T) {
 	table := New(theme.Default(), time.Now, Options{Branches: true})
 
 	tests := []struct {
-		width                      int
+		width                          int
 		wantHead, wantBase, wantAuthor int
 	}{
 		{120, maximumHead, maximumBase, 8},
@@ -97,13 +97,13 @@ func TestBranchColumnsDropHeadFirstThenBase(test *testing.T) {
 
 func TestBranchCellsAreTruncatedAndCleaned(test *testing.T) {
 	pullRequests := []github.PullRequest{{
-		Number: 1, Title: "T", HeadBranch: "feature/\x07a-branch-name-that-is-far-too-long‮",
+		Number: 1, Title: "T", HeadBranch: "feature/\x07a-branch-name-that-is-far-too-long\u202e",
 		BaseBranch: "base\x1b]52;c;aGk=\x07\x1b[2J\u202e",
 	}}
 	table := New(theme.Default(), time.Now, Options{Branches: true})
 	layout := table.Layout(pullRequests, 120)
 	row := ansi.Strip(table.Row(layout, pullRequests[0], false, false, 120))
-	if !strings.Contains(row, "feature/a-branch-name-t…") {
+	if !strings.Contains(row, "feature/ a-branch-name-…") {
 		test.Errorf("head not truncated to %d columns with an ellipsis: %q", maximumHead, row)
 	}
 	if strings.ContainsAny(row, "\x1b\x07\u202e") || !strings.Contains(row, "base") {
