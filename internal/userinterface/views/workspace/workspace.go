@@ -11,6 +11,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/MikePors/strigidae/internal/clipboard"
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/options"
 	"github.com/MikePors/strigidae/internal/userinterface"
@@ -50,6 +51,15 @@ func WithTimeouts(timeouts userinterface.Timeouts) Option {
 	return func(view *View) { view.timeouts = timeouts }
 }
 
+// WithClipboard sets the system clipboard tool that copy commands use besides
+// OSC 52. Without it only OSC 52 is sent.
+func WithClipboard(copier clipboard.Copier) Option {
+	return func(view *View) { view.clipboard = copier }
+}
+
+// Clipboard returns the clipboard tool the view copies with, nil for OSC 52 only.
+func (view *View) Clipboard() clipboard.Copier { return view.clipboard }
+
 // WithWrap makes the diff pane wrap long lines instead of cutting them off.
 func WithWrap(wrap bool) Option { return func(view *View) { view.wrap = wrap } }
 
@@ -81,6 +91,7 @@ type View struct {
 	markdownRenderer *markdown.Renderer
 	filePane         FilePane
 	edit             EditFunction
+	clipboard        clipboard.Copier // nil: OSC 52 only
 
 	sequence           int // latest load request; older results are stale
 	pullRequestPending bool
