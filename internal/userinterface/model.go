@@ -40,6 +40,19 @@ type Options struct {
 	// StartingOptions are the starting values of the `:set` options, normally
 	// from the config file. The zero value is every option at its default.
 	StartingOptions options.Values
+	// Companion, if set, is listened to from the start (see Companion).
+	Companion Companion
+}
+
+// Companion is a program strig works alongside that may speak at any time,
+// such as beefis answering a question. The root starts Listen when strig
+// starts. Every message that is not the root's own goes to Heard first, on
+// the UI goroutine: when it is the companion's, the companion records it and
+// returns what to run next (usually Listen again), and the message then goes
+// to every view, so views do not have to be open to miss nothing.
+type Companion interface {
+	Listen() tea.Cmd
+	Heard(message tea.Msg) (heard bool, next tea.Cmd)
 }
 
 // Internal timer messages. The id/gen fields discard timers that were
@@ -61,6 +74,7 @@ type Model struct {
 	messageLifetime time.Duration
 	notice          string
 	themeLoader     ThemeLoader
+	companion       Companion
 	themeSequence   int // the latest `:theme` load; older results are ignored
 	options         options.Values
 
@@ -113,6 +127,7 @@ func New(root View, activeTheme theme.Theme, startup Options) *Model {
 		messageLifetime: startup.MessageLifetime,
 		notice:          startup.Notice,
 		themeLoader:     startup.LoadTheme,
+		companion:       startup.Companion,
 		options:         startup.StartingOptions,
 		commandLine:     newCommandLine(activeTheme),
 		spin:            spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(activeTheme.Spinner)),
@@ -126,6 +141,9 @@ func (model *Model) Init() tea.Cmd {
 	commands := []tea.Cmd{model.top().Init(), tea.RequestBackgroundColor}
 	if model.notice != "" {
 		commands = append(commands, Info(model.notice))
+	}
+	if model.companion != nil {
+		commands = append(commands, model.companion.Listen())
 	}
 	return tea.Batch(commands...)
 }
@@ -198,6 +216,11 @@ func (model *Model) update(message tea.Msg) tea.Cmd {
 		model.spin, command = model.spin.Update(message)
 		return command
 	default:
+		if model.companion != nil {
+			if heard, next := model.companion.Heard(message); heard {
+				return tea.Batch(next, model.broadcastOther(message))
+			}
+		}
 		return model.broadcastOther(message)
 	}
 }
