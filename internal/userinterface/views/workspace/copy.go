@@ -29,6 +29,21 @@ func (view *View) copyFilename() tea.Cmd {
 	return view.copyText(path, "Copied "+terminaltext.Clean(path))
 }
 
+// copyURL copies the open pull request's URL to the clipboard, whatever pane
+// has focus.
+func (view *View) copyURL() tea.Cmd {
+	if view.detail == nil || view.detail.URL == "" {
+		return userinterface.Error(errors.New("no pull request URL to copy"))
+	}
+	url := view.detail.URL
+	// Refused like a path in copyFilename: a pasted control character or
+	// line break must not reach a shell or a chat as input.
+	if terminaltext.Clean(url) != url {
+		return userinterface.Error(fmt.Errorf("not copied: %s contains control characters", terminaltext.Clean(url)))
+	}
+	return view.copyText(url, "Copied "+terminaltext.Clean(url))
+}
+
 // copyText sends text to the clipboard through OSC 52 and, when there is a
 // clipboard tool, through that too: OSC 52 works over SSH but tmux and some
 // terminals drop it. A failing tool is only logged, because OSC 52 may have
