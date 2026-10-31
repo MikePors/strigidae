@@ -79,7 +79,7 @@ query ` + operationPullRequestDetail + `($owner: String!, $name: String!, $numbe
       ` + reactionSelection + `
       statusCheckRollup { contexts(first: 100) { totalCount nodes {
         __typename
-        ... on CheckRun { name status conclusion detailsUrl startedAt checkSuite { workflowRun { workflow { name } } } }
+        ... on CheckRun { name status conclusion detailsUrl startedAt checkSuite { app { databaseId } workflowRun { event workflow { databaseId name } } } }
         ... on StatusContext { context state targetUrl }
       } } }
       labels(first: 50) { nodes { name color } }

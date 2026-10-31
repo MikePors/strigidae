@@ -164,7 +164,8 @@ type PullRequestDetail struct {
 	// Reviews are submitted review summaries, oldest first.
 	Reviews []Review
 	// CheckList holds the first 100 checks of the head commit, in GitHub's
-	// order; CheckTotal is how many there are in all.
+	// order, without runs that a later run of the same check replaced;
+	// CheckTotal is how many there are in all, likewise without those.
 	CheckList  []Check
 	CheckTotal int
 	// MergeState says whether conflicts, a stale branch or branch protection

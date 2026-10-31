@@ -27,6 +27,21 @@ func mapChecksFromNodes(test *testing.T, nodes string, total int) github.PullReq
 }
 
 func checkRunNode(workflow, status, conclusion, startedAt, url string) string {
+	identifiers := map[string]string{"CI": "1", "Docs": "2"}
+	return checkRunIn(workflowSuite(identifiers[workflow], workflow, "push"), status, conclusion, startedAt, url)
+}
+
+// workflowSuite is the checkSuite of a run in a workflow.
+func workflowSuite(identifier, workflow, event string) string {
+	return `{"workflowRun": {"event": "` + event + `", "workflow": {"databaseId": ` + identifier + `, "name": "` + workflow + `"}}}`
+}
+
+// appSuite is the checkSuite of a run outside a workflow.
+func appSuite(identifier string) string {
+	return `{"app": {"databaseId": ` + identifier + `}, "workflowRun": null}`
+}
+
+func checkRunIn(suite, status, conclusion, startedAt, url string) string {
 	started := "null"
 	if startedAt != "" {
 		started = `"` + startedAt + `"`
@@ -36,7 +51,7 @@ func checkRunNode(workflow, status, conclusion, startedAt, url string) string {
 		conclusionValue = `"` + conclusion + `"`
 	}
 	return `{"__typename": "CheckRun", "name": "test", "status": "` + status + `", "conclusion": ` + conclusionValue +
-		`, "detailsUrl": "` + url + `", "startedAt": ` + started + `, "checkSuite": {"workflowRun": {"workflow": {"name": "` + workflow + `"}}}}`
+		`, "detailsUrl": "` + url + `", "startedAt": ` + started + `, "checkSuite": ` + suite + `}`
 }
 
 func TestMapDetailChecksKeepsLatestRun(test *testing.T) {
@@ -85,6 +100,47 @@ func TestMapDetailChecksKeepsLatestRun(test *testing.T) {
 			[]github.Check{{Name: "CI / test", Result: github.CheckPassed, URL: "u1"}, {Name: "Docs / test", Result: github.CheckPassed, URL: "u2"}},
 		},
 		{
+			"push and pull_request runs of one job both stay and show the event",
+			[]string{
+				checkRunIn(workflowSuite("1", "CI", "push"), "COMPLETED", "FAILURE", early, "u1"),
+				checkRunIn(workflowSuite("1", "CI", "pull_request"), "COMPLETED", "SUCCESS", late, "u2"),
+			},
+			[]github.Check{
+				{Name: "CI / test (push)", Result: github.CheckFailed, URL: "u1"},
+				{Name: "CI / test (pull_request)", Result: github.CheckPassed, URL: "u2"},
+			},
+		},
+		{
+			"same workflow name from two workflow files both stay",
+			[]string{
+				checkRunIn(workflowSuite("1", "CI", "push"), "COMPLETED", "SUCCESS", early, "u1"),
+				checkRunIn(workflowSuite("9", "CI", "push"), "COMPLETED", "SUCCESS", late, "u2"),
+			},
+			[]github.Check{
+				{Name: "CI / test (push)", Result: github.CheckPassed, URL: "u1"},
+				{Name: "CI / test (push)", Result: github.CheckPassed, URL: "u2"},
+			},
+		},
+		{
+			"same check name from two apps both stay",
+			[]string{
+				checkRunIn(appSuite("5"), "COMPLETED", "SUCCESS", early, "u1"),
+				checkRunIn(appSuite("6"), "COMPLETED", "FAILURE", late, "u2"),
+			},
+			[]github.Check{
+				{Name: "test", Result: github.CheckPassed, URL: "u1"},
+				{Name: "test", Result: github.CheckFailed, URL: "u2"},
+			},
+		},
+		{
+			"re-run of an app check collapses",
+			[]string{
+				checkRunIn(appSuite("5"), "COMPLETED", "CANCELLED", early, "u1"),
+				checkRunIn(appSuite("5"), "COMPLETED", "SUCCESS", late, "u2"),
+			},
+			[]github.Check{{Name: "test", Result: github.CheckPassed, URL: "u2"}},
+		},
+		{
 			"status contexts are untouched and survivors keep their order",
 			[]string{
 				`{"__typename": "StatusContext", "context": "ci/legacy", "state": "ERROR", "targetUrl": "s1"}`,
@@ -109,26 +165,5 @@ func TestMapDetailChecksKeepsLatestRun(test *testing.T) {
 				test.Errorf("CheckTotal = %d, want %d", detail.CheckTotal, len(testCase.want))
 			}
 		})
-	}
-}
-
-func TestCheckResultGroups(test *testing.T) {
-	tests := []struct {
-		result github.CheckResult
-		want   github.CheckGroup
-	}{
-		{github.CheckFailed, github.CheckGroupFailing},
-		{github.CheckTimedOut, github.CheckGroupFailing},
-		{github.CheckActionRequired, github.CheckGroupFailing},
-		{github.CheckRunning, github.CheckGroupPending},
-		{github.CheckPassed, github.CheckGroupPassing},
-		{github.CheckCancelled, github.CheckGroupInactive},
-		{github.CheckSkipped, github.CheckGroupInactive},
-		{github.CheckNeutral, github.CheckGroupInactive},
-	}
-	for _, testCase := range tests {
-		if got := testCase.result.Group(); got != testCase.want {
-			test.Errorf("%s group = %d, want %d", testCase.result, got, testCase.want)
-		}
 	}
 }

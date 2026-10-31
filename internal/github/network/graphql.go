@@ -1,6 +1,7 @@
 package network
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/MikePors/strigidae/internal/github"
@@ -76,7 +77,14 @@ type graphqlCheckContext struct {
 	StartedAt  *time.Time `json:"startedAt"`
 	CheckSuite *struct {
 		WorkflowRun *struct {
-			Workflow struct{ Name string }
+			Event    string
+			Workflow struct {
+				DatabaseID int `json:"databaseId"`
+				Name       string
+			}
+		}
+		App *struct {
+			DatabaseID int `json:"databaseId"`
 		}
 	}
 
@@ -97,9 +105,26 @@ func mapCheck(node graphqlCheckContext) github.Check {
 	return github.Check{Name: name, Result: github.CheckResultFromRun(node.Status, node.Conclusion), URL: node.DetailsURL}
 }
 
+// runKey identifies a check across its re-runs: the workflow, the event that
+// triggered it and the job name, or for a run outside a workflow the app and
+// the check name. Runs with different keys are different checks, even when
+// they display the same name.
+func runKey(context graphqlCheckContext) string {
+	suite := context.CheckSuite
+	if suite != nil && suite.WorkflowRun != nil {
+		run := suite.WorkflowRun
+		return fmt.Sprintf("workflow\x00%d\x00%s\x00%s", run.Workflow.DatabaseID, run.Event, context.Name)
+	}
+	appIdentifier := 0
+	if suite != nil && suite.App != nil {
+		appIdentifier = suite.App.DatabaseID
+	}
+	return fmt.Sprintf("app\x00%d\x00%s", appIdentifier, context.Name)
+}
+
 // latestRuns drops each check run that a later run of the same check (same
-// mapped name) replaced, keeping the order of the survivors. A run that has
-// not started counts as newer than any started one; on a tie the later one in
+// runKey) replaced, keeping the order of the survivors. A run that has not
+// started counts as newer than any started one; on a tie the later one in
 // GitHub's order wins. Status contexts are kept as they are.
 func latestRuns(contexts []graphqlCheckContext) []graphqlCheckContext {
 	newest := map[string]int{}
@@ -107,18 +132,37 @@ func latestRuns(contexts []graphqlCheckContext) []graphqlCheckContext {
 		if context.Typename == "StatusContext" {
 			continue
 		}
-		name := mapCheck(context).Name
-		if earlier, seen := newest[name]; !seen || !startedBefore(contexts[i], contexts[earlier]) {
-			newest[name] = i
+		key := runKey(context)
+		if earlier, seen := newest[key]; !seen || !startedBefore(contexts[i], contexts[earlier]) {
+			newest[key] = i
 		}
 	}
 	var kept []graphqlCheckContext
 	for i, context := range contexts {
-		if context.Typename == "StatusContext" || newest[mapCheck(context).Name] == i {
+		if context.Typename == "StatusContext" || newest[runKey(context)] == i {
 			kept = append(kept, context)
 		}
 	}
 	return kept
+}
+
+// mapCheckRuns maps contexts to checks. Check runs that would show the same name
+// (the same job run for different events) get " (<event>)" appended.
+func mapCheckRuns(contexts []graphqlCheckContext) []github.Check {
+	checks := make([]github.Check, len(contexts))
+	shown := map[string]int{}
+	for i, context := range contexts {
+		checks[i] = mapCheck(context)
+		shown[checks[i].Name]++
+	}
+	for i, context := range contexts {
+		suite := context.CheckSuite
+		if context.Typename == "StatusContext" || shown[checks[i].Name] < 2 || suite == nil || suite.WorkflowRun == nil || suite.WorkflowRun.Event == "" {
+			continue
+		}
+		checks[i].Name += " (" + suite.WorkflowRun.Event + ")"
+	}
+	return checks
 }
 
 // startedBefore reports whether first started strictly before second.
@@ -354,9 +398,7 @@ func mapDetail(node graphqlPullRequestDetail, files []graphqlFile, comments []gr
 			contexts = append(contexts, context)
 		}
 		kept := latestRuns(contexts)
-		for _, context := range kept {
-			detail.CheckList = append(detail.CheckList, mapCheck(context))
-		}
+		detail.CheckList = mapCheckRuns(kept)
 		// GitHub's total counts the superseded runs; the rows shown do not.
 		detail.CheckTotal -= len(contexts) - len(kept)
 	}
