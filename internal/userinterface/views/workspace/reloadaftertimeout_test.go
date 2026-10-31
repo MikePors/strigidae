@@ -3,6 +3,7 @@ package workspace
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/MikePors/strigidae/internal/github"
@@ -140,6 +141,16 @@ func TestWritesRunThroughTheirCommandsReloadAfterATimeout(test *testing.T) {
 			inliner.editPullRequest("A new title\n\nnew body\n")
 			answer(inliner)
 		}, 1, 0},
+		{"merge", func(*inliner) {}, func(inliner *inliner) {
+			inliner.messages = nil
+			inliner.mergeCommand("")
+			answer(inliner)
+		}, 1, 1},
+		{"submit review", func(*inliner) {}, func(inliner *inliner) {
+			inliner.body, inliner.messages = "looks good\n", nil
+			inliner.command("approve")
+			answer(inliner)
+		}, 1, 1},
 		{"inline comment starting the review", func(inliner *inliner) { inliner.moveTo(github.SideRight, 10) }, func(inliner *inliner) {
 			inliner.body, inliner.messages = "please rename\n", nil
 			inliner.press("c")
@@ -155,6 +166,9 @@ func TestWritesRunThroughTheirCommandsReloadAfterATimeout(test *testing.T) {
 			testCase.fire(inliner)
 			if err := inliner.lastErr(); !userinterface.IsWriteTimeout(err) {
 				test.Fatalf("error = %v, want a write timeout", err)
+			}
+			if !strings.Contains(inliner.lastErr().Error(), "timed out; it may have gone through, refresh to check") {
+				test.Errorf("error = %v, want the may-have-gone-through message", inliner.lastErr())
 			}
 			pullRequests, threads := 0, 0
 			for _, call := range inliner.client.Calls()[before:] {

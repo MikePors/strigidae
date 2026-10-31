@@ -91,6 +91,14 @@ func (client blockingClient) UnresolveReviewThread(ctx context.Context, _ string
 	return github.ThreadResolution{}, client.wait(ctx)
 }
 
+func (client blockingClient) MergePullRequest(ctx context.Context, _ github.MergeInput) error {
+	return client.wait(ctx)
+}
+
+func (client blockingClient) SubmitReview(ctx context.Context, _ github.SubmitReviewInput) error {
+	return client.wait(ctx)
+}
+
 func (client blockingClient) StartReview(ctx context.Context, _ github.StartReviewInput) (github.PendingReview, error) {
 	return github.PendingReview{}, client.wait(ctx)
 }
