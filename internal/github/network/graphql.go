@@ -72,6 +72,8 @@ type graphqlCheckContext struct {
 	Status     string
 	Conclusion string
 	DetailsURL string `json:"detailsUrl"`
+	// StartedAt is null until the run starts.
+	StartedAt  *time.Time `json:"startedAt"`
 	CheckSuite *struct {
 		WorkflowRun *struct {
 			Workflow struct{ Name string }
@@ -93,6 +95,41 @@ func mapCheck(node graphqlCheckContext) github.Check {
 		name = node.CheckSuite.WorkflowRun.Workflow.Name + " / " + name
 	}
 	return github.Check{Name: name, Result: github.CheckResultFromRun(node.Status, node.Conclusion), URL: node.DetailsURL}
+}
+
+// latestRuns drops each check run that a later run of the same check (same
+// mapped name) replaced, keeping the order of the survivors. A run that has
+// not started counts as newer than any started one; on a tie the later one in
+// GitHub's order wins. Status contexts are kept as they are.
+func latestRuns(contexts []graphqlCheckContext) []graphqlCheckContext {
+	newest := map[string]int{}
+	for i, context := range contexts {
+		if context.Typename == "StatusContext" {
+			continue
+		}
+		name := mapCheck(context).Name
+		if earlier, seen := newest[name]; !seen || !startedBefore(contexts[i], contexts[earlier]) {
+			newest[name] = i
+		}
+	}
+	var kept []graphqlCheckContext
+	for i, context := range contexts {
+		if context.Typename == "StatusContext" || newest[mapCheck(context).Name] == i {
+			kept = append(kept, context)
+		}
+	}
+	return kept
+}
+
+// startedBefore reports whether first started strictly before second.
+func startedBefore(first, second graphqlCheckContext) bool {
+	switch {
+	case first.StartedAt == nil:
+		return false
+	case second.StartedAt == nil:
+		return true
+	}
+	return first.StartedAt.Before(*second.StartedAt)
 }
 
 type graphqlReactionGroup struct {
@@ -309,12 +346,19 @@ func mapDetail(node graphqlPullRequestDetail, files []graphqlFile, comments []gr
 	detail.MergeState = github.MergeStateFromStatus(node.MergeStateStatus)
 	if node.StatusCheckRollup != nil {
 		detail.CheckTotal = node.StatusCheckRollup.Contexts.TotalCount
+		var contexts []graphqlCheckContext
 		for _, context := range node.StatusCheckRollup.Contexts.Nodes {
 			if context.Typename == "" { // a null node, or a type the query did not ask for
 				continue
 			}
+			contexts = append(contexts, context)
+		}
+		kept := latestRuns(contexts)
+		for _, context := range kept {
 			detail.CheckList = append(detail.CheckList, mapCheck(context))
 		}
+		// GitHub's total counts the superseded runs; the rows shown do not.
+		detail.CheckTotal -= len(contexts) - len(kept)
 	}
 	for _, label := range node.Labels.Nodes {
 		detail.Labels = append(detail.Labels, github.Label{Name: label.Name, Color: label.Color})
