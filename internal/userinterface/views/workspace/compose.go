@@ -234,6 +234,9 @@ func (view *View) posted(message postedMessage) tea.Cmd {
 	if isStale(message.err) {
 		return view.staleEdit(message)
 	}
+	if userinterface.IsWriteTimeout(message.err) {
+		return view.reloadAfterPost(message.target.kind) // the draft stays; GitHub may have the comment
+	}
 	if message.err != nil {
 		return nil // the draft stays; the command already reported the error
 	}
@@ -241,15 +244,22 @@ func (view *View) posted(message postedMessage) tea.Cmd {
 	if view.drafts[message.target.draftKey()] == message.body {
 		delete(view.drafts, message.target.draftKey())
 	}
-	switch message.target.kind {
-	case kindReply:
-		return tea.Batch(userinterface.Info("Reply posted"), view.reloadThreads())
-	case kindInline:
-		return tea.Batch(userinterface.Info("Pending comment added"), view.reloadPendingComments())
-	case kindEdit:
-		return tea.Batch(userinterface.Info("Comment updated"), view.reloadPendingComments())
+	notice := map[targetKind]string{kindReply: "Reply posted", kindInline: "Pending comment added", kindEdit: "Comment updated"}[message.target.kind]
+	if notice == "" {
+		notice = "Comment posted"
 	}
-	return tea.Batch(userinterface.Info("Comment posted"), view.reloadPullRequest())
+	return tea.Batch(userinterface.Info(notice), view.reloadAfterPost(message.target.kind))
+}
+
+// reloadAfterPost refreshes what a comment of the given kind changes.
+func (view *View) reloadAfterPost(kind targetKind) tea.Cmd {
+	switch kind {
+	case kindReply:
+		return view.reloadThreads()
+	case kindInline, kindEdit:
+		return view.reloadPendingComments()
+	}
+	return view.reloadPullRequest()
 }
 
 // threadLocation is "path:line" for a thread.

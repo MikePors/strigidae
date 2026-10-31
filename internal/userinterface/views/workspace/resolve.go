@@ -141,7 +141,7 @@ func (action threadAction) finish(resolution github.ThreadResolution, err error)
 func (view *View) threadResolved(message threadResolvedMessage) tea.Cmd {
 	view.writeDone()
 	if message.err != nil {
-		if isStale(message.err) {
+		if isStale(message.err) || userinterface.IsWriteTimeout(message.err) {
 			return view.reloadThreads() // the error is already shown
 		}
 		return nil

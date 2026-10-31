@@ -154,6 +154,12 @@ func (view *View) viewedDone(message viewedMessage) tea.Cmd {
 		return view.sendViewed(message.path, toggle.want)
 	}
 	toggle.inflight, toggle.settledAt = false, view.sequence
+	if userinterface.IsWriteTimeout(message.err) {
+		// GitHub may have applied the mark: forget what strig believed, so the
+		// reload decides what shows.
+		delete(view.viewedState, message.path)
+		return view.reloadPullRequest()
+	}
 	return nil
 }
 

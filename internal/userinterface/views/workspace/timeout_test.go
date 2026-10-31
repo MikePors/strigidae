@@ -118,7 +118,7 @@ func TestWritesTimeOutAndSayTheyMayHaveGoneThrough(test *testing.T) {
 				test.Errorf("error = %v, want it to say the write may have gone through", err)
 			}
 			if testCase.name == "viewed mark" {
-				if toggle := harness.view.viewedState[firstFile]; toggle == nil || toggle.inflight {
+				if toggle := harness.view.viewedState[firstFile]; toggle != nil && toggle.inflight {
 					test.Errorf("viewed toggle = %+v, want it settled so a later v sends again", toggle)
 				}
 			} else if harness.view.writes != 0 {

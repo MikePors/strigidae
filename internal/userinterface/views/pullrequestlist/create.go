@@ -249,13 +249,22 @@ func (view *View) pullRequestCreated(message pullRequestCreatedMessage) tea.Cmd 
 	if message.owner != view {
 		return nil
 	}
+	var shown tea.Cmd
 	if message.err != nil {
-		return userinterface.Error(terminaltext.SafeError(fmt.Errorf("create pull request: %w", message.err)))
+		shown = userinterface.Error(terminaltext.SafeError(fmt.Errorf("create pull request: %w", message.err)))
+		if !userinterface.IsWriteTimeout(message.err) {
+			return shown
+		}
 	}
 	for i := range view.tabs {
 		if i != view.active {
 			view.tabs[i].requested = false // reloaded when shown
 		}
+	}
+	if message.err != nil {
+		// The pull request may exist, but there is none to open: the list shows
+		// what GitHub has.
+		return tea.Batch(shown, view.reload(view.active))
 	}
 	return tea.Batch(
 		userinterface.Info(fmt.Sprintf("Created #%d", message.pullRequest.Number)),
