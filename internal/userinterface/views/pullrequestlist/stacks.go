@@ -13,14 +13,14 @@ import "github.com/MikePors/strigidae/internal/github"
 // head branch name the first in order is the parent. Every pull request
 // appears exactly once, even when bases and heads point at each other.
 func stackOrder(pullRequests []github.PullRequest) (ordered []github.PullRequest, depths []int) {
-	parents := make([]int, len(pullRequests))
+	parents := stackParents(pullRequests)
 	children := make([][]int, len(pullRequests))
-	for i := range pullRequests {
-		parents[i] = stackParent(pullRequests, i)
-		if parents[i] >= 0 {
-			children[parents[i]] = append(children[parents[i]], i)
+	for i, parent := range parents {
+		if parent >= 0 {
+			children[parent] = append(children[parent], i)
 		}
 	}
+	onCycle := cycleRows(parents)
 
 	ordered = make([]github.PullRequest, 0, len(pullRequests))
 	depths = make([]int, 0, len(pullRequests))
@@ -36,40 +36,72 @@ func stackOrder(pullRequests []github.PullRequest) (ordered []github.PullRequest
 			}
 		}
 	}
-	// A row is top-level when it has no parent, or when its parents lead into
-	// a cycle instead of a top-level row: the cycle is broken at its first row
-	// in order.
+	// A row is top-level when it has no parent, or when it is on a cycle and
+	// no other row of the cycle has been placed yet: the cycle opens at its
+	// first row in order, and the rest of it, with whatever hangs off it, is
+	// drawn below.
 	for i := range pullRequests {
-		if !visited[i] && (parents[i] < 0 || !reachesTop(parents, i)) {
+		if !visited[i] && (parents[i] < 0 || onCycle[i]) {
 			place(i, 0)
 		}
 	}
 	return ordered, depths
 }
 
-// stackParent is the index of the pull request that pullRequests[index] is
-// stacked on, or -1.
-func stackParent(pullRequests []github.PullRequest, index int) int {
-	child := pullRequests[index]
-	if child.State != github.PullRequestStateOpen || child.BaseBranch == "" {
-		return -1
-	}
-	for i, candidate := range pullRequests {
-		if i != index && candidate.State == github.PullRequestStateOpen && !candidate.CrossRepository && candidate.HeadBranch == child.BaseBranch {
-			return i
+// stackParents is, for every pull request, the index of the one it is stacked
+// on, or -1. It is built from one map of head branches, so it takes linear
+// time.
+func stackParents(pullRequests []github.PullRequest) []int {
+	heads := make(map[string][]int) // open, non-fork pull requests by head branch, in order
+	for i, pullRequest := range pullRequests {
+		if pullRequest.State == github.PullRequestStateOpen && !pullRequest.CrossRepository {
+			heads[pullRequest.HeadBranch] = append(heads[pullRequest.HeadBranch], i)
 		}
 	}
-	return -1
+	parents := make([]int, len(pullRequests))
+	for i, child := range pullRequests {
+		parents[i] = -1
+		if child.State != github.PullRequestStateOpen || child.BaseBranch == "" {
+			continue
+		}
+		for _, candidate := range heads[child.BaseBranch] {
+			if candidate != i { // the first, and at most one is the row itself
+				parents[i] = candidate
+				break
+			}
+		}
+	}
+	return parents
 }
 
-// reachesTop reports whether following parents from index ends at a row
-// without one, rather than going round a cycle.
-func reachesTop(parents []int, index int) bool {
-	for steps := 0; steps <= len(parents); steps++ {
-		if parents[index] < 0 {
-			return true
+// cycleRows marks the rows that are on a cycle of parents, in linear time.
+func cycleRows(parents []int) []bool {
+	const (
+		unseen = iota
+		walking
+		done
+	)
+	state := make([]int, len(parents))
+	onCycle := make([]bool, len(parents))
+	for start := range parents {
+		var path []int
+		row := start
+		for row >= 0 && state[row] == unseen {
+			state[row] = walking
+			path = append(path, row)
+			row = parents[row]
 		}
-		index = parents[index]
+		if row >= 0 && state[row] == walking { // came back to this walk's own path
+			for member := row; ; member = parents[member] {
+				onCycle[member] = true
+				if parents[member] == row {
+					break
+				}
+			}
+		}
+		for _, visitedRow := range path {
+			state[visitedRow] = done
+		}
 	}
-	return false
+	return onCycle
 }

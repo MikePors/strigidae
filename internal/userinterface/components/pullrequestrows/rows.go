@@ -197,8 +197,8 @@ func SearchItems(pullRequests []github.PullRequest, identity func(index int, pul
 	return items
 }
 
-// IndentColumns is how far the title moves in for each level of depth.
-const IndentColumns = 2
+// indentColumns is how far the title moves in for each level of depth.
+const indentColumns = 2
 
 // Row draws one pull request, padded to width. The selected row is
 // highlighted and carries a marker; a row that matches the search carries the
@@ -207,10 +207,10 @@ func (table Table) Row(layout Layout, pullRequest github.PullRequest, selected, 
 	return table.IndentedRow(layout, pullRequest, 0, selected, matched, width)
 }
 
-// IndentedRow is Row with the title moved in by depth levels of IndentColumns
+// IndentedRow is Row with the title moved in by depth levels of indentColumns
 // spaces before it is truncated; the other columns stay where they are.
 func (table Table) IndentedRow(layout Layout, pullRequest github.PullRequest, depth int, selected, matched bool, width int) string {
-	indent := strings.Repeat(" ", IndentColumns*max(depth, 0))
+	indent := strings.Repeat(" ", indentColumns*max(depth, 0))
 	title := terminaltext.Clean(pullRequest.Title)
 	if pullRequest.Draft {
 		title = draftPrefix + title

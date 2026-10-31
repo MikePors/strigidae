@@ -1,6 +1,7 @@
 package pullrequestlist
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -109,4 +110,27 @@ func TestStackedGolden(test *testing.T) {
 		}
 	}
 	golden.Assert(test, "stacked", out, false)
+}
+
+func TestNextPageMovesAChildUnderItsParent(test *testing.T) {
+	rows := makePullRequests(45)             // #45 down to #1; page 1 holds #45 to #16
+	rows[1].BaseBranch = rows[40].HeadBranch // #44 builds on #5, which arrives on page 2
+	view := loadedView(test, fakeWith(rows), nil)
+	if view.current().depths[1] != 0 {
+		test.Fatal("#44 should be top-level while its parent is not loaded")
+	}
+	command := press(view, "G")
+	if pullRequest, _ := view.current().selected(); pullRequest.Number != 16 {
+		test.Fatalf("setup: on #%d, want #16", pullRequest.Number)
+	}
+	deliver(test, view, command)
+
+	numbers := drawnNumbers(view)
+	child := slices.Index(numbers, 44)
+	if child < 1 || numbers[child-1] != 5 || view.current().depths[child] != 1 {
+		test.Errorf("#44 is at row %d after %v with depth %d, want directly under #5 at depth 1", child, numbers[:child], view.current().depths[child])
+	}
+	if pullRequest, _ := view.current().selected(); pullRequest.Number != 16 {
+		test.Errorf("after the next page the cursor is on #%d, want it to stay on #16", pullRequest.Number)
+	}
 }

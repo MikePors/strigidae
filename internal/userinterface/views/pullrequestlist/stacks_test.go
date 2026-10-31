@@ -77,10 +77,10 @@ func TestStackOrder(test *testing.T) {
 			wantDepths:   []int{0, 1, 0},
 		},
 		{
-			name:         "a row stacked on a cycle is shown once",
+			name:         "a row stacked on a cycle is drawn below the cycle's first row",
 			pullRequests: []github.PullRequest{stacked(3, "c", "a"), stacked(1, "a", "b"), stacked(2, "b", "a")},
-			wantNumbers:  []int{3, 1, 2},
-			wantDepths:   []int{0, 0, 1},
+			wantNumbers:  []int{1, 3, 2},
+			wantDepths:   []int{0, 1, 1},
 		},
 		{
 			name:         "a pull request whose base is its own head is top-level",
