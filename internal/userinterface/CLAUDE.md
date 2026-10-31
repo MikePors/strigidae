@@ -58,7 +58,7 @@ Reserved globally:
 | `ctrl+f` / `ctrl+b` | full page down / up |
 | `enter` | open / select |
 | `esc` | cancel or clear state inside the view (filter, selection, pending keys, popups). **Never navigates.** |
-| `?` | help overlay |
+| `?` | help overlay (scrolls with the movement keys when it does not fit; `?` and `esc` close it) |
 | `/`, `n` / `N` | search the list (Files pane, PR lists) or, in a pull request, the focused pane: the Files pane or the shown file's diff rows and drawn comment-thread rows (each pane has its own query; another file clears the diff's), next / previous match; `/` opens the search prompt in the bottom line through `userinterface.Prompter` (the shell opens it in the same update as the key; the view hears `PromptResultMessage` on every change, paste included, on `enter` and on `esc`; currently every row stays and matching rows are marked) |
 | `o` | open the current item in the browser |
 | `R` | refresh |

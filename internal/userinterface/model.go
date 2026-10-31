@@ -75,6 +75,7 @@ type Model struct {
 	sequenceGeneration int
 
 	showHelp    bool
+	helpOffset  int            // top body line of the help; always within the body
 	confirm     *confirmPrompt // open yes/no question, or nil
 	commandLine commandLine
 	status      struct {
@@ -152,6 +153,7 @@ func (model *Model) update(message tea.Msg) tea.Cmd {
 	case tea.WindowSizeMsg:
 		model.width, model.height = message.Width, message.Height
 		model.commandLine.input.SetWidth(max(1, message.Width-2)) // room for the prompt and cursor
+		model.clampHelp()
 		return model.broadcast(model.sizeMessage())
 	case tea.BackgroundColorMsg:
 		// The reply picks a built-in variant only. A theme the user chose is
@@ -269,7 +271,7 @@ func (model *Model) pop() tea.Cmd {
 }
 
 func (model *Model) resetKeys() {
-	model.showHelp = false
+	model.closeHelp()
 	model.confirm = nil
 	model.commandLine.close()
 	model.matcher.Reset()
@@ -325,10 +327,7 @@ func (model *Model) handleKey(message tea.KeyPressMsg) tea.Cmd {
 		return command
 	}
 	if model.showHelp {
-		if key.Matches(message, model.keys.Help, model.keys.Cancel) {
-			model.showHelp = false
-		}
-		return nil
+		return model.handleHelpKey(message)
 	}
 	if capturer, ok := model.top().(KeyCapturer); ok && capturer.CapturesKeys() {
 		model.resetKeys()
@@ -353,6 +352,13 @@ func (model *Model) expireSequence(generation int) tea.Cmd {
 		return nil
 	}
 	model.sequenceGeneration++
+	if model.showHelp {
+		// The help owns the keys: nothing may reach the view from here.
+		if result := model.matcher.Expire(model.keys.Bindings()); result.Kind == keys.Matched {
+			model.scrollHelp(result.Sequence, result.Count)
+		}
+		return nil
+	}
 	if result := model.matcher.Expire(model.bindings()); result.Kind == keys.Matched {
 		return model.dispatch(result.Sequence, result.Count)
 	}
@@ -366,11 +372,88 @@ func (model *Model) dispatch(sequence string, count int) tea.Cmd {
 	switch {
 	case key.Matches(keyMessage, model.keys.Help):
 		model.showHelp = true
+		model.helpOffset = 0
 		return nil
 	case key.Matches(keyMessage, model.keys.Command):
 		return model.commandLine.open()
 	}
 	return model.withRequestedPrompt(model.forward(keyMessage))
+}
+
+// helpLines is the help's scrolling body at the current size and bindings.
+func (model *Model) helpLines() []string {
+	width, _ := model.contentSize()
+	return helpBody(model.theme, model.top().Title(), model.keys.FullHelp(), model.top().FullHelp(), width)
+}
+
+// closeHelp hides the help and forgets its scroll position.
+func (model *Model) closeHelp() {
+	model.showHelp = false
+	model.helpOffset = 0
+}
+
+// clampHelp pulls the offset back inside the body, which changes length with
+// the width and with the view's enabled bindings.
+func (model *Model) clampHelp() {
+	if !model.showHelp {
+		return
+	}
+	_, height := model.contentSize()
+	model.helpOffset = clampHelpOffset(model.helpOffset, len(model.helpLines()), helpBodyRows(height))
+}
+
+// handleHelpKey runs a key press while the help is open. Only the global
+// bindings are matched, and nothing reaches the view.
+func (model *Model) handleHelpKey(message tea.KeyPressMsg) tea.Cmd {
+	if key.Matches(message, model.keys.Help, model.keys.Cancel) {
+		model.resetKeys()
+		return nil
+	}
+	result := model.matcher.Feed(message.String(), model.keys.Bindings())
+	model.sequenceGeneration++
+	switch result.Kind {
+	case keys.Pending:
+		generation := model.sequenceGeneration
+		return model.tick(model.sequenceWait, func(time.Time) tea.Msg { return sequenceTimeoutMessage{generation: generation} })
+	case keys.Matched:
+		model.scrollHelp(result.Sequence, result.Count)
+	}
+	return nil
+}
+
+// scrollHelp moves the help by a resolved global key; other keys do nothing.
+func (model *Model) scrollHelp(sequence string, count int) {
+	keyMessage := keys.Message{Sequence: sequence, Count: count}
+	_, height := model.contentSize()
+	rows := helpBodyRows(height)
+	model.clampHelp() // the body may have changed since the last key
+	offset := model.helpOffset
+	repeat := keyMessage.Repeat()
+	switch {
+	case key.Matches(keyMessage, model.keys.Down):
+		offset += repeat
+	case key.Matches(keyMessage, model.keys.Up):
+		offset -= repeat
+	case key.Matches(keyMessage, model.keys.Top):
+		offset = 0
+	case key.Matches(keyMessage, model.keys.Bottom):
+		offset = len(model.helpLines())
+		if count > 0 {
+			offset = count - 1
+		}
+	case key.Matches(keyMessage, model.keys.HalfDown):
+		offset += repeat * max(1, rows/2)
+	case key.Matches(keyMessage, model.keys.HalfUp):
+		offset -= repeat * max(1, rows/2)
+	case key.Matches(keyMessage, model.keys.PageDown):
+		offset += repeat * rows
+	case key.Matches(keyMessage, model.keys.PageUp):
+		offset -= repeat * rows
+	default:
+		return
+	}
+	model.helpOffset = max(0, offset)
+	model.clampHelp()
 }
 
 // View implements tea.Model.
@@ -393,7 +476,7 @@ func (model *Model) content() string {
 	width, height := model.contentSize()
 	var text string
 	if model.showHelp {
-		text = renderHelp(model.theme, model.top().Title(), model.keys.FullHelp(), model.top().FullHelp(), width)
+		text = renderHelp(model.theme, model.helpLines(), height, model.helpOffset)
 	} else {
 		text = model.top().Render(width, height)
 	}
