@@ -197,15 +197,25 @@ func SearchItems(pullRequests []github.PullRequest, identity func(index int, pul
 	return items
 }
 
+// indentColumns is how far the title moves in for each level of depth.
+const indentColumns = 2
+
 // Row draws one pull request, padded to width. The selected row is
 // highlighted and carries a marker; a row that matches the search carries the
 // search marker unless it is selected.
 func (table Table) Row(layout Layout, pullRequest github.PullRequest, selected, matched bool, width int) string {
+	return table.IndentedRow(layout, pullRequest, 0, selected, matched, width)
+}
+
+// IndentedRow is Row with the title moved in by depth levels of indentColumns
+// spaces before it is truncated; the other columns stay where they are.
+func (table Table) IndentedRow(layout Layout, pullRequest github.PullRequest, depth int, selected, matched bool, width int) string {
+	indent := strings.Repeat(" ", indentColumns*max(depth, 0))
 	title := terminaltext.Clean(pullRequest.Title)
 	if pullRequest.Draft {
 		title = draftPrefix + title
 	}
-	title = ansi.Truncate(title, layout.title, "…")
+	title = ansi.Truncate(indent+title, layout.title, "…")
 	head := ansi.Truncate(terminaltext.Clean(pullRequest.HeadBranch), layout.head, "…")
 	base := ansi.Truncate(terminaltext.Clean(pullRequest.BaseBranch), layout.base, "…")
 	author := ansi.Truncate(terminaltext.Clean(pullRequest.Author), layout.author, "…")
@@ -228,8 +238,8 @@ func (table Table) Row(layout Layout, pullRequest github.PullRequest, selected, 
 
 	styles := table.theme.PullRequestList
 	styledTitle := table.theme.Normal.Render(title)
-	if pullRequest.Draft && strings.HasPrefix(title, draftPrefix) {
-		styledTitle = styles.Draft.Render(draftPrefix) + table.theme.Normal.Render(strings.TrimPrefix(title, draftPrefix))
+	if pullRequest.Draft && strings.HasPrefix(title, indent+draftPrefix) {
+		styledTitle = indent + styles.Draft.Render(draftPrefix) + table.theme.Normal.Render(strings.TrimPrefix(title, indent+draftPrefix))
 	}
 	// Style after padding so the escape codes don't skew the widths.
 	var out []string

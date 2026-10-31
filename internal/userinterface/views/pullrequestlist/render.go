@@ -79,7 +79,7 @@ func (view *View) table(width, height int) string {
 
 	end := min(len(current.pullRequests), current.window.Top()+view.listHeight())
 	for i := current.window.Top(); i < end; i++ {
-		lines = append(lines, table.Row(layout, current.pullRequests[i], i == current.window.Cursor(), view.options.HighlightSearch() && current.search.Marked(i), width))
+		lines = append(lines, table.IndentedRow(layout, current.pullRequests[i], current.depths[i], i == current.window.Cursor(), view.options.HighlightSearch() && current.search.Marked(i), width))
 	}
 	return strings.Join(lines, "\n")
 }

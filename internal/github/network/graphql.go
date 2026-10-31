@@ -49,6 +49,7 @@ type graphqlPullRequest struct {
 	BaseRefName       string
 	HeadRefName       string
 	HeadRefOid        string
+	IsCrossRepository bool
 	StatusCheckRollup *graphqlRollup
 	MergeStateStatus  string
 	Author            *graphqlActor
@@ -221,6 +222,8 @@ func mapPullRequest(node graphqlPullRequest) (github.PullRequest, error) {
 		URL:            node.URL,
 		HeadBranch:     node.HeadRefName,
 		BaseBranch:     node.BaseRefName,
+
+		CrossRepository: node.IsCrossRepository,
 	}, nil
 }
 

@@ -11,6 +11,21 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
+func TestIndentedDraftKeepsItsStyle(test *testing.T) {
+	activeTheme := theme.Default()
+	pullRequests := []github.PullRequest{{Number: 7, Title: "Second step", Author: "alice", Draft: true}}
+	table := New(activeTheme, time.Now, Options{})
+	layout := table.Layout(pullRequests, 60)
+
+	row := table.IndentedRow(layout, pullRequests[0], 2, false, false, 60)
+	if want := "    " + activeTheme.PullRequestList.Draft.Render("[draft] "); !strings.Contains(row, want) {
+		test.Errorf("row %q lacks the indent followed by the styled draft marker %q", row, want)
+	}
+	if plain := ansi.Strip(row); !strings.Contains(plain, "#7      [draft] Second step") {
+		test.Errorf("plain row %q: title not indented by four columns", plain)
+	}
+}
+
 func TestShortRepository(test *testing.T) {
 	tests := []struct {
 		text  string

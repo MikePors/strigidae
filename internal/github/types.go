@@ -50,6 +50,9 @@ type PullRequest struct {
 	URL          string
 	HeadBranch   string
 	BaseBranch   string
+	// CrossRepository is true when the head branch lives in a fork, so a
+	// branch of the same name here is a different branch.
+	CrossRepository bool
 }
 
 // Label is a repository label.
