@@ -138,6 +138,9 @@ func (view *View) toggleReaction(target reactionTarget, content github.ReactionC
 // the comment update.
 func (view *View) reactionToggled(message reactionToggledMessage) tea.Cmd {
 	view.writeDone()
+	if userinterface.IsWriteTimeout(message.err) {
+		return view.reloadThreads() // the error is already shown
+	}
 	if message.err != nil {
 		return nil // the error is already shown
 	}

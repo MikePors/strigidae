@@ -1,6 +1,7 @@
 package pullrequestlist
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -474,5 +475,55 @@ func TestUnknownCommandIsNotHandled(test *testing.T) {
 	harness := newCreateHarness(test, "", "Title")
 	if command, handled := harness.view.Command("merge", ""); handled || command != nil {
 		test.Error("the list claimed :merge")
+	}
+}
+
+func TestCreateTimeoutReloadsTheListButOpensNothing(test *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		wantReload bool
+	}{
+		{"timeout", context.DeadlineExceeded, true},
+		{"other failure", errors.New("boom"), false},
+	}
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			harness := newCreateHarness(test, "feat/b", "Add the thing\n")
+			harness.client.SetError(fake.MethodCreatePullRequest, testCase.err)
+			press(harness.view, "g t") // load the second tab, so it can be marked for reload
+			press(harness.view, "g T")
+			harness.command(test, "create-draft")
+			_, command := harness.view.Update(harness.chooseBoth(test))
+			_, next := harness.view.Update(command())
+			var shown error
+			var results []tea.Msg
+			for _, produced := range flatten(next()) {
+				switch result := produced.(type) {
+				case userinterface.PushMessage:
+					test.Errorf("opened %v, but no pull request was created", result.View)
+				case userinterface.ErrorMessage:
+					shown = result.Err
+				default:
+					results = append(results, result)
+				}
+			}
+			if shown == nil {
+				test.Error("the error was not shown")
+			}
+			reloaded := false
+			for _, result := range results {
+				_, reloaded = result.(pullRequestsLoadedMessage)
+				if reloaded {
+					break
+				}
+			}
+			if reloaded != testCase.wantReload {
+				test.Errorf("list reloaded = %v, want %v", reloaded, testCase.wantReload)
+			}
+			if marked := !harness.view.tabs[1].requested; marked != testCase.wantReload {
+				test.Errorf("other tab marked for reload = %v, want %v", marked, testCase.wantReload)
+			}
+		})
 	}
 }
