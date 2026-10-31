@@ -491,6 +491,8 @@ func TestCreateTimeoutReloadsTheListButOpensNothing(test *testing.T) {
 		test.Run(testCase.name, func(test *testing.T) {
 			harness := newCreateHarness(test, "feat/b", "Add the thing\n")
 			harness.client.SetError(fake.MethodCreatePullRequest, testCase.err)
+			press(harness.view, "g t") // load the second tab, so it can be marked for reload
+			press(harness.view, "g T")
 			harness.command(test, "create-draft")
 			_, command := harness.view.Update(harness.chooseBoth(test))
 			_, next := harness.view.Update(command())
@@ -518,6 +520,9 @@ func TestCreateTimeoutReloadsTheListButOpensNothing(test *testing.T) {
 			}
 			if reloaded != testCase.wantReload {
 				test.Errorf("list reloaded = %v, want %v", reloaded, testCase.wantReload)
+			}
+			if marked := !harness.view.tabs[1].requested; marked != testCase.wantReload {
+				test.Errorf("other tab marked for reload = %v, want %v", marked, testCase.wantReload)
 			}
 		})
 	}

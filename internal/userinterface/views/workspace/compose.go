@@ -244,11 +244,20 @@ func (view *View) posted(message postedMessage) tea.Cmd {
 	if view.drafts[message.target.draftKey()] == message.body {
 		delete(view.drafts, message.target.draftKey())
 	}
-	notice := map[targetKind]string{kindReply: "Reply posted", kindInline: "Pending comment added", kindEdit: "Comment updated"}[message.target.kind]
-	if notice == "" {
-		notice = "Comment posted"
+	return tea.Batch(userinterface.Info(postedNotice(message.target.kind)), view.reloadAfterPost(message.target.kind))
+}
+
+// postedNotice is the status text for a comment of the given kind that was saved.
+func postedNotice(kind targetKind) string {
+	switch kind {
+	case kindReply:
+		return "Reply posted"
+	case kindInline:
+		return "Pending comment added"
+	case kindEdit:
+		return "Comment updated"
 	}
-	return tea.Batch(userinterface.Info(notice), view.reloadAfterPost(message.target.kind))
+	return "Comment posted"
 }
 
 // reloadAfterPost refreshes what a comment of the given kind changes.
