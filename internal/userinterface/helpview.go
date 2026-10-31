@@ -32,7 +32,8 @@ func helpBody(activeTheme theme.Theme, title string, global, viewBindings [][]ke
 }
 
 // helpBodyRows is how many body lines fit under the fixed title and blank
-// line; the body always gets at least one row.
+// line; the body gets at least one row, though the window may crop it away
+// when the height is under 3.
 func helpBodyRows(height int) int { return max(1, height-2) }
 
 // clampHelpOffset keeps the top body line where the last full window ends at

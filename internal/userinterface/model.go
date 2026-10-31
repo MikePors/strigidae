@@ -271,7 +271,7 @@ func (model *Model) pop() tea.Cmd {
 }
 
 func (model *Model) resetKeys() {
-	model.closeHelp()
+	model.showHelp = false
 	model.confirm = nil
 	model.commandLine.close()
 	model.matcher.Reset()
@@ -354,9 +354,7 @@ func (model *Model) expireSequence(generation int) tea.Cmd {
 	model.sequenceGeneration++
 	if model.showHelp {
 		// The help owns the keys: nothing may reach the view from here.
-		if result := model.matcher.Expire(model.keys.Bindings()); result.Kind == keys.Matched {
-			model.scrollHelp(result.Sequence, result.Count)
-		}
+		model.matcher.Reset()
 		return nil
 	}
 	if result := model.matcher.Expire(model.bindings()); result.Kind == keys.Matched {
@@ -384,12 +382,6 @@ func (model *Model) dispatch(sequence string, count int) tea.Cmd {
 func (model *Model) helpLines() []string {
 	width, _ := model.contentSize()
 	return helpBody(model.theme, model.top().Title(), model.keys.FullHelp(), model.top().FullHelp(), width)
-}
-
-// closeHelp hides the help and forgets its scroll position.
-func (model *Model) closeHelp() {
-	model.showHelp = false
-	model.helpOffset = 0
 }
 
 // clampHelp pulls the offset back inside the body, which changes length with
@@ -452,7 +444,7 @@ func (model *Model) scrollHelp(sequence string, count int) {
 	default:
 		return
 	}
-	model.helpOffset = max(0, offset)
+	model.helpOffset = offset
 	model.clampHelp()
 }
 

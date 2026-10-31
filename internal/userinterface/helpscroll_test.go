@@ -216,8 +216,8 @@ func TestHelpGrowsAndShrinksWithTheTerminal(test *testing.T) {
 		test.Errorf("indicator on a help that fits: %q", helpHead(model))
 	}
 	model.Update(tea.WindowSizeMsg{Width: 60, Height: 12})
-	if got := helpRange(model); !strings.HasSuffix(got, fmt.Sprintf(" of %d", total)) {
-		test.Errorf("after fitting then shrinking: %q", got)
+	if got, want := helpRange(model), fmt.Sprintf("1\u20139 of %d", total); got != want {
+		test.Errorf("after fitting then shrinking: %q, want %q", got, want)
 	}
 }
 
@@ -252,16 +252,90 @@ func TestHelpRenderClampsWithoutAKey(test *testing.T) {
 	}
 }
 
-func TestHelpNeverShowsAnEmptyBody(test *testing.T) {
-	for _, height := range []int{2, 3, 4, 5} {
+func TestHelpBodyWindowAtTinyHeights(test *testing.T) {
+	// The body gets one row in the window, but below a content height of 3
+	// the screen crops it away: only the indicator on the title moves.
+	for _, height := range []int{2, 3} {
 		test.Run(fmt.Sprintf("height %d", height), func(test *testing.T) {
 			model := helpModel(newLongHelpView(60), 60, height)
-			pressAll(model, "G", "j")
-			lines := strings.Split(ansi.Strip(model.View().Content), "\n")
-			if height >= 4 && strings.TrimSpace(lines[2]) == "" {
-				test.Errorf("empty body at height %d: %q", height, lines)
+			if got := helpRange(model); !strings.HasPrefix(got, "1\u20131 of ") {
+				test.Errorf("indicator = %q, want it to start with 1\u20131 of", got)
+			}
+			press(model, "j")
+			if got := helpRange(model); !strings.HasPrefix(got, "2\u20132 of ") {
+				test.Errorf("after j: %q, want it to start with 2\u20132 of", got)
+			}
+			if lines := strings.Count(model.View().Content, "\n") + 1; lines != height {
+				test.Errorf("screen has %d lines, want %d", lines, height)
 			}
 		})
+	}
+	test.Run("height 4 shows the body line", func(test *testing.T) {
+		model := helpModel(newLongHelpView(60), 60, 4)
+		if line := strings.Split(ansi.Strip(model.View().Content), "\n")[2]; strings.TrimSpace(line) == "" {
+			test.Error("body line empty at height 4")
+		}
+	})
+	test.Run("half page keeps a floor of one line", func(test *testing.T) {
+		model := helpModel(newLongHelpView(60), 60, 4)
+		press(model, "ctrl+d")
+		if got := helpRange(model); !strings.HasPrefix(got, "2\u20132 of ") {
+			test.Errorf("after ctrl+d: %q, want it to start with 2\u20132 of", got)
+		}
+	})
+}
+
+func TestHelpFitBoundary(test *testing.T) {
+	lines := len(helpModel(newFake("v"), 60, 12).helpLines())
+	tests := []struct {
+		name      string
+		height    int // terminal rows: the body gets height-3
+		indicator bool
+	}{
+		{"exact fit", lines + 3, false},
+		{"one line short", lines + 2, true},
+	}
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			model := helpModel(newFake("v"), 60, testCase.height)
+			if got := strings.Contains(helpHead(model), " of "); got != testCase.indicator {
+				test.Errorf("indicator shown = %v, want %v: %q", got, testCase.indicator, helpHead(model))
+			}
+		})
+	}
+}
+
+func TestHelpKeyAfterTheBodyShrank(test *testing.T) {
+	// The offset is stale until a key or a draw clamps it: k must count from
+	// the clamped position, so it moves one line up from the new bottom.
+	view := newLongHelpView(60)
+	model := helpModel(view, 60, 12)
+	press(model, "G")
+	view.setEnabled(false)
+	short := len(model.helpLines())
+	press(model, "k")
+	if got, want := helpRange(model), fmt.Sprintf("%d\u2013%d of %d", short-9, short-1, short); got != want {
+		test.Errorf("k after the body shrank: %q, want %q", got, want)
+	}
+}
+
+func TestHelpMatchesOnlyGlobalBindings(test *testing.T) {
+	view := newLongHelpView(60)
+	view.bindings = append(view.bindings, key.NewBinding(key.WithKeys("d d"), key.WithHelp("dd", "view delete")))
+	model := helpModel(view, 60, 12)
+	press(model, "d")
+	if model.matcher.Pending() || model.bar().pending != "" {
+		test.Error("a view's d d left d pending in the help")
+	}
+}
+
+func TestHelpTimerOfAnEarlierKeyIsStale(test *testing.T) {
+	model := helpModel(newLongHelpView(60), 60, 12)
+	first := press(model, "1")
+	press(model, "2")
+	run(model, first) // the timer from 1 fires while 12 is being typed
+	if !model.matcher.Pending() || model.bar().pending != "12" {
+		test.Errorf("pending = %q, want the count 12 still typed", model.bar().pending)
 	}
 }
 
