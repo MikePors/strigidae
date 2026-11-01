@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -33,7 +34,7 @@ func scriptPlugin(command, script string, timeout time.Duration) config.Plugin {
 }
 
 func baseEnvironment(directory string, extra ...string) []string {
-	return append([]string{"PATH=" + os.Getenv("PATH"), "FAKE_DIR=" + directory}, extra...)
+	return append([]string{"PATH=" + os.Getenv("PATH"), "FAKE_DIRECTORY=" + directory}, extra...)
 }
 
 func receive[Value any](test *testing.T, channel <-chan Value) Value {
@@ -99,24 +100,34 @@ func TestRunEffects(test *testing.T) {
 			want:    []Effect{notice("a"), notice("b")},
 			wantLog: `skipping unknown effect "future"`,
 		},
-		{name: "not JSON", output: "hello\n", wantIs: ErrInvalidOutput, wantError: `plugin "p": line 1: plugin printed a line that is not an effect`},
+		{name: "not JSON", output: "hello\n", wantIs: ErrInvalidOutput, wantError: `plugin "p": line 1: printed a line that is not an effect`},
 		{
 			name:      "bad line after a good one",
 			output:    `{"name":"notice","data":{"text":"a"}}` + "\nhello\n",
 			wantIs:    ErrInvalidOutput,
-			wantError: `plugin "p": line 2: plugin printed a line that is not an effect`,
+			wantError: `plugin "p": line 2: printed a line that is not an effect`,
 		},
-		{name: "not an object", output: "[1]\n", wantIs: ErrInvalidOutput, wantError: `plugin "p": line 1: plugin printed a line that is not an effect`},
-		{name: "no name", output: `{"data":{}}` + "\n", wantIs: ErrInvalidOutput, wantError: `plugin "p": line 1: plugin printed a line that is not an effect`},
-		{name: "text effect with data that is not an object", output: `{"name":"notice","data":"hi"}` + "\n", wantIs: ErrInvalidOutput, wantError: `plugin "p": line 1: plugin printed a line that is not an effect`},
-		{name: "notice without data", output: `{"name":"notice"}` + "\n", wantIs: ErrInvalidOutput, wantError: `plugin "p": line 1: plugin printed a line that is not an effect`},
-		{name: "failure without an error effect", exit: 2, wantIs: ErrFailed, wantError: `plugin "p": plugin failed`},
+		{name: "not an object", output: "[1]\n", wantIs: ErrInvalidOutput, wantError: `plugin "p": line 1: printed a line that is not an effect`},
+		{name: "no name", output: `{"data":{}}` + "\n", wantIs: ErrInvalidOutput, wantError: `plugin "p": line 1: printed a line that is not an effect`},
+		{name: "text effect with data that is not an object", output: `{"name":"notice","data":"hi"}` + "\n", wantIs: ErrInvalidOutput, wantError: `plugin "p": line 1: printed a line that is not an effect`},
+		{name: "notice without data", output: `{"name":"notice"}` + "\n", wantIs: ErrInvalidOutput, wantError: `plugin "p": line 1: printed a line that is not an effect`},
+		{name: "notice with empty data", output: `{"name":"notice","data":{}}` + "\n", wantIs: ErrInvalidOutput, wantError: `plugin "p": line 1: printed a line that is not an effect`},
+		{name: "notice with null data", output: `{"name":"notice","data":null}` + "\n", wantIs: ErrInvalidOutput, wantError: `plugin "p": line 1: printed a line that is not an effect`},
+		{name: "notice with empty text", output: `{"name":"notice","data":{"text":""}}` + "\n", wantIs: ErrInvalidOutput, wantError: `plugin "p": line 1: printed a line that is not an effect`},
+		{name: "notice with text that is not text", output: `{"name":"notice","data":{"text":5}}` + "\n", wantIs: ErrInvalidOutput, wantError: `plugin "p": line 1: printed a line that is not an effect`},
+		{name: "answer with a list as data", output: `{"name":"answer","data":[]}` + "\n", wantIs: ErrInvalidOutput, wantError: `plugin "p": line 1: printed a line that is not an effect`},
+		{name: "reload with a number as data", output: `{"name":"reload","data":5}` + "\n", wantIs: ErrInvalidOutput, wantError: `plugin "p": line 1: printed a line that is not an effect`},
+		{name: "reload with a list as data", output: `{"name":"reload","data":[]}` + "\n", wantIs: ErrInvalidOutput, wantError: `plugin "p": line 1: printed a line that is not an effect`},
+		{name: "reload with null data", output: `{"name":"reload","data":null}` + "\n", want: []Effect{{Name: EffectReload}}},
+		{name: "error with empty text is no error effect", output: `{"name":"error","data":{}}` + "\n", exit: 1, wantIs: ErrFailed, wantError: `plugin "p": failed`},
+		{name: "error effect after a bad line is not used", output: "hello\n" + `{"name":"error","data":{"text":"late"}}` + "\n", exit: 1, wantIs: ErrFailed, wantError: `plugin "p": failed`},
+		{name: "failure without an error effect", exit: 2, wantIs: ErrFailed, wantError: `plugin "p": failed`},
 		{
 			name:      "failure with other effects only",
 			output:    `{"name":"notice","data":{"text":"a"}}` + "\n",
 			exit:      1,
 			wantIs:    ErrFailed,
-			wantError: `plugin "p": plugin failed`,
+			wantError: `plugin "p": failed`,
 		},
 		{
 			name:      "failure reports the error effect's text",
@@ -125,7 +136,7 @@ func TestRunEffects(test *testing.T) {
 			wantIs:    ErrFailed,
 			wantError: `plugin "p": no model`,
 		},
-		{name: "failure with unreadable output", output: "garbage\n", exit: 1, wantIs: ErrFailed, wantError: `plugin "p": plugin failed`},
+		{name: "failure with unreadable output", output: "garbage\n", exit: 1, wantIs: ErrFailed, wantError: `plugin "p": failed`},
 	} {
 		test.Run(testCase.name, func(test *testing.T) {
 			var log bytes.Buffer
@@ -234,14 +245,174 @@ func TestRunTimeout(test *testing.T) {
 	}
 }
 
+// The script ignores SIGPIPE, so it only stops if strig kills it; the
+// timeout is far above guard, so a missing kill fails the test.
 func TestRunOutputLimit(test *testing.T) {
-	runner := New([]config.Plugin{scriptPlugin("p", "flood.sh", guard)}, Options{})
-	got, err := runner.Run(context.Background(), "p", Request{})
-	if !errors.Is(err, ErrOutputTooLarge) {
-		test.Errorf("error = %v, want ErrOutputTooLarge", err)
+	runner := New([]config.Plugin{scriptPlugin("p", "ignore-sigpipe.sh", time.Hour)}, Options{})
+	result := receive(test, runInBackground(context.Background(), runner, "p", "{}"))
+	if !errors.Is(result.err, ErrOutputTooLarge) {
+		test.Errorf("error = %v, want ErrOutputTooLarge", result.err)
 	}
-	if got != nil {
-		test.Errorf("effects = %v, want none from a failed run", got)
+	if result.effects != nil {
+		test.Errorf("effects = %v, want none from a failed run", result.effects)
+	}
+}
+
+func TestRunStderrIsBounded(test *testing.T) {
+	var log bytes.Buffer
+	runner := New([]config.Plugin{scriptPlugin("p", "stderr-flood.sh", guard)}, Options{Log: &log})
+	got, err := runner.Run(context.Background(), "p", Request{})
+	if err != nil {
+		test.Fatal(err)
+	}
+	if diff := cmp.Diff([]Effect{{Name: EffectNotice, Text: "ok"}}, got); diff != "" {
+		test.Errorf("effects mismatch (-want +got):\n%s", diff)
+	}
+	if log.Len() > MaximumErrorOutputSize+200 {
+		test.Errorf("log holds %d bytes, want about %d", log.Len(), MaximumErrorOutputSize)
+	}
+	if strings.Count(log.String(), "standard error cut off") != 1 {
+		test.Errorf("log does not hold exactly one cut-off note")
+	}
+}
+
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("no space left on device") }
+
+func TestRunLogFailureDoesNotDecideTheRun(test *testing.T) {
+	runner := New([]config.Plugin{scriptPlugin("p", "stderr-flood.sh", guard)}, Options{Log: failingWriter{}})
+	got, err := runner.Run(context.Background(), "p", Request{})
+	if err != nil {
+		test.Fatalf("Run: %v", err)
+	}
+	if diff := cmp.Diff([]Effect{{Name: EffectNotice, Text: "ok"}}, got); diff != "" {
+		test.Errorf("effects mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestRunAfterAFailedRun(test *testing.T) {
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	for _, testCase := range []struct {
+		name        string
+		script      string
+		environment []string
+		timeout     time.Duration
+		context     context.Context
+	}{
+		{"exit status", "emit.sh", []string{"FAKE_EXIT=1"}, guard, context.Background()},
+		{"timeout", "hang.sh", nil, 100 * time.Millisecond, context.Background()},
+		{"cancelled", "hang.sh", nil, guard, cancelled},
+		{"too much output", "ignore-sigpipe.sh", nil, time.Hour, context.Background()},
+		{"start failure", "does-not-exist", nil, guard, context.Background()},
+		{"bad output", "emit.sh", []string{"FAKE_OUTPUT=hello"}, guard, context.Background()},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			runner := New(
+				[]config.Plugin{scriptPlugin("p", testCase.script, testCase.timeout)},
+				Options{Environment: baseEnvironment(test.TempDir(), testCase.environment...)},
+			)
+			first := receive(test, runInBackground(testCase.context, runner, "p", "{}"))
+			if first.err == nil {
+				test.Fatal("the first run succeeded, want a failure")
+			}
+			// The same plugin must be free again.
+			runner.entries["p"].plugin = scriptPlugin("p", "ignore-input.sh", guard)
+			if second := receive(test, runInBackground(context.Background(), runner, "p", "{}")); second.err != nil {
+				test.Errorf("second run: %v", second.err)
+			}
+		})
+	}
+}
+
+func TestQueueTurnArrivingWithCancel(test *testing.T) {
+	line := &queue{}
+	if err := line.acquire(context.Background(), func() {}); err != nil {
+		test.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	joined := make(chan struct{})
+	result := make(chan error, 1)
+	go func() { result <- line.acquire(ctx, func() { close(joined) }) }()
+	receive(test, joined)
+
+	// Cancel, then hand the turn over while the waiter still has to take the
+	// lock: the waiter sees both, and must pass the turn on.
+	line.mutex.Lock()
+	cancel()
+	next := line.waiting[0]
+	line.waiting = line.waiting[1:]
+	close(next)
+	line.mutex.Unlock()
+
+	if err := receive(test, result); !errors.Is(err, context.Canceled) {
+		test.Fatalf("waiter error = %v, want context.Canceled", err)
+	}
+	free := make(chan error, 1)
+	go func() { free <- line.acquire(context.Background(), func() {}) }()
+	if err := receive(test, free); err != nil {
+		test.Errorf("acquire after the race: %v", err)
+	}
+}
+
+func TestBareProgramIsNotFoundInTheWorkingDirectory(test *testing.T) {
+	directory := test.TempDir()
+	script, err := os.ReadFile(filepath.Join("testdata", "ignore-input.sh"))
+	if err != nil {
+		test.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(directory, "local-plugin"), script, 0o700); err != nil {
+		test.Fatal(err)
+	}
+	test.Setenv("PATH", "/usr/bin:/bin")
+	test.Chdir(directory)
+	runner := New([]config.Plugin{{Command: "p", OnRun: []string{"local-plugin"}, Timeout: guard}}, Options{})
+	_, runError := runner.Run(context.Background(), "p", Request{})
+	if !errors.Is(runError, exec.ErrNotFound) {
+		test.Errorf("error = %v, want exec.ErrNotFound", runError)
+	}
+}
+
+func TestRunExpandsHomeInTheProgram(test *testing.T) {
+	home := test.TempDir()
+	script, err := os.ReadFile(filepath.Join("testdata", "emit.sh"))
+	if err != nil {
+		test.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, "plugin.sh"), script, 0o700); err != nil {
+		test.Fatal(err)
+	}
+	plugin := config.Plugin{Command: "p", OnRun: []string{"~/plugin.sh"}, Timeout: guard}
+	environment := baseEnvironment(home, `FAKE_OUTPUT={"name":"reload"}`)
+
+	runner := New([]config.Plugin{plugin}, Options{Environment: environment, Home: func() (string, error) { return home, nil }})
+	got, runError := runner.Run(context.Background(), "p", Request{})
+	if runError != nil || len(got) != 1 {
+		test.Errorf("Run = %v, %v, want one effect", got, runError)
+	}
+
+	withoutHome := New([]config.Plugin{plugin}, Options{Environment: environment})
+	if _, runError := withoutHome.Run(context.Background(), "p", Request{}); runError == nil {
+		test.Error("Run without a home directory succeeded")
+	}
+}
+
+func TestRunExitedPluginIsNotTimedOut(test *testing.T) {
+	directory := test.TempDir()
+	killChild(test, directory)
+	// The plugin exits at once but a child holds standard output, so Run waits
+	// out WaitDelay; the timeout passes meanwhile.
+	runner := New(
+		[]config.Plugin{scriptPlugin("p", "leave-child.sh", time.Second)},
+		Options{Environment: baseEnvironment(directory), WaitDelay: 2 * time.Second},
+	)
+	result := receive(test, runInBackground(context.Background(), runner, "p", "{}"))
+	if result.err != nil {
+		test.Fatalf("Run: %v", result.err)
+	}
+	if diff := cmp.Diff([]Effect{{Name: EffectNotice, Text: "done"}}, result.effects); diff != "" {
+		test.Errorf("effects mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -262,12 +433,12 @@ func TestLimitedBufferStopsAtTheLimit(test *testing.T) {
 // killChild stops the child a script left behind, so no test leaves a process.
 func killChild(test *testing.T, directory string) {
 	test.Cleanup(func() {
-		data, err := os.ReadFile(filepath.Join(directory, "pid"))
+		data, err := os.ReadFile(filepath.Join(directory, "child-process"))
 		if err != nil {
 			return
 		}
-		if pid, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil {
-			_ = syscall.Kill(pid, syscall.SIGKILL)
+		if processIdentifier, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil {
+			_ = syscall.Kill(processIdentifier, syscall.SIGKILL)
 		}
 	})
 }
@@ -326,12 +497,12 @@ type queueHarness struct {
 func newQueueHarness(test *testing.T, names ...string) *queueHarness {
 	test.Helper()
 	directory := test.TempDir()
-	fifo := filepath.Join(directory, "started")
-	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
+	pipePath := filepath.Join(directory, "started")
+	if err := syscall.Mkfifo(pipePath, 0o600); err != nil {
 		test.Fatal(err)
 	}
 	// Read-write, so opening never blocks and the script's writes never do.
-	file, err := os.OpenFile(fifo, os.O_RDWR, 0)
+	file, err := os.OpenFile(pipePath, os.O_RDWR, 0)
 	if err != nil {
 		test.Fatal(err)
 	}

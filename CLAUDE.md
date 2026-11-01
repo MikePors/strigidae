@@ -59,7 +59,7 @@ Packages that don't exist yet are created by the issue that first needs them. De
 
 ```
 cmd/strig ──► userinterface/views/* ──► userinterface/components ──► userinterface ──► userinterface/keys, userinterface/theme
-    │              └──────► github, diff, config, editor, gitrepository   (non-UI)
+    │              └──────► github, diff, config, editor, gitrepository, plugins   (non-UI)
     └──► github/network  (the only importer of the real client)
 ```
 

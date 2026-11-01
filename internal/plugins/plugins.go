@@ -1,8 +1,11 @@
 // Package plugins runs the programs behind the user's configured command
 // plugins. A run starts the program, writes one JSON request to its standard
 // input and reads effects, JSON lines on its standard output, that say what
-// the plugin would like strig to do. A plugin suggests; strig decides, so a
-// plugin gets no GitHub token and cannot write to GitHub.
+// the plugin would like strig to do. A plugin suggests; strig decides: strig
+// gives a plugin no GitHub token and writes nothing for it, and what a plugin
+// asks for goes through strig's own rules. A plugin is still the user's own
+// program, running as the user, so it can do whatever the user can, such as
+// running gh itself; only plugins the user trusts belong in the config.
 //
 // The package is non-UI and has no Bubble Tea import. Run blocks, so a caller
 // puts it inside a tea.Cmd.
@@ -16,6 +19,8 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,6 +34,10 @@ const Protocol = 1
 // MaximumOutputSize is the most standard output one run may print. Past it
 // the process is killed and the run fails.
 const MaximumOutputSize = 1 << 20
+
+// MaximumErrorOutputSize is the most standard error of one run that reaches
+// the log. The rest is dropped, with a note.
+const MaximumErrorOutputSize = 64 << 10
 
 // DefaultWaitDelay is how long strig keeps reading after the plugin process
 // exited. Something the plugin started can hold standard output open for as
@@ -52,14 +61,14 @@ var (
 	// ErrUnknownPlugin means no plugin has the requested name.
 	ErrUnknownPlugin = errors.New("no such plugin")
 	// ErrFailed means the plugin exited with a failure status.
-	ErrFailed = errors.New("plugin failed")
+	ErrFailed = errors.New("failed")
 	// ErrTimeout means the plugin ran past its timeout and was killed.
-	ErrTimeout = errors.New("plugin timed out")
+	ErrTimeout = errors.New("timed out")
 	// ErrOutputTooLarge means the plugin printed more than MaximumOutputSize
 	// and was killed.
-	ErrOutputTooLarge = errors.New("plugin printed too much output")
+	ErrOutputTooLarge = errors.New("printed too much output")
 	// ErrInvalidOutput means a line the plugin printed is not an effect.
-	ErrInvalidOutput = errors.New("plugin printed a line that is not an effect")
+	ErrInvalidOutput = errors.New("printed a line that is not an effect")
 )
 
 // Request is the JSON object a plugin reads from standard input. The fields
@@ -71,7 +80,10 @@ type Request struct {
 }
 
 // Effect is one thing a plugin asked for. Text is empty for effects that have
-// none. It is untrusted: sanitise it where it is shown.
+// none. It is untrusted: sanitise it where it is shown. The same goes for the
+// text of an error effect that reaches the caller as the text of an error
+// returned by Run: it is plugin-controlled, up to MaximumOutputSize long and
+// may hold terminal escapes, so clean it (terminaltext.Clean) where it is shown.
 type Effect struct {
 	Name string
 	Text string
@@ -87,6 +99,9 @@ type Options struct {
 	Log io.Writer
 	// WaitDelay overrides DefaultWaitDelay when positive.
 	WaitDelay time.Duration
+	// Home returns the home directory, for a program written as "~/...". It is
+	// called only then. Nil means such a program cannot be started.
+	Home func() (string, error)
 }
 
 // Runner runs the configured plugins, one run at a time per plugin.
@@ -95,6 +110,7 @@ type Runner struct {
 	environment []string
 	log         io.Writer
 	waitDelay   time.Duration
+	home        func() (string, error)
 
 	// Seams for tests: called when a run joins a queue, and to start a run's
 	// timeout.
@@ -114,6 +130,7 @@ func New(plugins []config.Plugin, options Options) *Runner {
 		environment: environment.Scrub(options.Environment),
 		log:         &lockedWriter{writer: io.Discard},
 		waitDelay:   DefaultWaitDelay,
+		home:        options.Home,
 		queued:      func(string) {},
 		withTimeout: context.WithTimeout,
 	}
@@ -153,9 +170,6 @@ func (runner *Runner) Run(ctx context.Context, name string, request Request) ([]
 }
 
 func (runner *Runner) execute(ctx context.Context, found *entry, body []byte) ([]Effect, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
 	name := found.plugin.Command
 	if err := found.queue.acquire(ctx, func() { runner.queued(name) }); err != nil {
 		return nil, err
@@ -173,24 +187,31 @@ func (runner *Runner) start(parent, runContext context.Context, plugin config.Pl
 	stopContext, stop := context.WithCancel(runContext)
 	defer stop()
 
+	program, err := runner.program(plugin.OnRun[0])
+	if err != nil {
+		return nil, fmt.Errorf("start plugin %q: %w", plugin.Command, err)
+	}
 	output := &limitedBuffer{limit: MaximumOutputSize, stop: stop}
-	command := exec.CommandContext(stopContext, plugin.OnRun[0], plugin.OnRun[1:]...)
+	command := exec.CommandContext(stopContext, program, plugin.OnRun[1:]...)
 	command.Env = runner.environment
 	// A plugin that never reads its input gets EPIPE on the write; exec
 	// ignores that, and the exit status decides.
 	command.Stdin = bytes.NewReader(body)
 	command.Stdout = output
-	command.Stderr = runner.log
+	command.Stderr = &boundedLog{writer: runner.log, name: plugin.Command, remaining: MaximumErrorOutputSize}
 	command.WaitDelay = runner.waitDelay
 
 	waitError := command.Run()
 
+	// A plugin that exited 0 has succeeded, even if the deadline passed while
+	// strig waited out WaitDelay for a child holding standard output.
+	succeeded := command.ProcessState != nil && command.ProcessState.Success()
 	switch {
 	case output.exceeded():
 		return nil, fmt.Errorf("plugin %q: %w (limit %d bytes)", plugin.Command, ErrOutputTooLarge, MaximumOutputSize)
-	case parent.Err() != nil:
+	case !succeeded && parent.Err() != nil:
 		return nil, parent.Err()
-	case runContext.Err() != nil:
+	case !succeeded && runContext.Err() != nil:
 		return nil, fmt.Errorf("plugin %q: %w after %s", plugin.Command, ErrTimeout, plugin.Timeout)
 	}
 
@@ -211,8 +232,26 @@ func (runner *Runner) start(parent, runContext context.Context, plugin config.Pl
 	}
 }
 
+// program is the program to start. A bare name is found on PATH and an
+// absolute path is used as it is (config accepts nothing else, so a checkout
+// cannot supply the program); "~/" is the home directory.
+func (runner *Runner) program(name string) (string, error) {
+	rest, isHome := strings.CutPrefix(name, "~/")
+	if !isHome {
+		return name, nil
+	}
+	if runner.home == nil {
+		return "", errors.New("no home directory to expand ~ in the program")
+	}
+	home, err := runner.home()
+	if err != nil {
+		return "", fmt.Errorf("expand ~ in the program: %w", err)
+	}
+	return filepath.Join(home, rest), nil
+}
+
 // exitFailure is the error for a plugin that exited with a failure status:
-// the text of its error effect if it printed one, else a fixed message.
+// the text of the first error effect before any bad line, else a fixed message.
 func (runner *Runner) exitFailure(name string, output []byte) error {
 	effects, _ := runner.parse(name, output)
 	for _, effect := range effects {
@@ -268,19 +307,38 @@ func decodeEffect(line []byte) (effect Effect, known bool, err error) {
 	effect.Name = decoded.Name
 	switch decoded.Name {
 	case EffectReload:
+		if err := decodeData(decoded.Data, &struct{}{}); err != nil {
+			return Effect{}, false, err
+		}
 		return effect, true, nil
 	case EffectNotice, EffectError, EffectAnswer:
 		var data struct {
 			Text string `json:"text"`
 		}
-		if err := json.Unmarshal(decoded.Data, &data); err != nil {
+		if err := decodeData(decoded.Data, &data); err != nil {
 			return Effect{}, false, err
+		}
+		if data.Text == "" {
+			return Effect{}, false, errors.New("effect has no text")
 		}
 		effect.Text = data.Text
 		return effect, true, nil
 	default:
 		return effect, false, nil
 	}
+}
+
+// decodeData decodes the data of an effect into target. Missing data and null
+// are the same as an empty object; anything else must be an object.
+func decodeData(raw json.RawMessage, target any) error {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
+		return nil
+	}
+	if raw[0] != '{' {
+		return errors.New("data is not an object")
+	}
+	return json.Unmarshal(raw, target)
 }
 
 // queue lets one run at a time hold a plugin and hands it to the waiting runs
@@ -343,9 +401,10 @@ func (line *queue) release() {
 }
 
 // limitedBuffer keeps a plugin's output up to a limit. Past it, it stops the
-// process and refuses more, so output is never buffered without bound.
+// process and refuses more, so output is never buffered without bound. exec
+// writes from one goroutine and joins it before Run returns, and everything
+// here is read after that, so it needs no lock.
 type limitedBuffer struct {
-	mutex    sync.Mutex
 	buffer   bytes.Buffer
 	limit    int
 	stop     context.CancelFunc
@@ -355,8 +414,6 @@ type limitedBuffer struct {
 var errOutputLimit = errors.New("output limit reached")
 
 func (limited *limitedBuffer) Write(data []byte) (int, error) {
-	limited.mutex.Lock()
-	defer limited.mutex.Unlock()
 	if limited.overflow || limited.buffer.Len()+len(data) > limited.limit {
 		limited.overflow = true
 		limited.stop()
@@ -365,16 +422,34 @@ func (limited *limitedBuffer) Write(data []byte) (int, error) {
 	return limited.buffer.Write(data)
 }
 
-func (limited *limitedBuffer) exceeded() bool {
-	limited.mutex.Lock()
-	defer limited.mutex.Unlock()
-	return limited.overflow
+func (limited *limitedBuffer) exceeded() bool { return limited.overflow }
+
+func (limited *limitedBuffer) bytes() []byte { return limited.buffer.Bytes() }
+
+// boundedLog passes the first remaining bytes of a plugin's standard error to
+// the log, adds one note, and drops the rest. It always reports success: a
+// chatty plugin or a failing log must not decide the run, and the plugin must
+// never get EPIPE from it.
+type boundedLog struct {
+	writer    io.Writer
+	name      string
+	remaining int
+	truncated bool
 }
 
-func (limited *limitedBuffer) bytes() []byte {
-	limited.mutex.Lock()
-	defer limited.mutex.Unlock()
-	return bytes.Clone(limited.buffer.Bytes())
+func (bounded *boundedLog) Write(data []byte) (int, error) {
+	total := len(data)
+	if bounded.remaining > 0 {
+		kept := min(total, bounded.remaining)
+		_, _ = bounded.writer.Write(data[:kept])
+		bounded.remaining -= kept
+		data = data[kept:]
+	}
+	if len(data) > 0 && !bounded.truncated {
+		bounded.truncated = true
+		_, _ = fmt.Fprintf(bounded.writer, "\nplugin %q: standard error cut off after %d bytes\n", bounded.name, MaximumErrorOutputSize)
+	}
+	return total, nil
 }
 
 // lockedWriter serialises writes: the standard error of several plugins and

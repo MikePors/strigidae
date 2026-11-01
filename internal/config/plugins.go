@@ -1,7 +1,9 @@
 package config
 
 import (
+	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	"go.yaml.in/yaml/v3"
@@ -24,9 +26,9 @@ const (
 
 var targetNames = []string{string(TargetLines), string(TargetPullRequest)}
 
-// commandName is a plain word: it becomes a `:command`, so it holds no
+// commandName is a plain word starting with a letter: it becomes a `:command`, so it holds no
 // spaces or punctuation.
-var commandName = regexp.MustCompile(`^[A-Za-z0-9-]+$`)
+var commandName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9-]*$`)
 
 // Plugin is a command that runs a program of the user's choosing. Plugins are
 // read only from the user's own config file, never from a repository.
@@ -51,10 +53,13 @@ func (parser *parser) plugin(node *yaml.Node) (Plugin, string) {
 		case "command":
 			plugin.Command = parser.stringValue(node, "plugin command")
 			if parser.err == nil && !commandName.MatchString(plugin.Command) {
-				parser.fail(node, "plugin command %q must be a plain word (letters, digits and hyphens)", plugin.Command)
+				parser.fail(node, "plugin command %q must be a plain word (a letter, then letters, digits and hyphens)", plugin.Command)
 			}
 		case "on_run":
 			plugin.OnRun = parser.program(node, "on_run")
+			if parser.err == nil && !allowedProgram(plugin.OnRun[0]) {
+				parser.fail(node, "on_run program %q must be a bare name found on PATH, an absolute path, or start with ~/", plugin.OnRun[0])
+			}
 		case "target":
 			plugin.Target = Target(parser.oneOf(node, "target", targetNames))
 		case "timeout":
@@ -71,6 +76,17 @@ func (parser *parser) plugin(node *yaml.Node) (Plugin, string) {
 		parser.fail(node, "plugin %q is missing a target", plugin.Command)
 	}
 	return plugin, plugin.Command
+}
+
+// allowedProgram reports whether a program is a bare name (looked up on PATH),
+// an absolute path, or under the home directory ("~/..."). A relative path with
+// a separator would resolve against the working directory, which is usually
+// the checkout under review, so a repository could supply the program.
+func allowedProgram(program string) bool {
+	if rest, isHome := strings.CutPrefix(program, "~/"); isHome {
+		return rest != ""
+	}
+	return !strings.Contains(program, "/") || filepath.IsAbs(program)
 }
 
 // program reads a non-empty list of text items: a program and its arguments.

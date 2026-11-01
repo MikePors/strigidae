@@ -3,12 +3,14 @@
 A plugin adds a command to strig that runs a program of your own. strig sends
 the program a description of what you are pointing at, and the program replies
 with what it would like strig to show or do. Plugins suggest and strig
-decides: a plugin gets no GitHub token and cannot write to GitHub, and
-anything it asks for is done under strig's own rules.
+decides: strig gives a plugin no GitHub token and writes nothing for it, and
+anything it asks for goes through strig's own rules. A plugin is still your own
+program, running as you, so it can do what you can (it could run `gh` itself,
+for example). Add only programs you trust.
 
 This page describes the configuration and the protocol between strig and the
-program. The commands themselves, and what the request holds for each target,
-arrive in later versions.
+program. The key is read and validated today; the commands themselves, and what
+the request holds for each target, arrive in a later version.
 
 ## Where plugins come from
 
@@ -29,12 +31,18 @@ plugins:
 
 | Key | Required | Meaning |
 |---|---|---|
-| `command` | yes | The plugin's name, which becomes a command of that name. A plain word: letters, digits and `-`. Names must be unique |
-| `on_run` | yes | A non-empty list: the program, then its arguments. The program is looked up on `PATH` like any other; there is no shell, so quoting and `~` are not interpreted |
+| `command` | yes | The plugin's name, which becomes a command of that name. A plain word: a letter, then letters, digits and `-`. Names must be unique |
+| `on_run` | yes | A non-empty list: the program, then its arguments. There is no shell, so quoting and variables are not interpreted. The program is a bare name found on `PATH`, an absolute path, or a path starting with `~/` (your home directory); any other path with a `/` is a config error (see below) |
 | `target` | yes | What the command acts on: `lines` or `pull-request` |
 | `timeout` | no | How long one run may take, as a Go duration such as `90s` or `2m`. Above zero. Default `60s` |
 
 Unknown keys are errors, like everywhere in the config.
+
+A program written as a relative path such as `scripts/ask.sh` or `./ask` would
+resolve against strig's working directory, usually the checkout under review,
+so a file from that repository could run. That is why the config does not
+accept it: use a bare name on `PATH`, or an absolute or `~/` path. Arguments
+after the program are not restricted.
 
 ## What strig sends
 
@@ -69,8 +77,10 @@ Rules:
 - Effects are handled in the order they were printed. Blank lines are skipped.
 - An effect with a name strig does not know is logged and skipped, so a newer
   plugin works with an older strig.
-- A line that is not a JSON object with a `name`, or a known effect whose
-  `data` is not shaped as above, fails the run.
+- A line that is not a JSON object with a `name` fails the run. So does a known
+  effect with bad `data`: `data` may be left out (or `null`) and otherwise must
+  be an object, and `notice`, `error` and `answer` need a non-empty string
+  `text` in it. `reload` needs no data.
 - `error` is an effect like the others: a run can print one and still exit 0.
 - Text in effects can hold anything the program printed, including terminal
   escape sequences. strig cleans it where it is shown.
@@ -78,14 +88,15 @@ Rules:
   fails.
 
 Standard error is written to strig's log file (`strig --log-path` prints where)
-and never shown on the screen.
+and never shown on the screen. Only the first 64 KiB of a run's standard error
+is kept, followed by a note; the rest is dropped.
 
 ## Exit status
 
 A program that exits 0 has succeeded, and its effects are used. A program that
-exits with any other status has failed: if it printed an `error` effect the run
-fails with that text, otherwise with a short fixed message. Its other effects
-are discarded.
+exits with any other status has failed: if it printed an `error` effect (the
+first one, before any line that is not an effect) the run fails with that
+text, otherwise with a short fixed message. Its other effects are discarded.
 
 ## Timeout
 

@@ -83,7 +83,10 @@ plugins:
     timeout: 120s
 ```
 
-The protocol and the rules of a run are in [plugins.md](plugins.md).
+The key is read and validated today, but the commands are not usable yet; they
+arrive in a later version. The first `on_run` item must be a bare program name,
+an absolute path or a `~/` path. The protocol and the rules of a run are in
+[plugins.md](plugins.md).
 
 ### Options
 
