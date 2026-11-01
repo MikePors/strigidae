@@ -67,6 +67,24 @@ Either key may be left out and keeps its default. Values are Go durations
 negative or unparseable values are a config error at startup, and so is an
 empty `timeouts:` (use `{}` or leave the key out). There is no `:set` for these.
 
+### `plugins`
+
+Optional. Commands that run a program of your own, each with a `command` name
+(a plain word), an `on_run` list (the program and its arguments), a `target`
+(`lines` or `pull-request`) and an optional `timeout` (default `60s`).
+Command names must be unique. Plugins are read only from this file, never from
+a repository.
+
+```yaml
+plugins:
+  - command: ask
+    on_run: [strig-ask]
+    target: lines
+    timeout: 120s
+```
+
+The protocol and the rules of a run are in [plugins.md](plugins.md).
+
 ### Options
 
 Optional yes/no keys, written at the top level next to `theme`. Each is also

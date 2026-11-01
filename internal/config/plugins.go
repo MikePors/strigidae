@@ -1,0 +1,105 @@
+package config
+
+import (
+	"regexp"
+	"time"
+
+	"go.yaml.in/yaml/v3"
+)
+
+// DefaultPluginTimeout is how long a plugin may run when the file sets no
+// timeout for it.
+const DefaultPluginTimeout = 60 * time.Second
+
+// Target is what a plugin's command acts on.
+type Target string
+
+// Supported plugin targets.
+const (
+	// TargetLines is the diff lines under the cursor or selection.
+	TargetLines Target = "lines"
+	// TargetPullRequest is the pull request as a whole.
+	TargetPullRequest Target = "pull-request"
+)
+
+var targetNames = []string{string(TargetLines), string(TargetPullRequest)}
+
+// commandName is a plain word: it becomes a `:command`, so it holds no
+// spaces or punctuation.
+var commandName = regexp.MustCompile(`^[A-Za-z0-9-]+$`)
+
+// Plugin is a command that runs a program of the user's choosing. Plugins are
+// read only from the user's own config file, never from a repository.
+type Plugin struct {
+	// Command is the plugin's name; it becomes a command of that name.
+	Command string
+	// OnRun is the program and its arguments, started once per run.
+	OnRun  []string
+	Target Target
+	// Timeout bounds one run, from the moment it starts.
+	Timeout time.Duration
+}
+
+func (parser *parser) plugins(node *yaml.Node, config *Config) {
+	config.Plugins = uniqueList(parser, node, "plugins", parser.plugin, "duplicate plugin command %q")
+}
+
+func (parser *parser) plugin(node *yaml.Node) (Plugin, string) {
+	plugin := Plugin{Timeout: DefaultPluginTimeout}
+	parser.mapping(node, "a plugin", func(key string, node *yaml.Node) {
+		switch key {
+		case "command":
+			plugin.Command = parser.stringValue(node, "plugin command")
+			if parser.err == nil && !commandName.MatchString(plugin.Command) {
+				parser.fail(node, "plugin command %q must be a plain word (letters, digits and hyphens)", plugin.Command)
+			}
+		case "on_run":
+			plugin.OnRun = parser.program(node, "on_run")
+		case "target":
+			plugin.Target = Target(parser.oneOf(node, "target", targetNames))
+		case "timeout":
+			plugin.Timeout = parser.duration(node, "plugin timeout")
+		}
+	}, []string{"command", "on_run", "target", "timeout"})
+	if parser.err == nil && plugin.Command == "" {
+		parser.fail(node, "plugin is missing a command")
+	}
+	if parser.err == nil && plugin.OnRun == nil {
+		parser.fail(node, "plugin %q is missing on_run", plugin.Command)
+	}
+	if parser.err == nil && plugin.Target == "" {
+		parser.fail(node, "plugin %q is missing a target", plugin.Command)
+	}
+	return plugin, plugin.Command
+}
+
+// program reads a non-empty list of text items: a program and its arguments.
+// The first item, the program, must not be empty.
+func (parser *parser) program(node *yaml.Node, what string) []string {
+	if node.Kind != yaml.SequenceNode || len(node.Content) == 0 {
+		parser.fail(node, "%s must be a non-empty list", what)
+		return nil
+	}
+	items := make([]string, 0, len(node.Content))
+	for i, item := range node.Content {
+		if i == 0 {
+			items = append(items, parser.stringValue(item, what+" program"))
+		} else {
+			items = append(items, parser.argument(item, what))
+		}
+		if parser.err != nil {
+			return nil
+		}
+	}
+	return items
+}
+
+// argument reads one scalar as written. Unlike stringValue it is not trimmed
+// and may be empty: an argument is data for the program.
+func (parser *parser) argument(node *yaml.Node, what string) string {
+	if node.Kind != yaml.ScalarNode || node.Tag == "!!null" {
+		parser.fail(node, "every item of %s must be text", what)
+		return ""
+	}
+	return node.Value
+}
