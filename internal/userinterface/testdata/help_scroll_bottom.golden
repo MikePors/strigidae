@@ -1,0 +1,14 @@
+Help  ? / esc to close  12–22 of 22                             
+                                                                
+zz       cursor line to the middle            F10      action 10
+zb       cursor line to the bottom            F11      action 11
+                                                                
+enter    open / select                                          
+o        open in browser                                        
+R        refresh                                                
+                                                                
+esc      cancel / clear                                         
+?        toggle help                                            
+:        command line (:q close, :qa quit)                      
+1-9      count: 11j, 3], 42G                                    
+ v  ? help  zq test sequence                                          
