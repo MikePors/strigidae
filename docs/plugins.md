@@ -1,0 +1,119 @@
+# Command plugins
+
+A plugin adds a command to strig that runs a program of your own. strig sends
+the program a description of what you are pointing at, and the program replies
+with what it would like strig to show or do. Plugins suggest and strig
+decides: a plugin gets no GitHub token and cannot write to GitHub, and
+anything it asks for is done under strig's own rules.
+
+This page describes the configuration and the protocol between strig and the
+program. The commands themselves, and what the request holds for each target,
+arrive in later versions.
+
+## Where plugins come from
+
+Plugins are read **only** from your own config file: the default location, or
+the file named with `--config` (see [config.md](config.md)). strig never reads
+plugin definitions from a repository, a checkout or a pull request, so what you
+review cannot make strig run a command.
+
+## Configuration
+
+```yaml
+plugins:
+  - command: ask            # becomes :ask
+    on_run: [strig-ask]     # the program and its arguments
+    target: lines           # lines or pull-request
+    timeout: 120s           # optional, default 60s
+```
+
+| Key | Required | Meaning |
+|---|---|---|
+| `command` | yes | The plugin's name, which becomes a command of that name. A plain word: letters, digits and `-`. Names must be unique |
+| `on_run` | yes | A non-empty list: the program, then its arguments. The program is looked up on `PATH` like any other; there is no shell, so quoting and `~` are not interpreted |
+| `target` | yes | What the command acts on: `lines` or `pull-request` |
+| `timeout` | no | How long one run may take, as a Go duration such as `90s` or `2m`. Above zero. Default `60s` |
+
+Unknown keys are errors, like everywhere in the config.
+
+## What strig sends
+
+strig starts the program, writes one JSON object to its standard input and
+closes it. The object starts with the protocol version:
+
+```json
+{"protocol": 1}
+```
+
+The rest of the object is defined per target in a later version of this page.
+A plugin should ignore fields it does not know. A plugin does not have to read
+its input; one that exits without reading it is not an error in itself.
+
+## What the plugin prints
+
+The plugin prints JSON lines on standard output. Each line is one *effect*:
+
+```json
+{"name": "notice", "data": {"text": "Looks fine"}}
+```
+
+| Effect | Data | Meaning |
+|---|---|---|
+| `notice` | `{"text": ...}` | A short message for the status bar |
+| `error` | `{"text": ...}` | The run failed, with this reason |
+| `answer` | `{"text": ...}` | An answer to show to the user |
+| `reload` | `{}` | Reload what is on screen |
+
+Rules:
+
+- Effects are handled in the order they were printed. Blank lines are skipped.
+- An effect with a name strig does not know is logged and skipped, so a newer
+  plugin works with an older strig.
+- A line that is not a JSON object with a `name`, or a known effect whose
+  `data` is not shaped as above, fails the run.
+- `error` is an effect like the others: a run can print one and still exit 0.
+- Text in effects can hold anything the program printed, including terminal
+  escape sequences. strig cleans it where it is shown.
+- At most 1 MiB of output is read. Past that the program is killed and the run
+  fails.
+
+Standard error is written to strig's log file (`strig --log-path` prints where)
+and never shown on the screen.
+
+## Exit status
+
+A program that exits 0 has succeeded, and its effects are used. A program that
+exits with any other status has failed: if it printed an `error` effect the run
+fails with that text, otherwise with a short fixed message. Its other effects
+are discarded.
+
+## Timeout
+
+The timeout is firm. It starts when the program starts, not while the run waits
+its turn (see below), and when it passes the program is killed and the run
+fails.
+
+Only the program strig started is killed. Anything it started in turn keeps
+running, so a plugin that wants to leave a helper running (a daemon, a
+background session) can.
+
+## One run at a time
+
+Runs of one plugin go one at a time, in the order they were asked for; the
+others wait. A run that is cancelled while it waits leaves without running.
+Different plugins do not wait for each other.
+
+## The environment
+
+The program inherits strig's environment and working directory, with the GitHub
+token variables (`GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`,
+`GITHUB_ENTERPRISE_TOKEN`) removed.
+
+## Daemons a plugin starts
+
+strig stops reading a moment after the program exits, even if something the
+program started still has its standard output open, so a leftover helper cannot
+hang strig. Even so, **a daemon a plugin starts must redirect its output and
+detach** (for example `nohup helper >/dev/null 2>&1 &`, or `setsid`), so it
+does not keep strig's pipes open. Output it prints after the program exited is
+not read.
