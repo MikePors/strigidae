@@ -420,6 +420,28 @@ func TestRunExitedPluginIsNotTimedOut(test *testing.T) {
 	}
 }
 
+// The plugin exits 0 at once and a child holds standard output; the caller's
+// context ends while Run waits out WaitDelay. The exit status decides.
+func TestRunCancelledDuringTheWaitAfterExit(test *testing.T) {
+	directory := test.TempDir()
+	killChild(test, directory)
+	runner := New(
+		[]config.Plugin{scriptPlugin("p", "leave-child.sh", guard)},
+		Options{Environment: baseEnvironment(directory), WaitDelay: 3 * time.Second},
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	timer := time.AfterFunc(time.Second, cancel)
+	defer timer.Stop()
+	result := receive(test, runInBackground(ctx, runner, "p", "{}"))
+	if result.err != nil {
+		test.Fatalf("Run: %v", result.err)
+	}
+	if diff := cmp.Diff([]Effect{{Name: EffectNotice, Text: "done"}}, result.effects); diff != "" {
+		test.Errorf("effects mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestLimitedBufferStopsAtTheLimit(test *testing.T) {
 	stopped := false
 	buffer := &limitedBuffer{limit: 5, stop: func() { stopped = true }}
@@ -453,21 +475,28 @@ func TestRunChildHoldingStandardOutput(test *testing.T) {
 		script string
 		want   []Effect
 		wantIs error
+		// useDefaultDelay leaves Options.WaitDelay unset; then the run must end
+		// within a tolerant limit well above the default of about a second.
+		useDefaultDelay bool
 	}{
-		{"plugin exits 0: its effects are complete", "leave-child.sh", []Effect{{Name: EffectNotice, Text: "done"}}, nil},
-		{"plugin exits 1: still a failure", "leave-child-failing.sh", nil, ErrFailed},
-		{"default wait delay", "leave-child.sh", []Effect{{Name: EffectNotice, Text: "done"}}, nil},
+		{"plugin exits 0: its effects are complete", "leave-child.sh", []Effect{{Name: EffectNotice, Text: "done"}}, nil, false},
+		{"plugin exits 1: still a failure", "leave-child-failing.sh", nil, ErrFailed, false},
+		{"default wait delay", "leave-child.sh", []Effect{{Name: EffectNotice, Text: "done"}}, nil, true},
 	} {
 		test.Run(testCase.name, func(test *testing.T) {
 			directory := test.TempDir()
 			killChild(test, directory)
 			options := Options{Environment: baseEnvironment(directory), WaitDelay: 100 * time.Millisecond}
-			if testCase.name == "default wait delay" {
-				options.WaitDelay = 0 // the default applies: about a second
+			if testCase.useDefaultDelay {
+				options.WaitDelay = 0
 			}
 			runner := New([]config.Plugin{scriptPlugin("p", testCase.script, guard)}, options)
+			started := time.Now()
 			results := runInBackground(context.Background(), runner, "p", "{}")
 			result := receive(test, results)
+			if elapsed := time.Since(started); testCase.useDefaultDelay && elapsed > 5*time.Second {
+				test.Errorf("run took %s, want the default wait delay of about a second", elapsed)
+			}
 			if testCase.wantIs == nil && result.err != nil {
 				test.Fatalf("Run: %v", result.err)
 			}
@@ -537,7 +566,7 @@ func TestClassify(test *testing.T) {
 		{"killed by a cancel", false, true, false, false, true, false, endCancelled},
 		{"cancel and timeout together is a cancel", false, true, false, false, true, true, endCancelled},
 		{"crashed by a signal", false, true, false, false, false, false, endFailed},
-		{"too much output beats everything", true, true, true, true, true, true, endTooLarge},
+		{"too much output beats a context that ended", true, true, false, false, true, true, endTooLarge},
 		{"never started", false, false, false, false, false, false, endNotStarted},
 		{"cancelled before starting", false, false, false, false, true, false, endCancelled},
 	} {
