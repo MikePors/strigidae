@@ -83,9 +83,14 @@ While a run of the pull request on screen is under way, or waiting behind
 another run of the same plugin, the status bar shows its usual spinner. What
 the plugin prints appears in the status bar when it finishes: a `notice` as
 information, an `error` (and a failed run) as an error, and an `answer` as a
-notice, unless the plugin has `show: thread` (below). A result belongs to the pull request it was asked from: if that
-pull request (repository and number) is no longer the one on screen, the result
-is dropped and only noted in the log. A new head commit does not drop it: the
+notice. A plugin with `show: thread` (below) differs: its answer, and its
+failure (an `error` effect, a failed run or a timeout), go to the thread, and
+an `error` printed beside an `answer` also goes to the status bar. A result
+belongs to the pull request it was asked from: if that pull request
+(repository and number) is no longer the one on screen, the result is dropped
+and only noted in the log (a local thread is still filled, and keeps the
+result for when the pull request is opened again). A new head commit does not
+drop it: the
 result still shows and `reload` still runs; the request carries the `head` the
 plugin was run at.
 Closing the pull request does not stop a run; quitting strig does: it kills
@@ -105,7 +110,8 @@ error to give `show` to a `pull-request` plugin.
 
 - **When you run it** the thread appears at once, even if the run waits behind
   another of the same plugin. The first comment, by `you`, is what you typed
-  after the command name (just `:ask` when you typed nothing). The second, by
+  after the command name, shown exactly as typed and not as Markdown (just
+  `:ask` when you typed nothing). The second, by
   `answer (local, not on GitHub)`, reads `waiting for an answer…`, muted.
 - **An `answer` effect** fills the second comment as Markdown, drawn like any
   comment on GitHub. Several `answer` effects in one run are joined with a
@@ -113,8 +119,9 @@ error to give `show` to a `pull-request` plugin.
 - **No answer.** An `error` effect (with no `answer`), a failed run or a
   timeout replace the waiting line with `no answer: <the reason>`, in the error
   style. A run that prints neither says `no answer: the plugin gave no answer`.
-  If it prints both an `answer` and an `error`, the answer is shown.
-- `notice` and `reload` effects of the run work as for any plugin.
+  If it prints both an `answer` and an `error`, the thread shows the answer.
+- `notice` and `reload` effects of the run work as for any plugin, and an
+  `error` printed beside an `answer` also goes to the status bar.
 - The thread is **local to strig**. It is never sent to GitHub and is gone when
   strig quits. `r`, `x`, `:resolve`, `:unresolve`, `e`, `D`, `:edit-comment`,
   `:delete-comment` and `:react` on it say `this answer is local to strig, not

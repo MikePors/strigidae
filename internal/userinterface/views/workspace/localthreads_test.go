@@ -8,6 +8,7 @@ import (
 	"unicode"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/google/go-cmp/cmp"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/MikePors/strigidae/internal/plugins"
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/components/diffview"
+	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
 // threadCommands are plugins that draw their answers as local threads, and one
@@ -386,23 +388,23 @@ func TestLocalThreadRefusesEveryWrite(test *testing.T) {
 		{":react", nil, "react +1", "react to", false},
 		{":react without a name", nil, "react", "react to", false},
 	}
-	for _, act := range actions {
+	for _, actionCase := range actions {
 		for _, commentIndex := range []int{0, 1} {
-			test.Run(fmt.Sprintf("%s on comment %d", act.name, commentIndex), func(test *testing.T) {
+			test.Run(fmt.Sprintf("%s on comment %d", actionCase.name, commentIndex), func(test *testing.T) {
 				session := newThreadSession(test, &recordingRunner{effects: answerEffects("Because.")})
 				session.ask()
 				identifier := session.localThreads()[0].Identifier
 				session.toLocalComment(identifier, commentIndex)
 				session.infos, session.errors = nil, nil
 				before := session.calls()
-				if len(act.keys) > 0 {
-					for _, text := range act.keys {
+				if len(actionCase.keys) > 0 {
+					for _, text := range actionCase.keys {
 						session.pumped(text)
 					}
 				} else {
-					session.line(act.command)
+					session.line(actionCase.command)
 				}
-				want := "this answer is local to strig, not on GitHub: nothing to " + act.verb
+				want := "this answer is local to strig, not on GitHub: nothing to " + actionCase.verb
 				if diff := cmp.Diff([]string{want}, session.infos); diff != "" {
 					test.Errorf("notices (-want +got):\n%s", diff)
 				}
@@ -573,6 +575,67 @@ func TestLocalThreadHostileText(test *testing.T) {
 				if strings.Contains(raw, bad) {
 					test.Errorf("raw output holds %q", bad)
 				}
+			}
+		})
+	}
+}
+
+// The question is what was typed, as plain text: nothing in it is Markdown.
+func TestLocalThreadQuestionIsPlainText(test *testing.T) {
+	for _, question := range []string{"why is List<T> used?", "what does a*b*c mean", "# heading?", "use `Retry` and _this_"} {
+		test.Run(question, func(test *testing.T) {
+			session := newThreadSession(test, &recordingRunner{effects: answerEffects("ok")})
+			session.line("ask " + question)
+			if screen := session.screen(); !strings.Contains(screen, "│   "+question) {
+				test.Errorf("the question is not on screen as typed: %q", question)
+			}
+		})
+	}
+}
+
+// An error printed beside an answer is not lost: the thread shows the answer
+// and the status bar the error, cleaned.
+func TestLocalThreadErrorBesideAnAnswerReachesTheStatusBar(test *testing.T) {
+	session := newThreadSession(test, &recordingRunner{effects: []plugins.Effect{
+		{Name: plugins.EffectAnswer, Text: "Fine."},
+		{Name: plugins.EffectError, Text: "rate limited\x1b[2J"},
+	}})
+	session.ask()
+	if got := session.status(); !strings.HasSuffix(got, "rate limited [2J") {
+		test.Errorf("status = %q, want the error", got)
+	}
+	if got := session.localThreads()[0]; got.Local != github.LocalAnswered {
+		test.Errorf("thread state = %d, want answered", got.Local)
+	}
+	// With no answer the thread has the error, and the status bar does not.
+	other := newThreadSession(test, &recordingRunner{effects: []plugins.Effect{{Name: plugins.EffectError, Text: "no model"}}})
+	other.ask()
+	if got := other.status(); strings.Contains(got, "no model") {
+		test.Errorf("status = %q, the error is in the thread", got)
+	}
+}
+
+// The waiting line is muted and the failure is in the error style.
+func TestLocalThreadStyles(test *testing.T) {
+	for _, testCase := range []struct {
+		name    string
+		effects []plugins.Effect
+		deliver bool
+		text    string
+		style   func(activeTheme theme.Theme) lipgloss.Style
+	}{
+		{"waiting", nil, false, "waiting for an answer…", func(activeTheme theme.Theme) lipgloss.Style { return activeTheme.Muted }},
+		{"failed", []plugins.Effect{{Name: plugins.EffectError, Text: "no model"}}, true, "no answer: no model", func(activeTheme theme.Theme) lipgloss.Style { return activeTheme.ErrorText }},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			session := newThreadSession(test, &recordingRunner{effects: testCase.effects})
+			result := session.held("ask why?")
+			if testCase.deliver {
+				session.pump(func() tea.Msg { return result })
+			}
+			want := testCase.style(session.inliner.view.theme).Render(testCase.text)
+			if !strings.Contains(session.model.View().Content, want) {
+				test.Errorf("the line is not drawn with its style: want %q", want)
 			}
 		})
 	}

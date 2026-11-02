@@ -3,6 +3,7 @@ package userinterface
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"strings"
 	"time"
 
@@ -255,9 +256,13 @@ func (model *Model) pluginResult(message pluginResultMessage) tea.Cmd {
 // Their text is the plugin's, so it is cleaned before the status bar.
 func (model *Model) pluginEffects(host PluginHost, name string, effects []plugins.Effect, inThread bool) tea.Cmd {
 	var commands []tea.Cmd
+	answered := slices.ContainsFunc(effects, func(effect plugins.Effect) bool { return effect.Name == plugins.EffectAnswer })
 	for _, effect := range effects {
-		if inThread && (effect.Name == plugins.EffectAnswer || effect.Name == plugins.EffectError) {
-			continue // the thread shows them
+		// The thread shows the answers, and the error when there is no answer;
+		// an error beside an answer would otherwise be lost, so it also goes
+		// to the status bar.
+		if inThread && (effect.Name == plugins.EffectAnswer || (effect.Name == plugins.EffectError && !answered)) {
+			continue
 		}
 		switch effect.Name {
 		case plugins.EffectNotice, plugins.EffectAnswer: // answers show as notices until they have a place of their own

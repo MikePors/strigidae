@@ -137,17 +137,26 @@ func header(environment Environment, thread github.ReviewThread, width int, opti
 	return ansi.Truncate(line, width, "…")
 }
 
-// localNote draws the last comment of a local thread that has no answer: the
-// waiting line, muted, or why there is none, in the error style. Both are
-// plain text, not Markdown, and the text is the plugin's, so it is cleaned.
-// ok is false for every other comment.
+// localNote draws a comment of a local thread as plain text, not Markdown:
+// the question, exactly as typed; the waiting line, muted; or why there is no
+// answer, in the error style. The text is the user's or the plugin's, so it is
+// cleaned. ok is false for the answer and for every comment of other threads.
 func localNote(activeTheme theme.Theme, thread github.ReviewThread, index, width int) (body string, ok bool) {
-	if index != len(thread.Comments)-1 || (thread.Local != github.LocalWaiting && thread.Local != github.LocalFailed) {
+	if !thread.Local.IsLocal() {
 		return "", false
 	}
-	style := activeTheme.Muted
-	if thread.Local == github.LocalFailed && !thread.IsOutdated {
+	style := activeTheme.Normal
+	switch {
+	case index == 0:
+	case index == len(thread.Comments)-1 && thread.Local == github.LocalWaiting:
+		style = activeTheme.Muted
+	case index == len(thread.Comments)-1 && thread.Local == github.LocalFailed:
 		style = activeTheme.ErrorText
+	default:
+		return "", false
+	}
+	if thread.IsOutdated {
+		style = activeTheme.Muted
 	}
 	const indent = "  " // as the Markdown body of an answer is indented
 	lines := strings.Split(ansi.Wrap(terminaltext.Clean(thread.Comments[index].Body), max(width-len(indent), 1), ""), "\n")
