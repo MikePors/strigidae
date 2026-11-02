@@ -15,10 +15,12 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/MikePors/strigidae/internal/config"
+	"github.com/MikePors/strigidae/internal/diff"
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/github/fake"
 	"github.com/MikePors/strigidae/internal/plugins"
 	"github.com/MikePors/strigidae/internal/userinterface"
+	"github.com/MikePors/strigidae/internal/userinterface/components/diffview"
 	"github.com/MikePors/strigidae/internal/userinterface/components/picker"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
@@ -328,6 +330,41 @@ func TestPluginRequest(test *testing.T) {
 				test.Errorf("request (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+// The "\ No newline at end of file" marker belongs to the line above it and is
+// no line of the excerpt, nor does it count among the lines of margin.
+func TestExcerptLeavesOutTheNoNewlineMarker(test *testing.T) {
+	file := &diff.File{NewPath: "a.txt", Hunks: []diff.Hunk{{Lines: []diff.Line{
+		{Kind: diff.Context, Old: 1, New: 1, Text: "one"},
+		{Kind: diff.Delete, Old: 2, Text: "two"},
+		{Kind: diff.NoNewline, Text: `\ No newline at end of file`},
+		{Kind: diff.Add, New: 2, Text: "TWO"},
+		{Kind: diff.NoNewline, Text: `\ No newline at end of file`},
+	}}}}
+	got, ok := excerptOf(file, diffview.Range{Path: "a.txt", Side: github.SideRight, Start: 2, End: 2})
+	if want := " one\n-two\n+TWO"; !ok || got != want {
+		test.Errorf("excerpt = %q (%v), want %q", got, ok, want)
+	}
+	got, ok = excerptOf(file, diffview.Range{Path: "a.txt", Side: github.SideLeft, Start: 2, End: 2})
+	if want := " one\n-two\n+TWO"; !ok || got != want {
+		test.Errorf("left excerpt = %q (%v), want %q", got, ok, want)
+	}
+}
+
+// Lines the diff does not hold (it was replaced under the cursor) are refused,
+// not sent as an empty excerpt.
+func TestLinesPluginRefusedWhenTheLinesAreNotInTheDiff(test *testing.T) {
+	session := newPluginSession(test, &recordingRunner{})
+	session.inliner.moveTo(github.SideRight, 10)
+	session.inliner.view.diff.Parsed = &diff.Diff{}
+	session.line("ask")
+	if diff := cmp.Diff([]string{"those lines are not in the diff; refresh and try again"}, session.infos); diff != "" {
+		test.Errorf("notices (-want +got):\n%s", diff)
+	}
+	if session.runs() != 0 {
+		test.Error("the plugin ran")
 	}
 }
 

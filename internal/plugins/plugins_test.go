@@ -310,6 +310,25 @@ func TestRunStderrIsBounded(test *testing.T) {
 	}
 }
 
+// The line that was cut is logged before strig's note about the cut.
+func TestRunCutOffNoteComesAfterTheCutLine(test *testing.T) {
+	var log bytes.Buffer
+	runner := New([]config.Plugin{scriptPlugin("p", "stderr-long-line.sh", guard)}, Options{Logger: textLogger(&log)})
+	if _, err := runner.Run(context.Background(), "p", Request{}); err != nil {
+		test.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSuffix(log.String(), "\n"), "\n")
+	if len(lines) != 2 {
+		test.Fatalf("log has %d records, want the cut line and the note:\n%.300s", len(lines), log.String())
+	}
+	if !strings.Contains(lines[0], `msg="plugin standard error" plugin=p line=aaaa`) {
+		test.Errorf("first record = %.120s, want the line that was cut", lines[0])
+	}
+	if !strings.Contains(lines[1], `msg="plugin standard error cut off" plugin=p`) {
+		test.Errorf("second record = %.200s, want the note", lines[1])
+	}
+}
+
 type failingWriter struct{}
 
 func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("no space left on device") }

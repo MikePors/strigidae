@@ -109,7 +109,9 @@ func (model *Model) startPlugin(message RunPluginMessage) tea.Cmd {
 	run := model.pluginSequence
 	model.pluginRuns[run] = pluginRun{identity: message.Identity, name: message.Name}
 	runner, ctx := model.pluginRunner, model.pluginContext
+	model.pluginRunning.Add(1)
 	return func() tea.Msg {
+		defer model.pluginRunning.Done()
 		effects, err := runner.Run(ctx, message.Name, message.Request)
 		return pluginResultMessage{run: run, effects: effects, err: err}
 	}
@@ -194,4 +196,29 @@ func (model *Model) quit() tea.Cmd {
 	model.quitting = true
 	model.pluginCancel()
 	return model.tick(model.pluginQuitWait, func(time.Time) tea.Msg { return quitWaitedMessage{} })
+}
+
+// Close cancels every plugin run and waits for them to end, for at most the
+// quit wait. cmd/strig calls it after the program returns, on every path: an
+// exit that never reaches Update (SIGTERM ends Bubble Tea with a QuitMsg that
+// the model does not see; SIGINT and a failed Run are others) would otherwise
+// leave plugins running, and a plugin has a session of its own. The wait is
+// for the runs to end, not just for the cancel: the kill happens in the
+// runner's goroutine, which strig must not outrun by exiting. The program has
+// returned, so nothing else uses the model; the caller must not use it
+// afterwards.
+func (model *Model) Close() {
+	if model.pluginCancel == nil {
+		return
+	}
+	model.pluginCancel()
+	ended := make(chan struct{})
+	go func() {
+		model.pluginRunning.Wait()
+		close(ended)
+	}()
+	select {
+	case <-ended:
+	case <-time.After(model.pluginQuitWait):
+	}
 }

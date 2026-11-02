@@ -64,7 +64,12 @@ says `not available here: ask`. They have no keys.
 - `target: lines` acts on the diff lines. With the diff pane on screen it uses
   the line under the cursor, or the lines of a `V` selection: press `:` while
   the selection is open (cancelling the command line with `esc` leaves the
-  selection as it was). The selection ends when the plugin takes it. During a selection any other command is refused with `end the selection to run :<name>`, and `:` opens the command line only if a `lines` plugin is configured. Without a
+  selection as it was). The selection ends when the plugin takes it. During a
+  selection the commands of the workspace (the built-ins such as `:resolve`
+  and `:review`, and `pull-request` plugins) are refused with `end the
+  selection to run :<name>`; strig's own `:q`, `:qa`, `:set` and `:theme`
+  still run. `:` opens the command line during a selection only if a `lines`
+  plugin is configured. Without a
   diff line under the cursor the command says `move onto a diff line to run
   :ask`, and in a narrow terminal showing the Files pane, `focus the diff to
   run :ask`. Until the diff has loaded: `diff not loaded`.
@@ -83,6 +88,7 @@ result still shows and `reload` still runs; the request carries the `head` the
 plugin was run at.
 Closing the pull request does not stop a run; quitting strig does: it kills
 the plugin processes, waits at most two seconds for them to end, and exits.
+This holds however strig ends (`:qa`, SIGTERM, SIGINT, or an error).
 
 A plugin runs in a session of its own, so it has no controlling terminal: a
 program that opens `/dev/tty` fails instead of reading your keys or drawing on

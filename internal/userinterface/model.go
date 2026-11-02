@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"charm.land/bubbles/v2/key"
@@ -87,7 +88,8 @@ type Model struct {
 	pluginCancel   context.CancelFunc
 	pluginSequence int
 	pluginRuns     map[int]pluginRun
-	quitting       bool // quit began and is waiting for plugin runs
+	pluginRunning  sync.WaitGroup // runs whose command has not returned; see Close
+	quitting       bool           // quit began and is waiting for plugin runs
 
 	width, height      int
 	matcher            keys.Matcher

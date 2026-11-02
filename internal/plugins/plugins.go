@@ -245,6 +245,7 @@ func (runner *Runner) start(parent, runContext context.Context, plugin config.Pl
 	standardError, flushLog := runner.standardErrorSink(plugin.Command)
 	defer flushLog()
 	command.Stderr = &boundedLog{writer: standardError, remaining: MaximumErrorOutputSize, cutOff: func() {
+		flushLog() // the line that was cut comes before the note about it
 		runner.logger.Warn("plugin standard error cut off", "plugin", plugin.Command, "limit", MaximumErrorOutputSize)
 	}}
 	command.WaitDelay = runner.waitDelay

@@ -191,8 +191,9 @@ func (view *View) hasLinesPlugin() bool {
 	return false
 }
 
-// duringSelection refuses every command but a `lines` plugin's while a line
-// selection is open: anything else could open a chooser or picker under it.
+// duringSelection refuses the commands of the workspace other than a `lines`
+// plugin's while a line selection is open: they could open a chooser or picker
+// under it. The shell's own commands never get here.
 // It returns nil when the command may run.
 func (view *View) duringSelection(chosen actionEntry) tea.Cmd {
 	if !view.visualActive() || (chosen.guard == usePluginLines && chosen.level == levelLines) {

@@ -40,7 +40,7 @@ func runTerminalInterface(application application, stderr io.Writer) error {
 	built, notice := application.buildTheme(logger, askTerminal)
 	application.theme = built
 	model := userinterface.New(firstView(application), application.theme, application.userInterfaceOptions(logger, notice))
-	if _, err := tea.NewProgram(model).Run(); err != nil {
+	if err := runProgram(tea.NewProgram(model), model); err != nil {
 		logger.Error("program failed", "err", err)
 		return fmt.Errorf("run: %w", err)
 	}
@@ -115,4 +115,12 @@ func (application application) timeouts() userinterface.Timeouts {
 func silenceBrowser() {
 	cliBrowser.Stdout = io.Discard
 	cliBrowser.Stderr = io.Discard
+}
+
+// runProgram runs the program and then ends the plugin runs, on every path
+// out of Run: a signal ends Bubble Tea without the model seeing a quit.
+func runProgram(program *tea.Program, model *userinterface.Model) error {
+	_, err := program.Run()
+	model.Close()
+	return err
 }
