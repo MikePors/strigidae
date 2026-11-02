@@ -1,9 +1,11 @@
 package userinterface
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"charm.land/bubbles/v2/key"
@@ -45,6 +47,14 @@ type Options struct {
 	// shell tell a command the top view lacks ("not available here") from a
 	// word that is no command at all.
 	ViewCommands []string
+	// PluginRunner runs the configured plugins; nil when there are none.
+	PluginRunner PluginRunner
+	// PluginCommands are the configured plugins' commands. Views are told
+	// through PluginsMessage; the names must also be in ViewCommands.
+	PluginCommands []PluginCommand
+	// PluginQuitWait is how long quitting waits for plugin runs it has
+	// cancelled; DefaultPluginQuitWait by default.
+	PluginQuitWait time.Duration
 }
 
 // Internal timer messages. The id/gen fields discard timers that were
@@ -69,6 +79,17 @@ type Model struct {
 	themeSequence   int // the latest `:theme` load; older results are ignored
 	options         options.Values
 	viewCommands    []string
+
+	// Plugin runs belong to the root: closing a view does not cancel one.
+	pluginRunner   PluginRunner
+	pluginCommands []PluginCommand
+	pluginQuitWait time.Duration
+	pluginContext  context.Context // made with the first run; cancelled at quit
+	pluginCancel   context.CancelFunc
+	pluginSequence int
+	pluginRuns     map[int]pluginRun
+	pluginRunning  sync.WaitGroup // runs whose command has not returned; see Close
+	quitting       bool           // quit began and is waiting for plugin runs
 
 	width, height      int
 	matcher            keys.Matcher
@@ -110,6 +131,12 @@ func New(root View, activeTheme theme.Theme, startup Options) *Model {
 	if startup.StartingOptions != nil {
 		root, _ = root.Update(OptionsMessage{Values: startup.StartingOptions})
 	}
+	if len(startup.PluginCommands) > 0 {
+		root, _ = root.Update(PluginsMessage{Commands: startup.PluginCommands})
+	}
+	if startup.PluginQuitWait <= 0 {
+		startup.PluginQuitWait = DefaultPluginQuitWait
+	}
 	return &Model{
 		stack:           []View{root},
 		theme:           activeTheme,
@@ -122,6 +149,10 @@ func New(root View, activeTheme theme.Theme, startup Options) *Model {
 		themeLoader:     startup.LoadTheme,
 		options:         startup.StartingOptions,
 		viewCommands:    startup.ViewCommands,
+		pluginRunner:    startup.PluginRunner,
+		pluginCommands:  startup.PluginCommands,
+		pluginQuitWait:  startup.PluginQuitWait,
+		pluginRuns:      map[int]pluginRun{},
 		commandLine:     newCommandLine(activeTheme),
 		spin:            spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(activeTheme.Spinner)),
 	}
@@ -175,6 +206,12 @@ func (model *Model) update(message tea.Msg) tea.Cmd {
 	case PopMessage:
 		return model.pop()
 	case QuitMessage:
+		return model.quit()
+	case RunPluginMessage:
+		return model.startPlugin(message)
+	case pluginResultMessage:
+		return model.pluginResult(message)
+	case quitWaitedMessage:
 		return tea.Quit
 	case ConfirmMessage:
 		model.resetKeys()
@@ -254,13 +291,17 @@ func (model *Model) push(view View) tea.Cmd {
 		view, _ = view.Update(OptionsMessage{Values: model.options})
 		model.stack[len(model.stack)-1] = view
 	}
+	if len(model.pluginCommands) > 0 {
+		view, _ = view.Update(PluginsMessage{Commands: model.pluginCommands})
+		model.stack[len(model.stack)-1] = view
+	}
 	return tea.Batch(view.Init(), model.forward(model.sizeMessage()))
 }
 
 func (model *Model) pop() tea.Cmd {
 	model.resetKeys()
 	if len(model.stack) == 1 {
-		return tea.Quit
+		return model.quit()
 	}
 	model.stack = model.stack[:len(model.stack)-1]
 	model.log.Debug("pop view", "depth", len(model.stack))
@@ -290,7 +331,7 @@ func (model *Model) setStatus(text string, kind statusKind) tea.Cmd {
 // push, pop and view state changes are all covered.
 func (model *Model) syncSpinner() tea.Cmd {
 	loader, ok := model.top().(Loader)
-	want := ok && loader.Loading()
+	want := ok && loader.Loading() || model.pluginActive()
 	switch {
 	case want && !model.spinning:
 		model.spinning = true
@@ -330,6 +371,10 @@ func (model *Model) handleKey(message tea.KeyPressMsg) tea.Cmd {
 		return model.handleHelpKey(message)
 	}
 	if capturer, ok := model.top().(KeyCapturer); ok && capturer.CapturesKeys() {
+		if keeper, ok := model.top().(CommandLineKeeper); ok && keeper.KeepsCommandLine() && key.Matches(message, model.keys.Command) {
+			model.resetKeys()
+			return model.commandLine.open()
+		}
 		model.resetKeys()
 		return model.forward(message)
 	}

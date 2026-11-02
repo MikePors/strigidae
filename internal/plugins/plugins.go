@@ -18,10 +18,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/MikePors/strigidae/internal/config"
@@ -71,12 +73,45 @@ var (
 	ErrInvalidOutput = errors.New("printed a line that is not an effect")
 )
 
-// Request is the JSON object a plugin reads from standard input. The fields
-// that describe what the user is pointing at are defined per target by the
-// slice that registers the commands.
+// Request is the JSON object a plugin reads from standard input.
 type Request struct {
 	// Protocol is set by the Runner; whatever the caller puts here is replaced.
 	Protocol int `json:"protocol"`
+	// Command is the name the user typed, the plugin's command.
+	Command string `json:"command"`
+	// Arguments is the rest of the command line, as one string.
+	Arguments string `json:"arguments"`
+	// Repository is the repository of the pull request.
+	Repository Repository `json:"repository"`
+	// Number is the pull request's number.
+	Number int `json:"number"`
+	// Head is the head commit the pull request had when the user ran the command.
+	Head string `json:"head"`
+	// Target is what the user pointed at. It is absent for a plugin whose
+	// target is the pull request as a whole.
+	Target *Target `json:"target,omitempty"`
+}
+
+// Repository names the repository a request is about.
+type Repository struct {
+	Host  string `json:"host"`
+	Owner string `json:"owner"`
+	Name  string `json:"name"`
+}
+
+// Target is the diff lines a `lines` plugin acts on.
+type Target struct {
+	// Path is the file's path in the pull request.
+	Path string `json:"path"`
+	// Side is "LEFT" for the old file and "RIGHT" for the new one.
+	Side string `json:"side"`
+	// Line is the last line of the selection on Side and StartLine the first;
+	// they are equal for a single line.
+	Line      int `json:"line"`
+	StartLine int `json:"startLine"`
+	// Excerpt is the selected lines with up to three lines of the hunk on each
+	// side, one per line of text, each starting with "+", "-" or a space.
+	Excerpt string `json:"excerpt"`
 }
 
 // Effect is one thing a plugin asked for. Text is empty for effects that have
@@ -94,9 +129,12 @@ type Options struct {
 	// Environment is the environment in os.Environ form. The GitHub token
 	// variables are removed before a plugin sees it.
 	Environment []string
-	// Log receives the plugins' standard error and strig's notes about their
-	// output. Nil discards it. It is never given a request.
-	Log io.Writer
+	// Logger receives the plugins' standard error and strig's notes about
+	// their output. Nil discards it. Each line a plugin prints on standard
+	// error becomes one record with the plugin's name as an attribute, so the
+	// text is quoted by the log handler and cannot pass as a log line of
+	// strig's own. It is never given a request.
+	Logger *slog.Logger
 	// WaitDelay overrides DefaultWaitDelay when positive.
 	WaitDelay time.Duration
 	// Home returns the home directory, for a program written as "~/...". It is
@@ -108,7 +146,7 @@ type Options struct {
 type Runner struct {
 	entries     map[string]*entry
 	environment []string
-	log         io.Writer
+	logger      *slog.Logger
 	waitDelay   time.Duration
 	home        func() (string, error)
 
@@ -128,14 +166,14 @@ func New(plugins []config.Plugin, options Options) *Runner {
 	runner := &Runner{
 		entries:     make(map[string]*entry, len(plugins)),
 		environment: environment.Scrub(options.Environment),
-		log:         &lockedWriter{writer: io.Discard},
+		logger:      slog.New(slog.NewTextHandler(io.Discard, nil)),
 		waitDelay:   DefaultWaitDelay,
 		home:        options.Home,
 		queued:      func(string) {},
 		withTimeout: context.WithTimeout,
 	}
-	if options.Log != nil {
-		runner.log = &lockedWriter{writer: options.Log}
+	if options.Logger != nil {
+		runner.logger = options.Logger
 	}
 	if options.WaitDelay > 0 {
 		runner.waitDelay = options.WaitDelay
@@ -147,16 +185,20 @@ func New(plugins []config.Plugin, options Options) *Runner {
 }
 
 // Run runs the plugin called name with the request and returns its effects in
-// the order it printed them. If another run of the same plugin is under way, it
-// waits its turn; cancelling ctx while waiting leaves the queue without
+// the order it printed them. If another run of the same plugin is under way,
+// it waits its turn; cancelling ctx while waiting leaves the queue without
 // running anything. The plugin's timeout starts when the run starts.
 //
 // A run fails, with no effects, if the plugin cannot be started, times out,
 // prints too much or a line that is not an effect, or exits with a failure
 // status. If ctx ends while the plugin runs, the plugin is killed and Run
-// returns ctx.Err(). An error effect is an ordinary effect: a run can return
-// one and succeed. If the plugin exits with a failure status after printing an error
-// effect, the error carries that effect's text.
+// returns ctx.Err(). But a plugin that had already exited 0 when ctx ended has
+// succeeded, so a cancelled caller can still receive effects with a nil
+// error; it must not assume that a cancel means there are none.
+//
+// An error effect is an ordinary effect: a run can return one and succeed. If
+// the plugin exits with a failure status after printing an error effect, the
+// error carries that effect's text.
 func (runner *Runner) Run(ctx context.Context, name string, request Request) ([]Effect, error) {
 	request.Protocol = Protocol
 	body, err := json.Marshal(request)
@@ -200,8 +242,24 @@ func (runner *Runner) start(parent, runContext context.Context, plugin config.Pl
 	// ignores that, and the exit status decides.
 	command.Stdin = bytes.NewReader(body)
 	command.Stdout = output
-	command.Stderr = &boundedLog{writer: runner.log, name: plugin.Command, remaining: MaximumErrorOutputSize}
+	standardError, flushLog := runner.standardErrorSink(plugin.Command)
+	defer flushLog()
+	command.Stderr = &boundedLog{writer: standardError, remaining: MaximumErrorOutputSize, cutOff: func() {
+		flushLog() // the line that was cut comes before the note about it
+		runner.logger.Warn("plugin standard error cut off", "plugin", plugin.Command, "limit", MaximumErrorOutputSize)
+	}}
 	command.WaitDelay = runner.waitDelay
+	detach(command)
+	// Only a kill by strig counts as one: a plugin that crashed on a signal of
+	// its own is a failure, whatever the clock says by the time the wait ends.
+	var cancelKilled atomic.Bool
+	command.Cancel = func() error {
+		err := command.Process.Kill()
+		if err == nil {
+			cancelKilled.Store(true)
+		}
+		return err
+	}
 
 	waitError := command.Run()
 
@@ -209,7 +267,9 @@ func (runner *Runner) start(parent, runContext context.Context, plugin config.Pl
 	switch classify(
 		output.exceeded(),
 		state != nil,
-		state != nil && state.Exited(),
+		// A process that exited on its own, even one not yet reaped when the
+		// kill arrived, was not ended by the kill.
+		cancelKilled.Load() && state != nil && !state.Exited(),
 		state != nil && state.Success(),
 		parent.Err() != nil,
 		runContext.Err() != nil,
@@ -247,18 +307,19 @@ const (
 	endNotStarted
 )
 
-// classify decides how a run ended. Once the plugin has exited by itself
-// (exited), its exit status decides, whatever the contexts say by then: they
-// may have ended while strig waited out WaitDelay for a child holding standard
-// output. A process strig killed has not exited by itself. started is whether
-// the process ran at all.
-func classify(tooLarge, started, exited, succeeded, cancelled, timedOut bool) ending {
+// classify decides how a run ended. Unless strig killed the plugin (killed),
+// its own ending decides, whatever the contexts say by then: they may have
+// ended while strig waited out WaitDelay for a child holding standard output,
+// and a plugin that crashed on a signal of its own was not killed by strig.
+// started is whether the process ran at all.
+func classify(tooLarge, started, killed, succeeded, cancelled, timedOut bool) ending {
+	ended := killed || !started // strig ended the run, or it never began
 	switch {
 	case tooLarge:
 		return endTooLarge
-	case !exited && cancelled:
+	case ended && cancelled:
 		return endCancelled
-	case !exited && timedOut:
+	case ended && timedOut:
 		return endTimedOut
 	case succeeded:
 		return endSucceeded
@@ -323,7 +384,7 @@ func (runner *Runner) parse(name string, output []byte) ([]Effect, error) {
 			return effects, fmt.Errorf("plugin %q: line %d: %w", name, number+1, ErrInvalidOutput)
 		}
 		if !known {
-			_, _ = fmt.Fprintf(runner.log, "plugin %q: skipping unknown effect %q\n", name, effect.Name)
+			runner.skippedEffect(name, effect.Name)
 			continue
 		}
 		effects = append(effects, effect)
@@ -472,9 +533,9 @@ func (limited *limitedBuffer) bytes() []byte { return limited.buffer.Bytes() }
 // never get EPIPE from it.
 type boundedLog struct {
 	writer    io.Writer
-	name      string
 	remaining int
 	truncated bool
+	cutOff    func() // logs strig's own note, once
 }
 
 func (bounded *boundedLog) Write(data []byte) (int, error) {
@@ -487,20 +548,7 @@ func (bounded *boundedLog) Write(data []byte) (int, error) {
 	}
 	if len(data) > 0 && !bounded.truncated {
 		bounded.truncated = true
-		_, _ = fmt.Fprintf(bounded.writer, "\nplugin %q: standard error cut off after %d bytes\n", bounded.name, MaximumErrorOutputSize)
+		bounded.cutOff()
 	}
 	return total, nil
-}
-
-// lockedWriter serialises writes: the standard error of several plugins and
-// strig's own notes share one log.
-type lockedWriter struct {
-	mutex  sync.Mutex
-	writer io.Writer
-}
-
-func (locked *lockedWriter) Write(data []byte) (int, error) {
-	locked.mutex.Lock()
-	defer locked.mutex.Unlock()
-	return locked.writer.Write(data)
 }
