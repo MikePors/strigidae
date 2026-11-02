@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -171,18 +172,46 @@ func TestRunEffects(test *testing.T) {
 }
 
 func TestRunWritesProtocolRequest(test *testing.T) {
-	directory := test.TempDir()
-	runner := New([]config.Plugin{scriptPlugin("p", "save-input.sh", guard)}, Options{Environment: baseEnvironment(directory)})
-	// The caller cannot change the version.
-	if _, err := runner.Run(context.Background(), "p", Request{Protocol: 99}); err != nil {
-		test.Fatal(err)
+	linesRequest := Request{
+		Protocol:   99, // the caller cannot change the version
+		Command:    "ask",
+		Arguments:  "why is this <here>?",
+		Repository: Repository{Host: "ghe.example.com", Owner: "acme", Name: "widgets"},
+		Number:     7,
+		Head:       "abc123",
+		Target:     &Target{Path: "a/b.go", Side: "RIGHT", Line: 12, StartLine: 10, Excerpt: " one\n+two\n-three"},
 	}
-	got, err := os.ReadFile(filepath.Join(directory, "input"))
-	if err != nil {
-		test.Fatal(err)
-	}
-	if diff := cmp.Diff(`{"protocol":1}`+"\n", string(got)); diff != "" {
-		test.Errorf("stdin mismatch (-want +got):\n%s", diff)
+	for _, testCase := range []struct {
+		name    string
+		request Request
+		want    string
+	}{
+		{
+			"lines",
+			linesRequest,
+			`{"protocol":1,"command":"ask","arguments":"why is this \u003chere\u003e?","repository":{"host":"ghe.example.com","owner":"acme","name":"widgets"},` +
+				`"number":7,"head":"abc123","target":{"path":"a/b.go","side":"RIGHT","line":12,"startLine":10,"excerpt":" one\n+two\n-three"}}`,
+		},
+		{
+			"pull request has no target",
+			Request{Command: "summarize", Repository: Repository{Host: "github.com", Owner: "acme", Name: "widgets"}, Number: 7, Head: "abc123"},
+			`{"protocol":1,"command":"summarize","arguments":"","repository":{"host":"github.com","owner":"acme","name":"widgets"},"number":7,"head":"abc123"}`,
+		},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			directory := test.TempDir()
+			runner := New([]config.Plugin{scriptPlugin("p", "save-input.sh", guard)}, Options{Environment: baseEnvironment(directory)})
+			if _, err := runner.Run(context.Background(), "p", testCase.request); err != nil {
+				test.Fatal(err)
+			}
+			got, err := os.ReadFile(filepath.Join(directory, "input"))
+			if err != nil {
+				test.Fatal(err)
+			}
+			if diff := cmp.Diff(testCase.want+"\n", string(got)); diff != "" {
+				test.Errorf("stdin mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
@@ -530,7 +559,8 @@ func TestRunPlainReadGetsTheWholeRequest(test *testing.T) {
 	if err != nil {
 		test.Fatal(err)
 	}
-	if diff := cmp.Diff(`{"protocol":1}`, string(got)); diff != "" {
+	want := `{"protocol":1,"command":"","arguments":"","repository":{"host":"","owner":"","name":""},"number":0,"head":""}`
+	if diff := cmp.Diff(want, string(got)); diff != "" {
 		test.Errorf("request read mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -553,29 +583,104 @@ func TestRunExitedWithErrorPastTheTimeout(test *testing.T) {
 func TestClassify(test *testing.T) {
 	for _, testCase := range []struct {
 		name                                                      string
-		tooLarge, started, exited, succeeded, cancelled, timedOut bool
+		tooLarge, started, killed, succeeded, cancelled, timedOut bool
 		want                                                      ending
 	}{
-		{"exit 0", false, true, true, true, false, false, endSucceeded},
-		{"exit 0 as the timeout lands", false, true, true, true, false, true, endSucceeded},
-		{"exit 0 as the caller cancels", false, true, true, true, true, false, endSucceeded},
-		{"exit 1", false, true, true, false, false, false, endFailed},
-		{"exit 1 past the timeout", false, true, true, false, false, true, endFailed},
-		{"exit 1 after a cancel", false, true, true, false, true, false, endFailed},
-		{"killed by the timeout", false, true, false, false, false, true, endTimedOut},
-		{"killed by a cancel", false, true, false, false, true, false, endCancelled},
-		{"cancel and timeout together is a cancel", false, true, false, false, true, true, endCancelled},
+		{"exit 0", false, true, false, true, false, false, endSucceeded},
+		{"exit 0 as the timeout lands", false, true, false, true, false, true, endSucceeded},
+		{"exit 0 as the caller cancels", false, true, false, true, true, false, endSucceeded},
+		{"exit 1", false, true, false, false, false, false, endFailed},
+		{"exit 1 past the timeout", false, true, false, false, false, true, endFailed},
+		{"exit 1 after a cancel", false, true, false, false, true, false, endFailed},
+		{"killed by the timeout", false, true, true, false, false, true, endTimedOut},
+		{"killed by a cancel", false, true, true, false, true, false, endCancelled},
+		{"cancel and timeout together is a cancel", false, true, true, false, true, true, endCancelled},
 		{"crashed by a signal", false, true, false, false, false, false, endFailed},
-		{"too much output beats a context that ended", true, true, false, false, true, true, endTooLarge},
+		{"crashed by a signal past the timeout", false, true, false, false, false, true, endFailed},
+		{"crashed by a signal after a cancel", false, true, false, false, true, false, endFailed},
+		{"too much output beats a context that ended", true, true, true, false, true, true, endTooLarge},
 		{"never started", false, false, false, false, false, false, endNotStarted},
 		{"cancelled before starting", false, false, false, false, true, false, endCancelled},
+		{"timed out before starting", false, false, false, false, false, true, endTimedOut},
 	} {
 		test.Run(testCase.name, func(test *testing.T) {
-			got := classify(testCase.tooLarge, testCase.started, testCase.exited, testCase.succeeded, testCase.cancelled, testCase.timedOut)
+			got := classify(testCase.tooLarge, testCase.started, testCase.killed, testCase.succeeded, testCase.cancelled, testCase.timedOut)
 			if got != testCase.want {
 				test.Errorf("classify = %d, want %d", got, testCase.want)
 			}
 		})
+	}
+}
+
+// The plugin dies on a signal strig did not send, a child holds standard
+// output, and the timeout passes while strig waits out WaitDelay. It crashed;
+// it was not killed for being slow, and its own text is the reason.
+func TestRunCrashedPluginPastTheTimeout(test *testing.T) {
+	directory := test.TempDir()
+	killChild(test, directory)
+	runner := New(
+		[]config.Plugin{scriptPlugin("p", "crash-and-leave-child.sh", 500*time.Millisecond)},
+		Options{Environment: baseEnvironment(directory), WaitDelay: 1500 * time.Millisecond},
+	)
+	result := receive(test, runInBackground(context.Background(), runner, "p", "{}"))
+	if result.err == nil || result.err.Error() != `plugin "p": out of memory` {
+		test.Errorf("error = %v, want the plugin's text", result.err)
+	}
+	if errors.Is(result.err, ErrTimeout) {
+		test.Errorf("error = %v, want a failure and not a timeout", result.err)
+	}
+}
+
+// With a logger, each line of standard error is one record that names the
+// plugin, and nothing the plugin wrote can pass as a record of strig's own or
+// reach a terminal.
+func TestRunStandardErrorGoesThroughTheLogger(test *testing.T) {
+	var log bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&log, nil))
+	runner := New([]config.Plugin{scriptPlugin("p", "hostile-stderr.sh", guard)}, Options{Logger: logger})
+	if _, err := runner.Run(context.Background(), "p", Request{}); err != nil {
+		test.Fatal(err)
+	}
+	if strings.ContainsRune(log.String(), '\x1b') {
+		test.Errorf("log holds a raw escape: %q", log.String())
+	}
+	lines := strings.Split(strings.TrimSuffix(log.String(), "\n"), "\n")
+	if len(lines) != 3 {
+		test.Fatalf("log has %d lines, want one record per line of standard error:\n%s", len(lines), log.String())
+	}
+	for _, line := range lines {
+		if !strings.Contains(line, `msg="plugin standard error" plugin=p line=`) {
+			test.Errorf("record %q does not name the plugin and hold the text as an attribute", line)
+		}
+	}
+	if !strings.Contains(lines[2], `line="no newline at the end"`) {
+		test.Errorf("last record = %q, want the unfinished line", lines[2])
+	}
+}
+
+// The plugin has a session of its own, so it has no controlling terminal.
+func TestRunPluginIsASessionLeader(test *testing.T) {
+	if _, err := exec.LookPath("ps"); err != nil {
+		test.Skip("no ps to read the session from")
+	}
+	runner := New([]config.Plugin{scriptPlugin("p", "session.sh", guard)}, Options{Environment: baseEnvironment(test.TempDir())})
+	effects, err := runner.Run(context.Background(), "p", Request{})
+	if err != nil || len(effects) != 1 {
+		test.Fatalf("Run: effects = %v, err = %v", effects, err)
+	}
+	processText, sessionText, _ := strings.Cut(effects[0].Text, " ")
+	if _, err := strconv.Atoi(sessionText); err != nil {
+		test.Skipf("ps cannot print a session number: %q", effects[0].Text)
+	}
+	if processText != sessionText {
+		test.Errorf("process %s is in session %s, want it to lead its own", processText, sessionText)
+	}
+	own, err := exec.Command("ps", "-o", "sid=", "-p", strconv.Itoa(os.Getpid())).Output()
+	if err != nil {
+		test.Fatal(err)
+	}
+	if sessionText == strings.TrimSpace(string(own)) {
+		test.Errorf("plugin shares strig's session %s", sessionText)
 	}
 }
 
