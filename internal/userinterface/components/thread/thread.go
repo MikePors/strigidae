@@ -74,7 +74,10 @@ func build(environment Environment, thread github.ReviewThread, width int, optio
 		}
 		out = append(out, ansi.Truncate(bar+comment.Header(theme, environment.Now, reviewComment), width, "…"))
 		owner = append(owner, i)
-		body := comment.Body(theme, environment.Markdown, reviewComment, bodyWidth)
+		body, noted := localNote(theme, thread, i, bodyWidth)
+		if !noted {
+			body = comment.Body(theme, environment.Markdown, reviewComment, bodyWidth)
+		}
 		if body == "" {
 			continue
 		}
@@ -112,7 +115,7 @@ func header(environment Environment, thread github.ReviewThread, width int, opti
 	if count != 1 {
 		summary += "s"
 	}
-	if count > 0 {
+	if count > 0 && !thread.Local.IsLocal() { // a local thread has no times
 		summary += " · " + comment.RelativeTime(environment.Now, thread.Comments[count-1].CreatedAt)
 	}
 	parts = append(parts, theme.Muted.Render(summary))
@@ -132,6 +135,26 @@ func header(environment Environment, thread github.ReviewThread, width int, opti
 		}
 	}
 	return ansi.Truncate(line, width, "…")
+}
+
+// localNote draws the last comment of a local thread that has no answer: the
+// waiting line, muted, or why there is none, in the error style. Both are
+// plain text, not Markdown, and the text is the plugin's, so it is cleaned.
+// ok is false for every other comment.
+func localNote(activeTheme theme.Theme, thread github.ReviewThread, index, width int) (body string, ok bool) {
+	if index != len(thread.Comments)-1 || (thread.Local != github.LocalWaiting && thread.Local != github.LocalFailed) {
+		return "", false
+	}
+	style := activeTheme.Muted
+	if thread.Local == github.LocalFailed && !thread.IsOutdated {
+		style = activeTheme.ErrorText
+	}
+	const indent = "  " // as the Markdown body of an answer is indented
+	lines := strings.Split(ansi.Wrap(terminaltext.Clean(thread.Comments[index].Body), max(width-len(indent), 1), ""), "\n")
+	for i, line := range lines {
+		lines[i] = indent + style.Render(line)
+	}
+	return strings.Join(lines, "\n"), true
 }
 
 func location(thread github.ReviewThread) string {

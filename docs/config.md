@@ -71,7 +71,9 @@ empty `timeouts:` (use `{}` or leave the key out). There is no `:set` for these.
 
 Optional. Commands that run a program of your own, each with a `command` name
 (a plain word), an `on_run` list (the program and its arguments), a `target`
-(`lines` or `pull-request`) and an optional `timeout` (default `60s`).
+(`lines` or `pull-request`), an optional `show` (`thread`, only with
+`target: lines`: the answer is drawn in the diff as a local thread, see
+[plugins.md](plugins.md)) and an optional `timeout` (default `60s`).
 Command names must be unique. Plugins are read only from this file, never from
 a repository.
 

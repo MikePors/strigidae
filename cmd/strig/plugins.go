@@ -39,7 +39,7 @@ func (application application) pluginOptions(logger *slog.Logger) (runner userin
 		return nil, nil, nil
 	}
 	for _, plugin := range application.config.Plugins {
-		commands = append(commands, userinterface.PluginCommand{Name: plugin.Command, Target: plugin.Target})
+		commands = append(commands, userinterface.PluginCommand{Name: plugin.Command, Target: plugin.Target, Show: plugin.Show})
 		names = append(names, plugin.Command)
 	}
 	runner = plugins.New(application.config.Plugins, plugins.Options{

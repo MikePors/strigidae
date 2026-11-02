@@ -33,6 +33,14 @@ func TestParsePlugins(test *testing.T) {
 			[]Plugin{{Command: "summarize", OnRun: []string{"summarizer"}, Target: TargetPullRequest, Timeout: 60 * time.Second, Line: 2}},
 		},
 		{
+			"show thread",
+			"plugins:\n  - {command: ask, on_run: [x], target: lines, show: thread}\n  - {command: plain, on_run: [y], target: lines}\n",
+			[]Plugin{
+				{Command: "ask", OnRun: []string{"x"}, Target: TargetLines, Show: ShowThread, Timeout: DefaultPluginTimeout, Line: 2},
+				{Command: "plain", OnRun: []string{"y"}, Target: TargetLines, Timeout: DefaultPluginTimeout, Line: 3},
+			},
+		},
+		{
 			"two plugins keep file order",
 			"plugins:\n  - {command: b-2, on_run: [x], target: lines}\n  - {command: A1, on_run: [y, '1'], target: lines}\n",
 			[]Plugin{
@@ -96,7 +104,11 @@ func TestParsePluginErrors(test *testing.T) {
 		{"zero timeout", "plugins:\n  - {command: ask, on_run: [x], target: lines, timeout: 0s}\n", "c.yml:2: plugin timeout must be a positive duration such as 10s or 1m30s"},
 		{"timeout without unit", "plugins:\n  - {command: ask, on_run: [x], target: lines, timeout: 30}\n", "c.yml:2: plugin timeout must be a positive duration such as 10s or 1m30s"},
 		{"negative timeout", "plugins:\n  - {command: ask, on_run: [x], target: lines, timeout: -1m}\n", "c.yml:2: plugin timeout must be a positive duration such as 10s or 1m30s"},
-		{"unknown key", "plugins:\n  - {command: ask, on_run: [x], target: lines, show: inline}\n", `c.yml:2: unknown key "show" in a plugin (valid keys: command, on_run, target, timeout)`},
+		{"unknown key", "plugins:\n  - {command: ask, on_run: [x], target: lines, display: inline}\n", `c.yml:2: unknown key "display" in a plugin (valid keys: command, on_run, target, show, timeout)`},
+		{"show value unknown", "plugins:\n  - {command: ask, on_run: [x], target: lines, show: inline}\n", `c.yml:2: show "inline" is not one of: thread`},
+		{"show is a list", "plugins:\n  - {command: ask, on_run: [x], target: lines, show: [thread]}\n", "c.yml:2: show must be a non-empty text value"},
+		{"show needs lines", "plugins:\n  - {command: ask, on_run: [x], target: pull-request, show: thread}\n", `c.yml:2: plugin "ask": show thread needs target lines`},
+		{"show on the second plugin is located there", "plugins:\n  - {command: a, on_run: [x], target: lines, show: thread}\n  - {command: b,\n    on_run: [x],\n    target: pull-request,\n    show: thread}\n", `c.yml:6: plugin "b": show thread needs target lines`},
 		{"duplicate key", "plugins:\n  - {command: ask, command: b, on_run: [x], target: lines}\n", `c.yml:2: duplicate key "command" in a plugin`},
 	} {
 		test.Run(testCase.name, func(test *testing.T) {

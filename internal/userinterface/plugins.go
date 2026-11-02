@@ -3,6 +3,7 @@ package userinterface
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -28,6 +29,8 @@ type PluginRunner interface {
 type PluginCommand struct {
 	Name   string
 	Target config.Target
+	// Show is where the answer is drawn; empty is the status bar.
+	Show config.Show
 }
 
 // PluginsMessage tells views which plugin commands exist. Like OptionsMessage,
@@ -84,6 +87,8 @@ type CommandLineKeeper interface {
 type pluginRun struct {
 	identity PullRequestIdentity
 	name     string
+	// thread is the local thread the run fills, or "" when it has none.
+	thread string
 }
 
 type (
@@ -107,14 +112,84 @@ func (model *Model) startPlugin(message RunPluginMessage) tea.Cmd {
 	}
 	model.pluginSequence++
 	run := model.pluginSequence
-	model.pluginRuns[run] = pluginRun{identity: message.Identity, name: message.Name}
+	started := pluginRun{identity: message.Identity, name: message.Name}
+	var shown tea.Cmd
+	if model.showsThread(message.Name) && message.Request.Target != nil {
+		started.thread = model.askLocalThread(message)
+		shown = model.broadcast(LocalThreadsMessage{Threads: model.localThreads.snapshot()})
+	}
+	model.pluginRuns[run] = started
 	runner, ctx := model.pluginRunner, model.pluginContext
 	model.pluginRunning.Add(1)
-	return func() tea.Msg {
+	return tea.Batch(shown, func() tea.Msg {
 		defer model.pluginRunning.Done()
 		effects, err := runner.Run(ctx, message.Name, message.Request)
 		return pluginResultMessage{run: run, effects: effects, err: err}
+	})
+}
+
+// showsThread reports whether the plugin draws its answer as a local thread.
+func (model *Model) showsThread(name string) bool {
+	for _, command := range model.pluginCommands {
+		if command.Name == name {
+			return command.Show == config.ShowThread
+		}
 	}
+	return false
+}
+
+// askLocalThread adds the thread a run will fill, at once, so it shows even
+// while the run waits its turn. The question is the arguments, or the command
+// alone when there are none.
+func (model *Model) askLocalThread(message RunPluginMessage) string {
+	target := message.Request.Target
+	question := message.Request.Arguments
+	if question == "" {
+		question = ":" + message.Name
+	}
+	return model.localThreads.add(LocalThread{
+		Repository: message.Identity.Repository,
+		Number:     message.Identity.Number,
+		Head:       message.Request.Head,
+		Path:       target.Path,
+		Side:       github.DiffSide(target.Side),
+		Line:       target.Line,
+		StartLine:  target.StartLine,
+		Question:   question,
+		State:      github.LocalWaiting,
+	})
+}
+
+// finishLocalThread fills the thread of a finished run: the answers joined by
+// a blank line, or why there is none. An error effect with no answer is the
+// reason; a run that printed neither says so. The status bar is left alone: the thread is
+// where the outcome shows.
+func (model *Model) finishLocalThread(identifier string, message pluginResultMessage) tea.Cmd {
+	state, text := github.LocalFailed, ""
+	var answers []string
+	var failure string
+	for _, effect := range message.effects {
+		switch effect.Name {
+		case plugins.EffectAnswer:
+			answers = append(answers, effect.Text)
+		case plugins.EffectError:
+			if failure == "" {
+				failure = effect.Text
+			}
+		}
+	}
+	switch {
+	case message.err != nil && len(answers) == 0:
+		text = message.err.Error()
+	case len(answers) > 0:
+		state, text = github.LocalAnswered, strings.Join(answers, "\n\n")
+	case failure != "":
+		text = failure
+	default:
+		text = "the plugin gave no answer"
+	}
+	model.localThreads.finish(identifier, state, text)
+	return model.broadcast(LocalThreadsMessage{Threads: model.localThreads.snapshot()})
 }
 
 // pluginActive reports whether a run of the pull request the top view shows
@@ -141,6 +216,12 @@ func (model *Model) pluginActive() bool {
 func (model *Model) pluginResult(message pluginResultMessage) tea.Cmd {
 	finished := model.pluginRuns[message.run]
 	delete(model.pluginRuns, message.run)
+	var filled tea.Cmd
+	if finished.thread != "" && !model.quitting {
+		// The thread is in the store whatever is on screen, so an answer that
+		// comes while its pull request is closed is there when it reopens.
+		filled = model.finishLocalThread(finished.thread, message)
+	}
 	if model.quitting {
 		// Nothing arriving after quit began is shown. The last run to end
 		// lets strig go before the wait is over.
@@ -158,20 +239,26 @@ func (model *Model) pluginResult(message pluginResultMessage) tea.Cmd {
 	}
 	if !ok {
 		model.log.Info("plugin result dropped: its pull request is not on screen", "plugin", finished.name, "number", finished.identity.Number)
-		return nil
+		return filled
 	}
 	if message.err != nil {
 		model.log.Warn("plugin failed", "plugin", finished.name, "err", message.err)
+		if finished.thread != "" {
+			return filled
+		}
 		return model.setStatus(terminaltext.Clean(message.err.Error()), statusError)
 	}
-	return model.pluginEffects(host, finished.name, message.effects)
+	return tea.Batch(filled, model.pluginEffects(host, finished.name, message.effects, finished.thread != ""))
 }
 
 // pluginEffects applies the effects in the order the plugin printed them.
 // Their text is the plugin's, so it is cleaned before the status bar.
-func (model *Model) pluginEffects(host PluginHost, name string, effects []plugins.Effect) tea.Cmd {
+func (model *Model) pluginEffects(host PluginHost, name string, effects []plugins.Effect, inThread bool) tea.Cmd {
 	var commands []tea.Cmd
 	for _, effect := range effects {
+		if inThread && (effect.Name == plugins.EffectAnswer || effect.Name == plugins.EffectError) {
+			continue // the thread shows them
+		}
 		switch effect.Name {
 		case plugins.EffectNotice, plugins.EffectAnswer: // answers show as notices until they have a place of their own
 			commands = append(commands, model.setStatus(terminaltext.Clean(effect.Text), statusInfo))

@@ -26,6 +26,18 @@ const (
 
 var targetNames = []string{string(TargetLines), string(TargetPullRequest)}
 
+// Show is where a plugin's answer is shown, besides the status bar.
+type Show string
+
+// Supported plugin show values.
+const (
+	// ShowThread draws the question and the answer as a local thread on the
+	// asked lines. It needs TargetLines.
+	ShowThread Show = "thread"
+)
+
+var showNames = []string{string(ShowThread)}
+
 // commandName is a plain word starting with a letter: it becomes a `:command`, so it holds no
 // spaces or punctuation.
 var commandName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9-]*$`)
@@ -38,6 +50,9 @@ type Plugin struct {
 	// OnRun is the program and its arguments, started once per run.
 	OnRun  []string
 	Target Target
+	// Show, if set, is where the answer is drawn; empty keeps it in the
+	// status bar.
+	Show Show
 	// Timeout bounds one run, from the moment it starts.
 	Timeout time.Duration
 	// Line is the line of the command in the file, for errors about it found
@@ -51,6 +66,7 @@ func (parser *parser) plugins(node *yaml.Node, config *Config) {
 
 func (parser *parser) plugin(node *yaml.Node) (Plugin, string) {
 	plugin := Plugin{Timeout: DefaultPluginTimeout}
+	var showNode *yaml.Node
 	parser.mapping(node, "a plugin", func(key string, node *yaml.Node) {
 		switch key {
 		case "command":
@@ -65,10 +81,12 @@ func (parser *parser) plugin(node *yaml.Node) (Plugin, string) {
 			}
 		case "target":
 			plugin.Target = Target(parser.oneOf(node, "target", targetNames))
+		case "show":
+			plugin.Show, showNode = Show(parser.oneOf(node, "show", showNames)), node
 		case "timeout":
 			plugin.Timeout = parser.duration(node, "plugin timeout")
 		}
-	}, []string{"command", "on_run", "target", "timeout"})
+	}, []string{"command", "on_run", "target", "show", "timeout"})
 	if parser.err == nil && plugin.Command == "" {
 		parser.fail(node, "plugin is missing a command")
 	}
@@ -77,6 +95,9 @@ func (parser *parser) plugin(node *yaml.Node) (Plugin, string) {
 	}
 	if parser.err == nil && plugin.Target == "" {
 		parser.fail(node, "plugin %q is missing a target", plugin.Command)
+	}
+	if parser.err == nil && plugin.Show != "" && plugin.Target != TargetLines {
+		parser.fail(showNode, "plugin %q: show %s needs target lines", plugin.Command, plugin.Show)
 	}
 	return plugin, plugin.Command
 }
