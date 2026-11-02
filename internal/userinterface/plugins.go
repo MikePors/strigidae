@@ -36,12 +36,20 @@ type PluginCommand struct {
 type PluginsMessage struct{ Commands []PluginCommand }
 
 // PullRequestIdentity names a pull request at one head commit. It is carried
-// by a plugin run and compared with the pull request on screen when the run
-// ends, so a result is shown only where it belongs.
+// by a plugin run and compared (repository and number) with the pull request
+// on screen when the run ends, so a result is shown only where it belongs.
 type PullRequestIdentity struct {
 	Repository github.Repository
 	Number     int
 	Head       string
+}
+
+// SamePullRequest reports whether both name the same pull request, whatever
+// their heads. Result routing and the spinner both use it, so they agree: a
+// new commit during a run does not hide its result, and the plugin has the
+// head it was run at in its request.
+func (identity PullRequestIdentity) SamePullRequest(other PullRequestIdentity) bool {
+	return identity.Repository == other.Repository && identity.Number == other.Number
 }
 
 // RunPluginMessage asks the root to run a plugin. Runs belong to the root,
@@ -119,7 +127,7 @@ func (model *Model) pluginActive() bool {
 		return false
 	}
 	for _, run := range model.pluginRuns {
-		if run.identity.Repository == shown.Repository && run.identity.Number == shown.Number {
+		if run.identity.SamePullRequest(shown) {
 			return true
 		}
 	}
@@ -143,7 +151,7 @@ func (model *Model) pluginResult(message pluginResultMessage) tea.Cmd {
 	if ok {
 		var shown PullRequestIdentity
 		if shown, ok = host.PullRequestIdentity(); ok {
-			ok = shown == finished.identity
+			ok = shown.SamePullRequest(finished.identity)
 		}
 	}
 	if !ok {

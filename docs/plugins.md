@@ -64,7 +64,7 @@ says `not available here: ask`. They have no keys.
 - `target: lines` acts on the diff lines. With the diff pane on screen it uses
   the line under the cursor, or the lines of a `V` selection: press `:` while
   the selection is open (cancelling the command line with `esc` leaves the
-  selection as it was). The selection ends when the plugin takes it. Without a
+  selection as it was). The selection ends when the plugin takes it. During a selection any other command is refused with `end the selection to run :<name>`, and `:` opens the command line only if a `lines` plugin is configured. Without a
   diff line under the cursor the command says `move onto a diff line to run
   :ask`, and in a narrow terminal showing the Files pane, `focus the diff to
   run :ask`. Until the diff has loaded: `diff not loaded`.
@@ -77,8 +77,10 @@ another run of the same plugin, the status bar shows its usual spinner. What
 the plugin prints appears in the status bar when it finishes: a `notice` as
 information, an `error` (and a failed run) as an error, and an `answer` as a
 notice for now. A result belongs to the pull request it was asked from: if that
-pull request is no longer the one on screen (the view was closed, or the head
-commit changed since), the result is dropped and only noted in the log.
+pull request (repository and number) is no longer the one on screen, the result
+is dropped and only noted in the log. A new head commit does not drop it: the
+result still shows and `reload` still runs; the request carries the `head` the
+plugin was run at.
 Closing the pull request does not stop a run; quitting strig does: it kills
 the plugin processes, waits at most two seconds for them to end, and exits.
 
@@ -186,7 +188,11 @@ fails.
 
 Only the program strig started is killed. Anything it started in turn keeps
 running, so a plugin that wants to leave a helper running (a daemon, a
-background session) can.
+background session) can. That also means a child the plugin started outlives
+it when strig quits or kills it (a shell script that runs `sleep 30` and exits
+leaves the `sleep`; use `exec sleep 30` to have the program itself be killed).
+Because the plugin has a session of its own, closing the terminal (SIGHUP) does
+not stop a running plugin either.
 
 ## One run at a time
 

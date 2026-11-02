@@ -129,13 +129,11 @@ type Options struct {
 	// Environment is the environment in os.Environ form. The GitHub token
 	// variables are removed before a plugin sees it.
 	Environment []string
-	// Log receives the plugins' standard error and strig's notes about their
-	// output. Nil discards it. It is never given a request.
-	Log io.Writer
-	// Logger, if set, is used instead of Log: each line a plugin prints on
-	// standard error becomes one record with the plugin's name as an attribute,
-	// so the text is quoted by the log handler and cannot pass as a log line
-	// of strig's own. It is never given a request.
+	// Logger receives the plugins' standard error and strig's notes about
+	// their output. Nil discards it. Each line a plugin prints on standard
+	// error becomes one record with the plugin's name as an attribute, so the
+	// text is quoted by the log handler and cannot pass as a log line of
+	// strig's own. It is never given a request.
 	Logger *slog.Logger
 	// WaitDelay overrides DefaultWaitDelay when positive.
 	WaitDelay time.Duration
@@ -148,7 +146,6 @@ type Options struct {
 type Runner struct {
 	entries     map[string]*entry
 	environment []string
-	log         io.Writer
 	logger      *slog.Logger
 	waitDelay   time.Duration
 	home        func() (string, error)
@@ -169,16 +166,15 @@ func New(plugins []config.Plugin, options Options) *Runner {
 	runner := &Runner{
 		entries:     make(map[string]*entry, len(plugins)),
 		environment: environment.Scrub(options.Environment),
-		log:         &lockedWriter{writer: io.Discard},
+		logger:      slog.New(slog.NewTextHandler(io.Discard, nil)),
 		waitDelay:   DefaultWaitDelay,
 		home:        options.Home,
 		queued:      func(string) {},
 		withTimeout: context.WithTimeout,
 	}
-	if options.Log != nil {
-		runner.log = &lockedWriter{writer: options.Log}
+	if options.Logger != nil {
+		runner.logger = options.Logger
 	}
-	runner.logger = options.Logger
 	if options.WaitDelay > 0 {
 		runner.waitDelay = options.WaitDelay
 	}
@@ -248,7 +244,9 @@ func (runner *Runner) start(parent, runContext context.Context, plugin config.Pl
 	command.Stdout = output
 	standardError, flushLog := runner.standardErrorSink(plugin.Command)
 	defer flushLog()
-	command.Stderr = &boundedLog{writer: standardError, name: plugin.Command, remaining: MaximumErrorOutputSize}
+	command.Stderr = &boundedLog{writer: standardError, remaining: MaximumErrorOutputSize, cutOff: func() {
+		runner.logger.Warn("plugin standard error cut off", "plugin", plugin.Command, "limit", MaximumErrorOutputSize)
+	}}
 	command.WaitDelay = runner.waitDelay
 	detach(command)
 	// Only a kill by strig counts as one: a plugin that crashed on a signal of
@@ -534,9 +532,9 @@ func (limited *limitedBuffer) bytes() []byte { return limited.buffer.Bytes() }
 // never get EPIPE from it.
 type boundedLog struct {
 	writer    io.Writer
-	name      string
 	remaining int
 	truncated bool
+	cutOff    func() // logs strig's own note, once
 }
 
 func (bounded *boundedLog) Write(data []byte) (int, error) {
@@ -549,20 +547,7 @@ func (bounded *boundedLog) Write(data []byte) (int, error) {
 	}
 	if len(data) > 0 && !bounded.truncated {
 		bounded.truncated = true
-		_, _ = fmt.Fprintf(bounded.writer, "\nplugin %q: standard error cut off after %d bytes\n", bounded.name, MaximumErrorOutputSize)
+		bounded.cutOff()
 	}
 	return total, nil
-}
-
-// lockedWriter serialises writes: the standard error of several plugins and
-// strig's own notes share one log.
-type lockedWriter struct {
-	mutex  sync.Mutex
-	writer io.Writer
-}
-
-func (locked *lockedWriter) Write(data []byte) (int, error) {
-	locked.mutex.Lock()
-	defer locked.mutex.Unlock()
-	return locked.writer.Write(data)
 }

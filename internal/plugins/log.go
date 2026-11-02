@@ -2,7 +2,6 @@ package plugins
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"log/slog"
 )
@@ -10,20 +9,13 @@ import (
 // standardErrorSink is where one run's standard error goes, and the function
 // that ends it (a last line without a newline is written then).
 func (runner *Runner) standardErrorSink(name string) (io.Writer, func()) {
-	if runner.logger == nil {
-		return runner.log, func() {}
-	}
 	lines := &lineLog{logger: runner.logger.With("plugin", name)}
 	return lines, lines.flush
 }
 
 // skippedEffect notes an effect name this version does not have.
 func (runner *Runner) skippedEffect(name, effect string) {
-	if runner.logger != nil {
-		runner.logger.Info("plugin printed an effect strig does not know; skipped", "plugin", name, "effect", effect)
-		return
-	}
-	_, _ = fmt.Fprintf(runner.log, "plugin %q: skipping unknown effect %q\n", name, effect)
+	runner.logger.Info("plugin printed an effect strig does not know; skipped", "plugin", name, "effect", effect)
 }
 
 // lineLog turns what a plugin writes into one log record per line. The text

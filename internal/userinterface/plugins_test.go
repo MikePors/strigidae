@@ -200,7 +200,7 @@ func TestPluginResultGoesToTheRightPullRequest(test *testing.T) {
 		{"same pull request", pullRequestSeven, false, true},
 		{"another number", other, false, false},
 		{"another repository, same number", otherRepository, false, false},
-		{"the head moved on", newHead, false, false},
+		{"the head moved on: the result still shows", newHead, false, true},
 		{"the view was closed", pullRequestSeven, true, false},
 	} {
 		test.Run(testCase.name, func(test *testing.T) {
@@ -265,6 +265,23 @@ func TestPluginSpinner(test *testing.T) {
 	step(model, second())
 	if model.spinning || model.bar().spinner != "" {
 		test.Error("the spinner is still on after the last run ended")
+	}
+}
+
+// A new commit during a run changes neither the spinner nor where the result
+// goes: both follow the same identity.
+func TestSpinnerAndResultAgreeWhenTheHeadMoves(test *testing.T) {
+	root := newPullRequestView(pullRequestSeven)
+	model, _ := pluginModel(test, &fakeRunner{effects: []plugins.Effect{{Name: plugins.EffectNotice, Text: "done"}, {Name: plugins.EffectReload}}}, root)
+	command := startRun(model, pullRequestSeven)
+	root.identity.Head = "def"
+	step(model, tea.WindowSizeMsg{Width: 60, Height: 12}) // any message makes the model re-evaluate the spinner
+	if !model.spinning {
+		test.Error("the spinner stopped when the head moved")
+	}
+	step(model, command())
+	if model.status.text != "done" || root.reloads != 1 {
+		test.Errorf("status %q, reloads %d: the result was dropped for a new head", model.status.text, root.reloads)
 	}
 }
 

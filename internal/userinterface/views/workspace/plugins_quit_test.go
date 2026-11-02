@@ -30,7 +30,8 @@ const guard = 20 * time.Second
 type slowPlugin struct {
 	ready, count string
 	runner       *plugins.Runner
-	process      int // the last process number the plugin reported
+	process      int  // the last process number the plugin reported
+	ended        bool // the test has seen the run end, so the number is no longer its own
 }
 
 func newSlowPlugin(test *testing.T) *slowPlugin {
@@ -50,8 +51,11 @@ func newSlowPlugin(test *testing.T) *slowPlugin {
 		plugins.Options{Environment: []string{"PATH=" + os.Getenv("PATH"), "COUNT_FILE=" + slow.count, "READY=" + slow.ready}},
 	)
 	test.Cleanup(func() {
-		if slow.process > 0 {
-			_ = syscall.Kill(slow.process, syscall.SIGKILL) // never leave a sleeper behind
+		// Only a process the test still knows is alive: once Run has returned
+		// the runner has killed and reaped it, and the number may be someone
+		// else's.
+		if slow.process > 0 && !slow.ended {
+			_ = syscall.Kill(slow.process, syscall.SIGKILL)
 		}
 	})
 	return slow
@@ -170,6 +174,7 @@ func TestQuitDuringARunKillsItAndSkipsTheQueue(test *testing.T) {
 	for range 2 {
 		session.pump(func() tea.Msg { return receiveResult(test, results) })
 	}
+	slow.ended = true
 	if !session.quit {
 		test.Error("strig did not quit once the cancelled runs ended")
 	}
@@ -205,6 +210,7 @@ func TestClosingThePullRequestKeepsTheRunGoing(test *testing.T) {
 	}
 	session.line("qa")
 	session.pump(func() tea.Msg { return receiveResult(test, results) })
+	slow.ended = true
 	if !session.quit || alive(processIdentifier) {
 		test.Errorf("quit = %v, plugin alive = %v", session.quit, alive(processIdentifier))
 	}

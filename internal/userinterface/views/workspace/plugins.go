@@ -176,7 +176,27 @@ func (view *View) PullRequestIdentity() (userinterface.PullRequestIdentity, bool
 func (view *View) Reload() tea.Cmd { return view.load() }
 
 // KeepsCommandLine implements userinterface.CommandLineKeeper: ":" opens the
-// command line during a line selection, so a `lines` plugin can use it.
+// command line during a line selection, so a `lines` plugin can use it. With
+// no such plugin configured the selection ignores ":" as it always did.
 func (view *View) KeepsCommandLine() bool {
-	return view.visualActive() && view.picker == nil && view.review.chooser == nil
+	return view.visualActive() && view.picker == nil && view.review.chooser == nil && view.hasLinesPlugin()
+}
+
+func (view *View) hasLinesPlugin() bool {
+	for _, command := range view.pluginCommands {
+		if command.Target == config.TargetLines {
+			return true
+		}
+	}
+	return false
+}
+
+// duringSelection refuses every command but a `lines` plugin's while a line
+// selection is open: anything else could open a chooser or picker under it.
+// It returns nil when the command may run.
+func (view *View) duringSelection(chosen actionEntry) tea.Cmd {
+	if !view.visualActive() || (chosen.guard == usePluginLines && chosen.level == levelLines) {
+		return nil
+	}
+	return userinterface.Info("end the selection to run :" + chosen.Command)
 }

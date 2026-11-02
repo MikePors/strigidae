@@ -3,7 +3,6 @@ package workspace
 import (
 	"context"
 	"errors"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +19,7 @@ import (
 	"github.com/MikePors/strigidae/internal/github/fake"
 	"github.com/MikePors/strigidae/internal/plugins"
 	"github.com/MikePors/strigidae/internal/userinterface"
+	"github.com/MikePors/strigidae/internal/userinterface/components/picker"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
@@ -364,17 +364,81 @@ func TestSelectionSurvivesTheCommandLine(test *testing.T) {
 	}
 }
 
-// A built-in typed during a selection still works on the cursor, as before.
-func TestBuiltInDuringASelectionKeepsItsBehaviour(test *testing.T) {
-	session := newPluginSession(test, &recordingRunner{})
-	session.inliner.moveTo(github.SideRight, 17)
-	session.press("V")
-	session.line("resolve")
-	if want := "no comment thread here"; !slices.Contains(session.infos, want) {
-		test.Errorf("notices = %v, want %q", session.infos, want)
+// During a selection only a `lines` plugin runs: anything else is refused, so
+// no chooser or picker can open under a live selection.
+func TestOnlyLinesPluginsRunDuringASelection(test *testing.T) {
+	for _, name := range []string{"review", "resolve", "approve", "merge", "summarize"} {
+		test.Run(name, func(test *testing.T) {
+			runner := &recordingRunner{}
+			session := newPluginSession(test, runner)
+			session.inliner.moveTo(github.SideRight, 17)
+			session.press("V")
+			session.line(name)
+			if diff := cmp.Diff([]string{"end the selection to run :" + name}, session.infos); diff != "" {
+				test.Errorf("notices (-want +got):\n%s", diff)
+			}
+			view := session.inliner.view
+			if !view.visualActive() || view.review.chooser != nil || view.picker != nil || session.runs() != 0 {
+				test.Errorf("selection %v, chooser %v, picker %v, runs %d", view.visualActive(), view.review.chooser != nil, view.picker != nil, session.runs())
+			}
+			if _, asked := session.inliner.lastConfirm(); asked {
+				test.Error("a question was asked")
+			}
+		})
 	}
-	if !session.inliner.view.visualActive() {
-		test.Error("a built-in command ended the selection")
+}
+
+// With no `lines` plugin, ":" in a selection does nothing, as before.
+func TestColonDuringASelectionNeedsALinesPlugin(test *testing.T) {
+	for _, testCase := range []struct {
+		name     string
+		commands []userinterface.PluginCommand
+		opens    bool
+	}{
+		{"no plugins", nil, false},
+		{"only a pull request plugin", []userinterface.PluginCommand{{Name: "summarize", Target: config.TargetPullRequest}}, false},
+		{"a lines plugin", []userinterface.PluginCommand{{Name: "ask", Target: config.TargetLines}}, true},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			session := newPluginSession(test, &recordingRunner{})
+			view := session.inliner.view
+			view.pluginCommands = testCase.commands
+			session.inliner.moveTo(github.SideRight, 14)
+			session.press("V")
+			if got := view.KeepsCommandLine(); got != testCase.opens {
+				test.Fatalf("KeepsCommandLine = %v, want %v", got, testCase.opens)
+			}
+			session.key(":")
+			if opened := session.status() == ":"; opened != testCase.opens {
+				test.Errorf("command line open = %v (status %q), want %v", opened, session.status(), testCase.opens)
+			}
+		})
+	}
+}
+
+// The command line stays closed over the pickers it was always closed over,
+// even during a selection.
+func TestColonStaysClosedOverPickers(test *testing.T) {
+	session := newPluginSession(test, &recordingRunner{})
+	view := session.inliner.view
+	session.inliner.moveTo(github.SideRight, 14)
+	session.press("V")
+	if !view.KeepsCommandLine() {
+		test.Fatal("setup: the command line should open over a plain selection")
+	}
+	view.openPicker()
+	if view.KeepsCommandLine() {
+		test.Error("the command line would open over the file picker")
+	}
+	view.picker = nil
+	view.review.chooser = picker.New(view.theme, "Submit review", []string{"Approve"})
+	if view.KeepsCommandLine() {
+		test.Error("the command line would open over the verdict chooser")
+	}
+	view.review.chooser = nil
+	view.filePane.VisualEnd()
+	if view.KeepsCommandLine() {
+		test.Error("the command line would open with no selection")
 	}
 }
 

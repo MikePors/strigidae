@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -99,7 +100,7 @@ func TestRunEffects(test *testing.T) {
 				`{"name":"future","data":{"x":1}}` + "\n" +
 				`{"name":"notice","data":{"text":"b"}}` + "\n",
 			want:    []Effect{notice("a"), notice("b")},
-			wantLog: `skipping unknown effect "future"`,
+			wantLog: `effect=future`,
 		},
 		{name: "not JSON", output: "hello\n", wantIs: ErrInvalidOutput, wantError: `plugin "p": line 1: printed a line that is not an effect`},
 		{
@@ -145,7 +146,7 @@ func TestRunEffects(test *testing.T) {
 				[]config.Plugin{scriptPlugin("p", "emit.sh", guard)},
 				Options{
 					Environment: baseEnvironment(test.TempDir(), "FAKE_OUTPUT="+testCase.output, "FAKE_EXIT="+strconv.Itoa(testCase.exit)),
-					Log:         &log,
+					Logger:      textLogger(&log),
 				},
 			)
 			got, err := runner.Run(context.Background(), "p", Request{})
@@ -236,7 +237,7 @@ func TestRunStartFailure(test *testing.T) {
 
 func TestRunStderrGoesToTheLogOnly(test *testing.T) {
 	var log bytes.Buffer
-	runner := New([]config.Plugin{scriptPlugin("p", "noisy-failure.sh", guard)}, Options{Log: &log})
+	runner := New([]config.Plugin{scriptPlugin("p", "noisy-failure.sh", guard)}, Options{Logger: textLogger(&log)})
 	_, err := runner.Run(context.Background(), "p", Request{})
 	if !errors.Is(err, ErrFailed) {
 		test.Fatalf("error = %v, want ErrFailed", err)
@@ -289,7 +290,7 @@ func TestRunOutputLimit(test *testing.T) {
 
 func TestRunStderrIsBounded(test *testing.T) {
 	var log bytes.Buffer
-	runner := New([]config.Plugin{scriptPlugin("p", "stderr-flood.sh", guard)}, Options{Log: &log})
+	runner := New([]config.Plugin{scriptPlugin("p", "stderr-flood.sh", guard)}, Options{Logger: textLogger(&log)})
 	got, err := runner.Run(context.Background(), "p", Request{})
 	if err != nil {
 		test.Fatal(err)
@@ -297,11 +298,15 @@ func TestRunStderrIsBounded(test *testing.T) {
 	if diff := cmp.Diff([]Effect{{Name: EffectNotice, Text: "ok"}}, got); diff != "" {
 		test.Errorf("effects mismatch (-want +got):\n%s", diff)
 	}
-	if log.Len() > MaximumErrorOutputSize+200 {
+	if log.Len() > 4*MaximumErrorOutputSize {
 		test.Errorf("log holds %d bytes, want about %d", log.Len(), MaximumErrorOutputSize)
 	}
-	if strings.Count(log.String(), "standard error cut off") != 1 {
-		test.Errorf("log does not hold exactly one cut-off note")
+	if strings.Count(log.String(), `msg="plugin standard error cut off" plugin=p`) != 1 {
+		test.Errorf("log does not hold exactly one cut-off record of strig's own")
+	}
+	// The note is strig's record, never a line the plugin printed.
+	if strings.Contains(log.String(), `line="plugin`) || strings.Contains(log.String(), `line=\"plugin`) {
+		test.Errorf("the cut-off note was logged as a line of the plugin's standard error")
 	}
 }
 
@@ -310,7 +315,7 @@ type failingWriter struct{}
 func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("no space left on device") }
 
 func TestRunLogFailureDoesNotDecideTheRun(test *testing.T) {
-	runner := New([]config.Plugin{scriptPlugin("p", "stderr-flood.sh", guard)}, Options{Log: failingWriter{}})
+	runner := New([]config.Plugin{scriptPlugin("p", "stderr-flood.sh", guard)}, Options{Logger: textLogger(failingWriter{})})
 	got, err := runner.Run(context.Background(), "p", Request{})
 	if err != nil {
 		test.Fatalf("Run: %v", err)
@@ -695,12 +700,14 @@ func TestRunRelativeHomeIsRefused(test *testing.T) {
 	}
 }
 
-// Two plugins write to one log at once; under -race a missing lock is found.
+func textLogger(writer io.Writer) *slog.Logger { return slog.New(slog.NewTextHandler(writer, nil)) }
+
+// Two plugins write to one log at once; under -race a data race is found.
 func TestRunPluginsShareOneLog(test *testing.T) {
 	var log bytes.Buffer
 	runner := New(
 		[]config.Plugin{scriptPlugin("a", "stderr-flood.sh", guard), scriptPlugin("b", "stderr-flood.sh", guard)},
-		Options{Log: &log},
+		Options{Logger: textLogger(&log)},
 	)
 	first := runInBackground(context.Background(), runner, "a", "{}")
 	second := runInBackground(context.Background(), runner, "b", "{}")
