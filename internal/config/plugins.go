@@ -40,6 +40,9 @@ type Plugin struct {
 	Target Target
 	// Timeout bounds one run, from the moment it starts.
 	Timeout time.Duration
+	// Line is the line of the command in the file, for errors about it found
+	// after parsing (a name that is also a built-in command).
+	Line int
 }
 
 func (parser *parser) plugins(node *yaml.Node, config *Config) {
@@ -51,7 +54,7 @@ func (parser *parser) plugin(node *yaml.Node) (Plugin, string) {
 	parser.mapping(node, "a plugin", func(key string, node *yaml.Node) {
 		switch key {
 		case "command":
-			plugin.Command = parser.stringValue(node, "plugin command")
+			plugin.Command, plugin.Line = parser.stringValue(node, "plugin command"), node.Line
 			if parser.err == nil && !commandName.MatchString(plugin.Command) {
 				parser.fail(node, "plugin command %q must be a plain word (a letter, then letters, digits and hyphens)", plugin.Command)
 			}

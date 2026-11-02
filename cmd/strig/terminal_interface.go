@@ -51,7 +51,12 @@ func runTerminalInterface(application application, stderr io.Writer) error {
 // userInterfaceOptions is what the shell starts with: the logger, the startup
 // notice, and the options the config file set.
 func (application application) userInterfaceOptions(logger *slog.Logger, notice string) userinterface.Options {
-	return userinterface.Options{Logger: logger, Notice: notice, StartingOptions: application.config.Options, ViewCommands: viewCommands()}
+	runner, commands, names := application.pluginOptions(logger)
+	return userinterface.Options{
+		Logger: logger, Notice: notice, StartingOptions: application.config.Options,
+		ViewCommands: append(viewCommands(), names...),
+		PluginRunner: runner, PluginCommands: commands,
+	}
 }
 
 // viewCommands collects the command names every view package declares, so the

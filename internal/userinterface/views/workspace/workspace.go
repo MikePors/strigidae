@@ -127,6 +127,8 @@ type View struct {
 	search  search.State   // over the same rows; Overview never matches
 	options options.Values // the `:set` options, sent by the root
 	focus   pane
+	// pluginCommands are the configured plugins' commands, sent by the root.
+	pluginCommands []userinterface.PluginCommand
 	// searchPane is the pane the search being typed belongs to; the prompt's
 	// results go to it.
 	searchPane pane
@@ -157,6 +159,9 @@ var (
 	_ userinterface.KeyCapturer = (*View)(nil)
 	_ userinterface.Commander   = (*View)(nil)
 	_ userinterface.Prompter    = (*View)(nil)
+
+	_ userinterface.PluginHost        = (*View)(nil)
+	_ userinterface.CommandLineKeeper = (*View)(nil)
 )
 
 // New returns the workspace for pull request number in repository.
@@ -258,6 +263,8 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		view.filePane.SetRelativeNumber(message.Values.RelativeNumber())
 		view.filePane.SetHighlightSearch(message.Values.HighlightSearch())
 		view.optionsChanged()
+	case userinterface.PluginsMessage:
+		view.pluginCommands = message.Commands
 	case userinterface.ThemeMessage:
 		view.theme = message.Theme
 		view.markdownRenderer = markdown.New(view.theme)

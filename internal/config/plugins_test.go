@@ -17,27 +17,27 @@ func TestParsePlugins(test *testing.T) {
 		{
 			"all keys",
 			"plugins:\n  - command: ask\n    on_run: [strig-ask, --fast, '']\n    target: lines\n    timeout: 2m\n",
-			[]Plugin{{Command: "ask", OnRun: []string{"strig-ask", "--fast", ""}, Target: TargetLines, Timeout: 2 * time.Minute}},
+			[]Plugin{{Command: "ask", OnRun: []string{"strig-ask", "--fast", ""}, Target: TargetLines, Timeout: 2 * time.Minute, Line: 2}},
 		},
 		{
 			"absolute and home programs, relative arguments",
 			"plugins:\n  - {command: a, on_run: [/usr/bin/ask, scripts/x, ./y], target: lines}\n  - {command: b, on_run: ['~/bin/ask'], target: lines}\n",
 			[]Plugin{
-				{Command: "a", OnRun: []string{"/usr/bin/ask", "scripts/x", "./y"}, Target: TargetLines, Timeout: DefaultPluginTimeout},
-				{Command: "b", OnRun: []string{"~/bin/ask"}, Target: TargetLines, Timeout: DefaultPluginTimeout},
+				{Command: "a", OnRun: []string{"/usr/bin/ask", "scripts/x", "./y"}, Target: TargetLines, Timeout: DefaultPluginTimeout, Line: 2},
+				{Command: "b", OnRun: []string{"~/bin/ask"}, Target: TargetLines, Timeout: DefaultPluginTimeout, Line: 3},
 			},
 		},
 		{
 			"timeout defaults to 60s",
 			"plugins:\n  - {command: summarize, on_run: [summarizer], target: pull-request}\n",
-			[]Plugin{{Command: "summarize", OnRun: []string{"summarizer"}, Target: TargetPullRequest, Timeout: 60 * time.Second}},
+			[]Plugin{{Command: "summarize", OnRun: []string{"summarizer"}, Target: TargetPullRequest, Timeout: 60 * time.Second, Line: 2}},
 		},
 		{
 			"two plugins keep file order",
 			"plugins:\n  - {command: b-2, on_run: [x], target: lines}\n  - {command: A1, on_run: [y, '1'], target: lines}\n",
 			[]Plugin{
-				{Command: "b-2", OnRun: []string{"x"}, Target: TargetLines, Timeout: DefaultPluginTimeout},
-				{Command: "A1", OnRun: []string{"y", "1"}, Target: TargetLines, Timeout: DefaultPluginTimeout},
+				{Command: "b-2", OnRun: []string{"x"}, Target: TargetLines, Timeout: DefaultPluginTimeout, Line: 2},
+				{Command: "A1", OnRun: []string{"y", "1"}, Target: TargetLines, Timeout: DefaultPluginTimeout, Line: 3},
 			},
 		},
 	} {

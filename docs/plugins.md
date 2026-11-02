@@ -8,9 +8,8 @@ anything it asks for goes through strig's own rules. A plugin is still your own
 program, running as you, so it can do what you can (it could run `gh` itself,
 for example). Add only programs you trust.
 
-This page describes the configuration and the protocol between strig and the
-program. The key is read and validated today; the commands themselves, and what
-the request holds for each target, arrive in a later version.
+This page describes the configuration, how to run a plugin, and the protocol
+between strig and the program.
 
 ## Where plugins come from
 
@@ -36,7 +35,10 @@ plugins:
 | `target` | yes | What the command acts on: `lines` or `pull-request` |
 | `timeout` | no | How long one run may take, as a Go duration such as `90s` or `2m`. Above zero. Default `60s` |
 
-Unknown keys are errors, like everywhere in the config.
+Unknown keys are errors, like everywhere in the config. So is a `command` that
+is already a command of strig itself (`approve`, `merge`, `q`, ...): the
+built-in would always win, so the plugin could never run. strig stops at
+startup and names the file and line.
 
 A program written as a relative path such as `scripts/ask.sh` or `./ask` would
 resolve against strig's working directory, usually the checkout under review,
@@ -44,18 +46,93 @@ so a file from that repository could run. That is why the config does not
 accept it: use a bare name on `PATH`, or an absolute or `~/` path. Arguments
 after the program are not restricted.
 
+## Running a plugin
+
+Each plugin is a `:` command in the pull request workspace, named by its
+`command`, with whatever you type after the name as its arguments:
+
+```
+:ask why does this retry forever?
+:summarize
+```
+
+Plugin commands exist only in the workspace; on a list or the dashboard strig
+says `not available here: ask`. They have no keys.
+
+- `target: pull-request` works from any pane, as soon as the pull request has
+  loaded.
+- `target: lines` acts on the diff lines. With the diff pane on screen it uses
+  the line under the cursor, or the lines of a `V` selection: press `:` while
+  the selection is open (cancelling the command line with `esc` leaves the
+  selection as it was). The selection ends when the plugin takes it. Without a
+  diff line under the cursor the command says `move onto a diff line to run
+  :ask`, and in a narrow terminal showing the Files pane, `focus the diff to
+  run :ask`. Until the diff has loaded: `diff not loaded`.
+
+Until the pull request has loaded, every plugin command says `pull request not
+loaded yet`, as the built-in commands do.
+
+While a run of the pull request on screen is under way, or waiting behind
+another run of the same plugin, the status bar shows its usual spinner. What
+the plugin prints appears in the status bar when it finishes: a `notice` as
+information, an `error` (and a failed run) as an error, and an `answer` as a
+notice for now. A result belongs to the pull request it was asked from: if that
+pull request is no longer the one on screen (the view was closed, or the head
+commit changed since), the result is dropped and only noted in the log.
+Closing the pull request does not stop a run; quitting strig does: it kills
+the plugin processes, waits at most two seconds for them to end, and exits.
+
+A plugin runs in a session of its own, so it has no controlling terminal: a
+program that opens `/dev/tty` fails instead of reading your keys or drawing on
+the screen. Its standard input is the request, its standard output the
+effects, and its standard error goes to strig's log.
+
 ## What strig sends
 
 strig starts the program, writes one JSON object to its standard input, followed
 by a newline, and closes it. The newline means a shell script can read the
 whole request with a plain `read -r line`, also under `set -e`. The object
-starts with the protocol version:
+looks like this for a `lines` plugin:
 
 ```json
-{"protocol": 1}
+{
+  "protocol": 1,
+  "command": "ask",
+  "arguments": "why does this retry forever?",
+  "repository": {"host": "github.com", "owner": "acme", "name": "widgets"},
+  "number": 7,
+  "head": "4f9c0e1d...",
+  "target": {
+    "path": "internal/sync/client.go",
+    "side": "RIGHT",
+    "line": 16,
+    "startLine": 14,
+    "excerpt": " ctx := ...\n+func (c *Client) Sync() {\n+\treturn nil\n+}"
+  }
+}
 ```
 
-The rest of the object is defined per target in a later version of this page.
+| Field | Meaning |
+|---|---|
+| `protocol` | The version of this protocol, `1` |
+| `command` | The plugin's `command`, as typed |
+| `arguments` | The rest of the command line, one string, trimmed at both ends (empty when there is none) |
+| `repository` | `host` (taken from the pull request's address, so GitHub Enterprise works), `owner` and `name` |
+| `number` | The pull request number |
+| `head` | The head commit the pull request had when the command was run. For `lines`, the commit the diff on screen belongs to |
+| `target` | Absent for `target: pull-request` plugins. For `lines`: |
+| `target.path` | The file's path in the pull request |
+| `target.side` | `RIGHT` for lines of the new file (added and unchanged lines), `LEFT` for the old file (a selection containing a deleted line) |
+| `target.line` | The last selected line, a line number on `side` |
+| `target.startLine` | The first selected line; equal to `line` for one line |
+| `target.excerpt` | The selected lines and up to three lines of the same hunk before and after them, joined by `\n`. Each line starts with `+` (added), `-` (deleted) or a space (unchanged), then the line's text |
+
+For a `target: pull-request` plugin the object is the same without `target`:
+
+```json
+{"protocol": 1, "command": "summarize", "arguments": "", "repository": {"host": "github.com", "owner": "acme", "name": "widgets"}, "number": 7, "head": "4f9c0e1d..."}
+```
+
 A plugin should ignore fields it does not know. A plugin does not have to read
 its input; one that exits without reading it is not an error in itself.
 
@@ -71,8 +148,8 @@ The plugin prints JSON lines on standard output. Each line is one *effect*:
 |---|---|---|
 | `notice` | `{"text": ...}` | A short message for the status bar |
 | `error` | `{"text": ...}` | A failure and its reason. With a failure exit status the run fails with this text; with exit 0 the effect is returned like any other |
-| `answer` | `{"text": ...}` | An answer to show to the user |
-| `reload` | `{}` | Reload what is on screen |
+| `answer` | `{"text": ...}` | An answer to show to the user; shown as a notice for now |
+| `reload` | `{}` | Reload the pull request on screen, as `R` does |
 
 Rules:
 
@@ -90,8 +167,9 @@ Rules:
   fails.
 
 Standard error is written to strig's log file (`strig --log-path` prints where)
-and never shown on the screen. Only the first 64 KiB of a run's standard error
-is kept, followed by a note; the rest is dropped.
+and never shown on the screen, one log record per line with the plugin's name,
+so the text cannot pass as a log line of strig's own. Only the first 64 KiB of
+a run's standard error is kept, followed by a note; the rest is dropped.
 
 ## Exit status
 
