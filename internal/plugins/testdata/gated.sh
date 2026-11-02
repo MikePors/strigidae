@@ -9,7 +9,8 @@ fi
 cat >> "$FAKE_DIRECTORY/order"
 echo >> "$FAKE_DIRECTORY/order"
 echo started >> "$FAKE_DIRECTORY/started"  # a named pipe the test reads
-until [ -e "$FAKE_DIRECTORY/gate" ]; do sleep 0.02; done
+until [ -e "$FAKE_DIRECTORY/gate" ] || [ ! -d "$FAKE_DIRECTORY" ]; do sleep 0.02; done
+[ -e "$FAKE_DIRECTORY/gate" ] || exit 1
 sleep 0.2
 rmdir "$FAKE_DIRECTORY/lock"
 echo '{"name":"notice","data":{"text":"ok"}}'

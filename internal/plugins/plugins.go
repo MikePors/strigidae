@@ -153,8 +153,9 @@ func New(plugins []config.Plugin, options Options) *Runner {
 //
 // A run fails, with no effects, if the plugin cannot be started, times out,
 // prints too much or a line that is not an effect, or exits with a failure
-// status. An error effect is an ordinary effect: a run can return one and
-// succeed. If the plugin exits with a failure status after printing an error
+// status. If ctx ends while the plugin runs, the plugin is killed and Run
+// returns ctx.Err(). An error effect is an ordinary effect: a run can return
+// one and succeed. If the plugin exits with a failure status after printing an error
 // effect, the error carries that effect's text.
 func (runner *Runner) Run(ctx context.Context, name string, request Request) ([]Effect, error) {
 	request.Protocol = Protocol
@@ -166,7 +167,8 @@ func (runner *Runner) Run(ctx context.Context, name string, request Request) ([]
 	if !ok {
 		return nil, fmt.Errorf("plugin %q: %w", name, ErrUnknownPlugin)
 	}
-	return runner.execute(ctx, found, body)
+	// The newline lets a shell script read the request with a plain read.
+	return runner.execute(ctx, found, append(body, '\n'))
 }
 
 func (runner *Runner) execute(ctx context.Context, found *entry, body []byte) ([]Effect, error) {
@@ -203,32 +205,67 @@ func (runner *Runner) start(parent, runContext context.Context, plugin config.Pl
 
 	waitError := command.Run()
 
-	// A plugin that exited 0 has succeeded, even if the deadline passed while
-	// strig waited out WaitDelay for a child holding standard output.
-	succeeded := command.ProcessState != nil && command.ProcessState.Success()
-	switch {
-	case output.exceeded():
+	state := command.ProcessState
+	switch classify(
+		output.exceeded(),
+		state != nil,
+		state != nil && state.Exited(),
+		state != nil && state.Success(),
+		parent.Err() != nil,
+		runContext.Err() != nil,
+	) {
+	case endTooLarge:
 		return nil, fmt.Errorf("plugin %q: %w (limit %d bytes)", plugin.Command, ErrOutputTooLarge, MaximumOutputSize)
-	case !succeeded && parent.Err() != nil:
+	case endCancelled:
 		return nil, parent.Err()
-	case !succeeded && runContext.Err() != nil:
+	case endTimedOut:
 		return nil, fmt.Errorf("plugin %q: %w after %s", plugin.Command, ErrTimeout, plugin.Timeout)
-	}
-
-	var exitError *exec.ExitError
-	switch {
-	case waitError == nil, errors.Is(waitError, exec.ErrWaitDelay):
-		// ErrWaitDelay is only reported when the plugin itself exited 0; what
-		// it printed before is complete.
+	case endSucceeded:
+		// What the plugin printed is complete, also if only WaitDelay ended the
+		// wait for a child holding standard output.
 		effects, err := runner.parse(plugin.Command, output.bytes())
 		if err != nil {
 			return nil, err
 		}
 		return effects, nil
-	case errors.As(waitError, &exitError):
+	case endFailed:
 		return nil, runner.exitFailure(plugin.Command, output.bytes())
 	default:
 		return nil, fmt.Errorf("start plugin %q: %w", plugin.Command, waitError)
+	}
+}
+
+// ending is how a process run ended.
+type ending int
+
+const (
+	endTooLarge ending = iota
+	endCancelled
+	endTimedOut
+	endSucceeded
+	endFailed
+	endNotStarted
+)
+
+// classify decides how a run ended. Once the plugin has exited by itself
+// (exited), its exit status decides, whatever the contexts say by then: they
+// may have ended while strig waited out WaitDelay for a child holding standard
+// output. A process strig killed has not exited by itself. started is whether
+// the process ran at all.
+func classify(tooLarge, started, exited, succeeded, cancelled, timedOut bool) ending {
+	switch {
+	case tooLarge:
+		return endTooLarge
+	case !exited && cancelled:
+		return endCancelled
+	case !exited && timedOut:
+		return endTimedOut
+	case succeeded:
+		return endSucceeded
+	case started:
+		return endFailed
+	default:
+		return endNotStarted
 	}
 }
 
@@ -246,6 +283,9 @@ func (runner *Runner) program(name string) (string, error) {
 	home, err := runner.home()
 	if err != nil {
 		return "", fmt.Errorf("expand ~ in the program: %w", err)
+	}
+	if !filepath.IsAbs(home) {
+		return "", errors.New("the home directory is not an absolute path")
 	}
 	return filepath.Join(home, rest), nil
 }

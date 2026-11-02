@@ -181,7 +181,7 @@ func TestRunWritesProtocolRequest(test *testing.T) {
 	if err != nil {
 		test.Fatal(err)
 	}
-	if diff := cmp.Diff(`{"protocol":1}`, string(got)); diff != "" {
+	if diff := cmp.Diff(`{"protocol":1}`+"\n", string(got)); diff != "" {
 		test.Errorf("stdin mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -337,8 +337,7 @@ func TestQueueTurnArrivingWithCancel(test *testing.T) {
 	go func() { result <- line.acquire(ctx, func() { close(joined) }) }()
 	receive(test, joined)
 
-	// Cancel, then hand the turn over while the waiter still has to take the
-	// lock: the waiter sees both, and must pass the turn on.
+	// Cancel and hand the turn over while the waiter has to take the lock.
 	line.mutex.Lock()
 	cancel()
 	next := line.waiting[0]
@@ -346,8 +345,13 @@ func TestQueueTurnArrivingWithCancel(test *testing.T) {
 	close(next)
 	line.mutex.Unlock()
 
-	if err := receive(test, result); !errors.Is(err, context.Canceled) {
-		test.Fatalf("waiter error = %v, want context.Canceled", err)
+	// The waiter may have seen either: nil means it took the turn, which it
+	// must give back; Canceled means it passed the turn on itself.
+	switch err := receive(test, result); {
+	case err == nil:
+		line.release()
+	case !errors.Is(err, context.Canceled):
+		test.Fatalf("waiter error = %v, want nil or context.Canceled", err)
 	}
 	free := make(chan error, 1)
 	go func() { free <- line.acquire(context.Background(), func() {}) }()
@@ -452,14 +456,16 @@ func TestRunChildHoldingStandardOutput(test *testing.T) {
 	}{
 		{"plugin exits 0: its effects are complete", "leave-child.sh", []Effect{{Name: EffectNotice, Text: "done"}}, nil},
 		{"plugin exits 1: still a failure", "leave-child-failing.sh", nil, ErrFailed},
+		{"default wait delay", "leave-child.sh", []Effect{{Name: EffectNotice, Text: "done"}}, nil},
 	} {
 		test.Run(testCase.name, func(test *testing.T) {
 			directory := test.TempDir()
 			killChild(test, directory)
-			runner := New(
-				[]config.Plugin{scriptPlugin("p", testCase.script, guard)},
-				Options{Environment: baseEnvironment(directory), WaitDelay: 100 * time.Millisecond},
-			)
+			options := Options{Environment: baseEnvironment(directory), WaitDelay: 100 * time.Millisecond}
+			if testCase.name == "default wait delay" {
+				options.WaitDelay = 0 // the default applies: about a second
+			}
+			runner := New([]config.Plugin{scriptPlugin("p", testCase.script, guard)}, options)
 			results := runInBackground(context.Background(), runner, "p", "{}")
 			result := receive(test, results)
 			if testCase.wantIs == nil && result.err != nil {
@@ -482,6 +488,92 @@ func TestRunPluginThatIgnoresItsInput(test *testing.T) {
 	result := receive(test, runInBackground(context.Background(), runner, "p", body))
 	if result.err != nil || result.effects != nil {
 		test.Errorf("result = %+v, want a plain success", result)
+	}
+}
+
+func TestRunPlainReadGetsTheWholeRequest(test *testing.T) {
+	directory := test.TempDir()
+	runner := New([]config.Plugin{scriptPlugin("p", "read-request.sh", guard)}, Options{Environment: baseEnvironment(directory)})
+	if _, err := runner.Run(context.Background(), "p", Request{}); err != nil {
+		test.Fatalf("Run: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(directory, "line"))
+	if err != nil {
+		test.Fatal(err)
+	}
+	if diff := cmp.Diff(`{"protocol":1}`, string(got)); diff != "" {
+		test.Errorf("request read mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// The plugin printed its reason and exited 1 by itself; a child holds standard
+// output past the timeout. Its exit status decides, not the timeout.
+func TestRunExitedWithErrorPastTheTimeout(test *testing.T) {
+	directory := test.TempDir()
+	killChild(test, directory)
+	runner := New(
+		[]config.Plugin{scriptPlugin("p", "error-and-leave-child.sh", 500*time.Millisecond)},
+		Options{Environment: baseEnvironment(directory), WaitDelay: 1500 * time.Millisecond},
+	)
+	result := receive(test, runInBackground(context.Background(), runner, "p", "{}"))
+	if result.err == nil || result.err.Error() != `plugin "p": no model` {
+		test.Errorf("error = %v, want the plugin's text", result.err)
+	}
+}
+
+func TestClassify(test *testing.T) {
+	for _, testCase := range []struct {
+		name                                                      string
+		tooLarge, started, exited, succeeded, cancelled, timedOut bool
+		want                                                      ending
+	}{
+		{"exit 0", false, true, true, true, false, false, endSucceeded},
+		{"exit 0 as the timeout lands", false, true, true, true, false, true, endSucceeded},
+		{"exit 0 as the caller cancels", false, true, true, true, true, false, endSucceeded},
+		{"exit 1", false, true, true, false, false, false, endFailed},
+		{"exit 1 past the timeout", false, true, true, false, false, true, endFailed},
+		{"exit 1 after a cancel", false, true, true, false, true, false, endFailed},
+		{"killed by the timeout", false, true, false, false, false, true, endTimedOut},
+		{"killed by a cancel", false, true, false, false, true, false, endCancelled},
+		{"cancel and timeout together is a cancel", false, true, false, false, true, true, endCancelled},
+		{"crashed by a signal", false, true, false, false, false, false, endFailed},
+		{"too much output beats everything", true, true, true, true, true, true, endTooLarge},
+		{"never started", false, false, false, false, false, false, endNotStarted},
+		{"cancelled before starting", false, false, false, false, true, false, endCancelled},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			got := classify(testCase.tooLarge, testCase.started, testCase.exited, testCase.succeeded, testCase.cancelled, testCase.timedOut)
+			if got != testCase.want {
+				test.Errorf("classify = %d, want %d", got, testCase.want)
+			}
+		})
+	}
+}
+
+func TestRunRelativeHomeIsRefused(test *testing.T) {
+	plugin := config.Plugin{Command: "p", OnRun: []string{"~/bin/x"}, Timeout: guard}
+	for _, home := range []string{"", "relative/home"} {
+		runner := New([]config.Plugin{plugin}, Options{Home: func() (string, error) { return home, nil }})
+		_, err := runner.Run(context.Background(), "p", Request{})
+		if err == nil || !strings.Contains(err.Error(), "not an absolute path") {
+			test.Errorf("home %q: error = %v, want a refusal", home, err)
+		}
+	}
+}
+
+// Two plugins write to one log at once; under -race a missing lock is found.
+func TestRunPluginsShareOneLog(test *testing.T) {
+	var log bytes.Buffer
+	runner := New(
+		[]config.Plugin{scriptPlugin("a", "stderr-flood.sh", guard), scriptPlugin("b", "stderr-flood.sh", guard)},
+		Options{Log: &log},
+	)
+	first := runInBackground(context.Background(), runner, "a", "{}")
+	second := runInBackground(context.Background(), runner, "b", "{}")
+	for _, channel := range []<-chan outcome{first, second} {
+		if result := receive(test, channel); result.err != nil {
+			test.Errorf("run: %v", result.err)
+		}
 	}
 }
 
@@ -519,6 +611,8 @@ func newQueueHarness(test *testing.T, names ...string) *queueHarness {
 	for _, name := range names {
 		plugins = append(plugins, scriptPlugin(name, "gated.sh", guard))
 	}
+	// A failing test may not reach openGate; let the scripts finish anyway.
+	test.Cleanup(func() { _ = os.WriteFile(filepath.Join(directory, "gate"), nil, 0o600) })
 	harness.runner = New(plugins, Options{Environment: baseEnvironment(directory)})
 	harness.runner.queued = func(name string) { harness.queued <- name }
 	return harness

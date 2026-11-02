@@ -46,8 +46,10 @@ after the program are not restricted.
 
 ## What strig sends
 
-strig starts the program, writes one JSON object to its standard input and
-closes it. The object starts with the protocol version:
+strig starts the program, writes one JSON object to its standard input, followed
+by a newline, and closes it. The newline means a shell script can read the
+whole request with a plain `read -r line`, also under `set -e`. The object
+starts with the protocol version:
 
 ```json
 {"protocol": 1}
@@ -68,7 +70,7 @@ The plugin prints JSON lines on standard output. Each line is one *effect*:
 | Effect | Data | Meaning |
 |---|---|---|
 | `notice` | `{"text": ...}` | A short message for the status bar |
-| `error` | `{"text": ...}` | The run failed, with this reason |
+| `error` | `{"text": ...}` | A failure and its reason. With a failure exit status the run fails with this text; with exit 0 the effect is returned like any other |
 | `answer` | `{"text": ...}` | An answer to show to the user |
 | `reload` | `{}` | Reload what is on screen |
 
@@ -124,7 +126,12 @@ token variables (`GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`,
 
 strig stops reading a moment after the program exits, even if something the
 program started still has its standard output open, so a leftover helper cannot
-hang strig. Even so, **a daemon a plugin starts must redirect its output and
-detach** (for example `nohup helper >/dev/null 2>&1 &`, or `setsid`), so it
-does not keep strig's pipes open. Output it prints after the program exited is
-not read.
+hang strig. That wait lasts about a second, and whatever is printed to standard
+output during it still counts: a line that is not an effect fails the run, and
+too much output hits the limit. So **a daemon a plugin starts must redirect its
+output and detach** (for example `nohup helper >/dev/null 2>&1 &`, or `setsid`),
+so it neither keeps strig's pipes open nor adds output to the run. Output
+printed after that wait is not read.
+
+Once the program has exited by itself, its exit status decides the run, even if
+the timeout or a cancel arrives during that wait.
