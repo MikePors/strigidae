@@ -151,21 +151,74 @@ func (log *requestReadLog) Write(data []byte) (int, error) {
 	return log.lockedBuffer.Write(data)
 }
 
+// expiredContext lets the injected timeout expire after the helper has read
+// a byte. A short real timer could expire during JSON encoding on a busy host,
+// before any write, which correctly leaves the service running.
+type expiredContext struct{ context.Context }
+
+func (ctx expiredContext) Err() error {
+	if ctx.Context.Err() != nil {
+		return context.DeadlineExceeded
+	}
+	return nil
+}
+
 func TestServiceTimedOutPartialWriteRestarts(test *testing.T) {
 	harness := backpressureHarness(test)
+	read := make(chan struct{})
+	harness.runner.logger = slog.New(slog.NewTextHandler(&requestReadLog{lockedBuffer: harness.log, read: read}, nil))
 	if result := harness.run(context.Background(), "ask", "block"); result.err != nil {
 		test.Fatal(result.err)
 	}
-	harness.runner.entries["ask"].plugin.Timeout = 30 * time.Millisecond
-	if result := harness.run(context.Background(), "ask", strings.Repeat("x", 1<<20)); !errors.Is(result.err, ErrTimeout) {
+	serving := harness.runner.entries["ask"].service
+	serving.mutex.Lock()
+	process := serving.process
+	serving.mutex.Unlock()
+	timed, expire := context.WithTimeout(context.Background(), time.Minute)
+	defer expire()
+	harness.runner.withTimeout = func(context.Context, time.Duration) (context.Context, context.CancelFunc) {
+		return expiredContext{timed}, expire
+	}
+	results := make(chan outcome, 1)
+	go func() { results <- harness.run(context.Background(), "ask", strings.Repeat("x", 1<<20)) }()
+	if err := process.child.Signal(syscall.SIGUSR1); err != nil {
+		test.Fatal(err)
+	}
+	receive(test, read)
+	expire()
+	if result := receive(test, results); !errors.Is(result.err, ErrTimeout) {
 		test.Fatalf("full pipe: %v", result.err)
 	}
-	harness.runner.entries["ask"].plugin.Timeout = time.Minute
-	if result := harness.run(context.Background(), "ask", "next"); result.err != nil || len(result.effects) != 1 || result.effects[0].Text != "next" {
+	harness.runner.withTimeout = context.WithTimeout
+	next, cancelNext := context.WithTimeout(context.Background(), guard)
+	defer cancelNext()
+	if result := harness.run(next, "ask", "next"); result.err != nil || len(result.effects) != 1 || result.effects[0].Text != "next" {
 		test.Errorf("next request: %v, %v", result.effects, result.err)
 	}
 	if starts := harness.starts(test); len(starts) != 2 {
 		test.Errorf("%d starts, want two", len(starts))
+	}
+}
+
+// Expiring before the write leaves complete framing, so the next run should
+// keep using the same process rather than restarting it.
+func TestServiceExpiredBeforeWriteKeepsProcess(test *testing.T) {
+	harness := backpressureHarness(test)
+	if result := harness.run(context.Background(), "ask", "ready"); result.err != nil {
+		test.Fatal(result.err)
+	}
+	harness.runner.withTimeout = func(parent context.Context, _ time.Duration) (context.Context, context.CancelFunc) {
+		return context.WithDeadline(parent, time.Now().Add(-time.Second))
+	}
+	if result := harness.run(context.Background(), "ask", "expired"); !errors.Is(result.err, ErrTimeout) {
+		test.Fatalf("expired run: %v", result.err)
+	}
+	harness.runner.withTimeout = context.WithTimeout
+	if result := harness.run(context.Background(), "ask", "next"); result.err != nil || len(result.effects) != 1 || result.effects[0].Text != "next" {
+		test.Errorf("next request: %v, %v", result.effects, result.err)
+	}
+	if starts := harness.starts(test); len(starts) != 1 {
+		test.Errorf("%d starts, want the existing process", len(starts))
 	}
 }
 
