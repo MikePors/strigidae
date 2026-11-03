@@ -39,11 +39,6 @@ func CommandNames() []string {
 	return names
 }
 
-// parseCommand turns a command line (without the ":") into a command. An
-// empty line does nothing. The static table is consulted first; then top, if
-// it is a Commander and the name is in viewCommands (the names every view
-// declares, from Options.ViewCommands). A name nobody handles yields an error
-// message.
 // splitCommandLine reads a command line as running it does: leading spaces and
 // the spaces between the command and its arguments are ignored. leading and gap
 // are those spaces as typed, so a caller can keep them. arguments keeps any
@@ -59,11 +54,19 @@ func splitCommandLine(line string) (leading, name, gap, arguments string, hasArg
 	return leading, name, gap, arguments, hasArguments
 }
 
+// parseCommand turns a command line (without the ":") into a command. An
+// empty line does nothing. The static table is consulted first; then top, if
+// it is a Commander and the name is in viewCommands (the names every view
+// declares, from Options.ViewCommands). A name nobody handles yields an error
+// message.
 func parseCommand(line string, top View, viewCommands []string) tea.Cmd {
 	if strings.TrimSpace(line) == "" {
 		return nil
 	}
 	_, name, _, arguments, _ := splitCommandLine(line)
+	// The name is only cut at an ASCII space; trailing white space of any
+	// kind with no space before it (a no-break space) is not part of it.
+	name = strings.TrimSpace(name)
 	arguments = strings.TrimSpace(arguments)
 	for _, definition := range commandTable() {
 		for _, alias := range definition.names {
