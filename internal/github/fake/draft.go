@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/MikePors/strigidae/internal/github"
 )
@@ -53,6 +54,8 @@ func (client *Client) changeDraft(ctx context.Context, method string, becomesDra
 		return fmt.Errorf("%s %s#%d: unknown pull request ID %q", method, in.Repository, in.Number, in.PullRequestIdentifier)
 	case !detail.ViewerCanUpdate:
 		return fmt.Errorf("%s %s#%d: %w", method, in.Repository, in.Number, github.ErrForbidden)
+	case detail.State == github.PullRequestStateClosed || detail.State == github.PullRequestStateMerged:
+		return fmt.Errorf("%s %s#%d: the pull request is %s", method, in.Repository, in.Number, strings.ToLower(string(detail.State)))
 	case detail.Draft == becomesDraft:
 		return fmt.Errorf("%s %s#%d: the pull request is already in that state", method, in.Repository, in.Number)
 	}

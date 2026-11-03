@@ -246,6 +246,74 @@ func TestDraftCommandTimeoutReloadsAndSaysItMayHaveGoneThrough(test *testing.T) 
 	}
 }
 
+// The state changes while the question is open: the yes re-reads and sends
+// nothing.
+func TestDraftCommandYesRereadsBeforeWriting(test *testing.T) {
+	tests := []struct {
+		name        string
+		command     string
+		screenDraft bool
+		serverState github.PullRequestState
+		serverDraft bool
+		want        string
+	}{
+		{"merged meanwhile", "ready", true, github.PullRequestStateMerged, true, "this pull request is merged"},
+		{"closed meanwhile", "draft", false, github.PullRequestStateClosed, false, "this pull request is closed"},
+		{"made ready meanwhile", "ready", true, github.PullRequestStateOpen, false, "this pull request is not a draft"},
+		{"made a draft meanwhile", "draft", false, github.PullRequestStateOpen, true, "this pull request is already a draft"},
+	}
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			inliner := newInliner(test)
+			inliner.setDraft(testCase.screenDraft)
+			inliner.messages = nil
+			inliner.command(testCase.command)
+			confirmation, asked := inliner.lastConfirm()
+			if !asked {
+				test.Fatal("no question")
+			}
+			inliner.setServerState(testCase.serverState, testCase.serverDraft)
+			before := inliner.loads()
+			inliner.messages = nil
+			inliner.run(confirmation.OnYes)
+			if len(inliner.draftChanges()) != 0 || len(inliner.methods(fake.MethodMarkReadyForReview, fake.MethodConvertToDraft)) != 0 {
+				test.Fatal("a mutation was sent on a stale yes")
+			}
+			if diff := cmp.Diff([]string{testCase.want}, inliner.infoMessages()); diff != "" {
+				test.Errorf("notices (-want +got):\n%s", diff)
+			}
+			if inliner.loads() < before+2 { // the re-read and the reload
+				test.Errorf("loads = %d after %d, want a re-read and a reload", inliner.loads(), before)
+			}
+			if inliner.view.detail.Draft != testCase.serverDraft || inliner.view.detail.State != testCase.serverState {
+				test.Error("the screen was not refreshed")
+			}
+			if inliner.view.writes != 0 {
+				test.Errorf("writes in flight: %d", inliner.view.writes)
+			}
+		})
+	}
+}
+
+// A screen made stale elsewhere is refused after a read, and the header
+// follows the reload.
+func TestDraftCommandRefusesAStaleScreenAndUpdatesTheHeader(test *testing.T) {
+	inliner := newInliner(test)
+	inliner.setDraft(true)
+	inliner.setServerState(github.PullRequestStateOpen, false) // made ready elsewhere
+	if !strings.Contains(inliner.shown(), "draft") {
+		test.Fatal("the header does not show the draft state before")
+	}
+	inliner.messages = nil
+	inliner.command("ready")
+	if diff := cmp.Diff([]string{noticeNotADraft}, inliner.infoMessages()); diff != "" {
+		test.Errorf("notices (-want +got):\n%s", diff)
+	}
+	if strings.Contains(inliner.shown(), "draft") {
+		test.Error("the header still shows draft after the refresh")
+	}
+}
+
 func TestDraftCommandReadFailureAsksNothing(test *testing.T) {
 	inliner := newInliner(test)
 	inliner.setDraft(true)

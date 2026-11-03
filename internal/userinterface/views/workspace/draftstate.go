@@ -30,8 +30,11 @@ type (
 		detail   github.PullRequestDetail
 		err      error
 	}
-	// draftChangedMessage is the result of the mutation.
+	// draftChangedMessage is the result of the mutation, or of the re-read
+	// after the yes: refusal is set when nothing was sent because the state
+	// had changed.
 	draftChangedMessage struct {
+		refusal string
 		origin  origin
 		toDraft bool
 		err     error
@@ -56,11 +59,6 @@ func draftRefusal(detail github.PullRequest, toDraft bool) string {
 
 // changeDraftState checks the loaded pull request, then re-reads it.
 func (view *View) changeDraftState(toDraft bool) tea.Cmd {
-	if view.detail != nil {
-		if refusal := draftRefusal(view.detail.PullRequest, toDraft); refusal != "" {
-			return userinterface.Info(refusal)
-		}
-	}
 	origin, client, timeouts := view.origin(), view.client, view.timeouts
 	view.commentSequence++ // a newer request supersedes this read
 	sequence := view.commentSequence
@@ -95,6 +93,18 @@ func (view *View) draftRead(message draftReadMessage) tea.Cmd {
 func (view *View) sendDraftState(toDraft bool, input github.DraftStateInput) tea.Cmd {
 	origin, client, timeouts := view.origin(), view.client, view.timeouts
 	return func() tea.Msg {
+		// Read again after the yes: the state may have changed while the
+		// question was open, and a stale yes never writes.
+		loadContext, cancelLoad := timeouts.LoadContext()
+		defer cancelLoad()
+		fresh, readErr := client.GetPullRequest(loadContext, origin.repository, origin.number)
+		if readErr != nil {
+			return withShownError(draftChangedMessage{origin: origin, toDraft: toDraft, err: readErr}, terminaltext.SafeError(fmt.Errorf("read pull request: %w", readErr)))
+		}
+		if refusal := draftRefusal(fresh.PullRequest, toDraft); refusal != "" {
+			return draftChangedMessage{origin: origin, toDraft: toDraft, refusal: refusal}
+		}
+		input.PullRequestIdentifier = fresh.Identifier
 		ctx, cancel := timeouts.RequestContext()
 		defer cancel()
 		what := "mark ready for review"
@@ -114,6 +124,9 @@ func (view *View) sendDraftState(toDraft bool, input github.DraftStateInput) tea
 // draftChanged reloads, so the header shows the new state.
 func (view *View) draftChanged(message draftChangedMessage) tea.Cmd {
 	view.writeDone()
+	if message.refusal != "" {
+		return tea.Batch(userinterface.Info(message.refusal), view.reloadPullRequest()) // the screen was stale
+	}
 	if userinterface.IsWriteTimeout(message.err) {
 		return view.reloadPullRequest() // the error is already shown
 	}

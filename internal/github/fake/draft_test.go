@@ -8,6 +8,29 @@ import (
 	"github.com/MikePors/strigidae/internal/github"
 )
 
+func TestDraftStateCallsRefuseClosedAndMergedPullRequests(test *testing.T) {
+	repository := github.Repository{Owner: "acme", Name: "widgets"}
+	for _, state := range []github.PullRequestState{github.PullRequestStateClosed, github.PullRequestStateMerged} {
+		test.Run(string(state), func(test *testing.T) {
+			client := New()
+			client.SetPullRequest(github.PullRequestDetail{
+				PullRequest:     github.PullRequest{Identifier: "PR_1", Repository: repository, Number: 1, State: state, Draft: true},
+				ViewerCanUpdate: true,
+			})
+			input := github.DraftStateInput{Repository: repository, Number: 1, PullRequestIdentifier: "PR_1"}
+			if err := client.MarkReadyForReview(context.Background(), input); err == nil {
+				test.Error("ready was accepted")
+			}
+			if err := client.ConvertToDraft(context.Background(), input); err == nil {
+				test.Error("draft was accepted")
+			}
+			if len(client.DraftChanges()) != 0 {
+				test.Error("a change was recorded")
+			}
+		})
+	}
+}
+
 func TestDraftStateCalls(test *testing.T) {
 	repository := github.Repository{Owner: "acme", Name: "widgets"}
 	tests := []struct {
