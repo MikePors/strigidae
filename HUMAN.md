@@ -18,6 +18,13 @@ Checks only the maintainer can do, such as live verification against real GitHub
   5. `esc` in each picker should cancel quietly; an empty title in the editor should show an error and create nothing.
   6. **Error case:** run `:create` again with the same head as step 2 (a pull request is already open) and, separately, a head branch that has no commits beyond the base (create one with `git branch no-commits main` and push it). The status bar should show GitHub's message. Report the wording.
 
+- [ ] **`:ready` and `:draft` change a pull request's draft state on GitHub** (#212). The `markPullRequestReadyForReview` and `convertPullRequestToDraft` mutations have only been tested against the fake client and fixtures.
+  1. Open a draft pull request of your own in a test repository and run `:ready`. It should ask `Mark #N ready for review?`; `n` sends nothing. Run it again and answer `y`: the status bar says `#N is ready for review` and the header changes from `draft`; check on github.com.
+  2. Run `:draft` on it. It should ask `Convert #N to a draft?`; answer `y`: `#N is now a draft`, and the header shows `draft` again.
+  3. Run `:draft` on a draft and `:ready` on a ready pull request: the notices `this pull request is already a draft` / `this pull request is not a draft`. On a closed or merged pull request either says `this pull request is closed` / `merged`.
+  4. Change the state on github.com while strig shows the old one, then run the command that would now be wrong: it should refuse and refresh the header.
+  5. **Error case:** on a pull request you only have read access to, or in a repository whose plan has no drafts, answer `y`. Report GitHub's error text as shown in the status bar.
+
 - [ ] **`:edit-pull-request` edits a pull request's title and body on GitHub** (#174). The `updatePullRequest` mutation and the `viewerCanUpdate` field have only been tested against the fake client and fixtures.
   1. Open a test PR you may edit in strig and run `:edit-pull-request`. The editor should open with the title, a blank line, then the body.
   2. Change both, close the editor, and answer `y`. strig should say `Pull request updated` and the Overview should show the new title and description; check both on github.com.

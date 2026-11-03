@@ -224,6 +224,16 @@ func (workspaceBindings *bindings) entries() []actionEntry {
 			run: func(view *View, _ invocation) tea.Cmd { return view.editPullRequest() },
 		},
 		{
+			Action: keys.Action{Name: "ready", Command: "ready"},
+			level:  levelPullRequest, guard: writeDraftState, fresh: freshTarget,
+			run: func(view *View, _ invocation) tea.Cmd { return view.changeDraftState(false) },
+		},
+		{
+			Action: keys.Action{Name: "draft", Command: "draft"},
+			level:  levelPullRequest, guard: writeDraftState, fresh: freshTarget,
+			run: func(view *View, _ invocation) tea.Cmd { return view.changeDraftState(true) },
+		},
+		{
 			Action: keys.Action{Name: "checks", Command: "checks"},
 			level:  levelPullRequest,
 			run:    func(view *View, _ invocation) tea.Cmd { return view.checksCommand() },
