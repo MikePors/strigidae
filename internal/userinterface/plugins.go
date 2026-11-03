@@ -12,6 +12,7 @@ import (
 
 	"github.com/MikePors/strigidae/internal/config"
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/localthreads"
 	"github.com/MikePors/strigidae/internal/plugins"
 	"github.com/MikePors/strigidae/internal/userinterface/terminaltext"
 )
@@ -124,7 +125,7 @@ func (model *Model) startPlugin(message RunPluginMessage) tea.Cmd {
 	var shown tea.Cmd
 	if model.showsThread(message.Name) && message.Request.Target != nil {
 		started.thread = model.askLocalThread(message)
-		shown = tea.Batch(model.broadcast(LocalThreadsMessage{Threads: model.localThreads.snapshot()}), model.saveLocalThreads(model.localThreadKey(message)))
+		shown = tea.Batch(model.broadcast(LocalThreadsMessage{Threads: model.localThreads.Snapshot()}), model.saveLocalThreads(model.localThreadKey(message)))
 	}
 	model.pluginRuns[run] = started
 	runner, ctx := model.pluginRunner, model.pluginContext
@@ -155,7 +156,7 @@ func (model *Model) askLocalThread(message RunPluginMessage) string {
 	if question == "" {
 		question = ":" + message.Name
 	}
-	return model.localThreads.add(LocalThread{
+	return model.localThreads.Add(LocalThread{
 		Host:       message.Request.Repository.Host,
 		Asked:      model.clock(),
 		Repository: message.Identity.Repository,
@@ -172,8 +173,8 @@ func (model *Model) askLocalThread(message RunPluginMessage) string {
 
 // localThreadKey is the pull request an asked thread belongs to. Its host is
 // the one in the request, the same the plugin is given.
-func (model *Model) localThreadKey(message RunPluginMessage) pullRequestKey {
-	return pullRequestKey{message.Request.Repository.Host, message.Identity.Repository, message.Identity.Number}
+func (model *Model) localThreadKey(message RunPluginMessage) localthreads.Key {
+	return localthreads.Key{Host: message.Request.Repository.Host, Repository: message.Identity.Repository, Number: message.Identity.Number}
 }
 
 // finishLocalThread fills the thread of a finished run: the answers joined by
@@ -205,10 +206,10 @@ func (model *Model) finishLocalThread(identifier string, message pluginResultMes
 		text = "the plugin gave no answer"
 	}
 	var saved tea.Cmd
-	if key, found := model.localThreads.finish(identifier, state, text); found {
+	if key, found := model.localThreads.Finish(identifier, state, text); found {
 		saved = model.saveLocalThreads(key)
 	}
-	return tea.Batch(model.broadcast(LocalThreadsMessage{Threads: model.localThreads.snapshot()}), saved)
+	return tea.Batch(model.broadcast(LocalThreadsMessage{Threads: model.localThreads.Snapshot()}), saved)
 }
 
 // pluginActive reports whether a run of the pull request the top view shows
@@ -325,7 +326,7 @@ func (model *Model) Close() {
 	if model.pluginCancel != nil {
 		model.pluginCancel()
 	}
-	flushed := model.flushLocalThreads() // its file work runs in a goroutine, beside the wait for the runs
+	flushed := model.localFiles.Flush(&model.localThreads) // its file work runs in a goroutine, beside the wait for the runs
 	select {
 	case <-flushed:
 	case <-timeout:
