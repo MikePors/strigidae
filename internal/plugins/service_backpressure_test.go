@@ -1,0 +1,239 @@
+//go:build unix
+
+package plugins
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
+	"os"
+	"os/exec"
+	"os/signal"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"syscall"
+	"testing"
+	"time"
+)
+
+// TestServicePeer runs in a child test process, with real stdin/stdout pipes.
+// "block" acknowledges one request, then stops reading until signalled.
+func TestServicePeer(test *testing.T) {
+	mode := os.Getenv("STRIG_TEST_SERVICE")
+	if mode == "" {
+		test.Skip("helper process")
+	}
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGUSR1)
+	if mode == "hold-output" {
+		<-signals
+		os.Exit(0)
+	}
+	directory := os.Getenv("FAKE_DIRECTORY")
+	starts, err := os.OpenFile(filepath.Join(directory, "starts"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		os.Exit(2)
+	}
+	if _, err := fmt.Fprintln(starts, os.Getpid()); err != nil {
+		os.Exit(2)
+	}
+	if err := starts.Close(); err != nil {
+		os.Exit(2)
+	}
+	encoder := json.NewEncoder(os.Stdout)
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Buffer(make([]byte, 64<<10), 8<<20)
+	for scanner.Scan() {
+		var request struct {
+			Identifier string `json:"id"`
+			Arguments  string `json:"arguments"`
+		}
+		if err := json.Unmarshal(scanner.Bytes(), &request); err != nil {
+			os.Exit(3)
+		}
+		if request.Arguments == "exit-with-open-output" {
+			child := exec.Command(os.Args[0], "-test.run=^TestServicePeer$")
+			child.Env = append(os.Environ(), "STRIG_TEST_SERVICE=hold-output")
+			child.Stdout = os.Stdout
+			if err := child.Start(); err != nil {
+				os.Exit(4)
+			}
+			if err := os.WriteFile(filepath.Join(directory, "output-holder"), []byte(strconv.Itoa(child.Process.Pid)), 0o600); err != nil {
+				os.Exit(5)
+			}
+			os.Exit(0)
+		}
+		if err := encoder.Encode(map[string]any{"id": request.Identifier, "name": "answer", "data": map[string]string{"text": request.Arguments}}); err != nil {
+			os.Exit(7)
+		}
+		if err := encoder.Encode(map[string]string{"id": request.Identifier, "name": "done"}); err != nil {
+			os.Exit(7)
+		}
+		if request.Arguments == "block" {
+			<-signals
+			var first [1]byte
+			if _, err := os.Stdin.Read(first[:]); err != nil {
+				os.Exit(6)
+			}
+			if _, err := fmt.Fprintln(os.Stderr, "service request byte read"); err != nil {
+				os.Exit(7)
+			}
+			<-signals
+		}
+	}
+	os.Exit(0)
+}
+
+func backpressureHarness(test *testing.T) *serviceHarness {
+	test.Helper()
+	harness := newServiceHarness(test, time.Minute)
+	harness.runner.entries["ask"].service.onRun = []string{os.Args[0], "-test.run=^TestServicePeer$"}
+	harness.runner.environment = append(harness.runner.environment, "STRIG_TEST_SERVICE=answer", "GORACE=atexit_sleep_ms=0")
+	return harness
+}
+
+// A run cancelled during a partial write must return before its minute-long
+// timeout, retire that stream, and let the next run start a fresh service.
+func TestServiceCancelledPartialWriteRestarts(test *testing.T) {
+	harness := backpressureHarness(test)
+	read := make(chan struct{})
+	harness.runner.logger = slog.New(slog.NewTextHandler(&requestReadLog{lockedBuffer: harness.log, read: read}, nil))
+	if result := harness.run(context.Background(), "ask", "block"); result.err != nil {
+		test.Fatal(result.err)
+	}
+	serving := harness.runner.entries["ask"].service
+	serving.mutex.Lock()
+	process := serving.process
+	serving.mutex.Unlock()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	results := make(chan outcome, 1)
+	go func() { results <- harness.run(ctx, "ask", strings.Repeat("x", 1<<20)) }()
+	if err := process.child.Signal(syscall.SIGUSR1); err != nil {
+		test.Fatal(err)
+	}
+	// The helper reads one byte, then stops again. This proves the blocked
+	// request has written part of its line before it is cancelled.
+	receive(test, read)
+	cancel()
+	result := receive(test, results)
+	if !errors.Is(result.err, context.Canceled) {
+		test.Fatalf("cancelled run: %v", result.err)
+	}
+	if result := harness.run(context.Background(), "ask", "next"); result.err != nil || len(result.effects) != 1 || result.effects[0].Text != "next" {
+		test.Errorf("run after interrupted request: %v, %v", result.effects, result.err)
+	}
+	if starts := harness.starts(test); len(starts) != 2 {
+		test.Errorf("%d starts, want a fresh stream", len(starts))
+	}
+	// The retired process is reaped by Stop, even though another is active.
+	harness.runner.Stop()
+	if err := process.child.Signal(syscall.Signal(0)); !errors.Is(err, os.ErrProcessDone) {
+		test.Errorf("retired process still alive: %v", err)
+	}
+}
+
+type requestReadLog struct {
+	*lockedBuffer
+	read chan struct{}
+	once sync.Once
+}
+
+func (log *requestReadLog) Write(data []byte) (int, error) {
+	if strings.Contains(string(data), "service request byte read") {
+		log.once.Do(func() { close(log.read) })
+	}
+	return log.lockedBuffer.Write(data)
+}
+
+func TestServiceTimedOutPartialWriteRestarts(test *testing.T) {
+	harness := backpressureHarness(test)
+	if result := harness.run(context.Background(), "ask", "block"); result.err != nil {
+		test.Fatal(result.err)
+	}
+	harness.runner.entries["ask"].plugin.Timeout = 30 * time.Millisecond
+	if result := harness.run(context.Background(), "ask", strings.Repeat("x", 1<<20)); !errors.Is(result.err, ErrTimeout) {
+		test.Fatalf("full pipe: %v", result.err)
+	}
+	harness.runner.entries["ask"].plugin.Timeout = time.Minute
+	if result := harness.run(context.Background(), "ask", "next"); result.err != nil || len(result.effects) != 1 || result.effects[0].Text != "next" {
+		test.Errorf("next request: %v, %v", result.effects, result.err)
+	}
+	if starts := harness.starts(test); len(starts) != 2 {
+		test.Errorf("%d starts, want two", len(starts))
+	}
+}
+
+func TestServiceWaitingWriterCanCancel(test *testing.T) {
+	for _, expired := range []bool{false, true} {
+		test.Run(strconv.FormatBool(expired), func(test *testing.T) {
+			harness := backpressureHarness(test)
+			if result := harness.run(context.Background(), "ask", "block"); result.err != nil {
+				test.Fatal(result.err)
+			}
+			serving := harness.runner.entries["ask"].service
+			serving.mutex.Lock()
+			process := serving.process
+			serving.mutex.Unlock()
+			process.writing <- struct{}{}
+			defer func() { <-process.writing }()
+			var ctx context.Context
+			var cancel context.CancelFunc
+			if expired {
+				ctx, cancel = context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+			} else {
+				ctx, cancel = context.WithCancel(context.Background())
+				cancel()
+			}
+			defer cancel()
+			result := make(chan outcome, 1)
+			go func() { result <- harness.run(ctx, "ask", "queued") }()
+			if result := receive(test, result); !errors.Is(result.err, ctx.Err()) {
+				test.Errorf("queued run: %v, want %v", result.err, ctx.Err())
+			}
+		})
+	}
+}
+
+// A dead process cannot receive another run while a child holds its output.
+func TestServiceRestartsBeforeOldOutputDrains(test *testing.T) {
+	harness := backpressureHarness(test)
+	exited := make(chan string, 8)
+	harness.runner.exited = func(name string) { exited <- name }
+	harness.runner.waitDelay = time.Minute
+	test.Cleanup(func() {
+		data, err := os.ReadFile(filepath.Join(harness.directory, "output-holder"))
+		if err != nil {
+			return
+		}
+		identifier, err := strconv.Atoi(string(data))
+		if err != nil {
+			test.Error(err)
+			return
+		}
+		_ = syscall.Kill(identifier, syscall.SIGUSR1)
+	})
+	result := make(chan outcome, 1)
+	go func() { result <- harness.run(context.Background(), "ask", "exit-with-open-output") }()
+	receive(test, exited)
+	if next := harness.run(context.Background(), "ask", "next"); next.err != nil || len(next.effects) != 1 || next.effects[0].Text != "next" {
+		test.Errorf("next run joined dead process: %v, %v", next.effects, next.err)
+	}
+	data, err := os.ReadFile(filepath.Join(harness.directory, "output-holder"))
+	if err != nil {
+		test.Fatal(err)
+	}
+	identifier, err := strconv.Atoi(string(data))
+	if err != nil {
+		test.Fatal(err)
+	}
+	_ = syscall.Kill(identifier, syscall.SIGUSR1)
+	if old := receive(test, result); !errors.Is(old.err, ErrExited) {
+		test.Errorf("old run: %v", old.err)
+	}
+}

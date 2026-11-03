@@ -511,20 +511,23 @@ func TestQuitBoundHoldsWhateverTheRunnerDoes(test *testing.T) {
 	<-results
 }
 
-// stoppingRunner has services: Run waits for its context to end, and Stop
-// records when it came.
+// stoppingRunner needs Stop to unblock its run, as a blocked service write does.
 type stoppingRunner struct {
-	mutex  sync.Mutex
-	events []string
+	mutex   sync.Mutex
+	events  []string
+	stopped chan struct{}
 }
 
 func (runner *stoppingRunner) Run(ctx context.Context, _ string, _ plugins.Request) ([]plugins.Effect, error) {
-	<-ctx.Done()
+	<-runner.stopped
 	runner.record("run ended")
 	return nil, ctx.Err()
 }
 
-func (runner *stoppingRunner) Stop() { runner.record("stopped") }
+func (runner *stoppingRunner) Stop() {
+	runner.record("stopped")
+	close(runner.stopped)
+}
 
 func (runner *stoppingRunner) record(event string) {
 	runner.mutex.Lock()
@@ -532,9 +535,9 @@ func (runner *stoppingRunner) record(event string) {
 	runner.events = append(runner.events, event)
 }
 
-// Close ends the runs, then the runner's services.
-func TestCloseStopsTheServicesAfterTheRuns(test *testing.T) {
-	runner := &stoppingRunner{}
+// Close must stop services without first waiting for their runs to end.
+func TestCloseStopsServicesBeforeWaitingForRuns(test *testing.T) {
+	runner := &stoppingRunner{stopped: make(chan struct{})}
 	model, _ := pluginModel(test, runner, newPullRequestView(pullRequestSeven))
 	run := startRun(model, pullRequestSeven)
 	done := make(chan struct{})
@@ -546,7 +549,7 @@ func TestCloseStopsTheServicesAfterTheRuns(test *testing.T) {
 	<-done
 	runner.mutex.Lock()
 	defer runner.mutex.Unlock()
-	if diff := cmp.Diff([]string{"run ended", "stopped"}, runner.events); diff != "" {
+	if diff := cmp.Diff([]string{"stopped", "run ended"}, runner.events); diff != "" {
 		test.Errorf("events (-want +got):\n%s", diff)
 	}
 }

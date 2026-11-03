@@ -3,7 +3,8 @@
 // input and reads effects, JSON lines on its standard output, that say what
 // the plugin would like strig to do. A plugin with a service is served by one
 // long-running process instead, shared with the other plugins of that
-// service: each run writes its request to it and waits for its effects. A plugin suggests; strig decides: strig
+// service: each run writes its request to it and waits for its effects.
+// A plugin suggests; strig decides: strig
 // gives a plugin no GitHub token and writes nothing for it, and what a plugin
 // asks for goes through strig's own rules. A plugin is still the user's own
 // program, running as the user, so it can do whatever the user can, such as
@@ -167,6 +168,7 @@ type Runner struct {
 	queued      func(name string)
 	withTimeout func(ctx context.Context, duration time.Duration) (context.Context, context.CancelFunc)
 	sent        func(name string)
+	exited      func(name string)
 }
 
 type entry struct {
@@ -186,6 +188,7 @@ func New(plugins []config.Plugin, options Options) *Runner {
 		queued:      func(string) {},
 		withTimeout: context.WithTimeout,
 		sent:        func(string) {},
+		exited:      func(string) {},
 	}
 	runner.serviceContext, runner.stopServices = context.WithCancel(context.Background())
 	if options.Logger != nil {

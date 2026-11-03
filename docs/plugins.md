@@ -307,10 +307,15 @@ What differs from a one-off run:
   cannot be read: strig kills the process and its runs fail.
 - **The timeout** is per run and starts when the run starts. A run that times
   out fails, and the process keeps running; what it prints for the run later
-  is skipped.
+  is skipped. Waiting to write a request and writing it both respect the
+  timeout and cancellation. If a request is only partly written, strig kills
+  the process: its input is no longer a stream of complete JSON lines. The
+  other runs on that process fail, and the next run starts a new process.
 - **Exit status** does not decide runs. When the process ends, the runs under
   way fail with `plugin "<name>": exited`, and the next run starts it again.
 - **Quitting strig** kills the process, on every path out, as it kills runs.
+  Stopping services starts alongside cancelling runs and saving local threads;
+  a blocked run or save cannot prevent the kill from being attempted.
   Should the kill not finish within the quit wait, the process's standard
   input still ends as strig exits, so a service should also exit at the end
   of its input.

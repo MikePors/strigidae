@@ -33,7 +33,8 @@ type service struct {
 // serviceProcess is one start of a service.
 type serviceProcess struct {
 	input   *os.File
-	writing sync.Mutex // one request line at a time
+	writing chan struct{} // one request line at a time, acquired with the run's context
+	child   *os.Process
 	// pending are the runs waiting for "done", by identifier. Guarded by the
 	// service's mutex.
 	pending map[string]*pendingRun
@@ -53,8 +54,8 @@ type serviceReply struct {
 
 // ask sends the request to the plugin's service, starting it if it isn't
 // running, and waits for the run's "done". The timeout starts here, with the
-// run. A run that ends before "done" (timeout, cancel) leaves the service
-// running; whatever it prints for the run later is dropped.
+// run. After a complete request, a timeout or cancel leaves the service
+// running; a partial request retires it so the next run has a clean stream.
 func (runner *Runner) ask(ctx context.Context, found *entry, request Request) ([]Effect, error) {
 	name := found.plugin.Command
 	runContext, cancel := runner.withTimeout(ctx, found.plugin.Timeout)
@@ -72,10 +73,17 @@ func (runner *Runner) ask(ctx context.Context, found *entry, request Request) ([
 	if err != nil {
 		return nil, fmt.Errorf("encode request for plugin %q: %w", name, err)
 	}
-	// The write fails if the service ended; the reply then says why.
-	if err := process.write(runContext, append(line, '\n')); err == nil {
-		runner.sent(name)
+	line = append(line, '\n')
+	if err := found.service.write(runContext, process, line); err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, os.ErrDeadlineExceeded) {
+			return nil, fmt.Errorf("plugin %q: %w after %s", name, ErrTimeout, found.plugin.Timeout)
+		}
+		return nil, fmt.Errorf("write request to plugin %q: %w", name, err)
 	}
+	runner.sent(name)
 	select {
 	case answered := <-reply:
 		if answered.err != nil {
@@ -115,16 +123,53 @@ func (serving *service) forget(process *serviceProcess, identifier string) {
 	delete(process.pending, identifier)
 }
 
-// write sends one request line. A service that doesn't read its input blocks
-// the write only until the run's deadline.
-func (process *serviceProcess) write(ctx context.Context, line []byte) error {
-	process.writing.Lock()
-	defer process.writing.Unlock()
+// retire prevents new runs from using a broken stream and ends its process.
+func (serving *service) retire(process *serviceProcess) {
+	serving.mutex.Lock()
+	if serving.process == process {
+		serving.process = nil
+	}
+	serving.mutex.Unlock()
+	_ = process.child.Kill() // it may have exited already
+}
+
+// write sends one request line. Both waiting for another writer and writing
+// to a full pipe stop when the run is cancelled or its deadline expires.
+func (serving *service) write(ctx context.Context, process *serviceProcess, line []byte) error {
+	select {
+	case process.writing <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	defer func() { <-process.writing }()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	deadline, _ := ctx.Deadline() // the zero time is no deadline
 	if err := process.input.SetWriteDeadline(deadline); err != nil {
 		return err
 	}
-	_, err := process.input.Write(line)
+	interrupted := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() {
+		_ = process.input.SetWriteDeadline(time.Now())
+		close(interrupted)
+	})
+	defer func() {
+		// The callback must end before the next writer sets its deadline.
+		if !stop() {
+			<-interrupted
+		}
+	}()
+	written, err := process.input.Write(line)
+	if ctx.Err() != nil {
+		err = ctx.Err()
+	}
+	// Retire before releasing the writer, so another request cannot append
+	// to an unfinished line. Cancellation before any bytes leaves it usable.
+	interruptedWrite := errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, os.ErrDeadlineExceeded)
+	if err != nil && (written > 0 && written < len(line) || !interruptedWrite) {
+		serving.retire(process)
+	}
 	return err
 }
 
@@ -163,6 +208,7 @@ func (runner *Runner) startService(serving *service) (*serviceProcess, error) {
 	command.Stdin, command.Stdout = inputReader, outputWriter
 	standardError, flushLog := runner.standardErrorSink(serving.name)
 	command.Stderr = &boundedLog{writer: standardError, remaining: MaximumErrorOutputSize, cutOff: func() {
+		flushLog() // the cut line comes before the note about it
 		runner.logger.Warn("plugin standard error cut off", "plugin", serving.name, "limit", MaximumErrorOutputSize)
 	}}
 	command.WaitDelay = runner.waitDelay
@@ -176,7 +222,7 @@ func (runner *Runner) startService(serving *service) (*serviceProcess, error) {
 	if closeError != nil {
 		runner.logger.Warn("close the service's pipe ends", "plugin", serving.name, "err", closeError)
 	}
-	process := &serviceProcess{input: inputWriter, pending: map[string]*pendingRun{}}
+	process := &serviceProcess{input: inputWriter, writing: make(chan struct{}, 1), child: command.Process, pending: map[string]*pendingRun{}}
 	read := make(chan error, 1)
 	started = true
 	go func() { read <- runner.readService(serving, process, outputReader, command) }()
@@ -254,6 +300,13 @@ func (runner *Runner) serviceLine(serving *service, process *serviceProcess, lin
 func (runner *Runner) waitService(serving *service, process *serviceProcess, command *exec.Cmd, output *os.File, read <-chan error, flushLog func()) {
 	defer runner.serviceProcesses.Done()
 	waitError := command.Wait()
+	// A new run must not join this process while its old output drains.
+	serving.mutex.Lock()
+	if serving.process == process {
+		serving.process = nil
+	}
+	serving.mutex.Unlock()
+	runner.exited(serving.name)
 	// Something the service started can hold its output open; reading stops
 	// a moment after the service itself ended.
 	var readError error
@@ -285,8 +338,8 @@ func (runner *Runner) waitService(serving *service, process *serviceProcess, com
 }
 
 // Stop kills the services' processes and returns once they have ended; runs
-// waiting on one fail. cmd/strig calls it as strig exits, after the runs were
-// cancelled. A run after Stop can't start a service.
+// waiting on one fail. Model.Close calls it as strig exits, alongside run
+// cancellation and file flushing. A run after Stop can't start a service.
 func (runner *Runner) Stop() {
 	runner.stopping.Lock()
 	runner.stopped = true
