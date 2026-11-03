@@ -304,9 +304,10 @@ func (model *Model) quit() tea.Cmd {
 	return model.tick(model.pluginQuitWait, func(time.Time) tea.Msg { return quitWaitedMessage{} })
 }
 
-// Close cancels every plugin run and waits for them to end, and for the writes
-// of local threads in flight, then writes what changed meanwhile; all within
-// one quit wait. cmd/strig calls it after the program returns, on every path:
+// Close cancels every plugin run and waits for them to end, and writes the
+// local threads that changed since their last write, all within one quit wait.
+// The writes do not wait for the runs, and do not depend on any command having
+// run. cmd/strig calls it after the program returns, on every path:
 // an exit that never reaches Update (SIGTERM ends Bubble Tea with a QuitMsg that
 // the model does not see; SIGINT and a failed Run are others) would otherwise
 // leave plugins running, and a plugin has a session of its own. The wait is
@@ -316,13 +317,17 @@ func (model *Model) quit() tea.Cmd {
 // afterwards.
 func (model *Model) Close() {
 	timeout := time.After(model.pluginQuitWait)
-	ended := true
+	flushed := model.flushLocalThreads() // runs beside the cancel and the wait for the runs
 	if model.pluginCancel != nil {
 		model.pluginCancel()
-		ended = waitFor(&model.pluginRunning, timeout)
 	}
-	if ended && waitFor(&model.localFiles.running, timeout) {
-		model.flushLocalThreads()
+	select {
+	case <-flushed:
+	case <-timeout:
+		return
+	}
+	if model.pluginCancel != nil {
+		waitFor(&model.pluginRunning, timeout)
 	}
 }
 

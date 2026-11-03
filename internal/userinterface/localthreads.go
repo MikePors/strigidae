@@ -189,10 +189,13 @@ func (store *localThreadStore) merge(key pullRequestKey, loaded []LocalThread) (
 	}
 	merged := make([]LocalThread, 0, len(loaded)+len(store.byRequest[key]))
 	for _, thread := range loaded {
-		existing, taken := store.find(thread.Identifier)
-		if (taken && sameQuestion(existing, thread)) || slices.ContainsFunc(merged, func(other LocalThread) bool {
+		_, taken := store.find(thread.Identifier)
+		// Only this pull request's threads can be the same thread; another's
+		// with the same identifier is a clash, renumbered below.
+		duplicate := func(other LocalThread) bool {
 			return other.Identifier == thread.Identifier && sameQuestion(other, thread)
-		}) {
+		}
+		if slices.ContainsFunc(store.byRequest[key], duplicate) || slices.ContainsFunc(merged, duplicate) {
 			changed = true // a duplicate is not kept
 			continue
 		}

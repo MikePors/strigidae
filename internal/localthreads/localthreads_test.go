@@ -68,11 +68,11 @@ func TestDecodeFailures(test *testing.T) {
 
 func TestPathParts(test *testing.T) {
 	for _, testCase := range []struct {
-		name              string
-		host, owner, repo string
-		number            int
-		want              string
-		wantNotPlain      bool
+		name                        string
+		host, owner, repositoryName string
+		number                      int
+		want                        string
+		wantNotPlain                bool
 	}{
 		{"plain", "github.com", "acme", "widgets", 7, "/state/strig/local-threads/github.com/acme/widgets/7.json", false},
 		{"empty host", "", "acme", "widgets", 7, "", true},
@@ -83,10 +83,11 @@ func TestPathParts(test *testing.T) {
 		{"slash in name", "github.com", "acme", "../x", 7, "", true},
 		{"backslash", "github.com", "acme\\x", "widgets", 7, "", true},
 		{"nul", "github.com", "acme", "wid\x00gets", 7, "", true},
+		{"mixed case", "github.com", "Acme", "Widgets", 7, "/state/strig/local-threads/github.com/acme/widgets/7.json", false},
 		{"zero number", "github.com", "acme", "widgets", 0, "", true},
 	} {
 		test.Run(testCase.name, func(test *testing.T) {
-			got, err := Path("/state", testCase.host, testCase.owner, testCase.repo, testCase.number)
+			got, err := Path("/state", testCase.host, testCase.owner, testCase.repositoryName, testCase.number)
 			if (err != nil) != testCase.wantNotPlain {
 				test.Fatalf("err = %v, want error %v", err, testCase.wantNotPlain)
 			}
@@ -192,5 +193,23 @@ func TestSetAside(test *testing.T) {
 	}
 	if err := SetAside(path); err != nil {
 		test.Errorf("setting aside a missing file: %v", err)
+	}
+}
+
+func TestSetAsideKeepsEarlierCopies(test *testing.T) {
+	path := filepath.Join(test.TempDir(), "7.json")
+	for _, content := range []string{"first", "second", "third"} {
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			test.Fatal(err)
+		}
+		if err := SetAside(path); err != nil {
+			test.Fatal(err)
+		}
+	}
+	for suffix, want := range map[string]string{UnreadableSuffix: "first", UnreadableSuffix + ".2": "second", UnreadableSuffix + ".3": "third"} {
+		got, err := os.ReadFile(path + suffix)
+		if err != nil || string(got) != want {
+			test.Errorf("%s = %q, %v; want %q", suffix, got, err, want)
+		}
 	}
 }

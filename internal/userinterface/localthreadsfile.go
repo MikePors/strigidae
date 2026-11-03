@@ -2,6 +2,7 @@ package userinterface
 
 import (
 	"errors"
+	"log/slog"
 	"sync"
 
 	tea "charm.land/bubbletea/v2"
@@ -22,30 +23,38 @@ type (
 		err     error
 	}
 	localThreadsSavedMessage struct {
-		key      pullRequestKey
-		setAside bool
-		err      error
+		key pullRequestKey
+		err error
 	}
 )
 
 // localSave is where one pull request's file stands. At most one operation on
 // it (the first read, or a write) is in flight; a change that comes meanwhile
-// only sets pending, and one write of the latest threads follows. So an older
-// copy can never land after a newer one.
+// only sets pending, and one write of the latest threads follows.
 type localSave struct {
 	inFlight bool
 	pending  bool
 }
 
-// localThreadFiles is the root's bookkeeping for the files. Only Update uses
-// it, apart from the wait group, which commands use.
+// localThreadFiles is the root's bookkeeping for the files. Update uses the
+// fields above the mutex; the fields below it are shared with the commands
+// and Close, and are used only with the mutex held.
+//
+// Every change of a pull request's threads bumps its generation, and a write
+// carries the generation it was made from. A write whose generation is not newer
+// than the last one written is skipped, so an older copy can never land after a
+// newer one, whoever writes (a command that ran late, or Close).
 type localThreadFiles struct {
-	directory string // the state directory; empty keeps nothing
-	opened    map[pullRequestKey]bool
-	saves     map[pullRequestKey]*localSave
-	setAside  map[pullRequestKey]bool // the file is unreadable: move it before writing
-	explained map[pullRequestKey]bool // why nothing is kept was logged
-	running   sync.WaitGroup          // read and write commands that have not returned; see Close
+	directory  string // the state directory; empty keeps nothing
+	opened     map[pullRequestKey]bool
+	loaded     map[pullRequestKey]bool // the saved threads have been merged
+	saves      map[pullRequestKey]*localSave
+	generation map[pullRequestKey]int
+	explained  map[pullRequestKey]bool // why nothing is kept was logged
+
+	mutex      sync.Mutex
+	written    map[pullRequestKey]int  // the generation last written
+	unreadable map[pullRequestKey]bool // the file can't be used: move it aside before writing
 }
 
 func (files *localThreadFiles) save(key pullRequestKey) *localSave {
@@ -56,6 +65,52 @@ func (files *localThreadFiles) save(key pullRequestKey) *localSave {
 		files.saves[key] = &localSave{}
 	}
 	return files.saves[key]
+}
+
+// changed records that the threads of key differ from the last write.
+func (files *localThreadFiles) changed(key pullRequestKey) {
+	if files.generation == nil {
+		files.generation = map[pullRequestKey]int{}
+	}
+	files.generation[key]++
+}
+
+func (files *localThreadFiles) markUnreadable(key pullRequestKey) {
+	files.mutex.Lock()
+	defer files.mutex.Unlock()
+	if files.unreadable == nil {
+		files.unreadable = map[pullRequestKey]bool{}
+	}
+	files.unreadable[key] = true
+}
+
+// write replaces the file with threads, made from the given generation, unless
+// a newer copy has been written. An unreadable file is moved aside first, once,
+// and if that fails nothing is overwritten.
+func (files *localThreadFiles) write(key pullRequestKey, path string, generation int, threads []localthreads.Thread) error {
+	files.mutex.Lock()
+	defer files.mutex.Unlock()
+	if generation <= files.written[key] {
+		return nil
+	}
+	data, err := localthreads.Encode(threads)
+	if err != nil {
+		return err
+	}
+	if files.unreadable[key] {
+		if err := localthreads.SetAside(path); err != nil {
+			return err
+		}
+		delete(files.unreadable, key)
+	}
+	if err := localthreads.Write(path, data); err != nil {
+		return err
+	}
+	if files.written == nil {
+		files.written = map[pullRequestKey]int{}
+	}
+	files.written[key] = generation
+	return nil
 }
 
 // localThreadPath is the file of a pull request. When there can be none (no
@@ -81,12 +136,20 @@ func (model *Model) localThreadPath(key pullRequestKey) (string, bool) {
 }
 
 // pullRequestOpened reads the saved threads the first time a pull request is
-// opened. Until the read returns it counts as a write in flight, so nothing
-// overwrites the file before its threads are loaded.
+// opened.
 func (model *Model) pullRequestOpened(message PullRequestOpenedMessage) tea.Cmd {
-	key := pullRequestKey{message.Identity.Host, message.Identity.Repository, message.Identity.Number}
+	if model.quitting {
+		return nil
+	}
+	return model.readLocalThreads(pullRequestKey{message.Identity.Host, message.Identity.Repository, message.Identity.Number})
+}
+
+// readLocalThreads starts the read of a pull request's file, once per run.
+// Until the read returns it counts as a write in flight, so nothing
+// overwrites the file before its threads are loaded.
+func (model *Model) readLocalThreads(key pullRequestKey) tea.Cmd {
 	files := &model.localFiles
-	if model.quitting || files.opened[key] {
+	if files.opened[key] {
 		return nil
 	}
 	path, ok := model.localThreadPath(key)
@@ -98,9 +161,7 @@ func (model *Model) pullRequestOpened(message PullRequestOpenedMessage) tea.Cmd 
 	}
 	files.opened[key] = true
 	files.save(key).inFlight = true
-	files.running.Add(1)
 	return func() tea.Msg {
-		defer files.running.Done()
 		file, err := localthreads.Read(path)
 		return localThreadsLoadedMessage{key: key, threads: fromFile(key, file.Threads), err: err}
 	}
@@ -112,17 +173,19 @@ func (model *Model) localThreadsLoaded(message localThreadsLoadedMessage) tea.Cm
 	files := &model.localFiles
 	save := files.save(message.key)
 	save.inFlight = false
+	if files.loaded == nil {
+		files.loaded = map[pullRequestKey]bool{}
+	}
+	files.loaded[message.key] = true
 	changed := false
 	if message.err != nil {
 		model.log.Warn("local threads file ignored", "reason", loadFailure(message.err), "number", message.key.number)
-		if files.setAside == nil {
-			files.setAside = map[pullRequestKey]bool{}
-		}
-		files.setAside[message.key] = true
+		files.markUnreadable(message.key)
 	} else {
 		changed = model.localThreads.merge(message.key, message.threads)
 	}
 	if changed {
+		files.changed(message.key)
 		save.pending = true
 	}
 	var written tea.Cmd
@@ -150,12 +213,20 @@ func loadFailure(err error) string {
 }
 
 // saveLocalThreads writes the pull request's threads after a change: at once
-// if nothing is in flight for it, else when what is in flight ends.
+// if nothing is in flight for it, else when what is in flight ends. A change
+// to a pull request whose saved threads have not been read yet starts the read
+// and waits for it, so the file is never written without them.
 func (model *Model) saveLocalThreads(key pullRequestKey) tea.Cmd {
 	if _, ok := model.localThreadPath(key); !ok {
 		return nil
 	}
-	save := model.localFiles.save(key)
+	files := &model.localFiles
+	files.changed(key)
+	save := files.save(key)
+	if !files.opened[key] {
+		save.pending = true
+		return model.readLocalThreads(key)
+	}
 	if save.inFlight {
 		save.pending = true
 		return nil
@@ -172,39 +243,19 @@ func (model *Model) writeLocalThreads(key pullRequestKey) tea.Cmd {
 	files := &model.localFiles
 	files.save(key).inFlight = true
 	threads := toFile(model.localThreads.forRequest(key))
-	setAside := files.setAside[key]
-	files.running.Add(1)
+	generation := files.generation[key]
 	return func() tea.Msg {
-		defer files.running.Done()
-		return localThreadsSavedMessage{key: key, setAside: setAside, err: writeLocalFile(path, threads, setAside)}
+		return localThreadsSavedMessage{key: key, err: files.write(key, path, generation, threads)}
 	}
-}
-
-// writeLocalFile moves an unreadable file aside if asked, then replaces the
-// file. If the file can't be moved it is not overwritten.
-func writeLocalFile(path string, threads []localthreads.Thread, setAside bool) error {
-	data, err := localthreads.Encode(threads)
-	if err != nil {
-		return err
-	}
-	if setAside {
-		if err := localthreads.SetAside(path); err != nil {
-			return err
-		}
-	}
-	return localthreads.Write(path, data)
 }
 
 // localThreadsSaved ends a write. A failure is logged, without any thread
 // text, and stops nothing. A change that came meanwhile is written now.
 func (model *Model) localThreadsSaved(message localThreadsSavedMessage) tea.Cmd {
-	files := &model.localFiles
-	save := files.save(message.key)
+	save := model.localFiles.save(message.key)
 	save.inFlight = false
 	if message.err != nil {
 		model.log.Warn("local threads not saved", "err", message.err, "number", message.key.number)
-	} else if message.setAside {
-		delete(files.setAside, message.key)
 	}
 	if !save.pending {
 		return nil
@@ -213,24 +264,63 @@ func (model *Model) localThreadsSaved(message localThreadsSavedMessage) tea.Cmd 
 	return model.writeLocalThreads(message.key)
 }
 
-// flushLocalThreads writes, from Close, the changes that were waiting for a
-// write in flight. The caller has seen the writes in flight end; if they did
-// not end in time, an older copy might still land, so it does not call this.
-func (model *Model) flushLocalThreads() {
+// flushLocalThreads starts, from Close, the write of every pull request whose
+// threads changed since the last write that completed. It does not depend on
+// any command having run: a write command that Bubble Tea never started is
+// made good here. A pull request whose saved threads were never read is read
+// first and merged, so they are kept. The program has returned, so Close may
+// use the model; the returned channel closes when the writes end, and the
+// caller bounds the wait so a stuck disk can't hold quit.
+func (model *Model) flushLocalThreads() <-chan struct{} {
+	type job struct {
+		key        pullRequestKey
+		path       string
+		generation int
+		threads    []LocalThread
+		loaded     bool
+	}
 	files := &model.localFiles
-	for key, save := range files.saves {
-		if !save.pending {
+	var jobs []job
+	files.mutex.Lock()
+	for key, generation := range files.generation {
+		if generation <= files.written[key] {
 			continue
 		}
-		save.pending = false
-		path, ok := model.localThreadPath(key)
-		if !ok {
-			continue
-		}
-		if err := writeLocalFile(path, toFile(model.localThreads.forRequest(key)), files.setAside[key]); err != nil {
-			model.log.Warn("local threads not saved", "err", err, "number", key.number)
+		if path, ok := model.localThreadPath(key); ok {
+			jobs = append(jobs, job{key, path, generation, model.localThreads.forRequest(key), files.loaded[key]})
 		}
 	}
+	files.mutex.Unlock()
+	next, limit := model.localThreads.next, model.localThreads.limit
+	logger := model.log
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		for _, pending := range jobs {
+			threads := pending.threads
+			if !pending.loaded {
+				threads = mergeUnread(pending.key, pending.path, pending.threads, next, limit, files, logger)
+			}
+			if err := files.write(pending.key, pending.path, pending.generation, toFile(threads)); err != nil {
+				logger.Warn("local threads not saved", "err", err, "number", pending.key.number)
+			}
+		}
+	}()
+	return finished
+}
+
+// mergeUnread reads the file of a pull request whose read never finished and
+// merges it with the threads asked this run, as a load would.
+func mergeUnread(key pullRequestKey, path string, asked []LocalThread, next, limit int, files *localThreadFiles, logger *slog.Logger) []LocalThread {
+	file, err := localthreads.Read(path)
+	if err != nil {
+		logger.Warn("local threads file ignored", "reason", loadFailure(err), "number", key.number)
+		files.markUnreadable(key)
+		return asked
+	}
+	scratch := localThreadStore{next: next, limit: limit, byRequest: map[pullRequestKey][]LocalThread{key: asked}}
+	scratch.merge(key, fromFile(key, file.Threads))
+	return scratch.forRequest(key)
 }
 
 func toFile(threads []LocalThread) []localthreads.Thread {

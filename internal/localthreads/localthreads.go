@@ -116,6 +116,8 @@ func Path(stateDirectory, host, owner, name string, number int) (string, error) 
 			return "", ErrNotPlainName
 		}
 	}
+	// GitHub names are case-insensitive, so both spellings share a file.
+	owner, name = strings.ToLower(owner), strings.ToLower(name)
 	return filepath.Join(stateDirectory, "strig", "local-threads", host, owner, name, strconv.Itoa(number)+".json"), nil
 }
 
@@ -182,14 +184,37 @@ func Write(path string, data []byte) error {
 		_ = os.Remove(name) // best effort: the write already failed
 		return fmt.Errorf("write local threads: %w", err)
 	}
+	syncDirectory(directory)
 	return nil
 }
 
+// syncDirectory makes the rename durable. It is best effort: the new file is
+// already in place, and not every file system can sync a directory.
+func syncDirectory(directory string) {
+	handle, err := os.Open(directory)
+	if err != nil {
+		return
+	}
+	_ = handle.Sync()
+	_ = handle.Close()
+}
+
 // SetAside renames an unusable file to path + UnreadableSuffix so the next
-// write doesn't overwrite it. A file that is already gone is not an error.
+// write doesn't overwrite it. An earlier set-aside copy is kept: the name is
+// then path + UnreadableSuffix + ".2", ".3" and so on. A file that is already
+// gone is not an error.
 func SetAside(path string) error {
-	err := os.Rename(path, path+UnreadableSuffix)
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+	if _, err := os.Lstat(path); errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	target := path + UnreadableSuffix
+	for attempt := 2; ; attempt++ {
+		if _, err := os.Lstat(target); errors.Is(err, fs.ErrNotExist) {
+			break
+		}
+		target = path + UnreadableSuffix + "." + strconv.Itoa(attempt)
+	}
+	if err := os.Rename(path, target); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("set aside unreadable local threads: %w", err)
 	}
 	return nil

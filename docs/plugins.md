@@ -129,7 +129,7 @@ error to give `show` to a `pull-request` plugin.
   draft, and not counted among the pull request's threads or unresolved
   threads. Folding (`z a`), `)` / `(`, `:set hideresolved`, `skipresolved` and
   search treat it like any other thread.
-- Threads are kept by repository and pull request number, so an answer that
+- Threads are kept by host, repository and pull request number, so an answer that
   arrives while the pull request is closed is there when you open it again.
 - **Answers survive restarting strig.** Each pull request has a file,
   `strig/local-threads/<host>/<owner>/<name>/<number>.json` under
@@ -144,6 +144,8 @@ error to give `show` to a `pull-request` plugin.
   ignored, and renamed to `<number>.json.unreadable` before strig next writes
   that pull request, so it is not overwritten. Nothing is kept when strig can't
   tell the pull request's host.
+  Two strig processes on the same pull request can overwrite each other's new
+  answers: each reads the file once and rewrites it whole.
 - **Outdated.** A thread remembers the head commit it was asked on. When the
   diff on screen is of another head, it is marked `[outdated]`, muted, and
   listed after the last row of its file with its location, as GitHub's

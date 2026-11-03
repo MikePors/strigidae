@@ -34,12 +34,13 @@ type savedSession struct {
 }
 
 type savedOptions struct {
-	directory string
-	host      string
-	limit     int
-	repo      github.Repository
-	times     []time.Time  // asked times to use, in order, before the clock moves on
-	runner    PluginRunner // replaces the one that answers at once
+	directory  string
+	host       string
+	limit      int
+	repository github.Repository
+	times      []time.Time  // asked times to use, in order, before the clock moves on
+	runner     PluginRunner // replaces the one that answers at once
+	quitWait   time.Duration
 }
 
 func newSavedSession(test *testing.T, options savedOptions) *savedSession {
@@ -50,15 +51,19 @@ func newSavedSession(test *testing.T, options savedOptions) *savedSession {
 		runner: &fakeRunner{effects: []plugins.Effect{{Name: plugins.EffectAnswer, Text: "because"}}},
 		clock:  time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC),
 	}
-	if options.repo.IsZero() {
-		options.repo = widgetsRepository
+	if options.repository.IsZero() {
+		options.repository = widgetsRepository
 	}
 	if options.runner != nil {
 		session.runner = options.runner
 	}
-	identity := PullRequestIdentity{Host: options.host, Repository: options.repo, Number: 7, Head: "abc"}
+	identity := PullRequestIdentity{Host: options.host, Repository: options.repository, Number: 7, Head: "abc"}
 	session.view = newPullRequestView(identity)
 	times := options.times
+	quitWait := options.quitWait
+	if quitWait == 0 {
+		quitWait = 300 * time.Millisecond
+	}
 	session.model = New(session.view, theme.Default(), Options{
 		Logger: slog.New(slog.NewTextHandler(session.logs, nil)),
 		Tick: func(_ time.Duration, function func(time.Time) tea.Msg) tea.Cmd {
@@ -67,7 +72,7 @@ func newSavedSession(test *testing.T, options savedOptions) *savedSession {
 		ViewCommands:     testViewCommands,
 		PluginRunner:     session.runner,
 		PluginCommands:   []PluginCommand{{Name: "ask", Target: config.TargetLines, Show: config.ShowThread}},
-		PluginQuitWait:   10 * time.Second,
+		PluginQuitWait:   quitWait,
 		StateDirectory:   options.directory,
 		LocalThreadLimit: options.limit,
 		Clock: func() time.Time {
@@ -585,7 +590,7 @@ func TestNothingIsKeptWithoutAUsableHost(test *testing.T) {
 	} {
 		test.Run(testCase.name, func(test *testing.T) {
 			directory := test.TempDir()
-			session := newSavedSession(test, savedOptions{directory: directory, host: testCase.host, repo: testCase.repository})
+			session := newSavedSession(test, savedOptions{directory: directory, host: testCase.host, repository: testCase.repository})
 			session.open()
 			session.ask("why?")
 			session.ask("and?")
@@ -673,5 +678,137 @@ func TestAskingBeforeTheLoadEndsKeepsTheSavedThreads(test *testing.T) {
 	}
 	if diff := cmp.Diff([]string{"old", "new"}, questions(session.shown())); diff != "" {
 		test.Errorf("shown (-want +got):\n%s", diff)
+	}
+}
+
+// The order of events in a real run: the question is asked before the root has
+// heard that the pull request opened. The saved thread must survive.
+func TestAskingBeforeOpeningKeepsTheSavedThreads(test *testing.T) {
+	directory := test.TempDir()
+	session := newSavedSession(test, savedOptions{directory: directory, host: "github.com"})
+	data, err := localthreads.Encode([]localthreads.Thread{{Identifier: "local-1", Question: "old", State: localthreads.StateAnswered, Asked: time.Unix(1, 0)}})
+	if err != nil {
+		test.Fatal(err)
+	}
+	if err := localthreads.Write(session.path(), data); err != nil {
+		test.Fatal(err)
+	}
+	session.ask("new")
+	session.open()
+	var got []string
+	for _, thread := range readSaved(test, session.path()) {
+		got = append(got, thread.Question)
+	}
+	if diff := cmp.Diff([]string{"old", "new"}, got); diff != "" {
+		test.Errorf("file (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff([]string{"old", "new"}, questions(session.shown())); diff != "" {
+		test.Errorf("shown (-want +got):\n%s", diff)
+	}
+}
+
+// Close makes good a write command that was never run, and does not wait for
+// it: the program ended before Bubble Tea ran the batch.
+func TestCloseWritesWhenTheWriteCommandNeverRan(test *testing.T) {
+	directory := test.TempDir()
+	session := newSavedSession(test, savedOptions{directory: directory, host: "github.com"})
+	session.open()
+	session.model.update(session.request("lost")) // its commands are dropped
+	session.model.Close()
+	if saved := readSaved(test, session.path()); len(saved) != 1 || saved[0].Question != "lost" {
+		test.Errorf("file after Close = %+v", saved)
+	}
+}
+
+// The same when a plugin run outlasts the quit wait.
+func TestCloseWritesWhenARunOutlastsTheWait(test *testing.T) {
+	directory := test.TempDir()
+	runner := &stubbornRunner{started: make(chan struct{}), let: make(chan struct{})}
+	session := newSavedSession(test, savedOptions{directory: directory, host: "github.com", runner: runner, quitWait: 50 * time.Millisecond})
+	session.open()
+	results := make(chan tea.Msg, 4)
+	var spawn func(command tea.Cmd)
+	spawn = func(command tea.Cmd) {
+		if command == nil {
+			return
+		}
+		go func() {
+			message := command()
+			if batch, ok := message.(tea.BatchMsg); ok {
+				for _, member := range batch {
+					spawn(member)
+				}
+				return
+			}
+			results <- message
+		}()
+	}
+	spawn(session.model.update(session.request("stuck")))
+	<-runner.started
+	session.model.update(session.request("lost")) // its commands are dropped
+	session.model.Close()
+	close(runner.let)
+	saved := readSaved(test, session.path())
+	if len(saved) != 2 {
+		test.Errorf("file after Close = %+v, want both questions", saved)
+	}
+}
+
+// A pull request whose saved threads were never read is read by Close and
+// merged, so the saved ones are not lost.
+func TestCloseKeepsSavedThreadsThatWereNeverRead(test *testing.T) {
+	directory := test.TempDir()
+	session := newSavedSession(test, savedOptions{directory: directory, host: "github.com"})
+	data, err := localthreads.Encode([]localthreads.Thread{{Identifier: "local-1", Question: "old", State: localthreads.StateAnswered, Asked: time.Unix(1, 0)}})
+	if err != nil {
+		test.Fatal(err)
+	}
+	if err := localthreads.Write(session.path(), data); err != nil {
+		test.Fatal(err)
+	}
+	session.model.update(session.request("new")) // the read never runs either
+	session.model.Close()
+	var got []string
+	for _, thread := range readSaved(test, session.path()) {
+		got = append(got, thread.Question)
+	}
+	if diff := cmp.Diff([]string{"old", "new"}, got); diff != "" {
+		test.Errorf("file (-want +got):\n%s", diff)
+	}
+}
+
+// A copy made before a newer one was written never replaces it, whoever
+// writes it.
+func TestAnOlderCopyNeverLandsAfterANewerOne(test *testing.T) {
+	directory := test.TempDir()
+	session := newSavedSession(test, savedOptions{directory: directory, host: "github.com"})
+	session.open()
+	identity, _ := session.view.PullRequestIdentity()
+	key := pullRequestKey{"github.com", identity.Repository, identity.Number}
+	session.model.localThreads.add(LocalThread{Host: "github.com", Repository: identity.Repository, Number: identity.Number, Question: "first"})
+	older := session.model.saveLocalThreads(key)
+	session.model.localThreads.add(LocalThread{Host: "github.com", Repository: identity.Repository, Number: identity.Number, Question: "second"})
+	session.model.Close() // writes the second copy
+	older()               // the first copy's command runs late
+	if saved := readSaved(test, session.path()); len(saved) != 2 {
+		test.Errorf("file = %+v, want both questions", saved)
+	}
+}
+
+// A thread of another pull request with the same identifier and text is not a
+// duplicate.
+func TestMergeDuplicateCheckStaysWithinThePullRequest(test *testing.T) {
+	var store localThreadStore
+	asked := time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC)
+	thread := LocalThread{Identifier: "local-1", Question: "why?", Path: "a.go", Asked: asked, State: github.LocalAnswered}
+	first := pullRequestKey{"github.com", widgetsRepository, 1}
+	second := pullRequestKey{"github.com", widgetsRepository, 2}
+	store.merge(first, []LocalThread{thread})
+	store.merge(second, []LocalThread{thread})
+	if got := len(store.byRequest[second]); got != 1 {
+		test.Errorf("second pull request has %d threads, want 1", got)
+	}
+	if store.byRequest[first][0].Identifier == store.byRequest[second][0].Identifier {
+		test.Error("both pull requests share an identifier")
 	}
 }
