@@ -329,6 +329,9 @@ func TestFilesThatCannotBeUsed(test *testing.T) {
 			if aside, _ := os.ReadFile(path + UnreadableSuffix); !bytes.Equal(aside, testCase.content) {
 				test.Error("the unreadable copy was replaced")
 			}
+			if _, err := os.Lstat(path + UnreadableSuffix + ".2"); err == nil {
+				test.Error("the second write set the new file aside too")
+			}
 		})
 	}
 }

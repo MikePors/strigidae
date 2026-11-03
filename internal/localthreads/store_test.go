@@ -214,6 +214,31 @@ func TestMergeRenumbersIdentifiersThatClash(test *testing.T) {
 	}
 }
 
+// The same thread twice in a file is not dropped when its identifier clashes
+// with a live thread: the first copy is renumbered before the duplicate check,
+// which compares identifiers, so the second no longer matches. This pins what
+// the code did before the move; the quirk is issue #227.
+func TestMergeKeepsAClashingDuplicateToday(test *testing.T) {
+	var store Store
+	store.Add(asked("live", baseTime))
+	store.Merge(widgetKey, []Entry{
+		{Identifier: "local-1", Question: "from the file"},
+		{Identifier: "../escape", Question: "odd identifier"},
+		{Identifier: "local-1", Question: "from the file", State: github.LocalAnswered}, // same again
+	})
+	want := []string{"from the file", "odd identifier", "from the file", "live"}
+	if diff := cmp.Diff(want, questions(store.ForRequest(widgetKey))); diff != "" {
+		test.Errorf("questions (-want +got):\n%s", diff)
+	}
+	seen := map[string]bool{}
+	for _, thread := range store.ForRequest(widgetKey) {
+		if seen[thread.Identifier] {
+			test.Errorf("identifier %q is used twice", thread.Identifier)
+		}
+		seen[thread.Identifier] = true
+	}
+}
+
 func TestMergeDoesNotKeepDuplicates(test *testing.T) {
 	thread := Entry{Identifier: "local-1", Host: "github.com", Repository: widgets, Number: 7, Question: "why?", Path: "a.go", Asked: baseTime, State: github.LocalAnswered}
 	for _, testCase := range []struct {

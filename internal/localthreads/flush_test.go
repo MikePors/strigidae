@@ -171,9 +171,16 @@ func TestFlushDoesNotBlockTheCallerWhileAWriteIsStuck(test *testing.T) {
 	var store Store
 	store.Add(asked("why?", baseTime))
 	files.Changed(widgetKey)
-	release := files.Hold()
+	release := files.HoldForTest()
 	defer release()
-	finished := files.Flush(&store) // returns although the lock is held
+	returned := make(chan (<-chan struct{}))
+	go func() { returned <- files.Flush(&store) }()
+	var finished <-chan struct{}
+	select {
+	case finished = <-returned: // returns although the lock is held
+	case <-time.After(5 * time.Second):
+		test.Fatal("Flush blocked while the lock was held")
+	}
 	select {
 	case <-finished:
 		test.Fatal("the flush ended while the lock was held")

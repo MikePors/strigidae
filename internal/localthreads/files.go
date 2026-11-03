@@ -205,10 +205,11 @@ func (files *Files) EndWrite(key Key, err error) (again bool) {
 // Flushed is closed when the writes of the last Flush end.
 func (files *Files) Flushed() <-chan struct{} { return files.flushed }
 
-// Hold takes the lock every write takes, as a stuck disk would, and returns
-// the function that gives it back. It is for tests of the caller's quit
-// wait; nothing else holds it for long.
-func (files *Files) Hold() (release func()) {
+// HoldForTest takes the lock every write takes, as a stuck disk would, and
+// returns the function that gives it back. It exists for tests of the caller's
+// quit wait and must never be called otherwise. Holding it blocks Write and an
+// EndRead that carries an error, so the holder must not call them.
+func (files *Files) HoldForTest() (release func()) {
 	files.mutex.Lock()
 	var once sync.Once
 	return func() { once.Do(files.mutex.Unlock) }

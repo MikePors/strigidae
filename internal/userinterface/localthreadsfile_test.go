@@ -1,6 +1,8 @@
 package userinterface
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -185,7 +187,7 @@ func TestCloseIsBoundedWhileAWriteIsStuck(test *testing.T) {
 	session.ask("first") // starts the plugin context
 	session.model.update(session.request("lost"))
 	files := &session.model.localFiles
-	release := files.Hold()
+	release := files.HoldForTest()
 	defer release()
 	closed := make(chan struct{})
 	go func() {
@@ -202,4 +204,142 @@ func TestCloseIsBoundedWhileAWriteIsStuck(test *testing.T) {
 	}
 	release()
 	<-files.Flushed() // the stuck writes end before the directory is removed
+}
+
+// A question that was waiting when strig exited has no answer now, and that is
+// saved back to the file.
+func TestRestartWhileWaitingIsSavedBack(test *testing.T) {
+	session := newSavedSession(test, savedOptions{directory: test.TempDir(), host: "github.com"})
+	data, err := localthreads.Encode([]localthreads.Thread{{Identifier: "local-1", Question: "why?", State: localthreads.StateWaiting, Asked: time.Unix(1, 0)}})
+	if err != nil {
+		test.Fatal(err)
+	}
+	if err := localthreads.Write(session.path(), data); err != nil {
+		test.Fatal(err)
+	}
+	session.open()
+	got := session.shown()
+	if len(got) != 1 || got[0].State != github.LocalFailed || got[0].Text != "strig was closed" {
+		test.Fatalf("after restart = %+v", got)
+	}
+	saved := readSaved(test, session.path())
+	if len(saved) != 1 || saved[0].State != localthreads.StateFailed || saved[0].Text != "strig was closed" {
+		test.Errorf("file after restart = %+v", saved)
+	}
+}
+
+// A write command is held back and run by hand, to see what a change made
+// while it was in flight does.
+func TestWritesAreOneAtATimeAndInOrder(test *testing.T) {
+	session := newSavedSession(test, savedOptions{directory: test.TempDir(), host: "github.com"})
+	session.open()
+	identity, _ := session.view.PullRequestIdentity()
+	key := localthreads.Key{Host: "github.com", Repository: identity.Repository, Number: identity.Number}
+	ask := func(question string) {
+		session.model.localThreads.Add(LocalThread{Host: "github.com", Repository: identity.Repository, Number: identity.Number, Question: question, Asked: session.clock})
+	}
+	saved := func() []string { return questions(fromSaved(readSaved(test, session.path()))) }
+
+	ask("first")
+	firstWrite := session.model.saveLocalThreads(key)
+	if firstWrite == nil {
+		test.Fatal("a change with nothing in flight did not start a write")
+	}
+	ask("second")
+	if session.model.saveLocalThreads(key) != nil {
+		test.Error("a second write started while the first was in flight")
+	}
+	ask("third")
+	if session.model.saveLocalThreads(key) != nil {
+		test.Error("a third write started while the first was in flight")
+	}
+	// The first write holds only what was there when it started.
+	first := firstWrite().(localThreadsSavedMessage)
+	if diff := cmp.Diff([]string{"first"}, saved()); first.err != nil || diff != "" {
+		test.Fatalf("file after the first write (%v) (-want +got):\n%s", first.err, diff)
+	}
+	// Its end starts one write of the latest copy.
+	latest := session.model.localThreadsSaved(first)
+	if latest == nil {
+		test.Fatal("no write followed for the changes made meanwhile")
+	}
+	last := latest().(localThreadsSavedMessage)
+	if diff := cmp.Diff([]string{"first", "second", "third"}, saved()); last.err != nil || diff != "" {
+		test.Errorf("file after the last write (%v) (-want +got):\n%s", last.err, diff)
+	}
+	if session.model.localThreadsSaved(last) != nil {
+		test.Error("a write followed with nothing changed")
+	}
+	ask("fourth") // idle again: the next change writes at once
+	if session.model.saveLocalThreads(key) == nil {
+		test.Error("a change after the writes ended did not write")
+	}
+}
+
+func fromSaved(saved []localthreads.Thread) []LocalThread {
+	return localthreads.FromFile(localthreads.Key{}, saved)
+}
+
+func TestNothingIsKeptWithoutAUsableHost(test *testing.T) {
+	for _, testCase := range []struct {
+		name       string
+		host       string
+		repository github.Repository
+	}{
+		{"empty host", "", widgetsRepository},
+		{"slash in host", "a/b", widgetsRepository},
+		{"dot dot owner", "github.com", github.Repository{Owner: "..", Name: "widgets"}},
+		{"slash in name", "github.com", github.Repository{Owner: "acme", Name: "x/y"}},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			directory := test.TempDir()
+			session := newSavedSession(test, savedOptions{directory: directory, host: testCase.host, repository: testCase.repository})
+			session.open()
+			session.ask("why?")
+			session.ask("and?")
+			session.model.Close()
+			if entries, err := os.ReadDir(directory); err != nil || len(entries) != 0 {
+				test.Errorf("state directory holds %v (%v), want nothing", entries, err)
+			}
+			if got := len(session.shown()); got != 2 {
+				test.Errorf("the session shows %d threads, want 2: they still work", got)
+			}
+			if got := strings.Count(session.logs.String(), "local threads are not kept"); got != 1 {
+				test.Errorf("explained %d times, want once:\n%s", got, session.logs)
+			}
+		})
+	}
+}
+
+func TestNoStateDirectoryKeepsNothingAndSaysNothing(test *testing.T) {
+	session := newSavedSession(test, savedOptions{host: "github.com"})
+	session.open()
+	session.ask("why?")
+	session.model.Close()
+	if got := len(session.shown()); got != 1 {
+		test.Errorf("shows %d threads, want 1", got)
+	}
+	if session.logs.Len() != 0 {
+		test.Errorf("logged: %s", session.logs)
+	}
+}
+
+func TestFailedWriteIsLoggedWithoutText(test *testing.T) {
+	directory := test.TempDir()
+	session := newSavedSession(test, savedOptions{directory: directory, host: "github.com"})
+	session.open()
+	// A file where the directory should be makes every write fail.
+	if err := os.WriteFile(filepath.Join(directory, "strig"), []byte("x"), 0o600); err != nil {
+		test.Fatal(err)
+	}
+	session.ask("top secret question")
+	if !strings.Contains(session.logs.String(), "local threads not saved") {
+		test.Errorf("failure not logged: %s", session.logs)
+	}
+	if strings.Contains(session.logs.String(), "secret") {
+		test.Errorf("log holds thread text: %s", session.logs)
+	}
+	if got := len(session.shown()); got != 1 {
+		test.Errorf("the thread is not shown after a failed write: %d", got)
+	}
 }
