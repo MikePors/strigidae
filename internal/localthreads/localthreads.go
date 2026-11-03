@@ -1,6 +1,13 @@
-// Package localthreads reads and writes the file that keeps a pull request's
-// local threads between runs of strig. It knows nothing of the user interface:
-// the root model hands it plain data and calls it only from commands.
+// Package localthreads holds a pull request's local threads: the store of them
+// (Store: identifiers, the count and size limits, merging what a file held),
+// the file that keeps them between runs of strig (Thread, Read, Write, Path),
+// and the bookkeeping for saving it (Files: one operation in flight and one
+// pending per pull request, generations so an older copy never lands after a
+// newer one, files set aside when unreadable, the flush at quit).
+//
+// It knows nothing of the user interface or Bubble Tea. The root model owns a
+// Store and a Files, asks them what to do, and runs the reads and writes in
+// commands; Files and Store make the decisions and keep the rules.
 package localthreads
 
 import (

@@ -211,7 +211,7 @@ func (session *savedSession) shown() []LocalThread {
 func (session *savedSession) path() string {
 	session.test.Helper()
 	identity, _ := session.view.PullRequestIdentity()
-	return savedPath(session.test, session.model.localFiles.directory, identity)
+	return savedPath(session.test, session.model.localFiles.Directory, identity)
 }
 
 func savedPath(test *testing.T, directory string, identity PullRequestIdentity) string {
@@ -392,16 +392,6 @@ func TestLimitAppliesToWhatIsLoaded(test *testing.T) {
 	}
 }
 
-func TestDefaultLimit(test *testing.T) {
-	var store localThreadStore
-	for i := 0; i < DefaultLocalThreadLimit+5; i++ {
-		store.add(LocalThread{Number: 1, Asked: time.Unix(int64(i), 0)})
-	}
-	if got := len(store.byRequest[pullRequestKey{number: 1}]); got != DefaultLocalThreadLimit {
-		test.Errorf("kept %d, want %d", got, DefaultLocalThreadLimit)
-	}
-}
-
 // A write command is held back and run by hand, to see what a change made
 // while it was in flight does.
 func TestWritesAreOneAtATimeAndInOrder(test *testing.T) {
@@ -409,9 +399,9 @@ func TestWritesAreOneAtATimeAndInOrder(test *testing.T) {
 	session := newSavedSession(test, savedOptions{directory: directory, host: "github.com"})
 	session.open()
 	identity, _ := session.view.PullRequestIdentity()
-	key := pullRequestKey{"github.com", identity.Repository, identity.Number}
+	key := localthreads.Key{Host: "github.com", Repository: identity.Repository, Number: identity.Number}
 	ask := func(question string) {
-		session.model.localThreads.add(LocalThread{Host: "github.com", Repository: identity.Repository, Number: identity.Number, Question: question, Asked: session.clock})
+		session.model.localThreads.Add(LocalThread{Host: "github.com", Repository: identity.Repository, Number: identity.Number, Question: question, Asked: session.clock})
 	}
 
 	ask("first")
@@ -467,9 +457,9 @@ func TestCloseWritesTheChangesWaitingForAWrite(test *testing.T) {
 	session := newSavedSession(test, savedOptions{directory: directory, host: "github.com"})
 	session.open()
 	identity, _ := session.view.PullRequestIdentity()
-	key := pullRequestKey{"github.com", identity.Repository, identity.Number}
+	key := localthreads.Key{Host: "github.com", Repository: identity.Repository, Number: identity.Number}
 	ask := func(question string) {
-		session.model.localThreads.add(LocalThread{Host: "github.com", Repository: identity.Repository, Number: identity.Number, Question: question, Asked: session.clock})
+		session.model.localThreads.Add(LocalThread{Host: "github.com", Repository: identity.Repository, Number: identity.Number, Question: question, Asked: session.clock})
 	}
 	ask("first")
 	inFlight := session.model.saveLocalThreads(key)
@@ -536,46 +526,6 @@ func TestIdentifiersContinueAfterALoad(test *testing.T) {
 	}
 	if !seen["local-5"] || !seen["local-9"] || !seen["local-10"] || len(seen) != 3 {
 		test.Errorf("identifiers = %v, want local-5, local-9 and local-10", seen)
-	}
-}
-
-func TestLoadedIdentifiersThatClashAreRenumbered(test *testing.T) {
-	var store localThreadStore
-	key := pullRequestKey{"github.com", widgetsRepository, 7}
-	live := store.add(LocalThread{Host: "github.com", Repository: widgetsRepository, Number: 7, Question: "live"})
-	if live != "local-1" {
-		test.Fatalf("live identifier = %q", live)
-	}
-	loaded := []LocalThread{
-		{Identifier: "local-1", Question: "from the file"},
-		{Identifier: "../escape", Question: "odd identifier"},
-		{Identifier: "local-1", Question: "from the file", State: github.LocalAnswered}, // same again
-	}
-	store.merge(key, loaded)
-	seen := map[string]bool{}
-	for _, thread := range store.byRequest[key] {
-		if seen[thread.Identifier] {
-			test.Errorf("identifier %q is used twice", thread.Identifier)
-		}
-		seen[thread.Identifier] = true
-		if _, valid := localNumber(thread.Identifier); !valid {
-			test.Errorf("identifier %q is not of the form local-N", thread.Identifier)
-		}
-	}
-	if next := store.add(LocalThread{Host: "github.com", Repository: widgetsRepository, Number: 7}); seen[next] {
-		test.Errorf("new identifier %q was already used", next)
-	}
-}
-
-func TestMergeDoesNotDuplicateAThreadAlreadyThere(test *testing.T) {
-	var store localThreadStore
-	key := pullRequestKey{"github.com", widgetsRepository, 7}
-	asked := time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC)
-	thread := LocalThread{Identifier: "local-1", Host: "github.com", Repository: widgetsRepository, Number: 7, Question: "why?", Path: "a.go", Asked: asked, State: github.LocalAnswered}
-	store.byRequest = map[pullRequestKey][]LocalThread{key: {thread}}
-	store.merge(key, []LocalThread{thread})
-	if got := len(store.byRequest[key]); got != 1 {
-		test.Errorf("%d threads after merging the same one, want 1", got)
 	}
 }
 
@@ -786,32 +736,14 @@ func TestAnOlderCopyNeverLandsAfterANewerOne(test *testing.T) {
 	session := newSavedSession(test, savedOptions{directory: directory, host: "github.com"})
 	session.open()
 	identity, _ := session.view.PullRequestIdentity()
-	key := pullRequestKey{"github.com", identity.Repository, identity.Number}
-	session.model.localThreads.add(LocalThread{Host: "github.com", Repository: identity.Repository, Number: identity.Number, Question: "first"})
+	key := localthreads.Key{Host: "github.com", Repository: identity.Repository, Number: identity.Number}
+	session.model.localThreads.Add(LocalThread{Host: "github.com", Repository: identity.Repository, Number: identity.Number, Question: "first"})
 	older := session.model.saveLocalThreads(key)
-	session.model.localThreads.add(LocalThread{Host: "github.com", Repository: identity.Repository, Number: identity.Number, Question: "second"})
+	session.model.localThreads.Add(LocalThread{Host: "github.com", Repository: identity.Repository, Number: identity.Number, Question: "second"})
 	session.model.Close() // writes the second copy
 	older()               // the first copy's command runs late
 	if saved := readSaved(test, session.path()); len(saved) != 2 {
 		test.Errorf("file = %+v, want both questions", saved)
-	}
-}
-
-// A thread of another pull request with the same identifier and text is not a
-// duplicate.
-func TestMergeDuplicateCheckStaysWithinThePullRequest(test *testing.T) {
-	var store localThreadStore
-	asked := time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC)
-	thread := LocalThread{Identifier: "local-1", Question: "why?", Path: "a.go", Asked: asked, State: github.LocalAnswered}
-	first := pullRequestKey{"github.com", widgetsRepository, 1}
-	second := pullRequestKey{"github.com", widgetsRepository, 2}
-	store.merge(first, []LocalThread{thread})
-	store.merge(second, []LocalThread{thread})
-	if got := len(store.byRequest[second]); got != 1 {
-		test.Errorf("second pull request has %d threads, want 1", got)
-	}
-	if store.byRequest[first][0].Identifier == store.byRequest[second][0].Identifier {
-		test.Error("both pull requests share an identifier")
 	}
 }
 
@@ -878,18 +810,6 @@ func TestFileSizeLimitDropsTheOldestByAskedTime(test *testing.T) {
 	}
 }
 
-// The newest thread is kept even when it alone is over the limit; dropping it
-// would lose the answer the user is waiting for.
-func TestNewestThreadIsNeverDroppedForSize(test *testing.T) {
-	var store localThreadStore
-	store.bytes = 100
-	key := pullRequestKey{"github.com", widgetsRepository, 7}
-	store.byRequest = map[pullRequestKey][]LocalThread{key: {{Question: "only", Text: bigAnswer(1000)}}}
-	if dropped := store.fit(key); dropped != 0 || len(store.byRequest[key]) != 1 {
-		test.Errorf("dropped %d, %d left", dropped, len(store.byRequest[key]))
-	}
-}
-
 // One answer is at most what a plugin may print, which must stay far below
 // what a file may hold, so the newest thread always fits. Answers hold code,
 // so characters JSON could escape are the worst ordinary case.
@@ -910,14 +830,7 @@ func TestCloseIsBoundedWhileAWriteIsStuck(test *testing.T) {
 	session.ask("first") // starts the plugin context
 	session.model.update(session.request("lost"))
 	files := &session.model.localFiles
-	files.mutex.Lock()
-	released := false
-	release := func() {
-		if !released {
-			released = true
-			files.mutex.Unlock()
-		}
-	}
+	release := files.Hold()
 	defer release()
 	closed := make(chan struct{})
 	go func() {
@@ -933,5 +846,5 @@ func TestCloseIsBoundedWhileAWriteIsStuck(test *testing.T) {
 		test.Error("the plugin runs were not cancelled")
 	}
 	release()
-	<-files.flushed // the stuck writes end before the directory is removed
+	<-files.Flushed() // the stuck writes end before the directory is removed
 }

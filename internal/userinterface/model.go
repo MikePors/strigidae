@@ -13,6 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/MikePors/strigidae/internal/localthreads"
 	"github.com/MikePors/strigidae/internal/options"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
@@ -102,8 +103,8 @@ type Model struct {
 	pluginRuns     map[int]pluginRun
 	pluginRunning  sync.WaitGroup // runs whose command has not returned; see Close
 	quitting       bool           // quit began and is waiting for plugin runs
-	localThreads   localThreadStore
-	localFiles     localThreadFiles
+	localThreads   localthreads.Store
+	localFiles     localthreads.Files
 	clock          func() time.Time
 
 	width, height      int
@@ -157,8 +158,8 @@ func New(root View, activeTheme theme.Theme, startup Options) *Model {
 	}
 	return &Model{
 		clock:           startup.Clock,
-		localThreads:    localThreadStore{limit: startup.LocalThreadLimit, bytes: startup.LocalThreadBytes},
-		localFiles:      localThreadFiles{directory: startup.StateDirectory},
+		localThreads:    localthreads.Store{Limit: startup.LocalThreadLimit, Bytes: startup.LocalThreadBytes},
+		localFiles:      localthreads.Files{Directory: startup.StateDirectory, Logger: startup.Logger},
 		stack:           []View{root},
 		theme:           activeTheme,
 		keys:            keys.DefaultGlobal(),
@@ -322,7 +323,7 @@ func (model *Model) push(view View) tea.Cmd {
 		view, _ = view.Update(PluginsMessage{Commands: model.pluginCommands})
 		model.stack[len(model.stack)-1] = view
 	}
-	if threads := model.localThreads.snapshot(); len(threads) > 0 {
+	if threads := model.localThreads.Snapshot(); len(threads) > 0 {
 		view, _ = view.Update(LocalThreadsMessage{Threads: threads})
 		model.stack[len(model.stack)-1] = view
 	}
