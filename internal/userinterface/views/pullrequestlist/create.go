@@ -71,6 +71,9 @@ type (
 // tell a command another view owns from a word that is no command at all.
 func Commands() []string { return []string{commandCreate, commandCreateDraft} }
 
+// CommandNames implements userinterface.CommandLister.
+func (view *View) CommandNames() []string { return Commands() }
+
 // Command implements userinterface.Commander.
 func (view *View) Command(name, _ string) (tea.Cmd, bool) {
 	switch name {

@@ -71,7 +71,9 @@ Reserved globally:
 | `}` / `{` | next / previous file |
 | `)` / `(` | next / previous comment thread (diff) |
 
-There is deliberately **no single-key back or quit**: `q` and `ctrl+c` are unbound. `ctrl+o` / `ctrl+i` (back / forward through views) and `tab` are reserved for later; terminals send the same byte for `tab` and `ctrl+i`.
+There is deliberately **no single-key back or quit**: `q` and `ctrl+c` are unbound. `ctrl+o` / `ctrl+i` (back / forward through views) are reserved for later, and `tab` is unbound outside the command line; terminals send the same byte for `tab` and `ctrl+i`.
+
+**Command-line completion** (`completion.go`). While the `:` line is open, `tab` / `shift+tab` complete the word at the end of the line: the first word against the shell's commands (table order) then the top view's, which a view lists by implementing `userinterface.CommandLister` (`CommandNames()`, the names its `Command` handles; the workspace's include its plugins); after `set ` against `options.All()` and the `no` forms; after `theme ` against `scheme.Names()` (the list `--list-themes` prints). Nothing else is completed, and prompts (`/`) never are. Two or more matches fill in the first and show a one-line list over the bottom row of the content, drawn by the root. Any other key keeps the line and closes the list. The keys are taken by the root, so they never reach the input (no tab character) or the view. Declared in `keys.Global.Complete` for the help only.
 
 **Counts.** Digits `1`-`9` start a count and `0` continues it (`11j`, `3]`, `42G`), capped at 9999. The sequence matcher parses it and delivers it as `keys.Message.Count` (0 means none; `Repeat()` gives at least 1). A view applies it only to `j`/`k`, `]`/`[`, `}`/`{`, `)`/`(`, `ctrl+d`/`ctrl+u`/`ctrl+f`/`ctrl+b`, `z h`/`z l`, `n`/`N` (the count-th match), and `G` (with a count: go to line N, which in a diff is the new-side line number, or the nearest shown one; row N in lists); every other key ignores it and acts once. The count clears on any other key, `esc`, and the sequence timeout. While a view captures keys, digits are plain input.
 

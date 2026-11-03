@@ -320,6 +320,18 @@ func (view *View) commandEntry(name string) (actionEntry, bool) {
 	return actionEntry{}, false
 }
 
+// CommandNames implements userinterface.CommandLister: the commands this view
+// takes, its plugins' included, from the entries Command looks them up in.
+func (view *View) CommandNames() []string {
+	var names []string
+	for _, candidate := range view.entries() {
+		if candidate.Command != "" {
+			names = append(names, candidate.Command)
+		}
+	}
+	return names
+}
+
 // Commands lists the command names of the workspace, for the shell to tell a
 // command another view owns from a word that is no command at all.
 func Commands() []string {
