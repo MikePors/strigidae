@@ -129,6 +129,9 @@ type View struct {
 	focus   pane
 	// pluginCommands are the configured plugins' commands, sent by the root.
 	pluginCommands []userinterface.PluginCommand
+	// localThreads are every local thread of the program, sent by the root;
+	// the ones of this pull request are drawn with the GitHub threads.
+	localThreads []userinterface.LocalThread
 	// searchPane is the pane the search being typed belongs to; the prompt's
 	// results go to it.
 	searchPane pane
@@ -265,6 +268,10 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		view.optionsChanged()
 	case userinterface.PluginsMessage:
 		view.pluginCommands = message.Commands
+	case userinterface.LocalThreadsMessage:
+		view.localThreads = message.Threads
+		view.setPaneThreads()
+		view.layout()
 	case userinterface.ThemeMessage:
 		view.theme = message.Theme
 		view.markdownRenderer = markdown.New(view.theme)

@@ -25,6 +25,7 @@ plugins:
   - command: ask            # becomes :ask
     on_run: [strig-ask]     # the program and its arguments
     target: lines           # lines or pull-request
+    show: thread            # optional: draw the answer in the diff
     timeout: 120s           # optional, default 60s
 ```
 
@@ -33,6 +34,7 @@ plugins:
 | `command` | yes | The plugin's name, which becomes a command of that name. A plain word: a letter, then letters, digits and `-`. Names must be unique |
 | `on_run` | yes | A non-empty list: the program, then its arguments. There is no shell, so quoting and variables are not interpreted. The program is a bare name found on `PATH`, an absolute path, or a path starting with `~/` (your home directory); any other path with a `/` is a config error (see below) |
 | `target` | yes | What the command acts on: `lines` or `pull-request` |
+| `show` | no | Where the answer is drawn. The only value is `thread`, and only with `target: lines`: see "Answers as local threads". Without it the answer is a notice |
 | `timeout` | no | How long one run may take, as a Go duration such as `90s` or `2m`. Above zero. Default `60s` |
 
 Unknown keys are errors, like everywhere in the config. So is a `command` that
@@ -81,9 +83,14 @@ While a run of the pull request on screen is under way, or waiting behind
 another run of the same plugin, the status bar shows its usual spinner. What
 the plugin prints appears in the status bar when it finishes: a `notice` as
 information, an `error` (and a failed run) as an error, and an `answer` as a
-notice for now. A result belongs to the pull request it was asked from: if that
-pull request (repository and number) is no longer the one on screen, the result
-is dropped and only noted in the log. A new head commit does not drop it: the
+notice. A plugin with `show: thread` (below) differs: its answer, and its
+failure (an `error` effect, a failed run or a timeout), go to the thread, and
+an `error` printed beside an `answer` also goes to the status bar. A result
+belongs to the pull request it was asked from: if that pull request
+(repository and number) is no longer the one on screen, the result is dropped
+and only noted in the log (a local thread is still filled, and keeps the
+result for when the pull request is opened again). A new head commit does not
+drop it: the
 result still shows and `reload` still runs; the request carries the `head` the
 plugin was run at.
 Closing the pull request does not stop a run; quitting strig does: it kills
@@ -94,6 +101,44 @@ A plugin runs in a session of its own, so it has no controlling terminal: a
 program that opens `/dev/tty` fails instead of reading your keys or drawing on
 the screen. Its standard input is the request, its standard output the
 effects, and its standard error goes to strig's log.
+
+## Answers as local threads
+
+A `lines` plugin with `show: thread` draws its question and answer in the diff
+on the lines it was asked about, as a comment thread. It is a configuration
+error to give `show` to a `pull-request` plugin.
+
+- **When you run it** the thread appears at once, even if the run waits behind
+  another of the same plugin. The first comment, by `you`, is what you typed
+  after the command name, shown exactly as typed and not as Markdown (just
+  `:ask` when you typed nothing). The second, by
+  `answer (local, not on GitHub)`, reads `waiting for an answer…`, muted.
+- **An `answer` effect** fills the second comment as Markdown, drawn like any
+  comment on GitHub. Several `answer` effects in one run are joined with a
+  blank line.
+- **No answer.** An `error` effect (with no `answer`), a failed run or a
+  timeout replace the waiting line with `no answer: <the reason>`, in the error
+  style. A run that prints neither says `no answer: the plugin gave no answer`.
+  If it prints both an `answer` and an `error`, the thread shows the answer.
+- `notice` and `reload` effects of the run work as for any plugin, and an
+  `error` printed beside an `answer` also goes to the status bar.
+- The thread is **local to strig**. It is never sent to GitHub and is gone when
+  strig quits. `r`, `x`, `:resolve`, `:unresolve`, `e`, `D`, `:edit-comment`,
+  `:delete-comment` and `:react` on it say `this answer is local to strig, not
+  on GitHub: nothing to <action>` and do nothing. It is never resolved, never a
+  draft, and not counted among the pull request's threads or unresolved
+  threads. Folding (`z a`), `)` / `(`, `:set hideresolved`, `skipresolved` and
+  search treat it like any other thread.
+- Threads are kept by repository and pull request number for as long as strig
+  runs, so an answer that arrives while the pull request is closed is there
+  when you open it again.
+- **Outdated.** A thread remembers the head commit it was asked on. When the
+  diff on screen is of another head, it is marked `[outdated]`, muted, and
+  listed after the last row of its file with its location, as GitHub's
+  outdated threads are; when the diff is of that head again it is back on its
+  lines.
+- The answer and the reason are the plugin's text: they are cleaned of
+  terminal escapes, like any text from a plugin.
 
 ## What strig sends
 
@@ -156,7 +201,7 @@ The plugin prints JSON lines on standard output. Each line is one *effect*:
 |---|---|---|
 | `notice` | `{"text": ...}` | A short message for the status bar |
 | `error` | `{"text": ...}` | A failure and its reason. With a failure exit status the run fails with this text; with exit 0 the effect is returned like any other |
-| `answer` | `{"text": ...}` | An answer to show to the user; shown as a notice for now |
+| `answer` | `{"text": ...}` | An answer to show to the user: a notice, or the answer of a local thread with `show: thread` |
 | `reload` | `{}` | Reload the pull request on screen, as `R` does |
 
 Rules:

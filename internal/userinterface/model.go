@@ -90,6 +90,7 @@ type Model struct {
 	pluginRuns     map[int]pluginRun
 	pluginRunning  sync.WaitGroup // runs whose command has not returned; see Close
 	quitting       bool           // quit began and is waiting for plugin runs
+	localThreads   localThreadStore
 
 	width, height      int
 	matcher            keys.Matcher
@@ -293,6 +294,10 @@ func (model *Model) push(view View) tea.Cmd {
 	}
 	if len(model.pluginCommands) > 0 {
 		view, _ = view.Update(PluginsMessage{Commands: model.pluginCommands})
+		model.stack[len(model.stack)-1] = view
+	}
+	if threads := model.localThreads.snapshot(); len(threads) > 0 {
+		view, _ = view.Update(LocalThreadsMessage{Threads: threads})
 		model.stack[len(model.stack)-1] = view
 	}
 	return tea.Batch(view.Init(), model.forward(model.sizeMessage()))
