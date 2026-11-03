@@ -4,6 +4,12 @@ Checks only the maintainer can do, such as live verification against real GitHub
 
 ## Live checks
 
+- [ ] **`Tab` completes on the command line in a real terminal** (#208). Only synthetic key events are tested; terminals differ in what they send for `shift+tab`.
+  1. In a pull request list, press `:` then `Tab`. The first command fills in and a one-line list of every command appears just above the command line, the current one highlighted. `Tab` and `shift+tab` should move through it and wrap.
+  2. Type `:set no` then `Tab`, and `:theme ` then `Tab`. Option and theme names should cycle. Type a character: the list closes and the match stays.
+  3. Open a pull request: `:` `Tab` should now offer its commands (`:approve`, `:merge`, …) and not `:create`. Shrink the terminal to under 30 columns and check the list scrolls with `…` and never wraps.
+  4. Report any terminal where `shift+tab` does nothing or types a character.
+
 - [ ] **`:create` and `:create-draft` create pull requests on GitHub** (#173). The `createPullRequest` mutation and the branch listing have only been tested against the fake client and fixtures.
   1. In a test repository, push a branch with at least one commit that differs from `main`. Run `strig` in the checkout and open the pull request list.
   2. Run `:create`. The head picker should open with your current branch under the cursor; `enter`. The base picker should not list that branch and should have the default branch under the cursor; `enter`. The editor opens empty: write a title, a blank line and a body, close it, answer `y`. The new pull request should open in strig and appear in the list; check title, body, head, base and that it is not a draft on github.com.

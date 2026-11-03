@@ -361,6 +361,14 @@ func (model *Model) handleKey(message tea.KeyPressMsg) tea.Cmd {
 		return model.promptKey(message)
 	}
 	if model.commandLine.active {
+		switch pressed {
+		case "tab":
+			model.complete(1)
+			return nil
+		case "shift+tab":
+			model.complete(-1)
+			return nil
+		}
 		line, ok, command := model.commandLine.handleKey(message)
 		if ok {
 			return parseCommand(line, model.top(), model.viewCommands)
@@ -497,7 +505,7 @@ func (model *Model) scrollHelp(sequence string, count int) {
 func (model *Model) View() tea.View {
 	var view tea.View
 	if model.width > 0 && model.height > 0 {
-		view = tea.NewView(model.content() + "\n" + model.bottomRow())
+		view = tea.NewView(model.overlayCompletion(model.content()) + "\n" + model.bottomRow())
 	}
 	view.AltScreen = true
 	if model.theme.Chosen && !model.theme.FromTerminal {

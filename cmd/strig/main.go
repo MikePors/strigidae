@@ -90,7 +90,7 @@ func execute(arguments []string, stdout, stderr io.Writer, dependencies dependen
 		}
 		return printLine(stdout, path)
 	case *listThemes:
-		return printLine(stdout, strings.Join(append(scheme.Bundled(), scheme.Terminal), "\n"))
+		return printLine(stdout, strings.Join(scheme.Names(), "\n"))
 	case *showConfigPath:
 		if configErr != nil {
 			return configErr
