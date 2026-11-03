@@ -55,6 +55,14 @@ type Options struct {
 	// PluginQuitWait is how long quitting waits for plugin runs it has
 	// cancelled; DefaultPluginQuitWait by default.
 	PluginQuitWait time.Duration
+	// StateDirectory is where local threads are kept between runs of strig
+	// (see logging.StateDirectory). Empty keeps them for the session only.
+	StateDirectory string
+	// Clock gives the time a local thread is asked at; time.Now by default.
+	Clock func() time.Time
+	// LocalThreadLimit is the most local threads kept per pull request;
+	// DefaultLocalThreadLimit by default.
+	LocalThreadLimit int
 }
 
 // Internal timer messages. The id/gen fields discard timers that were
@@ -91,6 +99,8 @@ type Model struct {
 	pluginRunning  sync.WaitGroup // runs whose command has not returned; see Close
 	quitting       bool           // quit began and is waiting for plugin runs
 	localThreads   localThreadStore
+	localFiles     localThreadFiles
+	clock          func() time.Time
 
 	width, height      int
 	matcher            keys.Matcher
@@ -138,7 +148,13 @@ func New(root View, activeTheme theme.Theme, startup Options) *Model {
 	if startup.PluginQuitWait <= 0 {
 		startup.PluginQuitWait = DefaultPluginQuitWait
 	}
+	if startup.Clock == nil {
+		startup.Clock = time.Now
+	}
 	return &Model{
+		clock:           startup.Clock,
+		localThreads:    localThreadStore{limit: startup.LocalThreadLimit},
+		localFiles:      localThreadFiles{directory: startup.StateDirectory},
 		stack:           []View{root},
 		theme:           activeTheme,
 		keys:            keys.DefaultGlobal(),
@@ -212,6 +228,12 @@ func (model *Model) update(message tea.Msg) tea.Cmd {
 		return model.startPlugin(message)
 	case pluginResultMessage:
 		return model.pluginResult(message)
+	case PullRequestOpenedMessage:
+		return model.pullRequestOpened(message)
+	case localThreadsLoadedMessage:
+		return model.localThreadsLoaded(message)
+	case localThreadsSavedMessage:
+		return model.localThreadsSaved(message)
 	case quitWaitedMessage:
 		return tea.Quit
 	case ConfirmMessage:
