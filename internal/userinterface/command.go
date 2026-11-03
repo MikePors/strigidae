@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"unicode"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -43,12 +44,26 @@ func CommandNames() []string {
 // it is a Commander and the name is in viewCommands (the names every view
 // declares, from Options.ViewCommands). A name nobody handles yields an error
 // message.
+// splitCommandLine reads a command line as running it does: leading spaces and
+// the spaces between the command and its arguments are ignored. leading and gap
+// are those spaces as typed, so a caller can keep them. arguments keeps any
+// trailing spaces; hasArguments is true once a space follows the name.
+func splitCommandLine(line string) (leading, name, gap, arguments string, hasArguments bool) {
+	rest := strings.TrimLeftFunc(line, unicode.IsSpace)
+	leading = line[:len(line)-len(rest)]
+	name, afterName, hasArguments := strings.Cut(rest, " ")
+	arguments = strings.TrimLeftFunc(afterName, unicode.IsSpace)
+	if hasArguments {
+		gap = " " + afterName[:len(afterName)-len(arguments)]
+	}
+	return leading, name, gap, arguments, hasArguments
+}
+
 func parseCommand(line string, top View, viewCommands []string) tea.Cmd {
-	line = strings.TrimSpace(line)
-	if line == "" {
+	if strings.TrimSpace(line) == "" {
 		return nil
 	}
-	name, arguments, _ := strings.Cut(line, " ")
+	_, name, _, arguments, _ := splitCommandLine(line)
 	arguments = strings.TrimSpace(arguments)
 	for _, definition := range commandTable() {
 		for _, alias := range definition.names {
