@@ -2,7 +2,6 @@ package userinterface
 
 import (
 	"bytes"
-	"context"
 	"log/slog"
 	"testing"
 	"time"
@@ -131,66 +130,6 @@ func (session *savedSession) request(question string) RunPluginMessage {
 func (session *savedSession) ask(question string) {
 	session.test.Helper()
 	session.run(session.model.update(session.request(question)))
-}
-
-// askHeld runs :ask on a line with a blockingRunner. It returns when the
-// waiting thread has been written; the function it returns lets the plugin
-// answer and delivers the answer.
-func (session *savedSession) askHeld(question string) (answer func()) {
-	session.test.Helper()
-	messages := make(chan tea.Msg, 16)
-	var spawn func(command tea.Cmd)
-	spawn = func(command tea.Cmd) {
-		if command == nil {
-			return
-		}
-		go func() {
-			message := command()
-			if batch, ok := message.(tea.BatchMsg); ok {
-				for _, member := range batch {
-					spawn(member)
-				}
-				return
-			}
-			messages <- message
-		}()
-	}
-	spawn(session.model.update(session.request(question)))
-	for waiting := true; waiting; {
-		select {
-		case message := <-messages:
-			if saved, ok := message.(localThreadsSavedMessage); ok {
-				session.run(session.model.update(saved))
-				waiting = false
-			}
-		case <-time.After(5 * time.Second):
-			session.test.Fatal("asking did not write the waiting thread")
-		}
-	}
-	return func() {
-		session.test.Helper()
-		close(session.runner.(*blockingRunner).release)
-		for {
-			if result, ok := (<-messages).(pluginResultMessage); ok {
-				session.run(session.model.update(result))
-				return
-			}
-		}
-	}
-}
-
-// blockingRunner answers when released, or fails when its context ends.
-type blockingRunner struct{ release chan struct{} }
-
-func newBlockingRunner() *blockingRunner { return &blockingRunner{release: make(chan struct{})} }
-
-func (runner *blockingRunner) Run(ctx context.Context, _ string, _ plugins.Request) ([]plugins.Effect, error) {
-	select {
-	case <-runner.release:
-		return []plugins.Effect{{Name: plugins.EffectAnswer, Text: "late answer"}}, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
 }
 
 // shown is the local threads the view was last told of.

@@ -186,6 +186,30 @@ func TestFlushDoesNotBlockTheCallerWhileAWriteIsStuck(test *testing.T) {
 	}
 }
 
+// A pull request whose latest copy was already written is left alone: the
+// flush does not even read its file.
+func TestFlushSkipsACopyAlreadyWritten(test *testing.T) {
+	files, logs := newFiles(test)
+	var store Store
+	store.Add(asked("why?", baseTime))
+	files.Changed(widgetKey)
+	path, generation, _ := files.BeginWrite(widgetKey)
+	if err := files.Write(widgetKey, path, generation, ToFile(store.ForRequest(widgetKey))); err != nil {
+		test.Fatal(err)
+	}
+	// Something else now makes the file unusable; a flush that read it would say so.
+	if err := os.WriteFile(path, []byte("{not json"), 0o600); err != nil {
+		test.Fatal(err)
+	}
+	wait(test, files.Flush(&store))
+	if logs.Len() != 0 {
+		test.Errorf("the flush read a file whose latest copy was written: %s", logs)
+	}
+	if kept, err := os.ReadFile(path); err != nil || string(kept) != "{not json" {
+		test.Errorf("file = %q (%v), want it untouched", kept, err)
+	}
+}
+
 // One answer is at most what a plugin may print, which must stay far below
 // what a file may hold, so the newest thread always fits. Answers hold code,
 // so characters JSON could escape are the worst ordinary case.

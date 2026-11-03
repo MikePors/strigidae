@@ -11,13 +11,13 @@ import (
 type Decision int
 
 const (
-	// Wait: an operation on the file is in flight; one write of the latest
+	// Wait means an operation on the file is in flight; one write of the latest
 	// threads follows when it ends.
 	Wait Decision = iota
-	// ReadFirst: the saved threads have not been read yet. The caller starts
+	// ReadFirst means the saved threads have not been read yet. The caller starts
 	// the read (BeginRead); the write follows it.
 	ReadFirst
-	// WriteNow: nothing is in flight. The caller starts a write (BeginWrite).
+	// WriteNow means nothing is in flight. The caller starts a write (BeginWrite).
 	WriteNow
 )
 
