@@ -52,6 +52,8 @@ type localThreadFiles struct {
 	generation map[pullRequestKey]int
 	explained  map[pullRequestKey]bool // why nothing is kept was logged
 
+	flushed <-chan struct{} // closes when Close's writes end; for tests
+
 	mutex      sync.Mutex
 	written    map[pullRequestKey]int  // the generation last written
 	unreadable map[pullRequestKey]bool // the file can't be used: move it aside before writing
@@ -82,6 +84,12 @@ func (files *localThreadFiles) markUnreadable(key pullRequestKey) {
 		files.unreadable = map[pullRequestKey]bool{}
 	}
 	files.unreadable[key] = true
+}
+
+func (files *localThreadFiles) writtenAtLeast(key pullRequestKey, generation int) bool {
+	files.mutex.Lock()
+	defer files.mutex.Unlock()
+	return generation <= files.written[key]
 }
 
 // write replaces the file with threads, made from the given generation, unless
@@ -184,9 +192,11 @@ func (model *Model) localThreadsLoaded(message localThreadsLoadedMessage) tea.Cm
 	} else {
 		changed = model.localThreads.merge(message.key, message.threads)
 	}
+	var fitted tea.Cmd
 	if changed {
 		files.changed(message.key)
 		save.pending = true
+		fitted = model.fitLocalThreads(message.key)
 	}
 	var written tea.Cmd
 	if save.pending {
@@ -194,7 +204,7 @@ func (model *Model) localThreadsLoaded(message localThreadsLoadedMessage) tea.Cm
 		written = model.writeLocalThreads(message.key)
 	}
 	if message.err != nil || len(message.threads) == 0 {
-		return written
+		return tea.Batch(written, fitted)
 	}
 	return tea.Batch(written, model.broadcast(LocalThreadsMessage{Threads: model.localThreads.snapshot()}))
 }
@@ -222,16 +232,29 @@ func (model *Model) saveLocalThreads(key pullRequestKey) tea.Cmd {
 	}
 	files := &model.localFiles
 	files.changed(key)
+	fitted := model.fitLocalThreads(key)
 	save := files.save(key)
 	if !files.opened[key] {
 		save.pending = true
-		return model.readLocalThreads(key)
+		return tea.Batch(fitted, model.readLocalThreads(key))
 	}
 	if save.inFlight {
 		save.pending = true
+		return fitted
+	}
+	return tea.Batch(fitted, model.writeLocalThreads(key))
+}
+
+// fitLocalThreads keeps the pull request's file small enough to be read back,
+// dropping the oldest threads from the store as well so the screen and the
+// file agree. It logs how many, never what they said.
+func (model *Model) fitLocalThreads(key pullRequestKey) tea.Cmd {
+	dropped := model.localThreads.fit(key)
+	if dropped == 0 {
 		return nil
 	}
-	return model.writeLocalThreads(key)
+	model.log.Warn("local threads dropped to keep the file small", "dropped", dropped, "number", key.number)
+	return model.broadcast(LocalThreadsMessage{Threads: model.localThreads.snapshot()})
 }
 
 // writeLocalThreads starts a write of the threads as they are now.
@@ -269,8 +292,10 @@ func (model *Model) localThreadsSaved(message localThreadsSavedMessage) tea.Cmd 
 // any command having run: a write command that Bubble Tea never started is
 // made good here. A pull request whose saved threads were never read is read
 // first and merged, so they are kept. The program has returned, so Close may
-// use the model; the returned channel closes when the writes end, and the
-// caller bounds the wait so a stuck disk can't hold quit.
+// use the model's own state here; everything that touches the files, the
+// mutex included, runs in the goroutine, because a stalled write holds the
+// mutex and must not hold the caller. The returned channel closes when the
+// writes end, and the caller bounds the wait so a stuck disk can't hold quit.
 func (model *Model) flushLocalThreads() <-chan struct{} {
 	type job struct {
 		key        pullRequestKey
@@ -281,25 +306,24 @@ func (model *Model) flushLocalThreads() <-chan struct{} {
 	}
 	files := &model.localFiles
 	var jobs []job
-	files.mutex.Lock()
 	for key, generation := range files.generation {
-		if generation <= files.written[key] {
-			continue
-		}
 		if path, ok := model.localThreadPath(key); ok {
 			jobs = append(jobs, job{key, path, generation, model.localThreads.forRequest(key), files.loaded[key]})
 		}
 	}
-	files.mutex.Unlock()
-	next, limit := model.localThreads.next, model.localThreads.limit
+	next, limit, bytes := model.localThreads.next, model.localThreads.limit, model.localThreads.bytes
 	logger := model.log
 	finished := make(chan struct{})
+	files.flushed = finished
 	go func() {
 		defer close(finished)
 		for _, pending := range jobs {
+			if files.writtenAtLeast(pending.key, pending.generation) {
+				continue
+			}
 			threads := pending.threads
 			if !pending.loaded {
-				threads = mergeUnread(pending.key, pending.path, pending.threads, next, limit, files, logger)
+				threads = mergeUnread(pending.key, pending.path, pending.threads, next, limit, bytes, files, logger)
 			}
 			if err := files.write(pending.key, pending.path, pending.generation, toFile(threads)); err != nil {
 				logger.Warn("local threads not saved", "err", err, "number", pending.key.number)
@@ -311,15 +335,16 @@ func (model *Model) flushLocalThreads() <-chan struct{} {
 
 // mergeUnread reads the file of a pull request whose read never finished and
 // merges it with the threads asked this run, as a load would.
-func mergeUnread(key pullRequestKey, path string, asked []LocalThread, next, limit int, files *localThreadFiles, logger *slog.Logger) []LocalThread {
+func mergeUnread(key pullRequestKey, path string, asked []LocalThread, next, limit, bytes int, files *localThreadFiles, logger *slog.Logger) []LocalThread {
 	file, err := localthreads.Read(path)
 	if err != nil {
 		logger.Warn("local threads file ignored", "reason", loadFailure(err), "number", key.number)
 		files.markUnreadable(key)
 		return asked
 	}
-	scratch := localThreadStore{next: next, limit: limit, byRequest: map[pullRequestKey][]LocalThread{key: asked}}
+	scratch := localThreadStore{next: next, limit: limit, bytes: bytes, byRequest: map[pullRequestKey][]LocalThread{key: asked}}
 	scratch.merge(key, fromFile(key, file.Threads))
+	scratch.fit(key)
 	return scratch.forRequest(key)
 }
 

@@ -137,8 +137,9 @@ error to give `show` to a `pull-request` plugin.
   change and read the first time you open that pull request in a run. A
   question that was still waiting when strig exited shows
   `no answer: strig was closed`. The directory is private to you (`0700`, files
-  `0600`). Only the 200 newest questions of a pull request are kept; asking
-  another drops the oldest, from the screen and from the file. Removing the
+  `0600`). Only the 200 newest questions of a pull request are kept, and only
+  as many as fit in 4 MiB of file; asking another, or a long answer, drops the
+  oldest, from the screen and from the file. Removing the
   directory deletes every saved answer; strig never cleans it up itself. A file
   strig can't read (damaged, from a newer strig, or over 4 MiB) is logged,
   ignored, and renamed to `<number>.json.unreadable` before strig next writes

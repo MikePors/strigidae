@@ -63,6 +63,10 @@ type Options struct {
 	// LocalThreadLimit is the most local threads kept per pull request;
 	// DefaultLocalThreadLimit by default.
 	LocalThreadLimit int
+	// LocalThreadBytes is the largest a pull request's file of local threads
+	// may be; localthreads.MaxFileSize by default, which is what a file is
+	// refused above when read.
+	LocalThreadBytes int
 }
 
 // Internal timer messages. The id/gen fields discard timers that were
@@ -153,7 +157,7 @@ func New(root View, activeTheme theme.Theme, startup Options) *Model {
 	}
 	return &Model{
 		clock:           startup.Clock,
-		localThreads:    localThreadStore{limit: startup.LocalThreadLimit},
+		localThreads:    localThreadStore{limit: startup.LocalThreadLimit, bytes: startup.LocalThreadBytes},
 		localFiles:      localThreadFiles{directory: startup.StateDirectory},
 		stack:           []View{root},
 		theme:           activeTheme,

@@ -41,6 +41,7 @@ type savedOptions struct {
 	times      []time.Time  // asked times to use, in order, before the clock moves on
 	runner     PluginRunner // replaces the one that answers at once
 	quitWait   time.Duration
+	bytes      int // the file size limit; 0 for the real one
 }
 
 func newSavedSession(test *testing.T, options savedOptions) *savedSession {
@@ -75,6 +76,7 @@ func newSavedSession(test *testing.T, options savedOptions) *savedSession {
 		PluginQuitWait:   quitWait,
 		StateDirectory:   options.directory,
 		LocalThreadLimit: options.limit,
+		LocalThreadBytes: options.bytes,
 		Clock: func() time.Time {
 			if len(times) > 0 {
 				asked := times[0]
@@ -811,4 +813,125 @@ func TestMergeDuplicateCheckStaysWithinThePullRequest(test *testing.T) {
 	if store.byRequest[first][0].Identifier == store.byRequest[second][0].Identifier {
 		test.Error("both pull requests share an identifier")
 	}
+}
+
+// bigAnswer is an answer of about size bytes of ordinary text.
+func bigAnswer(size int) string { return strings.Repeat("0123456789abcdef", size/16) }
+
+// Five answers of about 900 KB each are more than the file may hold. The file
+// is trimmed, oldest first, so it can be read back, and the screen agrees.
+func TestSavedFileAlwaysFitsWhatCanBeReadBack(test *testing.T) {
+	directory := test.TempDir()
+	session := newSavedSession(test, savedOptions{directory: directory, host: "github.com"})
+	session.runner = &fakeRunner{effects: []plugins.Effect{{Name: plugins.EffectAnswer, Text: bigAnswer(900_000)}}}
+	session.model.pluginRunner = session.runner
+	session.open()
+	var asked []string
+	for _, question := range []string{"q1", "q2", "q3", "q4", "q5"} {
+		session.ask(question)
+		asked = append(asked, question)
+	}
+	file, err := localthreads.Read(session.path())
+	if err != nil {
+		test.Fatalf("the saved file can't be read back: %v", err)
+	}
+	var kept []string
+	for _, thread := range file.Threads {
+		kept = append(kept, thread.Question)
+	}
+	if len(kept) == 0 || len(kept) >= len(asked) || kept[len(kept)-1] != "q5" {
+		test.Fatalf("kept %v of %v, want the newest only, fewer than all", kept, asked)
+	}
+	if diff := cmp.Diff(asked[len(asked)-len(kept):], kept); diff != "" {
+		test.Errorf("kept threads are not the newest (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff(kept, questions(session.shown())); diff != "" {
+		test.Errorf("the screen and the file disagree (-file +screen):\n%s", diff)
+	}
+	if !strings.Contains(session.logs.String(), "dropped") || strings.Contains(session.logs.String(), "0123456789") {
+		test.Errorf("log should count the dropped threads and hold no text:\n%.300s", session.logs)
+	}
+}
+
+func TestFileSizeLimitDropsTheOldestByAskedTime(test *testing.T) {
+	directory := test.TempDir()
+	base := time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC)
+	// Each thread is about 500 bytes in the file; the limit holds three. The
+	// second one stored is the oldest asked.
+	times := []time.Time{base.Add(2 * time.Hour), base, base.Add(time.Hour), base.Add(3 * time.Hour)}
+	session := newSavedSession(test, savedOptions{directory: directory, host: "github.com", bytes: 1700, times: times})
+	session.runner = &fakeRunner{effects: []plugins.Effect{{Name: plugins.EffectAnswer, Text: bigAnswer(320)}}}
+	session.model.pluginRunner = session.runner
+	session.open()
+	for _, question := range []string{"q1", "q2", "q3", "q4"} {
+		session.ask(question)
+	}
+	var kept []string
+	for _, thread := range readSaved(test, session.path()) {
+		kept = append(kept, thread.Question)
+	}
+	if diff := cmp.Diff([]string{"q1", "q3", "q4"}, kept); diff != "" {
+		test.Errorf("file (-want +got):\n%s", diff)
+	}
+	if info, err := os.Stat(session.path()); err != nil || info.Size() > 1700 {
+		test.Errorf("file is over the limit: %v", err)
+	}
+}
+
+// The newest thread is kept even when it alone is over the limit; dropping it
+// would lose the answer the user is waiting for.
+func TestNewestThreadIsNeverDroppedForSize(test *testing.T) {
+	var store localThreadStore
+	store.bytes = 100
+	key := pullRequestKey{"github.com", widgetsRepository, 7}
+	store.byRequest = map[pullRequestKey][]LocalThread{key: {{Question: "only", Text: bigAnswer(1000)}}}
+	if dropped := store.fit(key); dropped != 0 || len(store.byRequest[key]) != 1 {
+		test.Errorf("dropped %d, %d left", dropped, len(store.byRequest[key]))
+	}
+}
+
+// One answer is at most what a plugin may print, which must stay far below
+// what a file may hold, so the newest thread always fits. Answers hold code,
+// so characters JSON could escape are the worst ordinary case.
+func TestAFullSizeAnswerFitsInAFile(test *testing.T) {
+	text := strings.Repeat("<a & b>\n", plugins.MaximumOutputSize/8)
+	size := localthreads.FileOverhead + localthreads.ThreadSize(localthreads.Thread{Question: "q", Text: text, State: localthreads.StateAnswered})
+	if size*2 > localthreads.MaxFileSize {
+		test.Errorf("a full-size answer takes %d bytes of a %d byte file", size, localthreads.MaxFileSize)
+	}
+}
+
+// A save that is stuck holds the file mutex. Quitting must still cancel the
+// plugin runs and return within the quit wait.
+func TestCloseIsBoundedWhileAWriteIsStuck(test *testing.T) {
+	directory := test.TempDir()
+	session := newSavedSession(test, savedOptions{directory: directory, host: "github.com", quitWait: 100 * time.Millisecond})
+	session.open()
+	session.ask("first") // starts the plugin context
+	session.model.update(session.request("lost"))
+	files := &session.model.localFiles
+	files.mutex.Lock()
+	released := false
+	release := func() {
+		if !released {
+			released = true
+			files.mutex.Unlock()
+		}
+	}
+	defer release()
+	closed := make(chan struct{})
+	go func() {
+		session.model.Close()
+		close(closed)
+	}()
+	select {
+	case <-closed:
+	case <-time.After(10 * time.Second):
+		test.Fatal("Close did not return while a write held the mutex")
+	}
+	if session.model.pluginContext.Err() == nil {
+		test.Error("the plugin runs were not cancelled")
+	}
+	release()
+	<-files.flushed // the stuck writes end before the directory is removed
 }

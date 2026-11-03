@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/localthreads"
 )
 
 // DefaultLocalThreadLimit is the most local threads kept for one pull request.
@@ -70,6 +71,7 @@ func (thread LocalThread) key() pullRequestKey {
 type localThreadStore struct {
 	next      int
 	limit     int // 0 means DefaultLocalThreadLimit
+	bytes     int // 0 means localthreads.MaxFileSize
 	byRequest map[pullRequestKey][]LocalThread
 }
 
@@ -78,6 +80,42 @@ func (store *localThreadStore) maximum() int {
 		return store.limit
 	}
 	return DefaultLocalThreadLimit
+}
+
+func (store *localThreadStore) maximumBytes() int {
+	if store.bytes > 0 {
+		return store.bytes
+	}
+	return localthreads.MaxFileSize
+}
+
+// fit drops the oldest threads of key, by asked time as the count limit does,
+// until the file they make is no bigger than the file size limit (a bigger one
+// would be refused when read back), and says how many went. The newest thread
+// is never dropped: one answer is at most plugins.MaximumOutputSize, which
+// is far below the limit.
+func (store *localThreadStore) fit(key pullRequestKey) (dropped int) {
+	threads := store.byRequest[key]
+	sizes := make([]int, len(threads))
+	total := localthreads.FileOverhead + max(len(threads)-1, 0)
+	for i, thread := range threads {
+		sizes[i] = localthreads.ThreadSize(toFile([]LocalThread{thread})[0])
+		total += sizes[i]
+	}
+	for total > store.maximumBytes() && len(threads) > 1 {
+		oldest := 0
+		for i := range threads {
+			if threads[i].Asked.Before(threads[oldest].Asked) {
+				oldest = i
+			}
+		}
+		total -= sizes[oldest] + 1
+		threads = slices.Delete(threads, oldest, oldest+1)
+		sizes = slices.Delete(sizes, oldest, oldest+1)
+		dropped++
+	}
+	store.byRequest[key] = threads
+	return dropped
 }
 
 // newIdentifier returns an identifier no thread has had in this run or in a

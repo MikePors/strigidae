@@ -317,10 +317,10 @@ func (model *Model) quit() tea.Cmd {
 // afterwards.
 func (model *Model) Close() {
 	timeout := time.After(model.pluginQuitWait)
-	flushed := model.flushLocalThreads() // runs beside the cancel and the wait for the runs
 	if model.pluginCancel != nil {
 		model.pluginCancel()
 	}
+	flushed := model.flushLocalThreads() // its file work runs in a goroutine, beside the wait for the runs
 	select {
 	case <-flushed:
 	case <-timeout:

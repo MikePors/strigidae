@@ -77,11 +77,33 @@ func Encode(threads []Thread) ([]byte, error) {
 	if threads == nil {
 		threads = []Thread{}
 	}
-	data, err := json.Marshal(File{Version: Version, Threads: threads})
-	if err != nil {
+	return marshal(File{Version: Version, Threads: threads})
+}
+
+// marshal is JSON without HTML escaping: answers hold code, and `<` and `&`
+// would otherwise take six bytes each against the file size limit.
+func marshal(value any) ([]byte, error) {
+	var buffer bytes.Buffer
+	encoder := json.NewEncoder(&buffer)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(value); err != nil {
 		return nil, fmt.Errorf("encode local threads: %w", err)
 	}
-	return data, nil
+	return bytes.TrimSuffix(buffer.Bytes(), []byte("\n")), nil
+}
+
+// FileOverhead is the size of a file that holds no threads. A file of n
+// threads is FileOverhead + the sum of their ThreadSize + (n-1) separators.
+const FileOverhead = len(`{"version":1,"threads":[]}`)
+
+// ThreadSize is how many bytes a thread takes in the file, without the
+// separator after it.
+func ThreadSize(thread Thread) int {
+	data, err := marshal(thread)
+	if err != nil {
+		return 0
+	}
+	return len(data)
 }
 
 // Decode reads a file's bytes. It fails with ErrUnknownVersion for a version

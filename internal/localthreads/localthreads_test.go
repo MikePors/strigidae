@@ -213,3 +213,27 @@ func TestSetAsideKeepsEarlierCopies(test *testing.T) {
 		}
 	}
 }
+
+func TestThreadSizesAddUpToTheFile(test *testing.T) {
+	for _, count := range []int{0, 1, 2, 5} {
+		threads := sampleThreads()
+		for len(threads) < count {
+			threads = append(threads, Thread{Identifier: "local-9", Question: "<q> & more", Text: "a \"quoted\" \u00e9 answer"})
+		}
+		threads = threads[:count]
+		data, err := Encode(threads)
+		if err != nil {
+			test.Fatal(err)
+		}
+		want := FileOverhead
+		for _, thread := range threads {
+			want += ThreadSize(thread)
+		}
+		if count > 1 {
+			want += count - 1
+		}
+		if len(data) != want {
+			test.Errorf("%d threads: file is %d bytes, sizes add up to %d", count, len(data), want)
+		}
+	}
+}
