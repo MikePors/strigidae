@@ -88,6 +88,10 @@ type CommandLineKeeper interface {
 	KeepsCommandLine() bool
 }
 
+// pluginStopper is a runner with processes that outlive a run, the services
+// of *plugins.Runner: Close stops them alongside cancelling the runs.
+type pluginStopper interface{ Stop() }
+
 // pluginRun is a run the root has started and not yet heard back from.
 type pluginRun struct {
 	identity PullRequestIdentity
@@ -305,7 +309,7 @@ func (model *Model) quit() tea.Cmd {
 	return model.tick(model.pluginQuitWait, func(time.Time) tea.Msg { return quitWaitedMessage{} })
 }
 
-// Close cancels every plugin run and waits for them to end, and writes the
+// Close cancels every plugin run, stops the runner's services, and writes the
 // local threads that changed since their last write, all within one quit wait.
 // The writes do not wait for the runs, and do not depend on any command having
 // run. cmd/strig calls it after the program returns, on every path:
@@ -321,21 +325,38 @@ func (model *Model) Close() {
 	if model.pluginCancel != nil {
 		model.pluginCancel()
 	}
+	stopped := model.stopServices()
 	flushed := model.localFiles.Flush(&model.localThreads) // its file work runs in a goroutine, beside the wait for the runs
-	select {
-	case <-flushed:
-	case <-timeout:
-		return
+	for _, finished := range []<-chan struct{}{flushed, stopped} {
+		select {
+		case <-finished:
+		case <-timeout:
+			return
+		}
 	}
 	if model.pluginCancel != nil {
 		waitFor(&model.pluginRunning, timeout)
 	}
 }
 
-// waitFor waits for the group or the timeout, and says whether the group ended.
-// The caller stops after the first false, so a fired timeout is never waited
-// on twice.
-func waitFor(group *sync.WaitGroup, timeout <-chan time.Time) bool {
+// stopServices starts stopping the runner's services before any quit wait,
+// so a stuck run or file write cannot prevent the kill from being attempted.
+func (model *Model) stopServices() <-chan struct{} {
+	stopped := make(chan struct{})
+	stopper, ok := model.pluginRunner.(pluginStopper)
+	if !ok {
+		close(stopped)
+		return stopped
+	}
+	go func() {
+		stopper.Stop()
+		close(stopped)
+	}()
+	return stopped
+}
+
+// waitFor waits for the group or the remainder of the quit timeout.
+func waitFor(group *sync.WaitGroup, timeout <-chan time.Time) {
 	done := make(chan struct{})
 	go func() {
 		group.Wait()
@@ -343,8 +364,6 @@ func waitFor(group *sync.WaitGroup, timeout <-chan time.Time) bool {
 	}()
 	select {
 	case <-done:
-		return true
 	case <-timeout:
-		return false
 	}
 }

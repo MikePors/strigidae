@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"unicode"
@@ -508,4 +509,47 @@ func TestQuitBoundHoldsWhateverTheRunnerDoes(test *testing.T) {
 	}
 	close(runner.let)
 	<-results
+}
+
+// stoppingRunner needs Stop to unblock its run, as a blocked service write does.
+type stoppingRunner struct {
+	mutex   sync.Mutex
+	events  []string
+	stopped chan struct{}
+}
+
+func (runner *stoppingRunner) Run(ctx context.Context, _ string, _ plugins.Request) ([]plugins.Effect, error) {
+	<-runner.stopped
+	runner.record("run ended")
+	return nil, ctx.Err()
+}
+
+func (runner *stoppingRunner) Stop() {
+	runner.record("stopped")
+	close(runner.stopped)
+}
+
+func (runner *stoppingRunner) record(event string) {
+	runner.mutex.Lock()
+	defer runner.mutex.Unlock()
+	runner.events = append(runner.events, event)
+}
+
+// Close must stop services without first waiting for their runs to end.
+func TestCloseStopsServicesBeforeWaitingForRuns(test *testing.T) {
+	runner := &stoppingRunner{stopped: make(chan struct{})}
+	model, _ := pluginModel(test, runner, newPullRequestView(pullRequestSeven))
+	run := startRun(model, pullRequestSeven)
+	done := make(chan struct{})
+	go func() {
+		run()
+		close(done)
+	}()
+	model.Close()
+	<-done
+	runner.mutex.Lock()
+	defer runner.mutex.Unlock()
+	if diff := cmp.Diff([]string{"stopped", "run ended"}, runner.events); diff != "" {
+		test.Errorf("events (-want +got):\n%s", diff)
+	}
 }
