@@ -292,7 +292,7 @@ func TestFilesThatCannotBeUsed(test *testing.T) {
 			if err := os.WriteFile(path, testCase.content, 0o600); err != nil {
 				test.Fatal(err)
 			}
-			entries, err := Load(path, widgetKey)
+			entries, err := files.Load(path, widgetKey)
 			if err == nil || len(entries) != 0 {
 				test.Fatalf("Load = %v, %v, want an error and nothing", entries, err)
 			}

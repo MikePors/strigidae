@@ -42,8 +42,9 @@ func (model *Model) readLocalThreads(key localthreads.Key) tea.Cmd {
 	if !ok {
 		return nil
 	}
+	files := &model.localFiles
 	return func() tea.Msg {
-		threads, err := localthreads.Load(path, key)
+		threads, err := files.Load(path, key)
 		return localThreadsLoadedMessage{key: key, threads: threads, err: err}
 	}
 }

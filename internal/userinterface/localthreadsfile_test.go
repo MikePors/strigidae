@@ -343,3 +343,53 @@ func TestFailedWriteIsLoggedWithoutText(test *testing.T) {
 		test.Errorf("the thread is not shown after a failed write: %d", got)
 	}
 }
+
+// An unusable file found while another pull request's write is stuck must not
+// block the update goroutine, and is still set aside before the next write.
+func TestFailedReadDoesNotWaitForAStuckWrite(test *testing.T) {
+	session := newSavedSession(test, savedOptions{directory: test.TempDir(), host: "github.com"})
+	if err := os.MkdirAll(filepath.Dir(session.path()), 0o700); err != nil {
+		test.Fatal(err)
+	}
+	content := []byte("{secret-not-json")
+	if err := os.WriteFile(session.path(), content, 0o600); err != nil {
+		test.Fatal(err)
+	}
+	identity, _ := session.view.PullRequestIdentity()
+	key := localthreads.Key{Host: "github.com", Repository: identity.Repository, Number: identity.Number}
+	read := session.model.update(PullRequestOpenedMessage{Identity: identity})
+	loaded, ok := read().(localThreadsLoadedMessage)
+	if !ok || loaded.err == nil {
+		test.Fatalf("read result = %+v, want a failed read", loaded)
+	}
+
+	files := &session.model.localFiles
+	release := files.HoldForTest()
+	defer release()
+	var handled tea.Cmd
+	done := make(chan struct{})
+	go func() {
+		handled = session.model.update(loaded)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		test.Fatal("handling a failed read waited for the write lock")
+	}
+	release()
+	session.run(handled)
+	if strings.Contains(session.logs.String(), "secret") {
+		test.Errorf("log holds file content: %s", session.logs)
+	}
+
+	session.model.localThreads.Add(LocalThread{Host: "github.com", Repository: identity.Repository, Number: identity.Number, Question: "why?", Asked: session.clock})
+	session.run(session.model.saveLocalThreads(key))
+	aside, err := os.ReadFile(session.path() + localthreads.UnreadableSuffix)
+	if err != nil || string(aside) != string(content) {
+		test.Errorf("unreadable copy missing or changed: %v", err)
+	}
+	if saved := readSaved(test, session.path()); len(saved) != 1 || saved[0].Question != "why?" {
+		test.Errorf("new file = %+v", saved)
+	}
+}
