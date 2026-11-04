@@ -45,10 +45,10 @@ func clampHelpOffset(offset, lineCount, rows int) int {
 // renderHelp draws the title line, a blank line and the window of body lines
 // that starts at offset. When the body does not fit, the title line also
 // carries the visible range.
-func renderHelp(activeTheme theme.Theme, lines []string, height, offset int) string {
+func renderHelp(activeTheme theme.Theme, title string, lines []string, height, offset int) string {
 	rows := helpBodyRows(height)
 	offset = clampHelpOffset(offset, len(lines), rows)
-	head := activeTheme.HelpTitle.Render("Help") + activeTheme.Muted.Render("  ? / esc to close")
+	head := activeTheme.HelpTitle.Render(title) + activeTheme.Muted.Render("  ? / esc to close")
 	if len(lines) > rows {
 		last := min(offset+rows, len(lines))
 		head += activeTheme.Muted.Render(fmt.Sprintf("  %d\u2013%d of %d", offset+1, last, len(lines)))

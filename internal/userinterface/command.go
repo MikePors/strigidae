@@ -25,6 +25,7 @@ func commandTable() []commandDefinition {
 		{names: []string{"q", "quit"}, run: func(string) tea.Cmd { return Pop() }},
 		{names: []string{"qa", "qall", "quitall"}, run: func(string) tea.Cmd { return Quit() }},
 		{names: []string{"set"}, run: setCommand},
+		{names: []string{"help"}, run: helpCommand},
 		{names: []string{"theme"}, run: themeCommand},
 	}
 }

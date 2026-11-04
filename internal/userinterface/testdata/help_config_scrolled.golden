@@ -1,0 +1,8 @@
+Help: config  ? / esc to close  6–10 of 10                                                       
+                                                                                                 
+hidereviewed    nohidereviewed    nohidereviewed    hide hunks marked reviewed from the diff pane
+autoviewed      noautoviewed      noautoviewed      reviewing a file's last hunk marks it viewed 
+hideresolved    nohideresolved    nohideresolved    hide resolved threads from the diff pane     
+skipresolved    noskipresolved    noskipresolved    make ) and ( pass over resolved threads      
+relativenumber  norelativenumber  norelativenumber  number diff rows by distance from the cursor 
+ v  ? help  zq test sequence                                                                        

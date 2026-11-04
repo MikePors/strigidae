@@ -68,6 +68,15 @@ func (model *Model) completionCandidates(line string) (before string, candidates
 			return "", nil, false
 		}
 		return leading + name + gap, []string{"all", "unresolved"}, true
+	case "help":
+		if strings.Contains(arguments, " ") {
+			return "", nil, false
+		}
+		var names []string
+		for _, topic := range helpTopicTable() {
+			names = append(names, topic.name)
+		}
+		return leading + name + gap, names, true
 	case "theme":
 		if strings.Contains(arguments, " ") {
 			return "", nil, false

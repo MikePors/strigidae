@@ -25,20 +25,23 @@ type Option struct {
 	Name string
 	// Default is the value when neither the config nor `:set` changed it.
 	Default bool
+	// Description is one plain line saying what the option does, for
+	// `:help config`.
+	Description string
 }
 
 // All returns every option, in the order `:set` lists them.
 func All() []Option {
 	return []Option{
-		{Name: WrapScan, Default: true},
-		{Name: HighlightSearch, Default: true},
-		{Name: Wrap},
-		{Name: HideViewed},
-		{Name: HideReviewed},
-		{Name: AutoViewed},
-		{Name: HideResolved},
-		{Name: SkipResolved},
-		{Name: RelativeNumber},
+		{Name: WrapScan, Default: true, Description: "n and N continue past the last or first match"},
+		{Name: HighlightSearch, Default: true, Description: "mark the rows that match a search"},
+		{Name: Wrap, Description: "continue long diff lines on the next rows"},
+		{Name: HideViewed, Description: "hide files marked viewed from the Files pane"},
+		{Name: HideReviewed, Description: "hide hunks marked reviewed from the diff pane"},
+		{Name: AutoViewed, Description: "reviewing a file's last hunk marks it viewed"},
+		{Name: HideResolved, Description: "hide resolved threads from the diff pane"},
+		{Name: SkipResolved, Description: "make ) and ( pass over resolved threads"},
+		{Name: RelativeNumber, Description: "number diff rows by distance from the cursor"},
 	}
 }
 
