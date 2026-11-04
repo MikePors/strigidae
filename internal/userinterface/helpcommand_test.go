@@ -132,8 +132,8 @@ func TestHelpConfigShowsTheValueSetThisSession(test *testing.T) {
 		}
 	}
 	for name, want := range map[string][]string{
-		"wrap":       {"wrap", "nowrap"},
-		"wrapscan":   {"nowrapscan", "wrapscan"},
+		"wrap":       {"wrap*", "nowrap"},
+		"wrapscan":   {"nowrapscan*", "wrapscan"},
 		"hlsearch":   {"hlsearch", "hlsearch"},
 		"hideviewed": {"nohideviewed", "nohideviewed"},
 	} {
@@ -210,4 +210,31 @@ func TestHelpCommandGoldens(test *testing.T) {
 	}
 	pressAll(scrolling, "G")
 	golden.Assert(test, "help_config_scrolled", screen(scrolling), false)
+}
+
+func TestHelpConfigMarksOnlyOptionsChangedFromTheDefault(test *testing.T) {
+	model := sizedModel(120, 40)
+	enterLine(model, "set wrap")
+	enterLine(model, "help config")
+	for _, line := range strings.Split(screen(model), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 3 || !slices.Contains(optionNames(), fields[0]) {
+			continue
+		}
+		wantMarked := fields[0] == "wrap"
+		if marked := strings.HasSuffix(fields[1], "*"); marked != wantMarked {
+			test.Errorf("row %s: marked is %t, want %t (%q)", fields[0], marked, wantMarked, line)
+		}
+	}
+	if !strings.Contains(screen(model), "* changed from the default") {
+		test.Error("the legend is missing")
+	}
+}
+
+func optionNames() []string {
+	var names []string
+	for _, option := range options.All() {
+		names = append(names, option.Name)
+	}
+	return names
 }

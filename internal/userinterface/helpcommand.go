@@ -97,14 +97,19 @@ func helpTopicLines(activeTheme theme.Theme) []string {
 	return lines
 }
 
-// helpConfigLines lays out every option in four columns. Values are written
-// the way `:set` shows them.
+// helpConfigLines lays out every option in four columns, then a footer. Values
+// are written the way `:set` shows them, and a value that differs from its
+// default is followed by an asterisk.
 func helpConfigLines(activeTheme theme.Theme, values options.Values) []string {
 	const gap = "  "
 	var defaults options.Values
 	rows := [][4]string{{"Option", "Value", "Default", "Description"}}
 	for _, option := range options.All() {
-		rows = append(rows, [4]string{option.Name, values.Describe(option.Name), defaults.Describe(option.Name), option.Description})
+		value := values.Describe(option.Name)
+		if value != defaults.Describe(option.Name) {
+			value += "*"
+		}
+		rows = append(rows, [4]string{option.Name, value, defaults.Describe(option.Name), option.Description})
 	}
 	var widths [3]int
 	for _, row := range rows {
@@ -129,5 +134,5 @@ func helpConfigLines(activeTheme theme.Theme, values options.Values) []string {
 		line.WriteString(style.Render(row[3]))
 		lines[index] = line.String()
 	}
-	return lines
+	return append(lines, "", activeTheme.Muted.Render(":set name / :set noname to change    * changed from the default"))
 }
