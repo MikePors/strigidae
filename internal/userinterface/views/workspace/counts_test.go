@@ -122,9 +122,9 @@ func TestCountedFileNavigation(test *testing.T) {
 
 func TestCountsInTheFilesPane(test *testing.T) {
 	harness := loaded(test, 100, 24)
-	harness.pressCounted("j", 2)
+	harness.pressCounted("j", 3)
 	if got := harness.view.selection(); got != 2 {
-		test.Errorf("2j: selection = %d, want 2", got)
+		test.Errorf("3j: selection = %d, want 2", got)
 	}
 	harness.pressCounted("G", 1)
 	if got := harness.view.selection(); got != 0 {

@@ -1,0 +1,34 @@
+open #7 Add retry policy to sync client
+alice · changes requested · main ← feat/retry · [enhancement] [sync] · reviewers: bob ?, team core …
+╭─ Files 0/5 viewed ─────────╮╭─ Comments ─────────────────────────────────────────────────────────╮
+│  Overview                  ││9 conversations · 3 unresolved · 1 draft comments                   │
+│> Comments (9)              ││  me PENDING reviewed (draft, not submitted)                        │
+│    M …al/sync/client.go +25││    Draft: looks good overall, nit on naming.                       │
+│    A …al/sync/retry.go +214││                                                                    │
+│    D …al/sync/legacy.go -90││Published                                                           │
+│    R …and-backoff.md +12 -3││  ▸ README.md:1 erin 1 comment · 1h ago — Typo.                     │
+│    M README.md        +2 -1││                                                                    │
+│                            ││  bob approved · 1h ago                                             │
+│                            ││                                                                    │
+│                            ││> ▾ internal/sync/client.go:14 bob 2 comments · 4h ago              │
+│                            ││  [unresolved]                                                      │
+│                            ││  │ bob · 5h ago  ❤️ 1                                              │
+│                            ││  │   Why retry here?                                               │
+│                            ││  │                                                                 │
+│                            ││  │ alice · 4h ago  ❤️ 1                                            │
+│                            ││  │   Handles flaky links.                                          │
+│                            ││                                                                    │
+│                            ││  alice commented · 1d ago                                          │
+│                            ││    Done in the latest push.                                        │
+│                            ││                                                                    │
+│                            ││  carol requested changes · 1d ago                                  │
+│                            ││    The cap should be configurable.                                 │
+│                            ││                                                                    │
+│                            ││  ▸ internal/sync/client.go:12 carol 1 comment · 1d ago [resolved] …│
+│                            ││                                                                    │
+│                            ││  bob commented · 2d ago                                            │
+│                            ││    Thanks! Could you add a test for the **jitter** bounds?         │
+│                            ││                                                                    │
+│                            ││  ▸ internal/sync/client.go:3 dave 1 comment · 2d ago [outdated] — …│
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯

@@ -40,7 +40,7 @@ func TestSlashInTheFilesPaneAsksForThePrompt(test *testing.T) {
 
 func TestRestoreFollowsTheFileWhenFilesChange(test *testing.T) {
 	harness := loaded(test, 100, 30)
-	harness.press("j", "j") // retry.go
+	harness.press("j", "j", "j") // retry.go
 	harness.press("/")
 	harness.searchFor("zzz", userinterface.PromptChanged)
 	detail := testDetail()
@@ -54,7 +54,7 @@ func TestRestoreFollowsTheFileWhenFilesChange(test *testing.T) {
 
 func TestSubmitJumpsToTheFirstMatchAtOrAfterTheOriginInTheFilesPane(test *testing.T) {
 	harness := loaded(test, 100, 30)
-	harness.press("j", "j", "j") // legacy.go
+	harness.press("j", "j", "j", "j") // legacy.go
 	harness.press("/")
 	harness.searchFor("retry", userinterface.PromptSubmitted)
 	if got := harness.view.selection(); got != 4 {
@@ -76,7 +76,7 @@ func TestHelpSaysTheSearchKeysActOnTheFocusedPane(test *testing.T) {
 
 func TestTypingMovesTheFilesCursorAndEscRestoresIt(test *testing.T) {
 	harness := loaded(test, 100, 30)
-	harness.press("j") // row 1
+	harness.press("j", "j") // first file, after Overview and Comments
 	harness.startSearch("retry")
 	if got := harness.view.selection(); got != 2 {
 		test.Errorf("selection = %d, want 2", got)
@@ -122,7 +122,7 @@ func TestNextPreviousAndCountsInTheFilesPane(test *testing.T) {
 
 func TestNoMatchInTheFilesPane(test *testing.T) {
 	harness := loaded(test, 100, 30)
-	harness.press("j")
+	harness.press("j", "j")
 	harness.startSearch("zzz")
 	harness.searchFor("zzz", userinterface.PromptSubmitted)
 	found := false
@@ -142,21 +142,21 @@ func TestNoMatchInTheFilesPane(test *testing.T) {
 func TestMarksAndEscInTheFilesPane(test *testing.T) {
 	harness := loaded(test, 100, 30)
 	harness.startSearch("README")
-	harness.searchFor("README", userinterface.PromptSubmitted) // selects row 5
+	harness.searchFor("README", userinterface.PromptSubmitted) // selects README.md
 	harness.startSearch("retry")
-	harness.searchFor("retry", userinterface.PromptSubmitted) // selects row 2
+	harness.searchFor("retry", userinterface.PromptSubmitted) // selects retry.go
 	marker := theme.New(true).SearchMarker.Render(search.Glyph)
 	rows := harness.view.fileRows(40, 10)
 	if strings.Contains(rows[0], search.Glyph) || strings.Contains(rows[1], search.Glyph) {
 		test.Error("rows that do not match carry the marker")
 	}
-	if !strings.HasPrefix(rows[4], marker) {
-		test.Errorf("row 4 = %q, want the styled marker first", rows[4])
+	if !strings.HasPrefix(rows[5], marker) {
+		test.Errorf("row 5 = %q, want the styled marker first", rows[5])
 	}
-	if !strings.HasPrefix(ansi.Strip(rows[2]), search.SelectedGlyph) {
-		test.Errorf("selected matching row = %q, want the cursor and the match glyph", ansi.Strip(rows[2]))
+	if !strings.HasPrefix(ansi.Strip(rows[3]), search.SelectedGlyph) {
+		test.Errorf("selected matching row = %q, want the cursor and the match glyph", ansi.Strip(rows[3]))
 	}
-	if strings.Contains(rows[2], marker) {
+	if strings.Contains(rows[3], marker) {
 		test.Error("the selected row draws the marker in the accent colour")
 	}
 	harness.press("esc")
@@ -172,7 +172,7 @@ func TestRefreshRecomputesTheFilesMarks(test *testing.T) {
 	detail := testDetail()
 	detail.Files = detail.Files[:2] // client.go, retry.go
 	harness.send(pullRequestLoadedMessage{owner: harness.view, repository: testRepository, number: 7, sequence: harness.view.sequence, detail: detail})
-	if !harness.view.search.Marked(2) || harness.view.search.Marked(4) {
+	if !harness.view.search.Marked(3) || harness.view.search.Marked(5) {
 		test.Error("marks were not recomputed")
 	}
 }
@@ -201,7 +201,7 @@ func TestEnterOnAnEmptyPromptRepeatsTheLastSearchInTheFilesPane(test *testing.T)
 	harness.press("esc", "g g")
 	harness.press("/")
 	harness.searchFor("", userinterface.PromptSubmitted)
-	if harness.view.search.Query() != "retry" || !harness.view.search.Marked(4) {
+	if harness.view.search.Query() != "retry" || !harness.view.search.Marked(5) {
 		test.Errorf("query = %q", harness.view.search.Query())
 	}
 	if got := harness.view.selection(); got != 2 {

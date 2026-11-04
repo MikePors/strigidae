@@ -211,7 +211,7 @@ func TestViewedMarkAfterATimeoutShowsWhatGitHubHas(test *testing.T) {
 			harness := loaded(test, 100, 24)
 			harness.view.client = testCase.client(blockingClient{Client: harness.client})
 			harness.view.timeouts = shortTimeouts
-			harness.press("j", "v")
+			harness.press("j", "j", "v")
 			if !userinterface.IsWriteTimeout(harness.lastErr()) {
 				test.Fatalf("error = %v, want a write timeout", harness.lastErr())
 			}

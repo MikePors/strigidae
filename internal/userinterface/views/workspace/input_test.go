@@ -21,7 +21,7 @@ func TestFocusAndFileNavigation(test *testing.T) {
 		test.Error("h should focus the files pane")
 	}
 
-	harness.press("j", "j")
+	harness.press("j", "j", "j")
 	if harness.view.selection() != 2 {
 		test.Errorf("j j: sel = %d", harness.view.selection())
 	}

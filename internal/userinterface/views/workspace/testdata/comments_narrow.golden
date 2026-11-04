@@ -1,0 +1,20 @@
+open #7 Add retry policy to sync client
+alice · changes requested · main ← feat/retry · [enhancemen…
+╭─ Comments ───────────────────────────────────────────────╮
+│9 conversations · 3 unresolved · 1 draft comments         │
+│> ▾ internal/sync/client.go:14 bob 2 comments · 4h ago    │
+│  [unresolved]                                            │
+│  │ bob · 5h ago  ❤️ 1                                    │
+│  │   Why retry here?                                     │
+│  │                                                       │
+│  │ alice · 4h ago  ❤️ 1                                  │
+│  │   Handles flaky links.                                │
+│                                                          │
+│  alice commented · 1d ago                                │
+│    Done in the latest push.                              │
+│                                                          │
+│  carol requested changes · 1d ago                        │
+│    The cap should be configurable.                       │
+│                                                          │
+│  ▸ internal/sync/client.go:12 carol 1 comment · 1d ago […│
+╰──────────────────────────────────────────────────────────╯

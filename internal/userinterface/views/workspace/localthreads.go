@@ -27,6 +27,7 @@ func localRefusal(words string) string {
 // and the local ones. view.threads stays GitHub's alone, so the Overview, the
 // counts and every write look at real threads only.
 func (view *View) setPaneThreads() {
+	view.comments.dirty = true
 	view.filePane.SetThreads(view.paneThreads())
 }
 

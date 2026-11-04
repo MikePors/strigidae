@@ -165,6 +165,7 @@ func (view *View) mine(owner *View, repository github.Repository, number, sequen
 
 func (view *View) pullRequestLoaded(message pullRequestLoadedMessage) tea.Cmd {
 	view.pullRequestPending = false
+	view.detailErr = message.err
 	if message.err != nil {
 		if view.detail == nil {
 			view.err, view.notFound = message.err, errors.Is(message.err, github.ErrNotFound)
@@ -172,14 +173,19 @@ func (view *View) pullRequestLoaded(message pullRequestLoadedMessage) tea.Cmd {
 		return userinterface.Error(terminaltext.SafeError(message.err))
 	}
 	previous := view.selectedPath()
+	commentsSelected := view.current == commentsEntry
 	following := view.current == view.cursorEntry() // the pane shows the cursor's file
 	view.detail, view.err, view.notFound = &message.detail, nil, false
+	view.comments.dirty = true
 	view.reapplyViewed(message.sequence)
 	view.current = 0
 	for i, file := range message.detail.Files {
 		if previous != "" && file.Path == previous {
 			view.current = i + 1
 		}
+	}
+	if commentsSelected {
+		view.current = commentsEntry
 	}
 	view.place(view.current) // a refresh must not scroll the Files list
 	if following {

@@ -217,6 +217,7 @@ type graphqlFile struct {
 }
 
 type graphqlReview struct {
+	URL         string
 	ID          string
 	State       string
 	Body        string
@@ -427,7 +428,7 @@ func mapDetail(node graphqlPullRequestDetail, files []graphqlFile, comments []gr
 	}
 	for _, review := range reviews {
 		detail.Reviews = append(detail.Reviews, github.Review{
-			Identifier: review.ID, Author: review.Author.login(), State: github.ReviewState(review.State), Body: review.Body, SubmittedAt: review.SubmittedAt,
+			Identifier: review.ID, URL: review.URL, Author: review.Author.login(), State: github.ReviewState(review.State), Body: review.Body, SubmittedAt: review.SubmittedAt,
 		})
 	}
 	return detail, nil

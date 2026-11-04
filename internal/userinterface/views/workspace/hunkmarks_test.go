@@ -21,7 +21,7 @@ const (
 func hunkHarness(test *testing.T) *harness {
 	test.Helper()
 	harness := loaded(test, 100, 30)
-	harness.press("j", "l")
+	harness.press("j", "j", "l")
 	return harness
 }
 
@@ -189,7 +189,7 @@ func TestHunkMarkKeyInHelp(test *testing.T) {
 // the diff is not on screen, so there is no hunk to mark.
 func TestMarkHunkWhileDiffHidden(test *testing.T) {
 	harness := loaded(test, 60, 20)
-	harness.press("j", "m")
+	harness.press("j", "j", "m")
 	if strings.Contains(harness.screen(), "@@") {
 		test.Fatal("setup: the diff is on screen")
 	}
@@ -205,7 +205,7 @@ func TestMarkHunkWhileDiffHidden(test *testing.T) {
 // left so the progress stays visible.
 func TestHunkProgressSurvivesLongPath(test *testing.T) {
 	harness := loaded(test, 100, 30)
-	harness.press("j", "j", "j", "j", "l", "m") // the renamed file with the long path
+	harness.press("j", "j", "j", "j", "j", "l", "m") // the renamed file with the long path
 	title := strings.SplitN(harness.screen(), "\n", 4)[2]
 	if !strings.Contains(title, "· 1/1 hunks reviewed") || !strings.Contains(title, "…") || !strings.Contains(title, "retry-policy-and-backoff.md") {
 		test.Errorf("title row = %q, want a left-shortened path and the progress", title)

@@ -70,7 +70,7 @@ func TestRapidTogglesAreSerialised(test *testing.T) {
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
 			harness := viewedHarness(test, 100, 24)
-			harness.press("j")
+			harness.press("j", "j")
 			command := harness.pressV()
 			for range testCase.presses - 1 {
 				if harness.pressV() != nil {
@@ -99,7 +99,7 @@ func TestRapidTogglesAreSerialised(test *testing.T) {
 func TestRapidTogglesBothFailRevertToConfirmed(test *testing.T) {
 	harness := viewedHarness(test, 100, 24, github.FileUnviewed)
 	harness.client.SetError(fake.MethodSetFileViewed, errors.New("boom"))
-	harness.press("j")
+	harness.press("j", "j")
 	command := harness.pressV()
 	harness.pressV() // wants unviewed again
 	if next := harness.finish(command); next != nil {
@@ -119,7 +119,7 @@ func TestRapidTogglesBothFailRevertToConfirmed(test *testing.T) {
 func TestFailureMessagesNameTheAction(test *testing.T) {
 	harness := viewedHarness(test, 100, 24, github.FileViewed)
 	harness.client.SetError(fake.MethodSetFileViewed, errors.New("boom"))
-	harness.press("j", "v")
+	harness.press("j", "j", "v")
 	err := harness.lastErr()
 	if err == nil || !strings.HasPrefix(err.Error(), "unmark "+firstFile+" as viewed: boom") {
 		test.Errorf("error = %v", err)
@@ -128,7 +128,7 @@ func TestFailureMessagesNameTheAction(test *testing.T) {
 
 func TestRefreshMidToggleKeepsOptimisticMark(test *testing.T) {
 	harness := viewedHarness(test, 100, 24)
-	harness.press("j")
+	harness.press("j", "j")
 	command := harness.pressV()
 	harness.reload(testDetail()) // read before the mutation landed: unviewed
 	if got := harness.stateOf(); got != github.FileViewed {
@@ -154,7 +154,7 @@ func TestRefreshMidToggleKeepsOptimisticMark(test *testing.T) {
 func TestFailureAfterRefreshReverts(test *testing.T) {
 	harness := viewedHarness(test, 100, 24, github.FileUnviewed)
 	harness.client.SetError(fake.MethodSetFileViewed, errors.New("boom"))
-	harness.press("j")
+	harness.press("j", "j")
 	command := harness.pressV()
 	harness.reload(unviewedDetail())
 	harness.finish(command)
@@ -170,7 +170,7 @@ func TestFailureAfterRefreshReverts(test *testing.T) {
 
 func TestToggleOnVanishedFileIsDropped(test *testing.T) {
 	harness := viewedHarness(test, 100, 24)
-	harness.press("j")
+	harness.press("j", "j")
 	command := harness.pressV()
 	detail := testDetail()
 	detail.Files = detail.Files[1:]
@@ -196,7 +196,7 @@ func TestViewedResultForOtherViewIgnored(test *testing.T) {
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
 			harness := viewedHarness(test, 100, 24)
-			harness.press("j")
+			harness.press("j", "j")
 			harness.pressV()
 			message := viewedMessage{owner: harness.view, repository: testRepository, number: 7, path: firstFile, sent: github.FileViewed, err: errors.New("x")}
 			testCase.mutate(&message)
@@ -210,7 +210,7 @@ func TestViewedResultForOtherViewIgnored(test *testing.T) {
 
 func TestReloadStartedBeforeSettleKeepsMark(test *testing.T) {
 	harness := viewedHarness(test, 100, 24, github.FileUnviewed)
-	harness.press("j")
+	harness.press("j", "j")
 	command := harness.pressV()
 	harness.finish(command) // settles at the current load seq
 	// A reload that began before the settle finishes with the old data.

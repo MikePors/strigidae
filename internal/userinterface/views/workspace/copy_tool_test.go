@@ -29,7 +29,7 @@ func copyWith(test *testing.T, copier clipboard.Copier) []tea.Msg {
 	test.Helper()
 	harness := loaded(test, 120, 30)
 	WithClipboard(copier)(harness.view)
-	harness.press("j")
+	harness.press("j", "j")
 	return copyCommand(test, harness.view)
 }
 
@@ -75,7 +75,7 @@ func TestCopyFilenameRefusedPathIsNotPiped(test *testing.T) {
 	copier := &fakeCopier{}
 	harness := loaded(test, 120, 30)
 	WithClipboard(copier)(harness.view)
-	harness.press("j")
+	harness.press("j", "j")
 	harness.view.detail.Files[0].Path = "a\nb.go"
 	copyCommand(test, harness.view)
 	if len(copier.texts) != 0 {

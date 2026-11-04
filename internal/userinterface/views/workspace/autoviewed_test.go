@@ -19,7 +19,7 @@ func autoHarness(test *testing.T, on bool, states ...github.ViewedState) *harnes
 	test.Helper()
 	harness := viewedHarness(test, 100, 30, states...)
 	harness.send(userinterface.OptionsMessage{Values: options.Values{}.With(options.AutoViewed, on)})
-	harness.press("j", "l")
+	harness.press("j", "j", "l")
 	return harness
 }
 
@@ -105,7 +105,7 @@ func TestAutoViewedAcrossWorkspaces(test *testing.T) {
 	WithHunkMarks(first.view.hunkMarks)(reopened.view)
 	reopened.run(reopened.view.Init())
 	reopened.send(userinterface.OptionsMessage{Values: options.Values{}.With(options.AutoViewed, true)})
-	reopened.press("j", "l")
+	reopened.press("j", "j", "l")
 	if reopened.clientFile() != github.FileViewed {
 		test.Fatal("setup: the reopened pull request does not show the file viewed")
 	}

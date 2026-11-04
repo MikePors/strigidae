@@ -34,7 +34,7 @@ const (
 
 	issueCommentSelection = `id url body createdAt author { login } ` + reactionSelection
 
-	reviewSelection = `id state body submittedAt author { login }`
+	reviewSelection = `id url state body submittedAt author { login }`
 
 	reviewCommentSelection = `id url state body diffHunk createdAt viewerCanUpdate viewerCanDelete viewerDidAuthor author { login } ` + reactionSelection
 )

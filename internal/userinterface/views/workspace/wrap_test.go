@@ -25,7 +25,7 @@ func TestWrapReachesDiffPane(test *testing.T) {
 			WithClock(func() time.Time { return testNow }), WithTheme(theme.New(true)), WithWrap(wrap))
 		harness.send(tea.WindowSizeMsg{Width: 100, Height: 40})
 		harness.run(harness.view.Init())
-		harness.press("j", "j", "l") // retry.go, whose comment line is wider than the pane
+		harness.press("j", "j", "j", "l") // retry.go, whose comment line is wider than the pane
 		if got := strings.Contains(harness.screen(), "↪"); got != wrap {
 			test.Errorf("wrap %v: continuation marker shown = %v\n%s", wrap, got, harness.screen())
 		}
@@ -46,7 +46,7 @@ func TestSetWrapTurnsWrappingOnAndOffInAnOpenWorkspace(test *testing.T) {
 		WithClock(func() time.Time { return testNow }), WithTheme(theme.New(true)))
 	harness.send(tea.WindowSizeMsg{Width: 100, Height: 40})
 	harness.run(harness.view.Init())
-	harness.press("j", "j", "l")
+	harness.press("j", "j", "j", "l")
 	if strings.Contains(harness.screen(), "↪") {
 		test.Fatal("the diff wraps before the option is set")
 	}
