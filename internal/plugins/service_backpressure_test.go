@@ -269,7 +269,7 @@ func TestServiceRestartsBeforeOldOutputDrains(test *testing.T) {
 			test.Error(err)
 			return
 		}
-		_ = syscall.Kill(identifier, syscall.SIGUSR1)
+		_ = syscall.Kill(identifier, syscall.SIGKILL)
 	})
 	result := make(chan outcome, 1)
 	go func() { result <- harness.run(context.Background(), "ask", "exit-with-open-output") }()
@@ -277,6 +277,8 @@ func TestServiceRestartsBeforeOldOutputDrains(test *testing.T) {
 	if next := harness.run(context.Background(), "ask", "next"); next.err != nil || len(next.effects) != 1 || next.effects[0].Text != "next" {
 		test.Errorf("next run joined dead process: %v, %v", next.effects, next.err)
 	}
+	// SIGKILL, not SIGUSR1: the holder may still be starting, and a Go program
+	// ignores SIGUSR1 until it calls signal.Notify, so the signal could be lost.
 	data, err := os.ReadFile(filepath.Join(harness.directory, "output-holder"))
 	if err != nil {
 		test.Fatal(err)
@@ -285,7 +287,7 @@ func TestServiceRestartsBeforeOldOutputDrains(test *testing.T) {
 	if err != nil {
 		test.Fatal(err)
 	}
-	_ = syscall.Kill(identifier, syscall.SIGUSR1)
+	_ = syscall.Kill(identifier, syscall.SIGKILL)
 	if old := receive(test, result); !errors.Is(old.err, ErrExited) {
 		test.Errorf("old run: %v", old.err)
 	}
