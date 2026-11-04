@@ -238,7 +238,7 @@ func TestCommentsHostileTextAndDrafts(test *testing.T) {
 	selectCommentThread(test, harness, "draft")
 	raw := harness.render()
 	screen := ansi.Strip(raw)
-	if strings.Contains(raw, "\x1b[2J") || !strings.Contains(screen, "draft") || harness.view.comments.drafts != 1 {
+	if strings.Contains(raw, "\x1b[2J") || !strings.Contains(screen, "draft") || harness.view.comments.drafts != 2 {
 		test.Fatalf("draft or text sanitization failed:\n%s", screen)
 	}
 }

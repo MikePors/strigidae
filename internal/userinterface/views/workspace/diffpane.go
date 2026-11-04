@@ -109,6 +109,10 @@ func (pane *diffPane) SetHunkHiding(hidden func(file *diff.File, hunk int) bool,
 	pane.diffView.SetHunkFade(fade)
 }
 
+func (pane *diffPane) HunkReviewedChanged(file *diff.File, hunk int) {
+	pane.diffView.HunkReviewedChanged(file, hunk)
+}
+
 func (pane *diffPane) HiddenHunksChanged() { pane.diffView.HiddenHunksChanged() }
 
 func (pane *diffPane) SetThreadFade(fade func(identifier string) (step int, fading bool)) {

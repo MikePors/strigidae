@@ -1,7 +1,7 @@
 open #7 Add retry policy to sync client
 alice · changes requested · main ← feat/retry · [enhancemen…
 ╭─ Comments ───────────────────────────────────────────────╮
-│9 conversations · 3 unresolved · 0 draft comments         │
+│9 conversations · 3 unresolved · 1 draft comments         │
 │> ▾ internal/sync/client.go:14 bob 2 comments · 4h ago    │
 │  [unresolved]                                            │
 │  │ bob · 5h ago  ❤️ 1                                    │

@@ -56,6 +56,7 @@ func TestJumpRevealEndsWhenHunksAreReviewed(test *testing.T) {
 		test.Fatal("jump refused")
 	}
 	hidden = true
+	model.HunkReviewedChanged(model.file, 0)
 	model.HiddenHunksChanged()
 	if strings.Contains(ansi.Strip(model.Render(80, 18)), "Do we need") {
 		test.Fatal("reviewed hunk stayed revealed after its fade")
@@ -74,5 +75,51 @@ func TestJumpRevealEndsWhenThreadIsResolved(test *testing.T) {
 	model.SetThreads(threads)
 	if strings.Contains(ansi.Strip(model.Render(80, 18)), "Do we need") {
 		test.Fatal("resolved thread stayed revealed")
+	}
+}
+
+func TestJumpRevealSurvivesUnrelatedHunkNotifications(test *testing.T) {
+	model := threadModel(test, 80, 18)
+	model.SetHunkHidden(func(*diff.File, int) bool { return true })
+	if !model.JumpThread("open") {
+		test.Fatal("jump refused")
+	}
+	// A previous fade ending or an unrelated option invokes this general refresh.
+	model.HiddenHunksChanged()
+	if !strings.Contains(ansi.Strip(model.Render(80, 18)), "Do we need") {
+		test.Fatal("layout notification hid the jump target")
+	}
+	model.HunkReviewedChanged(model.file, 1)
+	if !strings.Contains(ansi.Strip(model.Render(80, 18)), "Do we need") {
+		test.Fatal("reviewing a different hunk hid the jump target")
+	}
+	other := fixture(test, "pkg/new.go")
+	model.HunkReviewedChanged(other, 0)
+	if !strings.Contains(ansi.Strip(model.Render(80, 18)), "Do we need") {
+		test.Fatal("reviewing a different file hid the jump target")
+	}
+	model.HunkReviewedChanged(model.file, 0)
+	if strings.Contains(ansi.Strip(model.Render(80, 18)), "Do we need") {
+		test.Fatal("reviewing the target hunk did not end its reveal")
+	}
+}
+
+func TestJumpRevealEndsOnHidingReconfiguration(test *testing.T) {
+	model := threadModel(test, 80, 18)
+	model.SetHideResolved(true)
+	if !model.JumpThread("resolved") {
+		test.Fatal("jump refused")
+	}
+	model.SetHideResolved(false)
+	model.SetHideResolved(true)
+	if !model.threadHidden(model.fileThreads[1]) {
+		test.Fatal("hideresolved toggle did not clear the reveal")
+	}
+	if !model.JumpThread("resolved") {
+		test.Fatal("second jump refused")
+	}
+	model.SetHunkHidden(func(*diff.File, int) bool { return true })
+	if model.revealedThread != "" {
+		test.Fatal("hidereviewed reconfiguration did not clear the reveal")
 	}
 }

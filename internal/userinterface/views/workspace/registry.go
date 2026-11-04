@@ -280,7 +280,7 @@ func (view *View) invoke(chosen actionEntry, call invocation) tea.Cmd {
 		}
 	}
 	if chosen.diffVisible {
-		if hidden := view.diffHidden(chosen.words); hidden != nil {
+		if hidden := view.diffHidden(chosen.words, chosen.level); hidden != nil {
 			return hidden
 		}
 	}

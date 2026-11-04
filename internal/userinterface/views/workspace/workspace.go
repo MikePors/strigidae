@@ -287,9 +287,13 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		view.width, view.height = message.Width, message.Height
 		view.layout()
 	case userinterface.OptionsMessage:
+		hideReviewedChanged := view.options.HideReviewed() != message.Values.HideReviewed()
 		view.options = message.Values
 		view.wrap = message.Values.Wrap()
 		view.filePane.SetWrap(view.wrap)
+		if hideReviewedChanged {
+			view.filePane.SetHunkHiding(view.hunkHidden, view.hunkFade)
+		}
 		view.filePane.SetHideResolved(message.Values.HideResolved())
 		view.filePane.SetSkipResolved(message.Values.SkipResolved())
 		view.filePane.SetRelativeNumber(message.Values.RelativeNumber())

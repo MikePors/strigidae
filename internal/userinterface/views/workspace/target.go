@@ -128,9 +128,9 @@ func (view *View) resolveTarget(request request) (resolvedTarget, tea.Cmd) {
 // diffHidden returns the notice to show when the diff pane is not on screen (a
 // narrow terminal showing the Files pane), or nil. The cursor of a pane the
 // user cannot see is not something to act on.
-func (view *View) diffHidden(words string) tea.Cmd {
+func (view *View) diffHidden(words string, targetLevel level) tea.Cmd {
 	if _, rightWidth := view.paneWidths(); rightWidth == 0 {
-		if view.mode == contentComments {
+		if view.mode == contentComments && targetLevel == levelThread {
 			return userinterface.Info("focus Comments to " + words)
 		}
 		return userinterface.Info("focus the diff to " + words)

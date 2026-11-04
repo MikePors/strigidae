@@ -19,14 +19,31 @@ const placeholderText = "▸ reviewed hunk hidden  "
 // and HiddenHunksChanged only. nil hides none.
 func (model *Model) SetHunkHidden(hidden func(file *diff.File, hunk int) bool) {
 	model.hunkHidden = hidden
+	model.revealedThread = ""
 	model.layout()
 }
 
 // HiddenHunksChanged rebuilds the rows after the answers of the SetHunkHidden
 // function changed. A cursor inside a hunk that is now hidden moves to its
 // placeholder.
-func (model *Model) HiddenHunksChanged() {
-	model.revealedThread = ""
+func (model *Model) HiddenHunksChanged() { model.layout() }
+
+// HunkReviewedChanged ends a jump reveal only when its own hunk was marked or
+// unmarked. The caller updates the review and fade state before notifying us.
+func (model *Model) HunkReviewedChanged(file *diff.File, hunk int) {
+	if model.file != nil && file != nil && model.file.Path() == file.Path() {
+		for baseIndex, indexes := range model.attach {
+			if model.base[baseIndex].hunk != hunk {
+				continue
+			}
+			for _, index := range indexes {
+				if model.fileThreads[index].Identifier == model.revealedThread {
+					model.revealedThread = ""
+					break
+				}
+			}
+		}
+	}
 	model.layout()
 }
 

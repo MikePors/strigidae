@@ -73,6 +73,7 @@ func (view *View) syncComments() {
 			group := 1
 			if pending {
 				group = 0
+				pane.drafts++
 			}
 			items = append(items, conversationItem{
 				identifier: "review:" + review.Identifier, URL: review.URL, at: review.SubmittedAt, group: group,
@@ -224,6 +225,15 @@ func (view *View) commentsSearchList() search.List {
 	}
 }
 
+// conversationTop includes the group heading when its first item is selected.
+func (pane *commentsPane) conversationTop(row int) int {
+	start := pane.starts[row]
+	if row == 0 || pane.items[row-1].group != pane.items[row].group {
+		return max(0, start-1)
+	}
+	return start
+}
+
 func (view *View) selectConversation(row int, match bool) {
 	pane := &view.comments
 	if len(pane.items) == 0 {
@@ -235,7 +245,7 @@ func (view *View) selectConversation(row int, match bool) {
 	view.renderComments(max(1, rightWidth-2), max(1, view.panesHeight()-2))
 	if pane.window.Cursor() < len(pane.starts) {
 		start := pane.starts[pane.window.Cursor()]
-		pane.viewport.SetYOffset(start)
+		pane.viewport.SetYOffset(pane.conversationTop(pane.window.Cursor()))
 		if match && pane.search.Active() {
 			if pane.matchingCommentStart >= 0 {
 				pane.viewport.SetYOffset(pane.matchingCommentStart)
@@ -370,7 +380,7 @@ func (view *View) renderComments(width, height int) []string {
 		if pane.renderedSelected == pane.selected {
 			pane.viewport.SetYOffset(start + offset)
 		} else {
-			pane.viewport.SetYOffset(start)
+			pane.viewport.SetYOffset(pane.conversationTop(pane.window.Cursor()))
 		}
 		pane.renderedSelected, pane.renderedStart = pane.selected, start
 	}

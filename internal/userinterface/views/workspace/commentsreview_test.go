@@ -43,26 +43,30 @@ func TestCommentsFallbackAfterResolvingLastThreadShowsHeader(test *testing.T) {
 }
 
 func TestCommentsSelectionFollowsIdentityWhenRowsShift(test *testing.T) {
-	harness := commentsHarness(test, 100, 18)
-	selectCommentThread(test, harness, "t-open")
-	before := harness.view.comments.window.Cursor()
 	original := testThreads()
 	extra := github.ReviewThread{Identifier: "newest", Path: firstFile, Line: 14, Comments: []github.ReviewComment{newComment("new-reviewer", "New conversation", -time.Hour)}}
+	inserted := append(append([]github.ReviewThread{}, original...), extra)
 	for _, testCase := range []struct {
-		name    string
-		threads []github.ReviewThread
-		row     int
+		name          string
+		before, after []github.ReviewThread
+		delta         int
 	}{
-		{"insert above", append(append([]github.ReviewThread{}, original...), extra), before + 1},
-		{"remove above", original, before},
+		{"insert above", original, inserted, 1},
+		{"remove above", inserted, original, -1},
 	} {
 		test.Run(testCase.name, func(test *testing.T) {
-			harness.client.SetReviewThreads(testRepository, 7, testCase.threads)
+			harness := commentsHarness(test, 100, 18)
+			harness.client.SetReviewThreads(testRepository, 7, testCase.before)
+			harness.press("R")
+			selectCommentThread(test, harness, "t-open")
+			before := harness.view.comments.window.Cursor()
+			harness.client.SetReviewThreads(testRepository, 7, testCase.after)
 			harness.press("R")
 			harness.render()
 			pane := &harness.view.comments
-			if pane.selected != "thread:t-open" || pane.window.Cursor() != testCase.row || pane.items[pane.window.Cursor()].identifier != "thread:t-open" {
-				test.Fatalf("refresh selection %q at row %d, want t-open at %d", pane.selected, pane.window.Cursor(), testCase.row)
+			want := before + testCase.delta
+			if pane.selected != "thread:t-open" || pane.window.Cursor() != want || pane.items[pane.window.Cursor()].identifier != "thread:t-open" {
+				test.Fatalf("refresh selection %q at row %d, want t-open at %d", pane.selected, pane.window.Cursor(), want)
 			}
 		})
 	}

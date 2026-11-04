@@ -95,6 +95,7 @@ func (model *Model) SetHideResolved(hide bool) {
 		return
 	}
 	model.hideResolved = hide
+	model.revealedThread = ""
 	model.layout()
 }
 

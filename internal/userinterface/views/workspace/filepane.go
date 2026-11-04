@@ -121,6 +121,9 @@ type FilePane interface {
 	SetHunkHiding(hidden func(file *diff.File, hunk int) bool, fade func(file *diff.File, hunk int) int)
 	// HiddenHunksChanged says the hidden function's answers changed.
 	HiddenHunksChanged()
+	// HunkReviewedChanged applies an explicit review change to one hunk; other
+	// hunks and files retain any temporary jump reveal.
+	HunkReviewedChanged(file *diff.File, hunk int)
 	// SetThreadFade is called once with how to tell whether a review thread
 	// is fading out and how far (0 to theme.FadeSteps); panes with threads
 	// keep a fading resolved one shown under SetHideResolved and draw it
