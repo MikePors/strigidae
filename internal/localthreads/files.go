@@ -34,7 +34,10 @@ type save struct {
 // decides; the caller runs the reads and writes in commands and tells Files
 // how they ended. Only the caller's update goroutine uses the fields above the
 // mutex; the fields below it are shared with the commands and the flush, and
-// are used only with the mutex held.
+// are used only with the mutex held. The mutex is held through a write's
+// encoding, disk write and sync, so a stuck disk holds it: nothing on the
+// update goroutine may take it. Only Write, Load and the flush's goroutine do
+// (the commands and that goroutine run off it).
 //
 // Every change of a pull request's threads bumps its generation, and a write
 // carries the generation it was made from. A write whose generation is not
@@ -118,16 +121,24 @@ func (files *Files) BeginRead(key Key) (path string, ok bool) {
 }
 
 // Load reads the threads of a pull request's file. It is for the command that
-// BeginRead started.
-func Load(path string, key Key) ([]Entry, error) {
+// BeginRead started, and runs off the update goroutine: a file that can't be
+// used is marked here, under the mutex, so that EndRead need not take it. The
+// mark is in place before the command's result reaches EndRead, and the read
+// counts as a write in flight until then, so no write of the pull request can
+// run before the mark.
+func (files *Files) Load(path string, key Key) ([]Entry, error) {
 	file, err := Read(path)
+	if err != nil {
+		files.markUnreadable(key)
+	}
 	return FromFile(key, file.Threads), err
 }
 
 // EndRead ends the read. err is the read's failure, or nil; changed is whether
 // merging what it held changed the store (see Store.Merge), which a failed read
 // never does. A file that can't be used is logged, without its content, and
-// set aside before the next write. It says whether a write is due: the merge
+// set aside before the next write (Load has already marked it, off this
+// goroutine, so this takes no lock). It says whether a write is due: the merge
 // changed something, or a change came meanwhile.
 func (files *Files) EndRead(key Key, err error, changed bool) (write bool) {
 	current := files.save(key)
@@ -138,7 +149,6 @@ func (files *Files) EndRead(key Key, err error, changed bool) (write bool) {
 	files.loaded[key] = true
 	if err != nil {
 		files.logger().Warn("local threads file ignored", "reason", loadFailure(err), "number", key.Number)
-		files.markUnreadable(key)
 	}
 	if changed {
 		files.generation = bump(files.generation, key)
@@ -207,8 +217,9 @@ func (files *Files) Flushed() <-chan struct{} { return files.flushed }
 
 // HoldForTest takes the lock every write takes, as a stuck disk would, and
 // returns the function that gives it back. It exists for tests of the caller's
-// quit wait and must never be called otherwise. Holding it blocks Write and an
-// EndRead that carries an error, so the holder must not call them.
+// quit wait and must never be called otherwise. Holding it blocks Write and Load
+// of an unusable file, so the holder must not call them; nothing on the update
+// goroutine blocks.
 func (files *Files) HoldForTest() (release func()) {
 	files.mutex.Lock()
 	var once sync.Once
