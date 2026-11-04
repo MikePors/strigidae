@@ -214,19 +214,20 @@ func TestMergeRenumbersIdentifiersThatClash(test *testing.T) {
 	}
 }
 
-// The same thread twice in a file is not dropped when its identifier clashes
-// with a live thread: the first copy is renumbered before the duplicate check,
-// which compares identifiers, so the second no longer matches. This pins what
-// the code did before the move; the quirk is issue #227.
-func TestMergeKeepsAClashingDuplicateToday(test *testing.T) {
+// The same thread twice in a file is dropped even when its identifier clashes
+// with a live thread (issue #227): the check uses the identifier as written.
+func TestMergeDropsAClashingDuplicate(test *testing.T) {
 	var store Store
 	store.Add(asked("live", baseTime))
-	store.Merge(widgetKey, []Entry{
+	changed := store.Merge(widgetKey, []Entry{
 		{Identifier: "local-1", Question: "from the file"},
 		{Identifier: "../escape", Question: "odd identifier"},
 		{Identifier: "local-1", Question: "from the file", State: github.LocalAnswered}, // same again
 	})
-	want := []string{"from the file", "odd identifier", "from the file", "live"}
+	if !changed {
+		test.Error("changed = false, want true")
+	}
+	want := []string{"from the file", "odd identifier", "live"}
 	if diff := cmp.Diff(want, questions(store.ForRequest(widgetKey))); diff != "" {
 		test.Errorf("questions (-want +got):\n%s", diff)
 	}
@@ -236,6 +237,27 @@ func TestMergeKeepsAClashingDuplicateToday(test *testing.T) {
 			test.Errorf("identifier %q is used twice", thread.Identifier)
 		}
 		seen[thread.Identifier] = true
+	}
+}
+
+// Two different questions that share an identifier in the file are both kept.
+func TestMergeKeepsDifferentQuestionsWithTheSameIdentifier(test *testing.T) {
+	var store Store
+	store.Add(asked("live", baseTime))
+	store.Merge(widgetKey, []Entry{
+		{Identifier: "local-1", Question: "first"},
+		{Identifier: "local-1", Question: "second"},
+	})
+	want := []string{"first", "second", "live"}
+	if diff := cmp.Diff(want, questions(store.ForRequest(widgetKey))); diff != "" {
+		test.Errorf("questions (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff(3, len(map[string]bool{
+		store.ForRequest(widgetKey)[0].Identifier: true,
+		store.ForRequest(widgetKey)[1].Identifier: true,
+		store.ForRequest(widgetKey)[2].Identifier: true,
+	})); diff != "" {
+		test.Errorf("identifiers are not unique (-want +got):\n%s", diff)
 	}
 }
 
