@@ -45,8 +45,8 @@ func defaultBindings() bindings {
 		PreviousSection: bind("[", "[", "previous section (overview)"),
 		Comment:         bind("c", "c", "new comment on the diff line / selection (lines only)"),
 		OverviewComment: bind("C", "C", "new top-level comment on the pull request"),
-		Reply:           bind("r", "r", "reply to the comment thread at the cursor (diff pane)"),
-		ResolveThread:   bind("x", "x", "resolve or unresolve the comment thread at the cursor (diff pane; also :resolve, :unresolve)"),
+		Reply:           bind("r", "r", "reply to the selected review thread (diff or Comments)"),
+		ResolveThread:   bind("x", "x", "resolve or unresolve the selected review thread (diff or Comments; also :resolve, :unresolve)"),
 		Viewed:          bind("v", "v", "toggle file viewed"),
 		ReviewHunk:      bind("m", "m", "toggle hunk reviewed at the diff cursor (kept by strig until it quits)"),
 
@@ -64,11 +64,17 @@ func openInBrowser(url string) error {
 }
 
 func (view *View) handleKey(message keys.Message) tea.Cmd {
+	if view.mode == contentComments && view.focus == paneRight {
+		if command, handled := view.commentsKey(message); handled {
+			return command
+		}
+	}
 	if chosen, ok := view.keyEntry(message); ok {
 		return view.invoke(chosen, invocation{message: message})
 	}
 	switch {
 	case view.diffSearchFocused() && key.Matches(message, view.globalKeys.Search):
+		view.searchComments = false
 		view.searchPane = paneRight
 		return view.filePane.StartSearch()
 	case view.diffSearchFocused() && key.Matches(message, view.globalKeys.NextMatch):
@@ -78,6 +84,7 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 	case view.diffSearchFocused() && key.Matches(message, view.globalKeys.Cancel):
 		view.filePane.ClearSearch()
 	case view.focus == paneFiles && key.Matches(message, view.globalKeys.Search):
+		view.searchComments = false
 		view.searchPane = paneFiles
 		return view.search.Start(view.searchList())
 	case view.focus == paneFiles && key.Matches(message, view.globalKeys.NextMatch):
@@ -114,6 +121,9 @@ func (view *View) stepFile(delta int) {
 	// Hidden files are skipped: count along the shown file entries.
 	var before, after []int
 	for _, entry := range view.rows[1:] {
+		if entry <= 0 {
+			continue
+		}
 		if entry < view.selection() {
 			before = append(before, entry)
 		} else if entry > view.selection() {

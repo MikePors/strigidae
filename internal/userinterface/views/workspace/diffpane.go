@@ -259,3 +259,6 @@ func (pane *diffPane) FullHelp() [][]key.Binding {
 	bindings := pane.bind
 	return [][]key.Binding{{bindings.NextHunk, bindings.PreviousHunk, bindings.NextThread, bindings.PreviousThread}, {bindings.ToggleThread, bindings.OpenThread, bindings.CloseThread}, {bindings.ScrollLeft, bindings.ScrollRight, bindings.HalfScrollLeft, bindings.HalfScrollRight}}
 }
+
+// JumpThread implements explicit navigation from the Comments pane.
+func (pane *diffPane) JumpThread(identifier string) bool { return pane.diffView.JumpThread(identifier) }

@@ -284,7 +284,7 @@ func TestGetPullRequest(test *testing.T) {
 		},
 		Reviews: []github.Review{
 			{
-				Identifier: "PRR_kwDOExample01", Author: "octocat", State: github.ReviewChangesRequested,
+				Identifier: "PRR_kwDOExample01", URL: "https://github.com/MikePors/strigidae/pull/27#pullrequestreview-1", Author: "octocat", State: github.ReviewChangesRequested,
 				Body: "Please add tests.", SubmittedAt: mustTime(test, "2026-10-18T13:00:00Z"),
 			},
 			// The viewer's draft review is kept; its SubmittedAt is zero.

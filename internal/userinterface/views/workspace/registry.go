@@ -62,7 +62,7 @@ type actionEntry struct {
 }
 
 // onOverview and inFile say where the section and selection keys apply.
-func onOverview(view *View) bool { return view.selection() == 0 }
+func onOverview(view *View) bool { return view.selection() == 0 && view.mode != contentComments }
 
 func inFile(view *View) bool { return view.selection() > 0 }
 
@@ -166,6 +166,10 @@ func (workspaceBindings *bindings) entries() []actionEntry {
 		{Action: keys.Action{Name: "leave-visual-mode", Binding: &workspaceBindings.VisualExit}},
 
 		// Commands without keys.
+		{
+			Action: keys.Action{Name: "comments", Command: "comments"},
+			run:    func(view *View, call invocation) tea.Cmd { return view.openComments(call.arguments) },
+		},
 		{
 			Action: keys.Action{Name: "resolve", Command: "resolve"},
 			level:  levelThread, words: "resolve it", diffVisible: true, guard: writeThread, fresh: freshTarget,

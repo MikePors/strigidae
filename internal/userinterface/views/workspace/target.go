@@ -67,6 +67,15 @@ type resolvedTarget struct {
 // returns the command that tells why there is none. The caller has checked
 // that the diff pane is on screen (diffHidden) where the action needs it.
 func (view *View) resolveTarget(request request) (resolvedTarget, tea.Cmd) {
+	if view.mode == contentComments && request.level == levelThread {
+		if item := view.selectedConversation(); item != nil && item.thread != nil {
+			if item.thread.Local.IsLocal() {
+				return resolvedTarget{}, userinterface.Info(localRefusal(request.words))
+			}
+			return resolvedTarget{thread: *item.thread}, nil
+		}
+		return resolvedTarget{}, userinterface.Info("select a review thread to " + request.words)
+	}
 	var context diffview.Context
 	if view.selection() > 0 { // the Overview has no diff cursor
 		context = view.filePane.Context()

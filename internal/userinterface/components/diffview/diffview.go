@@ -117,6 +117,7 @@ type Model struct {
 
 	now              func() time.Time
 	markdownRenderer *markdown.Renderer
+	revealedThread   string                // explicit Comments jump, cleared on file change
 	threads          []github.ReviewThread // all of the pull request's threads
 	fileThreads      []github.ReviewThread // the ones on the shown file
 	attach           map[int][]int         // base row -> indexes in fileThreads
@@ -250,6 +251,7 @@ func TooLargeMessage() string {
 }
 
 func (model *Model) reset() {
+	model.revealedThread = ""
 	model.blockCache = nil
 	model.visual = false // base rows are about to change
 	model.base, model.rows, model.hunkRow = nil, nil, nil

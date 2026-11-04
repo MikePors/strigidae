@@ -4,6 +4,12 @@ Checks only the maintainer can do, such as live verification against real GitHub
 
 ## Live checks
 
+- [ ] **Comments pane in a real terminal** (Comments pane proposal; issue creation is currently blocked by integration permissions).
+  1. Run `strig -R owner/repo`, open a test PR containing PR comments, review summaries, resolved and outdated threads, and drafts. Select Comments below Overview, then try `:comments unresolved` and `:comments all`.
+  2. Search for text in a reply with `/`, move with `n` / `N`, and confirm the matching conversation expands. Read a long conversation with `ctrl+d` / `ctrl+u`; resize below 80 columns and use `h` / `l` to switch focus.
+  3. Press `enter` on a current thread, including a deleted-side thread and a hidden resolved thread. Check the exact code/thread is selected. Run `:comments` to return. An outdated thread must stay in Comments with a notice; `o` must open its permalink. Check a review summary's permalink too.
+  4. Reply to and resolve a test review thread from Comments, checking the confirmation and the result on GitHub. Repeat with local plugin results: writes and browser opening must be refused. Report any wrong target, missing content, or terminal overflow.
+
 - [ ] **Local threads survive restarting strig** (#202). Only files in a temporary directory are tested.
   1. Configure a `lines` plugin with `show: thread` (for example `docs/plugins.md`'s `ask`), open a pull request, move onto a diff line and run `:ask why?`. Wait for the answer, then quit (`:qa`) and start `strig` again on the same pull request. The question and the answer should be back on the same lines.
   2. Run `:ask` with a plugin that takes a while, quit while the thread says `waiting for an answer…`, start `strig` again and open the pull request. The thread should say `no answer: strig was closed`.

@@ -58,7 +58,7 @@ func TestGolden(test *testing.T) {
 	})
 	test.Run("narrow_files", func(test *testing.T) {
 		harness := loaded(test, 60, 20)
-		harness.press("j")
+		harness.press("j", "j")
 		golden.Assert(test, "narrow_files", harness.render(), false)
 	})
 	test.Run("narrow_right", func(test *testing.T) {

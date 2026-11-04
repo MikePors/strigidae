@@ -340,3 +340,24 @@ func TestRenderMatchesCutsACurrentMatchWiderThanTheLine(test *testing.T) {
 		test.Errorf("drawn %q, want the match cut with an ellipsis", plain)
 	}
 }
+
+func TestCommentsArgumentCompletion(test *testing.T) {
+	for _, testCase := range []struct {
+		line string
+		want []string
+	}{
+		{"comments ", []string{"all", "unresolved"}},
+		{"comments all ", nil},
+	} {
+		test.Run(testCase.line, func(test *testing.T) {
+			model := New(newLister("workspace", "comments"), theme.New(true), Options{})
+			_, words, ok := model.completionCandidates(testCase.line)
+			if diff := cmp.Diff(testCase.want, words); diff != "" {
+				test.Errorf("candidates (-want +got):\n%s", diff)
+			}
+			if ok != (testCase.want != nil) {
+				test.Errorf("completion available = %v", ok)
+			}
+		})
+	}
+}

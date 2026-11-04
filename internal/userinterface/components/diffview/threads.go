@@ -124,7 +124,7 @@ func (model *Model) SetThreadFade(fade func(identifier string) (step int, fading
 func (model *Model) ThreadFadesChanged() { model.layout() }
 
 func (model *Model) threadHidden(reviewThread github.ReviewThread) bool {
-	return model.hideResolved && reviewThread.IsResolved && !model.threadFading(reviewThread.Identifier)
+	return reviewThread.Identifier != model.revealedThread && model.hideResolved && reviewThread.IsResolved && !model.threadFading(reviewThread.Identifier)
 }
 
 func (model *Model) threadFading(identifier string) bool {
@@ -356,4 +356,36 @@ func (model *Model) renderThreadRow(i int, row row) string {
 	lead += model.relativeCell(i) + spaces(model.lineNumbersWidth())
 	text := ansi.Truncate(lead+model.blocks[row.threadRow.threadIndex][row.threadRow.rowInBlock], model.width, "")
 	return text + spaces(model.width-ansi.StringWidth(text))
+}
+
+// JumpThread reveals and selects a thread by identity, preserving its exact side.
+// It refuses outdated and unanchored line threads rather than guessing a line.
+func (model *Model) JumpThread(identifier string) bool {
+	index := slices.IndexFunc(model.fileThreads, func(reviewThread github.ReviewThread) bool { return reviewThread.Identifier == identifier })
+	if index < 0 || model.fileThreads[index].IsOutdated {
+		return false
+	}
+	reviewThread := model.fileThreads[index]
+	if reviewThread.SubjectType != github.SubjectFile {
+		anchored := false
+		for _, indexes := range model.attach {
+			if slices.Contains(indexes, index) {
+				anchored = true
+				break
+			}
+		}
+		if !anchored {
+			return false
+		}
+	}
+	model.revealedThread = identifier
+	model.SetThreadExpanded(identifier, true)
+	for i, row := range model.rows {
+		if row.threadRow != nil && row.threadRow.threadIndex == index {
+			model.window.GotoRow(i)
+			model.window.ScrollCursorTop()
+			return true
+		}
+	}
+	return false
 }

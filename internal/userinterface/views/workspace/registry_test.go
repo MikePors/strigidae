@@ -141,7 +141,7 @@ func TestCommandsAreHandledAndOthersAreNot(test *testing.T) {
 	if command, handled := view.Command("frobnicate", ""); handled || command != nil {
 		test.Error("an unknown command was handled")
 	}
-	want := []string{"approve", "checks", "copy-filename", "copy-url", "delete-comment", "discard-review", "draft", "edit-comment", "edit-pull-request", "merge", "react", "ready", "request-changes", "resolve", "review", "unresolve"}
+	want := []string{"approve", "checks", "comments", "copy-filename", "copy-url", "delete-comment", "discard-review", "draft", "edit-comment", "edit-pull-request", "merge", "react", "ready", "request-changes", "resolve", "review", "unresolve"}
 	if diff := cmp.Diff(want, slices.Sorted(slices.Values(names))); diff != "" {
 		test.Errorf("commands (-want +got):\n%s", diff)
 	}
@@ -175,7 +175,7 @@ func TestEntryThatDoesNotApplyFallsThrough(test *testing.T) {
 	if _, ok := view.keyEntry(next); !ok {
 		test.Fatal("the section key should reach next-section on the Overview")
 	}
-	harness.press("j") // select the first file
+	harness.press("j", "j") // select the first file
 	if view.selection() == 0 {
 		test.Fatal("a file should be selected")
 	}

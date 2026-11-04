@@ -196,6 +196,9 @@ func (view *View) stateBadge() string {
 // truncates anything longer). A long path is shortened from the left, so the
 // hunk progress after it stays visible.
 func (view *View) rightTitle(width int) string {
+	if view.mode == contentComments {
+		return "Comments"
+	}
 	if path := view.selectedPath(); path != "" {
 		path, progress := terminaltext.Clean(path), view.hunkProgress()
 		if over := ansi.StringWidth(path) + ansi.StringWidth(progress) - width; over > 0 && progress != "" {
@@ -214,6 +217,20 @@ func (view *View) fileRows(width, height int) []string {
 	for row := view.window.Top(); row < len(view.rows) && len(rows) < height; row++ {
 		selected := row == view.window.Cursor()
 		entry := view.rows[row]
+		if entry == commentsEntry {
+			view.syncComments()
+			label := "Comments (…)"
+			if view.detail != nil && view.threadLoaded && !view.pullRequestPending && !view.threadPending && view.threadErr == nil && view.detailErr == nil {
+				label = fmt.Sprintf("Comments (%d)", view.comments.total)
+			}
+			text := "  " + label
+			style := view.theme.Normal
+			if selected {
+				text, style = "> "+label, view.theme.Selected
+			}
+			rows = append(rows, style.Render(text))
+			continue
+		}
 		if entry == 0 {
 			rows = append(rows, view.overviewRow(selected))
 			continue
@@ -330,6 +347,9 @@ func changeMarker(change github.FileChangeType) string {
 
 // rightRows renders the right pane's content.
 func (view *View) rightRows(width, height int) []string {
+	if view.mode == contentComments {
+		return view.renderComments(width, height)
+	}
 	if view.selection() > 0 {
 		return strings.Split(view.filePane.Render(width, height), "\n")
 	}

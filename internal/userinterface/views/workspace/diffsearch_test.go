@@ -18,7 +18,7 @@ func TestDiffSearchDoesNotComeBackAfterAFileWithoutADiff(test *testing.T) {
 	if got := harness.view.selectedPath(); got != "README.md" {
 		test.Fatalf("selected %q", got)
 	}
-	harness.press("g g", "j", "l", "g g") // client.go again (via Overview, which shows no file)
+	harness.press("g g", "j", "j", "l", "g g") // client.go again (via Overview, which shows no file)
 	if got := harness.view.selectedPath(); got != "internal/sync/client.go" {
 		test.Fatalf("selected %q", got)
 	}
@@ -83,7 +83,7 @@ func diffSearching(test *testing.T) *harness {
 	const text = "ctx"
 	test.Helper()
 	harness := loaded(test, 100, 30)
-	harness.press("j", "l")
+	harness.press("j", "j", "l")
 	harness.press("/")
 	harness.searchFor(text, userinterface.PromptChanged)
 	harness.searchFor(text, userinterface.PromptSubmitted)
@@ -92,7 +92,7 @@ func diffSearching(test *testing.T) *harness {
 
 func TestSlashInTheDiffPaneAsksForThePromptAndSearchesTheDiff(test *testing.T) {
 	harness := loaded(test, 100, 30)
-	harness.press("j", "l", "/")
+	harness.press("j", "j", "l", "/")
 	if prefix, ok := harness.view.PromptRequest(); !ok || prefix != "/" {
 		test.Fatalf("after / in the diff pane the request is %q, %v", prefix, ok)
 	}

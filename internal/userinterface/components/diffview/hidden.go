@@ -36,6 +36,18 @@ func (model *Model) SetHunkFade(fade func(file *diff.File, hunk int) int) {
 }
 
 func (model *Model) isHidden(hunk int) bool {
+	if model.revealedThread != "" {
+		for baseIndex, indexes := range model.attach {
+			if model.base[baseIndex].hunk != hunk {
+				continue
+			}
+			for _, index := range indexes {
+				if model.fileThreads[index].Identifier == model.revealedThread {
+					return false
+				}
+			}
+		}
+	}
 	return model.hunkHidden != nil && model.file != nil && model.hunkHidden(model.file, hunk)
 }
 

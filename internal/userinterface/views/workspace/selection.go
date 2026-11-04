@@ -12,9 +12,9 @@ func (view *View) files() []github.ChangedFile {
 	return view.detail.Files
 }
 
-// selection is the entry the right pane shows: 0 is Overview, i is Files[i-1].
-// It is the cursor's entry unless the file picker opened a hidden file.
-func (view *View) selection() int { return view.current }
+// selection returns a diff file index, or zero for either non-file mode.
+// The sidebar cursor can differ when a hidden file was opened explicitly.
+func (view *View) selection() int { return max(0, view.current) }
 
 func (view *View) selectedPath() string {
 	if selected := view.selection(); selected > 0 && selected <= len(view.files()) {
@@ -25,6 +25,12 @@ func (view *View) selectedPath() string {
 
 func (view *View) selectionChanged() {
 	selected := view.selection()
+	view.mode = contentOverview
+	if view.current == commentsEntry {
+		view.mode = contentComments
+	} else if selected > 0 {
+		view.mode = contentFile
+	}
 	if selected == 0 || selected > len(view.files()) {
 		// The one place a line selection ends when the file leaves the screen,
 		// including when a reload drops the file. (Another file or a reloaded

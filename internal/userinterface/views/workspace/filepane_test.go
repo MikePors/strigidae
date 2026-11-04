@@ -79,7 +79,7 @@ func TestSetFileOnChangedMetadata(test *testing.T) {
 	harness := loaded(test, 100, 30)
 	pane := &recordPane{}
 	harness.view.filePane = pane
-	harness.press("j")
+	harness.press("j", "j")
 	if len(pane.files) != 1 {
 		test.Fatalf("SetFile calls = %v", pane.files)
 	}

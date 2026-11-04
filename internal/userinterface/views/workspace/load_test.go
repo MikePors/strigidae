@@ -70,7 +70,7 @@ func TestLoadErrors(test *testing.T) {
 
 func TestRefreshKeepsContentOnError(test *testing.T) {
 	harness := loaded(test, 100, 30)
-	harness.press("j", "j") // select the second file
+	harness.press("j", "j", "j") // select the second file
 	path := harness.view.selectedPath()
 	harness.client.SetError(fake.MethodGetPullRequest, errors.New("flaky"))
 	harness.press("R")

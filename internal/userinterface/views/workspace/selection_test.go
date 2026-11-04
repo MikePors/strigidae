@@ -9,7 +9,7 @@ import (
 
 func TestFilePaneFollowsSelection(test *testing.T) {
 	harness := loaded(test, 100, 30)
-	harness.press("j")
+	harness.press("j", "j")
 	if !strings.Contains(ansi.Strip(harness.render()), "func (c *Client) Sync") {
 		test.Error("selecting a file should show its diff")
 	}
@@ -26,8 +26,8 @@ func TestRefreshKeepsFilesListTop(test *testing.T) {
 	harness := loaded(test, 100, 7) // three file rows visible
 	harness.press("G", "k", "k")
 	top, current := harness.view.window.Top(), harness.view.selection()
-	if top != 3 || current != 3 {
-		test.Fatalf("setup: top=%d cursor=%d, want 3 and 3", top, current)
+	if top != 4 || current != 3 {
+		test.Fatalf("setup: top=%d cursor=%d, want 4 and 3", top, current)
 	}
 	harness.press("R")
 	if harness.view.window.Top() != top || harness.view.selection() != current {
