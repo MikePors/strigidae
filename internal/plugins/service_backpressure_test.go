@@ -31,6 +31,11 @@ func TestServicePeer(test *testing.T) {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGUSR1)
 	if mode == "hold-output" {
+		// Tell the parent that SIGUSR1 is now handled; before Notify the
+		// signal would be dropped. File descriptor 3 is the first ExtraFiles entry.
+		if _, err := os.NewFile(3, "ready").Write([]byte{1}); err != nil {
+			os.Exit(8)
+		}
 		<-signals
 		os.Exit(0)
 	}
@@ -60,9 +65,23 @@ func TestServicePeer(test *testing.T) {
 			child := exec.Command(os.Args[0], "-test.run=^TestServicePeer$")
 			child.Env = append(os.Environ(), "STRIG_TEST_SERVICE=hold-output")
 			child.Stdout = os.Stdout
-			if err := child.Start(); err != nil {
+			ready, readyWriter, err := os.Pipe()
+			if err != nil {
 				os.Exit(4)
 			}
+			child.ExtraFiles = []*os.File{readyWriter}
+			err = child.Start()
+			// Close our copy so a holder that dies early shows up as EOF.
+			_ = readyWriter.Close()
+			if err != nil {
+				os.Exit(4)
+			}
+			// The test signals the holder as soon as it reads output-holder, so
+			// publish the PID only once the holder is listening.
+			if _, err := ready.Read(make([]byte, 1)); err != nil {
+				os.Exit(9)
+			}
+			_ = ready.Close()
 			if err := os.WriteFile(filepath.Join(directory, "output-holder"), []byte(strconv.Itoa(child.Process.Pid)), 0o600); err != nil {
 				os.Exit(5)
 			}
