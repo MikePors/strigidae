@@ -166,8 +166,9 @@ func number(identifier string) (int, bool) {
 }
 
 // Merge adds the threads read from a file to the pull request's own, which
-// are normally none. A thread already in the store (same identifier and same
-// question) is not added twice. A loaded identifier that is not of the form
+// are normally none. A thread already in the store, or already kept from the
+// file (same identifier as written in the file and same question), is not
+// added twice, even when its identifier clashes and would be replaced. A loaded identifier that is not of the form
 // local-N, or that another thread already has, is replaced by a new one, and
 // numbering continues after the largest loaded number, so identifiers stay
 // unique across restarts. A thread that was waiting when strig exited has no
@@ -183,6 +184,10 @@ func (store *Store) Merge(key Key, loaded []Entry) (changed bool) {
 		}
 	}
 	merged := make([]Entry, 0, len(loaded)+len(store.byRequest[key]))
+	// The threads kept so far as the file wrote them, before any renumbering,
+	// so a repeated copy is still recognised after its first copy got a new
+	// identifier.
+	kept := make([]Entry, 0, len(loaded))
 	for _, thread := range loaded {
 		_, taken := store.find(thread.Identifier)
 		// Only this pull request's threads can be the same thread; another's
@@ -190,10 +195,11 @@ func (store *Store) Merge(key Key, loaded []Entry) (changed bool) {
 		duplicate := func(other Entry) bool {
 			return other.Identifier == thread.Identifier && sameQuestion(other, thread)
 		}
-		if slices.ContainsFunc(store.byRequest[key], duplicate) || slices.ContainsFunc(merged, duplicate) {
+		if slices.ContainsFunc(store.byRequest[key], duplicate) || slices.ContainsFunc(kept, duplicate) {
 			changed = true // a duplicate is not kept
 			continue
 		}
+		kept = append(kept, thread)
 		_, valid := number(thread.Identifier)
 		taken = taken || slices.ContainsFunc(merged, func(other Entry) bool { return other.Identifier == thread.Identifier })
 		if !valid || taken {
