@@ -130,6 +130,9 @@ func (view *View) resolveTarget(request request) (resolvedTarget, tea.Cmd) {
 // user cannot see is not something to act on.
 func (view *View) diffHidden(words string) tea.Cmd {
 	if _, rightWidth := view.paneWidths(); rightWidth == 0 {
+		if view.mode == contentComments {
+			return userinterface.Info("focus Comments to " + words)
+		}
 		return userinterface.Info("focus the diff to " + words)
 	}
 	return nil

@@ -186,6 +186,15 @@ func (view *View) selectedConversation() *conversationItem {
 	return &view.comments.items[view.comments.window.Cursor()]
 }
 
+func checkCommentsArguments(arguments string) tea.Cmd {
+	switch strings.TrimSpace(arguments) {
+	case "", "all", "unresolved":
+		return nil
+	default:
+		return userinterface.Error(fmt.Errorf("usage: :comments [all|unresolved]"))
+	}
+}
+
 func (view *View) openComments(arguments string) tea.Cmd {
 	switch strings.TrimSpace(arguments) {
 	case "":
@@ -193,8 +202,6 @@ func (view *View) openComments(arguments string) tea.Cmd {
 		view.comments.unresolved = false
 	case "unresolved":
 		view.comments.unresolved = true
-	default:
-		return userinterface.Info("usage: comments [all|unresolved]")
 	}
 	view.comments.dirty = true
 	view.selectEntry(commentsEntry)
@@ -327,8 +334,10 @@ func (view *View) renderComments(width, height int) []string {
 		} else {
 			body = append(body, comment.Header(view.theme, view.now(), item.comment))
 			if selected {
-				body = append(body, strings.Split(comment.Body(view.theme, view.markdownRenderer, item.comment, max(1, width-2)), "\n")...)
-			} else {
+				if text := comment.Body(view.theme, view.markdownRenderer, item.comment, max(1, width-2)); text != "" {
+					body = append(body, strings.Split(text, "\n")...)
+				}
+			} else if strings.TrimSpace(item.comment.Body) != "" {
 				body = append(body, "  "+ansi.Truncate(terminaltext.Clean(strings.Join(strings.Fields(item.comment.Body), " ")), max(1, width-4), "…"))
 			}
 		}
@@ -360,6 +369,8 @@ func (view *View) renderComments(width, height int) []string {
 		start := pane.starts[pane.window.Cursor()]
 		if pane.renderedSelected == pane.selected {
 			pane.viewport.SetYOffset(start + offset)
+		} else {
+			pane.viewport.SetYOffset(start)
 		}
 		pane.renderedSelected, pane.renderedStart = pane.selected, start
 	}
@@ -427,10 +438,6 @@ func (view *View) jumpConversation() tea.Cmd {
 	if reviewThread.IsOutdated {
 		return userinterface.Info("No current diff location; press o to open on GitHub.")
 	}
-	jumper, ok := view.filePane.(interface{ JumpThread(string) bool })
-	if !ok {
-		return userinterface.Info("this diff pane does not support thread jumps")
-	}
 	for i, file := range view.files() {
 		if file.Path != reviewThread.Path {
 			continue
@@ -439,7 +446,7 @@ func (view *View) jumpConversation() tea.Cmd {
 		// state stays intact and the right pane's title identifies the destination.
 		previous := view.current
 		view.selectEntry(i + 1)
-		if !jumper.JumpThread(reviewThread.Identifier) {
+		if !view.filePane.JumpThread(reviewThread.Identifier) {
 			view.selectEntry(previous)
 			return userinterface.Info("No current diff location; press o to open on GitHub.")
 		}

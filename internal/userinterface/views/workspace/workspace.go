@@ -23,7 +23,7 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
-// pane identifies which pane has focus.
+// contentMode identifies the content shown in the right pane.
 type contentMode int
 
 const (
@@ -35,6 +35,7 @@ const (
 // commentsEntry identifies a sidebar destination, never a diff file index.
 const commentsEntry = -1
 
+// pane identifies which pane has focus.
 type pane int
 
 const (

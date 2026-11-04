@@ -4,7 +4,7 @@ Checks only the maintainer can do, such as live verification against real GitHub
 
 ## Live checks
 
-- [ ] **Comments pane in a real terminal** (Comments pane proposal; issue creation is currently blocked by integration permissions).
+- [ ] **Comments pane in a real terminal** (#233).
   1. Run `strig -R owner/repo`, open a test PR containing PR comments, review summaries, resolved and outdated threads, and drafts. Select Comments below Overview, then try `:comments unresolved` and `:comments all`.
   2. Search for text in a reply with `/`, move with `n` / `N`, and confirm the matching conversation expands. Read a long conversation with `ctrl+d` / `ctrl+u`; resize below 80 columns and use `h` / `l` to switch focus.
   3. Press `enter` on a current thread, including a deleted-side thread and a hidden resolved thread. Check the exact code/thread is selected. Run `:comments` to return. An outdated thread must stay in Comments with a notice; `o` must open its permalink. Check a review summary's permalink too.

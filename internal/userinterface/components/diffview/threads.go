@@ -36,6 +36,9 @@ func (model *Model) SetThreads(threads []github.ReviewThread) {
 // SetThreads keeps the choice.
 func (model *Model) SetThreadExpanded(identifier string, expanded bool) {
 	model.open[identifier] = expanded
+	if !expanded && model.revealedThread == identifier {
+		model.revealedThread = ""
+	}
 	model.layout()
 }
 

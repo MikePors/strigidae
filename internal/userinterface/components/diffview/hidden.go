@@ -25,7 +25,10 @@ func (model *Model) SetHunkHidden(hidden func(file *diff.File, hunk int) bool) {
 // HiddenHunksChanged rebuilds the rows after the answers of the SetHunkHidden
 // function changed. A cursor inside a hunk that is now hidden moves to its
 // placeholder.
-func (model *Model) HiddenHunksChanged() { model.layout() }
+func (model *Model) HiddenHunksChanged() {
+	model.revealedThread = ""
+	model.layout()
+}
 
 // SetHunkFade sets how the pane learns how far a hunk has faded: fade
 // returns 0 for its normal look, up to theme.FadeSteps for the faintest. It

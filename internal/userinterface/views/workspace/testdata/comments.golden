@@ -2,13 +2,13 @@ open #7 Add retry policy to sync client
 alice · changes requested · main ← feat/retry · [enhancement] [sync] · reviewers: bob ?, team core …
 ╭─ Files 0/5 viewed ─────────╮╭─ Comments ─────────────────────────────────────────────────────────╮
 │  Overview                  ││9 conversations · 3 unresolved · 0 draft comments                   │
-│> Comments (9)              ││    Draft: looks good overall, nit on naming.                       │
-│    M …al/sync/client.go +25││                                                                    │
-│    A …al/sync/retry.go +214││Published                                                           │
-│    D …al/sync/legacy.go -90││  ▸ README.md:1 erin 1 comment · 1h ago — Typo.                     │
-│    R …and-backoff.md +12 -3││                                                                    │
-│    M README.md        +2 -1││  bob approved · 1h ago                                             │
-│                            ││                                                                    │
+│> Comments (9)              ││  me PENDING reviewed (draft, not submitted)                        │
+│    M …al/sync/client.go +25││    Draft: looks good overall, nit on naming.                       │
+│    A …al/sync/retry.go +214││                                                                    │
+│    D …al/sync/legacy.go -90││Published                                                           │
+│    R …and-backoff.md +12 -3││  ▸ README.md:1 erin 1 comment · 1h ago — Typo.                     │
+│    M README.md        +2 -1││                                                                    │
+│                            ││  bob approved · 1h ago                                             │
 │                            ││                                                                    │
 │                            ││> ▾ internal/sync/client.go:14 bob 2 comments · 4h ago              │
 │                            ││  [unresolved]                                                      │

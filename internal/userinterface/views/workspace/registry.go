@@ -168,6 +168,7 @@ func (workspaceBindings *bindings) entries() []actionEntry {
 		// Commands without keys.
 		{
 			Action: keys.Action{Name: "comments", Command: "comments"},
+			check:  checkCommentsArguments,
 			run:    func(view *View, call invocation) tea.Cmd { return view.openComments(call.arguments) },
 		},
 		{

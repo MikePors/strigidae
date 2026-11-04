@@ -54,6 +54,8 @@ func (pane *stubPane) ThreadFadesChanged()                                      
 
 func (pane *stubPane) SetThreadExpanded(string, bool) {}
 
+func (pane *stubPane) JumpThread(string) bool { return false }
+
 func (pane *stubPane) SetThreads([]github.ReviewThread) {}
 
 func (pane *stubPane) SetFile(file github.ChangedFile) { pane.files = append(pane.files, file.Path) }

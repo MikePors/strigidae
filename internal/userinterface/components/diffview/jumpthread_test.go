@@ -1,7 +1,10 @@
 package diffview
 
 import (
+	"strings"
 	"testing"
+
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MikePors/strigidae/internal/diff"
 	"github.com/MikePors/strigidae/internal/github"
@@ -42,5 +45,34 @@ func TestJumpFileThread(test *testing.T) {
 	model.SetThreads([]github.ReviewThread{{Identifier: "file", Path: "server.go", SubjectType: github.SubjectFile}})
 	if !model.JumpThread("file") || len(model.Context().Threads) != 1 {
 		test.Fatal("file-level thread not reached")
+	}
+}
+
+func TestJumpRevealEndsWhenHunksAreReviewed(test *testing.T) {
+	model := threadModel(test, 80, 18)
+	hidden := false
+	model.SetHunkHidden(func(*diff.File, int) bool { return hidden })
+	if !model.JumpThread("open") {
+		test.Fatal("jump refused")
+	}
+	hidden = true
+	model.HiddenHunksChanged()
+	if strings.Contains(ansi.Strip(model.Render(80, 18)), "Do we need") {
+		test.Fatal("reviewed hunk stayed revealed after its fade")
+	}
+}
+
+func TestJumpRevealEndsWhenThreadIsResolved(test *testing.T) {
+	model := threadModel(test, 80, 18)
+	model.SetHideResolved(true)
+	if !model.JumpThread("open") {
+		test.Fatal("jump refused")
+	}
+	threads := sampleThreads()
+	threads[0].IsResolved = true
+	model.SetThreadExpanded("open", false)
+	model.SetThreads(threads)
+	if strings.Contains(ansi.Strip(model.Render(80, 18)), "Do we need") {
+		test.Fatal("resolved thread stayed revealed")
 	}
 }

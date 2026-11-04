@@ -97,6 +97,9 @@ func (view *View) moveOffMarked() {
 	next := row + 1
 	if next >= len(view.rows) {
 		next = row - 1
+		for next >= 0 && view.rows[next] == commentsEntry {
+			next--
+		}
 	}
 	if next < 0 {
 		return

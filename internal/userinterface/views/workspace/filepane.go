@@ -79,6 +79,9 @@ type FilePane interface {
 	// SetThreads is called when the pull request's review threads load or
 	// reload; the pane shows the ones on its file.
 	SetThreads(threads []github.ReviewThread)
+	// JumpThread reveals and selects a current thread by identity, or reports
+	// false when its location is unavailable.
+	JumpThread(identifier string) bool
 	// SetThreadExpanded folds the thread with the given identifier open or
 	// closed, replacing whatever the user chose before; it is called after a
 	// thread was resolved or unresolved, together with SetThreads.

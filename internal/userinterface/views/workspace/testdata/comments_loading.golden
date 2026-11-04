@@ -3,18 +3,18 @@ alice · changes requested · main ← feat/retry · [enhancement] [sync] · rev
 ╭─ Files 0/5 viewed ─────────╮╭─ Comments ─────────────────────────────────────────────────────────╮
 │  Overview                  ││Partial · 9 conversations · 3 unresolved · 0 draft comments         │
 │> Comments (…)              ││Loading review threads…                                             │
-│    M …al/sync/client.go +25││Drafts (not submitted)                                              │
-│    A …al/sync/retry.go +214││> me PENDING reviewed (draft, not submitted)                        │
-│    D …al/sync/legacy.go -90││    Draft: looks good overall, nit on naming.                       │
-│    R …and-backoff.md +12 -3││                                                                    │
-│    M README.md        +2 -1││Published                                                           │
-│                            ││  ▸ README.md:1 erin 1 comment · 1h ago — Typo.                     │
+│    M …al/sync/client.go +25││> me PENDING reviewed (draft, not submitted)                        │
+│    A …al/sync/retry.go +214││    Draft: looks good overall, nit on naming.                       │
+│    D …al/sync/legacy.go -90││                                                                    │
+│    R …and-backoff.md +12 -3││Published                                                           │
+│    M README.md        +2 -1││  ▸ README.md:1 erin 1 comment · 1h ago — Typo.                     │
 │                            ││                                                                    │
 │                            ││  bob approved · 1h ago                                             │
-│                            ││                                                                    │
 │                            ││                                                                    │
 │                            ││  ▸ internal/sync/client.go:14 bob 2 comments · 4h ago — Why retry …│
 │                            ││                                                                    │
 │                            ││  alice commented · 1d ago                                          │
 │                            ││    Done in the latest push.                                        │
+│                            ││                                                                    │
+│                            ││  carol requested changes · 1d ago                                  │
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯

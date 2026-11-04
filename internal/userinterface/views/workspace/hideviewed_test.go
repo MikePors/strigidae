@@ -150,8 +150,8 @@ func TestViewedAtTheEndMovesTheCursorBack(test *testing.T) {
 	hidden := newHideHarness(test, true, viewed, viewed, viewed, viewed)
 	hidden.wantRows(0, commentsEntry, 5)
 	hidden.press("j", "j", "v")
-	if got := hidden.view.selection(); got != 0 {
-		test.Errorf("after the last file the cursor is on entry %d, want Overview", got)
+	if hidden.view.current != 0 || hidden.view.mode != contentOverview {
+		test.Errorf("after the last file: entry=%d mode=%v, want Overview", hidden.view.current, hidden.view.mode)
 	}
 
 	other := newHideHarness(test, true, viewed)
