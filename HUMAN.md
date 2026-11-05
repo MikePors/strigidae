@@ -4,6 +4,11 @@ Checks only the maintainer can do, such as live verification against real GitHub
 
 ## Live checks
 
+- [ ] **`o` opens the browser without the token variables, in a real terminal** (#145). Only a fake command runner is tested.
+  1. With no `GH_BROWSER`, no `BROWSER` and no gh config `browser` set, open a pull request in strig and press `o`. The default browser should open the pull request and nothing should be printed over the TUI. Do this on Linux, on macOS and on Windows (Windows now runs `rundll32 url.dll,FileProtocolHandler` as a child process instead of an in-process call).
+  2. Run `GH_BROWSER='sh -c "env > /tmp/env.txt" --' GH_TOKEN=x strig`, press `o` on a pull request, then check `/tmp/env.txt`: it must contain no `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN` or `GITHUB_ENTERPRISE_TOKEN`, and should still have `PATH` and `HOME`.
+  3. Report the platform, whether the browser opened, anything drawn over the TUI, and any token variable found in `/tmp/env.txt`.
+
 - [ ] **Comments pane in a real terminal** (#233).
   1. Run `strig -R owner/repo`, open a test PR containing PR comments, review summaries, resolved and outdated threads, and drafts. Select Comments below Overview, then try `:comments unresolved` and `:comments all`.
   2. Search for text in a reply with `/`, move with `n` / `N`, and confirm the matching conversation expands. Read a long conversation with `ctrl+d` / `ctrl+u`; resize below 80 columns and use `h` / `l` to switch focus.

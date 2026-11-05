@@ -23,12 +23,12 @@ type started struct {
 
 // fakeSetup describes the machine an Opener runs on.
 type fakeSetup struct {
-	platform   string
-	variables  map[string]string
-	configured string
-	programs   []string // names LookPath finds
-	files      []string // paths Lstat finds
-	environ    []string
+	platform           string
+	variables          map[string]string
+	configured         string
+	programs           []string // names LookPath finds
+	files              []string // paths Lstat finds
+	processEnvironment []string
 }
 
 func (setup fakeSetup) opener(runs *[]started) *Opener {
@@ -52,7 +52,7 @@ func (setup fakeSetup) opener(runs *[]started) *Opener {
 			}
 			return nil, os.ErrNotExist
 		},
-		Environment: environment.Scrub(setup.environ),
+		Environment: environment.Scrub(setup.processEnvironment),
 		Run: func(command *exec.Cmd) error {
 			*runs = append(*runs, started{
 				Path:        command.Path,
@@ -221,11 +221,27 @@ func TestAddressChecks(test *testing.T) {
 	}
 }
 
+func TestNilEnvironmentIsEmptyNotInherited(test *testing.T) {
+	var command *exec.Cmd
+	opener := New(Options{
+		Platform:    "darwin",
+		LookPath:    func(name string) (string, error) { return "/bin/" + name, nil },
+		Environment: nil,
+		Run:         func(started *exec.Cmd) error { command = started; return nil },
+	})
+	if err := opener.Open("https://example.com"); err != nil {
+		test.Fatalf("Open: %v", err)
+	}
+	if command.Env == nil || len(command.Env) != 0 {
+		test.Errorf("Env = %#v, want non-nil and empty", command.Env)
+	}
+}
+
 func TestEnvironmentIsScrubbedAndOutputDiscarded(test *testing.T) {
 	setup := fakeSetup{
 		platform: "darwin",
 		programs: []string{"open"},
-		environ: []string{
+		processEnvironment: []string{
 			"PATH=/usr/bin", "GH_TOKEN=secret", "GITHUB_TOKEN=secret", "GH_ENTERPRISE_TOKEN=secret",
 			"GITHUB_ENTERPRISE_TOKEN=secret", "HOME=/home/someone", "GH_HOST=github.com",
 		},
