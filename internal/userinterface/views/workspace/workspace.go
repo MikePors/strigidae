@@ -54,8 +54,8 @@ func WithClock(now func() time.Time) Option { return func(view *View) { view.now
 // pass its own current theme.
 func WithTheme(activeTheme theme.Theme) Option { return func(view *View) { view.theme = activeTheme } }
 
-// WithOpener replaces how `o` opens the pull request URL, which by default is
-// the user's browser.
+// WithOpener replaces how `o` opens the pull request URL, which strig's
+// startup supplies (the user's browser).
 func WithOpener(open func(url string) error) Option { return func(view *View) { view.open = open } }
 
 // WithTimeouts sets the deadlines of the GitHub calls; zero fields select the defaults.
@@ -192,7 +192,7 @@ func New(client github.Client, repository github.Repository, number int, options
 		now:            time.Now,
 		tick:           tea.Tick,
 		rows:           []int{0, commentsEntry},
-		open:           openInBrowser,
+		open:           UnavailableBrowser,
 		theme:          theme.Default(),
 		globalKeys:     keys.DefaultGlobal(),
 		bind:           defaultBindings(),

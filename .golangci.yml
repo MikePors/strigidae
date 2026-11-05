@@ -44,6 +44,7 @@ linters:
             - "**/internal/options/**"
             - "**/internal/editor/**"
             - "**/internal/clipboard/**"
+            - "**/internal/browseropener/**"
             - "**/internal/environment/**"
             - "**/internal/plugins/**"
             - "**/internal/localthreads/**"
