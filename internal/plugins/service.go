@@ -12,7 +12,6 @@ import (
 	"os/exec"
 	"strconv"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -83,12 +82,10 @@ func (runner *Runner) ask(ctx context.Context, found *entry, request Request) ([
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, os.ErrDeadlineExceeded) {
 			return nil, endedByDeadline(ctx, runContext, name, found.plugin.Timeout)
 		}
-		if errors.Is(err, syscall.EPIPE) || !found.service.isCurrent(process) {
-			// The process ended, or was retired, since the run joined it; its
-			// input may be closed or broken.
-			return nil, fmt.Errorf("plugin %q: %w", name, ErrExited)
-		}
-		return nil, fmt.Errorf("write request to plugin %q: %w", name, err)
+		// write retired the process, so the stream is gone: the process ended or
+		// its input is broken or closed. The cause is for the log only.
+		runner.logger.Warn("write to the plugin service failed", "plugin", name, "err", err)
+		return nil, fmt.Errorf("plugin %q: %w", name, ErrExited)
 	}
 	runner.sent(name)
 	select {
@@ -140,13 +137,6 @@ func (serving *service) forget(process *serviceProcess, identifier string) {
 	serving.mutex.Lock()
 	defer serving.mutex.Unlock()
 	delete(process.pending, identifier)
-}
-
-// isCurrent reports whether the process is the one new runs join.
-func (serving *service) isCurrent(process *serviceProcess) bool {
-	serving.mutex.Lock()
-	defer serving.mutex.Unlock()
-	return serving.process == process
 }
 
 // retire prevents new runs from using a broken stream and ends its process.
