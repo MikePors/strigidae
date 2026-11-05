@@ -309,3 +309,71 @@ func TestServiceRestartsBeforeOldOutputDrains(test *testing.T) {
 		test.Errorf("old run: %v", old.err)
 	}
 }
+
+// onceLiveContext reports no error on its first check, as the write does
+// before it starts, and the real one afterwards. It never reports done, so the
+// waiting for the writer cannot end early. Its deadline has passed, so the
+// write is interrupted without a single byte written.
+type onceLiveContext struct {
+	context.Context
+	checked bool
+}
+
+func (ctx *onceLiveContext) Done() <-chan struct{} { return nil }
+
+func (ctx *onceLiveContext) Err() error {
+	if !ctx.checked {
+		ctx.checked = true
+		return nil
+	}
+	return ctx.Context.Err()
+}
+
+// A write that is interrupted with no byte written leaves complete framing, so
+// the service stays usable.
+func TestServiceInterruptedWriteWithNothingWrittenKeepsProcess(test *testing.T) {
+	harness := backpressureHarness(test)
+	if result := harness.run(context.Background(), "ask", "block"); result.err != nil { // it stops reading now
+		test.Fatal(result.err)
+	}
+	serving := harness.runner.entries["ask"].service
+	serving.mutex.Lock()
+	process := serving.process
+	serving.mutex.Unlock()
+	fillPipe(test, process.input)
+	expired, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+	err := serving.write(&onceLiveContext{Context: expired}, process, []byte("{}\n"))
+	if !errors.Is(err, context.DeadlineExceeded) {
+		test.Fatalf("write to a full pipe: %v", err)
+	}
+	serving.mutex.Lock()
+	current := serving.process
+	serving.mutex.Unlock()
+	if current != process {
+		test.Error("an interrupted write with nothing written retired the service")
+	}
+}
+
+// fillPipe writes one byte at a time until not even one more fits.
+func fillPipe(test *testing.T, pipe *os.File) {
+	test.Helper()
+	raw, err := pipe.SyscallConn()
+	if err != nil {
+		test.Fatal(err)
+	}
+	var full error
+	err = raw.Write(func(descriptor uintptr) bool {
+		for {
+			if _, full = syscall.Write(int(descriptor), []byte{'x'}); full != nil {
+				return true
+			}
+		}
+	})
+	if err != nil {
+		test.Fatal(err)
+	}
+	if !errors.Is(full, syscall.EAGAIN) {
+		test.Fatalf("filling the pipe: %v", full)
+	}
+}
