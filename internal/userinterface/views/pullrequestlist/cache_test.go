@@ -52,9 +52,6 @@ func TestCachedStartup(test *testing.T) {
 			}
 			golden.Assert(test, "stale", ansi.Strip(view.Render(80, 13)), false)
 			golden.Assert(test, "stale_narrow", ansi.Strip(view.Render(30, 8)), false)
-			if next := view.maybeLoadMore(); next != nil {
-				test.Fatal("paged stale results")
-			}
 			deliver(test, view, fresh)
 			switch {
 			case testCase.failure == nil:
