@@ -57,28 +57,36 @@ func Header(activeTheme theme.Theme, now time.Time, comment Comment) string {
 	return text
 }
 
-// ReactionText renders the non-zero reaction counts in the muted style, or ""
-// when there are none. A positive width wraps the text onto several lines,
-// breaking only between reactions so an emoji stays with its count.
+// ReactionText renders the non-zero reaction counts, or "" when there are
+// none: the viewer's own reactions in the OwnReaction style, the rest muted. A
+// positive width wraps the text onto several lines, breaking only between
+// reactions so an emoji stays with its count.
 func ReactionText(activeTheme theme.Theme, reactionList []github.ReactionSummary, width int) string {
 	var lines []string
-	current := ""
-	for _, part := range reactionParts(reactionList) {
+	current, currentWidth := "", 0
+	for _, reaction := range reactionList {
+		if reaction.Count <= 0 {
+			continue
+		}
+		part := terminaltext.Clean(reaction.Content.Emoji()) + " " + strconv.Itoa(reaction.Count)
+		style := activeTheme.Muted
+		if reaction.ViewerReacted {
+			style = activeTheme.OwnReaction
+		}
+		styled, partWidth := style.Render(part), ansi.StringWidth(part)
 		switch {
 		case current == "":
-			current = part
-		case width > 0 && ansi.StringWidth(current+" "+part) > width:
+			current, currentWidth = styled, partWidth
+		case width > 0 && currentWidth+1+partWidth > width:
 			lines = append(lines, current)
-			current = part
+			current, currentWidth = styled, partWidth
 		default:
-			current += " " + part
+			current += " " + styled
+			currentWidth += 1 + partWidth
 		}
 	}
 	if current != "" {
 		lines = append(lines, current)
-	}
-	for i, line := range lines {
-		lines[i] = activeTheme.Muted.Render(line)
 	}
 	return strings.Join(lines, "\n")
 }
@@ -106,17 +114,6 @@ func Author(name string) string {
 		return "ghost"
 	}
 	return terminaltext.Clean(name)
-}
-
-// reactionParts is one "👍 2" string per non-zero reaction.
-func reactionParts(reactionList []github.ReactionSummary) []string {
-	var parts []string
-	for _, reaction := range reactionList {
-		if reaction.Count > 0 {
-			parts = append(parts, terminaltext.Clean(reaction.Content.Emoji())+" "+strconv.Itoa(reaction.Count))
-		}
-	}
-	return parts
 }
 
 // RelativeTime formats t relative to now ("5m ago").

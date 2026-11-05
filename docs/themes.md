@@ -58,7 +58,7 @@ kept), at fixed strengths that differ for dark and light themes.
 | `muted` | `base03` | De-emphasised text, line numbers, hints, draft state |
 | `border` | `muted` | Pane borders. Follows `muted` unless set |
 | `selection` | `base02` | The cursor row in the diff |
-| `accent` | `base0E` | Focus, headings, the focused pane border and title, merged state, tabs |
+| `accent` | `base0E` | Focus, headings, the focused pane border and title, merged state, tabs, your own reactions |
 | `accent-strong` | `base0E` mixed 40% toward `base07` | The selected item in lists and popups |
 | `on-accent` | `base00` | Text drawn on an `accent` background |
 | `info` | `base0D` | Hunk headers, thread bars |

@@ -12,6 +12,7 @@ import (
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/github/fake"
 	"github.com/MikePors/strigidae/internal/userinterface/components/diffview"
+	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
 const (
@@ -249,6 +250,39 @@ func TestReactPickerToggles(test *testing.T) {
 			}
 			if inliner.view.writes != 0 {
 				test.Errorf("writes = %d", inliner.view.writes)
+			}
+		})
+	}
+}
+
+// The highlight is checked before the reload runs, so it must come from the
+// local update alone.
+func TestReactHighlightFollowsTheToggle(test *testing.T) {
+	tests := []struct {
+		name     string
+		argument string
+		want     []string
+	}{
+		{"added reaction turns to the own style", "laugh", []string{"OWN:👍 3", "OWN:😄 2", "OWN:❤️ 2"}},
+		{"removed reaction turns muted", "+1", []string{"MUTED:👍 2", "MUTED:😄 1", "OWN:❤️ 2"}},
+	}
+	activeTheme := theme.New(true)
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			inliner := newInliner(test)
+			inliner.seedReactions()
+			inliner.toComment(0)
+			inliner.toggleWithoutReload(testCase.argument)
+			out := inliner.diffView().Render(inliner.view.paneWidth, inliner.view.paneHeight)
+			for _, part := range testCase.want {
+				style, text, _ := strings.Cut(part, ":")
+				rendered := activeTheme.Muted.Render(text)
+				if style == "OWN" {
+					rendered = activeTheme.OwnReaction.Render(text)
+				}
+				if !strings.Contains(out, rendered) {
+					test.Errorf("want %s:\n%q", part, out)
+				}
 			}
 		})
 	}
