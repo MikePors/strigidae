@@ -263,3 +263,31 @@ func TestServiceWriteToAnEndedProcessReportsExited(test *testing.T) {
 		})
 	}
 }
+
+func TestEndedByDeadlineNamesTheTimeoutOnlyWhenItWasTheReason(test *testing.T) {
+	soon, cancelSoon := context.WithTimeout(context.Background(), time.Hour)
+	defer cancelSoon()
+	later, cancelLater := context.WithTimeout(context.Background(), 3*time.Hour)
+	defer cancelLater()
+	for _, testCase := range []struct {
+		name        string
+		caller      context.Context
+		wantTimeout bool
+	}{
+		{"no deadline of the caller", context.Background(), true},
+		{"caller's deadline after the plugin's", later, true},
+		{"caller's deadline before the plugin's", soon, false},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			runContext, cancel := context.WithTimeout(testCase.caller, 2*time.Hour)
+			defer cancel()
+			err := endedByDeadline(testCase.caller, runContext, "ask", 2*time.Hour)
+			if got := errors.Is(err, ErrTimeout); got != testCase.wantTimeout {
+				test.Errorf("%v: timeout = %v, want %v", err, got, testCase.wantTimeout)
+			}
+			if !testCase.wantTimeout && !errors.Is(err, context.DeadlineExceeded) {
+				test.Errorf("%v does not wrap the deadline", err)
+			}
+		})
+	}
+}

@@ -80,7 +80,7 @@ func (runner *Runner) ask(ctx context.Context, found *entry, request Request) ([
 			return nil, ctx.Err()
 		}
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, os.ErrDeadlineExceeded) {
-			return nil, fmt.Errorf("plugin %q: %w after %s", name, ErrTimeout, found.plugin.Timeout)
+			return nil, endedByDeadline(ctx, runContext, name, found.plugin.Timeout)
 		}
 		if errors.Is(err, syscall.EPIPE) || !found.service.isCurrent(process) {
 			// The process ended, or was retired, since the run joined it; its
@@ -101,7 +101,19 @@ func (runner *Runner) ask(ctx context.Context, found *entry, request Request) ([
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	return nil, fmt.Errorf("plugin %q: %w after %s", name, ErrTimeout, found.plugin.Timeout)
+	return nil, endedByDeadline(ctx, runContext, name, found.plugin.Timeout)
+}
+
+// endedByDeadline words the end of a run at its deadline. When the caller's
+// own deadline is the one that came first, the plugin's timeout is not the
+// reason, so it is not named.
+func endedByDeadline(ctx, runContext context.Context, name string, timeout time.Duration) error {
+	if parent, ok := ctx.Deadline(); ok {
+		if own, _ := runContext.Deadline(); !own.Before(parent) {
+			return fmt.Errorf("plugin %q: %w", name, context.DeadlineExceeded)
+		}
+	}
+	return fmt.Errorf("plugin %q: %w after %s", name, ErrTimeout, timeout)
 }
 
 // begin hands out a run of the service, starting the process if needed.
