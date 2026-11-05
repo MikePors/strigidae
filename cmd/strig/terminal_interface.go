@@ -11,8 +11,9 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	cliBrowser "github.com/cli/browser"
+	"github.com/cli/go-gh/v2/pkg/config"
 
+	"github.com/MikePors/strigidae/internal/browseropener"
 	"github.com/MikePors/strigidae/internal/clipboard"
 	"github.com/MikePors/strigidae/internal/environment"
 	"github.com/MikePors/strigidae/internal/logging"
@@ -34,7 +35,6 @@ func runTerminalInterface(application application, stderr io.Writer) error {
 	}
 	defer closeLog()
 	logging.Install(logger)
-	silenceBrowser()
 	logger.Info("starting", "version", version.String(), "repo", application.repository.String())
 
 	built, notice := application.buildTheme(logger, askTerminal)
@@ -87,9 +87,9 @@ func askTerminal() (terminalpalette.Reply, error) {
 // or in one with no GitHub remote), else the repository's pull request list.
 func firstView(application application) userinterface.View {
 	if application.dashboard {
-		return dashboard.New(application.client, application.config.Tabs, application.theme, dashboard.Options{Notice: application.notice, Timeouts: application.timeouts(), Clipboard: systemClipboard()})
+		return dashboard.New(application.client, application.config.Tabs, application.theme, dashboard.Options{Notice: application.notice, Timeouts: application.timeouts(), Clipboard: systemClipboard(), Open: systemBrowser().Open})
 	}
-	return pullrequestlist.New(application.client, application.repository, application.config.Tabs, application.theme, pullrequestlist.Options{Timeouts: application.timeouts(), Clipboard: systemClipboard(), CurrentBranch: application.currentBranch})
+	return pullrequestlist.New(application.client, application.repository, application.config.Tabs, application.theme, pullrequestlist.Options{Timeouts: application.timeouts(), Clipboard: systemClipboard(), Open: systemBrowser().Open, CurrentBranch: application.currentBranch})
 }
 
 // systemClipboard is the real clipboard tool lookup.
@@ -114,13 +114,33 @@ func (application application) timeouts() userinterface.Timeouts {
 	return userinterface.Timeouts{Request: application.config.Timeouts.Request, Load: application.config.Timeouts.Load}
 }
 
-// silenceBrowser stops browser launchers writing to the terminal the TUI owns.
-// When no launcher is configured, go-gh falls back to cli/browser, which wires
-// xdg-open and friends to these package globals (os.Stdout/os.Stderr by
-// default) regardless of the writers given to browser.New.
-func silenceBrowser() {
-	cliBrowser.Stdout = io.Discard
-	cliBrowser.Stderr = io.Discard
+// systemBrowser is the real browser opener.
+func systemBrowser() *browseropener.Opener {
+	return browseropener.New(browserOptions(os.Environ(), ghConfigBrowser))
+}
+
+// browserOptions gives the launcher the same scrubbed environment as every
+// program strig starts.
+func browserOptions(variables []string, configuredBrowser func() string) browseropener.Options {
+	return browseropener.Options{
+		Platform:          runtime.GOOS,
+		GetEnvironment:    os.Getenv,
+		ConfiguredBrowser: configuredBrowser,
+		LookPath:          exec.LookPath,
+		Lstat:             os.Lstat,
+		Environment:       environment.Scrub(variables),
+	}
+}
+
+// ghConfigBrowser is the browser setting of the gh CLI's config, or "" when
+// the config can't be read or sets none.
+func ghConfigBrowser() string {
+	configuration, err := config.Read(nil)
+	if err != nil {
+		return ""
+	}
+	browser, _ := configuration.Get([]string{"browser"})
+	return browser
 }
 
 // runProgram runs the program and then ends the plugin runs, on every path

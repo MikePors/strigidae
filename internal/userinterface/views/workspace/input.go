@@ -1,12 +1,11 @@
 package workspace
 
 import (
+	"errors"
 	"fmt"
-	"io"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
-	"github.com/cli/go-gh/v2/pkg/browser"
 
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
@@ -59,8 +58,10 @@ func defaultBindings() bindings {
 	}
 }
 
-func openInBrowser(url string) error {
-	return browser.New("", io.Discard, io.Discard).Browse(url)
+// UnavailableBrowser is the opener a view has when none was injected: it
+// reports that no browser can be opened rather than starting one.
+func UnavailableBrowser(string) error {
+	return errors.New("no browser opener configured")
 }
 
 func (view *View) handleKey(message keys.Message) tea.Cmd {

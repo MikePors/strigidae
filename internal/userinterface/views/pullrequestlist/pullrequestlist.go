@@ -3,12 +3,10 @@ package pullrequestlist
 
 import (
 	"fmt"
-	"io"
 	"time"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
-	"github.com/cli/go-gh/v2/pkg/browser"
 
 	"github.com/MikePors/strigidae/internal/clipboard"
 	"github.com/MikePors/strigidae/internal/config"
@@ -157,7 +155,7 @@ func New(client github.Client, repository github.Repository, configured []config
 		options.Now = time.Now
 	}
 	if options.Open == nil {
-		options.Open = openInBrowser
+		options.Open = workspace.UnavailableBrowser
 	}
 	if options.Edit == nil {
 		options.Edit = workspace.ExecEditor
@@ -201,13 +199,6 @@ func authorQuery(repository github.Repository, author string) string {
 
 // current is the tab being shown.
 func (view *View) current() *tab { return &view.tabs[view.active] }
-
-// openInBrowser discards the launcher's output: it must not touch the screen
-// the TUI owns. This covers a configured launcher; the default fallback writes
-// to cli/browser's globals, which cmd/strig silences at startup.
-func openInBrowser(url string) error {
-	return browser.New("", io.Discard, io.Discard).Browse(url)
-}
 
 // Loading implements userinterface.Loader.
 func (view *View) Loading() bool {

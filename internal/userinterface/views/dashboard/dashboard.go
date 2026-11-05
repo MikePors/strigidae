@@ -6,12 +6,10 @@ package dashboard
 
 import (
 	"fmt"
-	"io"
 	"time"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
-	"github.com/cli/go-gh/v2/pkg/browser"
 
 	"github.com/MikePors/strigidae/internal/clipboard"
 	"github.com/MikePors/strigidae/internal/config"
@@ -127,7 +125,7 @@ func New(client github.Client, tabs []config.Tab, activeTheme theme.Theme, optio
 		options.Now = time.Now
 	}
 	if options.Open == nil {
-		options.Open = openInBrowser
+		options.Open = workspace.UnavailableBrowser
 	}
 	view := &View{
 		client:     client,
@@ -165,12 +163,6 @@ func New(client github.Client, tabs []config.Tab, activeTheme theme.Theme, optio
 // in queries, so this never duplicates one.
 func searchQuery(configured config.Section) string {
 	return configured.Query + " sort:" + string(configured.Sort) + "-" + string(configured.Order)
-}
-
-// openInBrowser discards the launcher's output: it must not touch the screen
-// the TUI owns.
-func openInBrowser(url string) error {
-	return browser.New("", io.Discard, io.Discard).Browse(url)
 }
 
 // Loading implements userinterface.Loader.

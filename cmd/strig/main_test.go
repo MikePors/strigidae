@@ -14,7 +14,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
-	cliBrowser "github.com/cli/browser"
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/MikePors/strigidae/internal/config"
@@ -103,18 +102,6 @@ func TestRunPositionalArgument(test *testing.T) {
 	}
 	if !harness.started.IsZero() {
 		test.Error("TUI started despite the stray argument")
-	}
-}
-
-func TestSilenceBrowser(test *testing.T) {
-	oldOut, oldErr := cliBrowser.Stdout, cliBrowser.Stderr
-	test.Cleanup(func() { cliBrowser.Stdout, cliBrowser.Stderr = oldOut, oldErr })
-	var out, errOut bytes.Buffer
-	cliBrowser.Stdout, cliBrowser.Stderr = &out, &errOut
-
-	silenceBrowser()
-	if cliBrowser.Stdout != io.Discard || cliBrowser.Stderr != io.Discard {
-		test.Fatal("browser output not discarded")
 	}
 }
 
@@ -422,6 +409,13 @@ func TestDashboardShowsConfiguredTeammateTab(test *testing.T) {
 
 func TestClipboardToolGetsScrubbedEnvironment(test *testing.T) {
 	options := clipboardOptions([]string{"PATH=/bin", "GH_TOKEN=secret", "GITHUB_TOKEN=secret", "HOME=/h"})
+	if diff := cmp.Diff([]string{"PATH=/bin", "HOME=/h"}, options.Environment); diff != "" {
+		test.Errorf("environment (-want +got):\n%s", diff)
+	}
+}
+
+func TestBrowserLauncherGetsScrubbedEnvironment(test *testing.T) {
+	options := browserOptions([]string{"PATH=/bin", "GH_TOKEN=secret", "GITHUB_TOKEN=secret", "HOME=/h"}, func() string { return "" })
 	if diff := cmp.Diff([]string{"PATH=/bin", "HOME=/h"}, options.Environment); diff != "" {
 		test.Errorf("environment (-want +got):\n%s", diff)
 	}
