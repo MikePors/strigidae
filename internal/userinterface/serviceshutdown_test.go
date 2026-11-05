@@ -50,12 +50,12 @@ func TestCloseStopsServicesEvenWhenAFileWriteIsStuck(test *testing.T) {
 func TestCloseStopsServicesEvenWhenARunIsStuck(test *testing.T) {
 	runner := &shutdownRunner{started: make(chan struct{}), stopped: make(chan struct{}), release: make(chan struct{})}
 	model, _ := pluginModel(test, runner, newPullRequestView(pullRequestSeven))
-	model.pluginQuitWait = 500 * time.Millisecond
+	// So long that Stop can only have started before the wait, not after it.
+	model.pluginQuitWait = time.Hour
 	run := startRun(model, pullRequestSeven)
 	ended := make(chan struct{})
 	go func() { run(); close(ended) }()
 	<-runner.started
-	defer func() { close(runner.release); <-ended }()
 	closed := make(chan struct{})
 	go func() { model.Close(); close(closed) }()
 	select {
@@ -63,13 +63,26 @@ func TestCloseStopsServicesEvenWhenARunIsStuck(test *testing.T) {
 	case <-time.After(time.Second):
 		test.Fatal("stuck run prevented stopping services")
 	}
-	// The run is stuck, so only the end of the quit wait lets Close return:
-	// Stop must have started before that.
+	close(runner.release)
+	<-ended
 	select {
 	case <-closed:
-		test.Fatal("Stop started only after the quit wait ended")
-	default:
+	case <-time.After(time.Second):
+		test.Fatal("Close did not return once the run ended")
 	}
+}
+
+func TestCloseReturnsAfterTheQuitWaitWithAStuckRun(test *testing.T) {
+	runner := &shutdownRunner{started: make(chan struct{}), stopped: make(chan struct{}), release: make(chan struct{})}
+	model, _ := pluginModel(test, runner, newPullRequestView(pullRequestSeven))
+	model.pluginQuitWait = 20 * time.Millisecond
+	run := startRun(model, pullRequestSeven)
+	ended := make(chan struct{})
+	go func() { run(); close(ended) }()
+	<-runner.started
+	defer func() { close(runner.release); <-ended }()
+	closed := make(chan struct{})
+	go func() { model.Close(); close(closed) }()
 	select {
 	case <-closed:
 	case <-time.After(time.Second):
