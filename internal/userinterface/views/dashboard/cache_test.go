@@ -20,10 +20,10 @@ func TestCachedStartup(test *testing.T) {
 		name    string
 		failure error
 	}{
-		{"fresh", nil}, {"offline", errors.New("offline")}, {"forbidden", github.ErrForbidden},
+		{"fresh", nil}, {"offline", errors.New("offline")}, {"forbidden", github.ErrForbidden}, {"unauthenticated", github.ErrNotAuthenticated}, {"not_found", github.ErrNotFound},
 	} {
 		test.Run(testCase.name, func(test *testing.T) {
-			cache := listcache.New(test.TempDir(), "example.test", "alice", nil)
+			cache := listcache.New(test.TempDir(), "example.test", "alice", func() time.Time { return testNow })
 			client := fake.New()
 			client.SetError(fake.MethodSearchPullRequests, testCase.failure)
 			view := newView(client, testTabs(test), nil)
@@ -31,7 +31,7 @@ func TestCachedStartup(test *testing.T) {
 			target := &view.tabs[0].sections[0]
 			key := listcache.Key{Kind: "search", Query: target.search, Limit: github.PageRequest{Limit: target.limit}.Size()}
 			items := []github.PullRequest{pullRequest("acme/widgets", 12, "Cached pull request", time.Hour)}
-			if err := cache.Save(key, items, time.Now()); err != nil {
+			if err := cache.Save(key, items, testNow); err != nil {
 				test.Fatal(err)
 			}
 			commands := view.Init()().(tea.BatchMsg)
@@ -54,6 +54,9 @@ func TestCachedStartup(test *testing.T) {
 					test.Fatal("empty fresh result did not replace cached rows")
 				}
 			case listcache.Denied(testCase.failure):
+				if _, hit := cache.Load(key); hit {
+					test.Fatal("access failure retained cache")
+				}
 				if target.stale || len(target.pullRequests) != 0 {
 					test.Fatal("access failure retained cached rows")
 				}
@@ -67,5 +70,25 @@ func TestCachedStartup(test *testing.T) {
 				test.Fatal("late cache restarted loading")
 			}
 		})
+	}
+}
+
+func TestDeniedSectionKeepsFallbackSelection(test *testing.T) {
+	view := newView(fake.New(), testTabs(test), nil)
+	current := &view.tabs[0]
+	first := pullRequest("acme/widgets", 1, "First", time.Hour)
+	second := pullRequest("acme/widgets", 2, "Second", time.Hour)
+	current.sections[0].pullRequests = []github.PullRequest{first}
+	current.sections[1].pullRequests = []github.PullRequest{second}
+	current.selectIndex(0)
+	view.loaded(sectionLoadedMessage{tab: 0, section: 0, err: github.ErrForbidden})
+	selected, ok := current.selectedPullRequest()
+	if !ok || selected.Number != second.Number {
+		test.Fatal("cursor did not fall back")
+	}
+	view.loaded(sectionLoadedMessage{tab: 0, section: 0, page: github.Page[github.PullRequest]{Items: []github.PullRequest{first}}})
+	selected, ok = current.selectedPullRequest()
+	if !ok || selected.Number != second.Number {
+		test.Fatal("cursor jumped back to the recovered section")
 	}
 }

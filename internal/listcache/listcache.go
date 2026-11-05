@@ -17,10 +17,14 @@ import (
 
 // Key identifies the effective list request within a host and account.
 type Key struct {
-	Kind       string
+	// Kind distinguishes dashboard searches from repository tabs.
+	Kind string
+	// Repository scopes a repository tab; empty for cross-repository searches.
 	Repository github.Repository
-	Query      string
-	Limit      int
+	// Query includes the effective filters and ordering.
+	Query string
+	// Limit is the configured page size (the default for repository tabs).
+	Limit int
 }
 
 type snapshot struct {

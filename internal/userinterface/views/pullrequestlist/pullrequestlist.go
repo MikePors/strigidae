@@ -48,7 +48,7 @@ type pullRequestsLoadedMessage struct {
 type Options struct {
 	// Cache supplies account-scoped startup snapshots; nil disables persistence.
 	Cache *listcache.Store
-	// Now supplies the current time for relative ages.
+	// Now supplies the current time for relative ages and cache timestamps.
 	Now func() time.Time
 	// Open opens a URL in the browser; it runs inside a tea.Cmd.
 	Open func(url string) error
@@ -270,7 +270,7 @@ func (view *View) fetch(index int, pageRequest github.PageRequest, more bool) te
 	query, sequence := view.tabs[index].query, view.tabs[index].sequence
 	cache := view.cache
 	key := listcache.Key{Kind: "repository", Repository: repository, Query: query, Limit: github.DefaultPageSize}
-	started := time.Now()
+	started := view.now()
 	fresh := func() tea.Msg {
 		ctx, cancel := timeouts.LoadContext()
 		defer cancel()
@@ -281,15 +281,13 @@ func (view *View) fetch(index int, pageRequest github.PageRequest, more bool) te
 		} else {
 			page, err = client.SearchPullRequests(ctx, query, pageRequest)
 		}
-		if !more {
-			if err == nil {
-				if saveError := cache.Save(key, page.Items, started); saveError != nil {
-					slog.Debug("save list cache", "err", saveError)
-				}
-			} else if listcache.Denied(err) {
-				if removeError := cache.Remove(key); removeError != nil {
-					slog.Debug("remove list cache", "err", removeError)
-				}
+		if err == nil && !more {
+			if saveError := cache.Save(key, page.Items, started); saveError != nil {
+				slog.Debug("save list cache", "err", saveError)
+			}
+		} else if listcache.Denied(err) {
+			if removeError := cache.Remove(key); removeError != nil {
+				slog.Debug("remove list cache", "err", removeError)
 			}
 		}
 		return pullRequestsLoadedMessage{repository: repository, tab: index, sequence: sequence, more: more, page: page, err: err}

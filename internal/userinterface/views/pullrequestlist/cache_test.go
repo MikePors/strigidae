@@ -35,9 +35,9 @@ func TestCachedStartup(test *testing.T) {
 		{"fresh", nil}, {"offline", errors.New("offline")}, {"forbidden", github.ErrForbidden}, {"unauthenticated", github.ErrNotAuthenticated}, {"not_found", github.ErrNotFound},
 	} {
 		test.Run(testCase.name, func(test *testing.T) {
-			cache := listcache.New(test.TempDir(), "example.test", "alice", nil)
+			cache := listcache.New(test.TempDir(), "example.test", "alice", func() time.Time { return testNow })
 			key := listcache.Key{Kind: "repository", Repository: testRepository, Limit: github.DefaultPageSize}
-			if err := cache.Save(key, makePullRequests(2), time.Now()); err != nil {
+			if err := cache.Save(key, makePullRequests(2), testNow); err != nil {
 				test.Fatal(err)
 			}
 			client := fakeWith(nil)
@@ -86,11 +86,11 @@ func TestCachedStartup(test *testing.T) {
 }
 
 func TestCacheSupersededAndHostile(test *testing.T) {
-	cache := listcache.New(test.TempDir(), "example.test", "alice", nil)
+	cache := listcache.New(test.TempDir(), "example.test", "alice", func() time.Time { return testNow })
 	key := listcache.Key{Kind: "repository", Repository: testRepository, Limit: github.DefaultPageSize}
 	items := makePullRequests(1)
 	items[0].Title = "unsafe\x1b[2Jtitle"
-	if err := cache.Save(key, items, time.Now()); err != nil {
+	if err := cache.Save(key, items, testNow); err != nil {
 		test.Fatal(err)
 	}
 	view := newView(fakeWith(nil), nil)
@@ -98,7 +98,7 @@ func TestCacheSupersededAndHostile(test *testing.T) {
 	cached, _ := startupCommands(test, view.Init())
 	message := cached()
 	view.Update(message)
-	if strings.Contains(ansi.Strip(view.Render(80, 13)), "\x1b") {
+	if strings.Contains(view.Render(80, 13), "\x1b[2J") {
 		test.Fatal("cached escape leaked")
 	}
 	refresh := view.reload(0)
@@ -111,7 +111,7 @@ func TestCacheSupersededAndHostile(test *testing.T) {
 
 func TestCacheMissStillLoads(test *testing.T) {
 	view := newView(fakeWith(makePullRequests(2)), nil)
-	view.cache = listcache.New(test.TempDir(), "example.test", "alice", nil)
+	view.cache = listcache.New(test.TempDir(), "example.test", "alice", func() time.Time { return testNow })
 	cached, fresh := startupCommands(test, view.Init())
 	deliver(test, view, cached)
 	if view.current().stale || !view.Loading() {
@@ -125,9 +125,9 @@ func TestCacheMissStillLoads(test *testing.T) {
 
 func TestCachedEmptyStartup(test *testing.T) {
 	view := newView(fakeWith(makePullRequests(2)), nil)
-	view.cache = listcache.New(test.TempDir(), "example.test", "alice", nil)
+	view.cache = listcache.New(test.TempDir(), "example.test", "alice", func() time.Time { return testNow })
 	key := listcache.Key{Kind: "repository", Repository: testRepository, Limit: github.DefaultPageSize}
-	if err := view.cache.Save(key, nil, time.Now()); err != nil {
+	if err := view.cache.Save(key, nil, testNow); err != nil {
 		test.Fatal(err)
 	}
 	cached, fresh := startupCommands(test, view.Init())
@@ -139,5 +139,26 @@ func TestCachedEmptyStartup(test *testing.T) {
 	deliver(test, view, fresh)
 	if view.current().stale || len(view.current().pullRequests) != 2 {
 		test.Fatal("fresh rows did not replace empty snapshot")
+	}
+}
+
+func TestDeniedNextPageRemovesSnapshot(test *testing.T) {
+	client := fakeWith(makePullRequests(40))
+	view := newView(client, nil)
+	view.cache = listcache.New(test.TempDir(), "example.test", "alice", func() time.Time { return testNow })
+	cached, fresh := startupCommands(test, view.Init())
+	deliver(test, view, cached)
+	deliver(test, view, fresh)
+	key := listcache.Key{Kind: "repository", Repository: testRepository, Limit: github.DefaultPageSize}
+	if _, hit := view.cache.Load(key); !hit {
+		test.Fatal("first page was not cached")
+	}
+	client.SetError(fake.MethodListPullRequests, github.ErrForbidden)
+	deliver(test, view, view.fetch(0, github.PageRequest{After: view.current().next}, true))
+	if len(view.current().pullRequests) != 0 {
+		test.Fatal("denied page retained rows")
+	}
+	if _, hit := view.cache.Load(key); hit {
+		test.Fatal("denied page left a reusable snapshot")
 	}
 }

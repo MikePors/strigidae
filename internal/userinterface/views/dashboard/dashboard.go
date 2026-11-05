@@ -40,7 +40,7 @@ type sectionLoadedMessage struct {
 type Options struct {
 	// Cache supplies account-scoped startup snapshots; nil disables persistence.
 	Cache *listcache.Store
-	// Now supplies the current time for relative ages.
+	// Now supplies the current time for relative ages and cache timestamps.
 	Now func() time.Time
 	// Open opens a URL in the browser; it runs inside a tea.Cmd.
 	Open func(url string) error
@@ -247,7 +247,7 @@ func (view *View) load(index int) tea.Cmd {
 func (view *View) search(tabIndex, sectionIndex int, target section) tea.Cmd {
 	client, timeouts, cache := view.client, view.timeouts, view.cache
 	key := listcache.Key{Kind: "search", Query: target.search, Limit: github.PageRequest{Limit: target.limit}.Size()}
-	started := time.Now()
+	started := view.now()
 	fresh := func() tea.Msg {
 		ctx, cancel := timeouts.LoadContext()
 		defer cancel()
@@ -315,16 +315,15 @@ func (view *View) loaded(message sectionLoadedMessage) {
 	}
 	target.loading = false
 	target.err = message.err
-	if message.err != nil {
-		if listcache.Denied(message.err) {
-			target.pullRequests = nil
-			target.stale = false
-			current.search.Refresh(current.searchList())
-		}
+	if message.err != nil && !listcache.Denied(message.err) {
 		return // keep the rows from the last good load
 	}
 	target.stale = false
-	target.pullRequests = message.page.Items
+	if message.err != nil {
+		target.pullRequests = nil
+	} else {
+		target.pullRequests = message.page.Items
+	}
 	current.search.Refresh(current.searchList())
 	if current.total() == 0 {
 		current.anchor = nil // start from the top when rows come back
