@@ -220,3 +220,46 @@ func TestStopKillsTheService(test *testing.T) {
 		test.Error("a run after Stop started the service again")
 	}
 }
+
+// A run that joined a process just before it ended or was retired reports the
+// exit, not the raw write error.
+func TestServiceWriteToAnEndedProcessReportsExited(test *testing.T) {
+	for _, testCase := range []struct {
+		name string
+		end  func(test *testing.T, process *serviceProcess)
+	}{
+		{"broken pipe", func(test *testing.T, process *serviceProcess) {
+			reader, writer, err := os.Pipe()
+			if err != nil {
+				test.Fatal(err)
+			}
+			if err := reader.Close(); err != nil {
+				test.Fatal(err)
+			}
+			_ = process.input.Close()
+			process.input = writer
+		}},
+		{"closed file", func(test *testing.T, process *serviceProcess) {
+			// As when the process ended between a run joining it and writing.
+			if err := process.input.Close(); err != nil {
+				test.Fatal(err)
+			}
+		}},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			harness := newServiceHarness(test, time.Minute)
+			if result := harness.run(context.Background(), "ask", "first"); result.err != nil {
+				test.Fatal(result.err)
+			}
+			serving := harness.runner.entries["ask"].service
+			serving.mutex.Lock()
+			process := serving.process
+			serving.mutex.Unlock()
+			testCase.end(test, process)
+			result := harness.run(context.Background(), "ask", "second")
+			if !errors.Is(result.err, ErrExited) || result.err.Error() != `plugin "ask": exited` {
+				test.Errorf("run on an ended process: %v", result.err)
+			}
+		})
+	}
+}
