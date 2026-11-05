@@ -108,3 +108,13 @@ type Client interface {
 	// error.
 	CreatePullRequest(ctx context.Context, in CreatePullRequestInput) (PullRequest, error)
 }
+
+// CacheIdentity is the optional locally known identity used to isolate list
+// snapshots. An empty account disables caching when credentials override the
+// active gh account or the identity cannot be established without a request.
+type CacheIdentity interface {
+	// Host returns the effective GitHub host.
+	Host() string
+	// CacheAccount returns the locally known authenticated account, or empty.
+	CacheAccount() string
+}

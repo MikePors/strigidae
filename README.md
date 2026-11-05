@@ -28,6 +28,31 @@ go install github.com/MikePors/strigidae/cmd/strig@latest
 
 Run `strig` outside a git checkout, or in one with no GitHub remote (and without `-R`), to see the dashboard: one tab per entry in the config (by default a single "Me" tab), each tab showing its sections stacked, with pull requests from any repository. `g t` / `g T` switch tabs, `]` / `[` jump between sections, `enter` opens the pull request, `o` opens it in the browser and `R` refreshes the tab, and `/` searches the rows: type to jump to the first match, `enter` keeps the search (matching rows get a marker), `n` / `N` move to the next / previous match and `esc` clears it. The repository's pull request list and the Files pane of a pull request search the same way. In a pull request, `/` searches whichever pane has focus: the Files pane's paths, or the shown file's diff lines and comment threads (only what is drawn; the cursor row shows `>` instead of the marker); each pane keeps its own query, and showing another file clears the diff's. Inside a checkout with a GitHub remote, or with `-R owner/repo`, strig shows that repository's pull requests instead. That list has tabs too: **All** (every open pull request), then one per entry in the config's `tabs:` (by default **Me**) with the repository's open pull requests by that tab's `user`; the tabs' sections are not used there. `g t` / `g T` switch tabs; each tab loads when first shown, keeps its own cursor and search, and `R` refreshes the tab on screen. Stacked pull requests (one whose base branch is another open pull request's head branch in the same repository) are drawn under their parent in that list, with the title indented two spaces per level. A checkout whose remote is on a host strig doesn't know (another forge, or a GitHub Enterprise host you are not signed in to) still exits with an error; pass `-R owner/repo` there.
 
+## List cache
+
+Dashboard sections and repository PR lists start with their last successful
+initial-page results, marked `stale`, while a fresh request runs. The repository
+list normally fetches 30 rows; after paging, `R` can refresh and cache up to 100
+rows at once. Restarting shows that snapshot until the live 30-row first page
+arrives, with further rows loaded as you scroll. A successful
+refresh replaces them (including an empty result) and removes the label. A
+network failure keeps the cached rows; an authentication or access failure clears
+them. Opening a PR still loads its details and diff from GitHub.
+
+Snapshots are accepted for up to 24 hours at startup. This cutoff does not remove
+rows already displayed during a long session. The cache uses the platform cache
+directory: `$XDG_CACHE_HOME/strig` or `~/.cache/strig` on Linux,
+`~/Library/Caches/strig` on macOS, and `%LocalAppData%/strig` on Windows. Stop strig
+and delete that directory to clear it; expired files are ignored, not automatically
+deleted.
+
+Entries are separated by GitHub host, active `gh` account, repository, and query.
+Caching is disabled when the account cannot be established locally, including
+when an environment token overrides `gh` authentication. Only list summaries are
+stored, never tokens, headers, PR details, or diffs. Summaries can contain private
+repository information; files are created with owner-only permissions on Unix.
+Missing, corrupt, or unwritable caches do not stop live loading.
+
 ## Comments across a pull request
 
 Select **Comments** below Overview in the Files pane, or run `:comments`, to

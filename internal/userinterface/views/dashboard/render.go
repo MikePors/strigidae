@@ -59,6 +59,9 @@ func (view *View) drawLine(table pullrequestrows.Table, layout pullrequestrows.L
 
 func (view *View) heading(target section, width int) string {
 	title := view.theme.SectionHeading.Render(terminaltext.Clean(target.name))
+	if target.stale {
+		title += " " + view.theme.Muted.Render("(stale)")
+	}
 	if target.err != nil && len(target.pullRequests) > 0 {
 		title += " " + view.theme.ErrorText.Render("(refresh failed: "+terminaltext.SafeError(target.err).Error()+")")
 	}
@@ -68,7 +71,7 @@ func (view *View) heading(target section, width int) string {
 
 func (view *View) note(target section, width int) string {
 	switch {
-	case target.loading:
+	case target.loading && !target.stale:
 		return view.theme.Muted.Render("  Loading...")
 	case target.err != nil:
 		message := terminaltext.SafeError(target.err).Error()

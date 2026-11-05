@@ -12,6 +12,7 @@ import (
 
 	githubapi "github.com/cli/go-gh/v2/pkg/api"
 	"github.com/cli/go-gh/v2/pkg/auth"
+	ghconfig "github.com/cli/go-gh/v2/pkg/config"
 
 	"github.com/MikePors/strigidae/internal/github"
 )
@@ -43,13 +44,17 @@ type Client struct {
 	graphqlClient *githubapi.GraphQLClient
 	rest          *githubapi.RESTClient
 	// diff is a REST client that asks for the unified diff media type.
-	diff  *githubapi.RESTClient
-	limit *limitTracker
-	now   func() time.Time
-	host  string
+	diff         *githubapi.RESTClient
+	limit        *limitTracker
+	now          func() time.Time
+	host         string
+	cacheAccount string
 }
 
-var _ github.Client = (*Client)(nil)
+var (
+	_ github.Client        = (*Client)(nil)
+	_ github.CacheIdentity = (*Client)(nil)
+)
 
 // New builds a Client. It returns an error wrapping github.ErrNotAuthenticated
 // when no token can be found.
@@ -58,11 +63,18 @@ func New(options Options) (*Client, error) {
 	if host == "" {
 		host, _ = auth.DefaultHost()
 	}
+	account := ""
 	token := options.Token
 	if token == "" {
 		source := options.TokenSource
 		if source == nil {
-			source = func(hostName string) string { token, _ := auth.TokenForHost(hostName); return token }
+			source = func(hostName string) string {
+				token, tokenSource := auth.TokenForHost(hostName)
+				if configuration, err := ghconfig.Read(nil); err == nil {
+					account = cacheAccount(configuration, hostName, tokenSource)
+				}
+				return token
+			}
 		}
 		token = source(host)
 	}
@@ -101,7 +113,7 @@ func New(options Options) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create diff client: %w", err)
 	}
-	return &Client{graphqlClient: graphqlClient, rest: rest, diff: diff, limit: tracker, now: now, host: host}, nil
+	return &Client{graphqlClient: graphqlClient, rest: rest, diff: diff, limit: tracker, now: now, host: host, cacheAccount: account}, nil
 }
 
 // Host returns the GitHub host this client talks to.
@@ -148,4 +160,16 @@ func (tracker *limitTracker) resetFor(resource string) time.Time {
 	tracker.mutex.Lock()
 	defer tracker.mutex.Unlock()
 	return tracker.resets[resource]
+}
+
+// CacheAccount returns the locally known account, or empty when credentials
+// override gh's active account. No credential material enters the cache key.
+func (client *Client) CacheAccount() string { return client.cacheAccount }
+
+func cacheAccount(configuration *ghconfig.Config, host, source string) string {
+	if configuration == nil || (source != "oauth_token" && source != "gh") {
+		return ""
+	}
+	account, _ := configuration.Get([]string{"hosts", auth.NormalizeHostname(host), "user"})
+	return account
 }
