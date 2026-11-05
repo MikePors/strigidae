@@ -275,7 +275,8 @@ program at the first run of any plugin of that service and keeps it running,
 so one process serves every run of those plugins. It suits a program that
 holds something open between runs (a session, a connection only one process
 may have) or whose replies take long: runs of a service don't wait for each
-other.
+other. Services need Linux or macOS; on other systems every run of a service
+plugin fails.
 
 ```yaml
 plugins:
