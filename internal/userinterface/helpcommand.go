@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MikePors/strigidae/internal/options"
 	"github.com/MikePors/strigidae/internal/userinterface/terminaltext"
@@ -97,11 +98,22 @@ func helpTopicLines(activeTheme theme.Theme) []string {
 	return lines
 }
 
+// minimumDescriptionWidth is the narrowest the description column is made: the
+// width of its heading. Below it the overlay cuts lines off at its edge.
+const minimumDescriptionWidth = 11
+
+// wrapWords breaks text into lines of at most width columns, at spaces where
+// it can and inside a word only when the word alone is wider than width.
+func wrapWords(text string, width int) []string {
+	return strings.Split(ansi.Wrap(text, max(1, width), ""), "\n")
+}
+
 // helpConfigLines lays out every option in four columns, then a footer. Values
 // are written the way `:set` shows them, and a value that differs from its
-// default is followed by an asterisk.
-func helpConfigLines(activeTheme theme.Theme, values options.Values) []string {
-	const gap = "  "
+// default is followed by an asterisk. A description wider than width is
+// wrapped onto the following lines, under its column.
+func helpConfigLines(activeTheme theme.Theme, values options.Values, width int) []string {
+	gap := "  "
 	var defaults options.Values
 	rows := [][4]string{{"Option", "Value", "Default", "Description"}}
 	for _, option := range options.All() {
@@ -117,7 +129,13 @@ func helpConfigLines(activeTheme theme.Theme, values options.Values) []string {
 			widths[i] = max(widths[i], lipgloss.Width(row[i]))
 		}
 	}
-	lines := make([]string, len(rows))
+	if width < widths[0]+widths[1]+widths[2]+3*len(gap)+minimumDescriptionWidth {
+		gap = " " // squeeze the gaps before giving up on the width
+	}
+	leftWidth := widths[0] + widths[1] + widths[2] + 3*len(gap)
+	descriptionWidth := max(minimumDescriptionWidth, width-leftWidth)
+	indent := strings.Repeat(" ", leftWidth)
+	var lines []string
 	for index, row := range rows {
 		style := activeTheme.HelpDescription
 		if index == 0 {
@@ -131,8 +149,16 @@ func helpConfigLines(activeTheme theme.Theme, values options.Values) []string {
 			}
 			line.WriteString(cellStyle.Render(row[i]) + strings.Repeat(" ", widths[i]-lipgloss.Width(row[i])) + gap)
 		}
-		line.WriteString(style.Render(row[3]))
-		lines[index] = line.String()
+		descriptionLines := wrapWords(row[3], descriptionWidth)
+		line.WriteString(style.Render(descriptionLines[0]))
+		lines = append(lines, line.String())
+		for _, continuation := range descriptionLines[1:] {
+			lines = append(lines, indent+style.Render(continuation))
+		}
 	}
-	return append(lines, "", activeTheme.Muted.Render(":set name / :set noname to change    * changed from the default"))
+	lines = append(lines, "")
+	for _, footerLine := range wrapWords(":set name / :set noname to change    * changed from the default", width) {
+		lines = append(lines, activeTheme.Muted.Render(footerLine))
+	}
+	return lines
 }

@@ -1,6 +1,7 @@
 package userinterface
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -256,6 +257,53 @@ func TestHelpCommandGoldens(test *testing.T) {
 	}
 	pressAll(scrolling, "G")
 	golden.Assert(test, "help_config_scrolled", screen(scrolling), false)
+
+	for _, width := range []int{80, 60} {
+		narrow := sizedModel(width, 30)
+		enterLine(narrow, "help config")
+		golden.Assert(test, fmt.Sprintf("help_config_%d", width), screen(narrow), false)
+	}
+
+	narrowScrolling := sizedModel(60, 10)
+	enterLine(narrowScrolling, "help config")
+	pressAll(narrowScrolling, "G")
+	golden.Assert(test, "help_config_narrow_scrolled", screen(narrowScrolling), false)
+}
+
+func TestWrapWords(test *testing.T) {
+	tests := []struct {
+		name  string
+		text  string
+		width int
+		want  []string
+	}{
+		{"fits exactly", "one two", 7, []string{"one two"}},
+		{"breaks at a space", "one two three", 7, []string{"one two", "three"}},
+		{"over-long word is hard-broken", "a abcdefghij b", 4, []string{"a", "abcd", "efgh", "ij b"}},
+		{"empty", "", 5, []string{""}},
+	}
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			if diff := cmp.Diff(testCase.want, wrapWords(testCase.text, testCase.width)); diff != "" {
+				test.Errorf("wrapWords (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestHelpConfigRelaysOutOnResize(test *testing.T) {
+	model := sizedModel(120, 30)
+	enterLine(model, "help config")
+	wide := len(model.helpLines())
+	model.Update(tea.WindowSizeMsg{Width: 60, Height: 30})
+	if narrow := len(model.helpLines()); narrow <= wide {
+		test.Errorf("lines at 60 columns = %d, want more than %d at 120", narrow, wide)
+	}
+	for _, line := range strings.Split(screen(model), "\n") {
+		if strings.Contains(line, "hide resolved threads from the diff pane") {
+			test.Errorf("description not wrapped at 60 columns: %q", line)
+		}
+	}
 }
 
 func TestHelpConfigMarksOnlyOptionsChangedFromTheDefault(test *testing.T) {
