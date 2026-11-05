@@ -472,7 +472,7 @@ func (model *Model) helpLines() []string {
 	case helpTopics:
 		return helpTopicLines(model.theme)
 	case helpConfig:
-		return helpConfigLines(model.theme, model.options)
+		return helpConfigLines(model.theme, model.options, width)
 	case helpKeys:
 	}
 	return helpBody(model.theme, model.top().Title(), model.keys.FullHelp(), model.top().FullHelp(), width)

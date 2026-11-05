@@ -1,11 +1,13 @@
 package userinterface
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/google/go-cmp/cmp"
 
@@ -256,6 +258,52 @@ func TestHelpCommandGoldens(test *testing.T) {
 	}
 	pressAll(scrolling, "G")
 	golden.Assert(test, "help_config_scrolled", screen(scrolling), false)
+
+	for _, width := range []int{80, 60} {
+		narrow := sizedModel(width, 30)
+		enterLine(narrow, "help config")
+		golden.Assert(test, fmt.Sprintf("help_config_%d", width), screen(narrow), false)
+	}
+
+	narrowScrolling := sizedModel(60, 10)
+	enterLine(narrowScrolling, "help config")
+	pressAll(narrowScrolling, "G")
+	golden.Assert(test, "help_config_narrow_scrolled", screen(narrowScrolling), false)
+}
+
+func TestWrapWords(test *testing.T) {
+	tests := []struct {
+		name  string
+		text  string
+		width int
+		want  []string
+	}{
+		{"fits exactly", "one two", 7, []string{"one two"}},
+		{"breaks at a space", "one two three", 7, []string{"one two", "three"}},
+		{"over-long word is hard-broken", "a abcdefghij b", 4, []string{"a", "abcd", "efgh", "ij b"}},
+		{"empty", "", 5, []string{""}},
+	}
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			if diff := cmp.Diff(testCase.want, wrapWords(testCase.text, testCase.width)); diff != "" {
+				test.Errorf("wrapWords (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestHelpConfigRelaysOutOnResize(test *testing.T) {
+	model := sizedModel(120, 30)
+	enterLine(model, "help config")
+	wide := len(model.helpLines())
+	model.Update(tea.WindowSizeMsg{Width: 60, Height: 30})
+	if narrow := len(model.helpLines()); narrow <= wide {
+		test.Errorf("lines at 60 columns = %d, want more than %d at 120", narrow, wide)
+	}
+	model.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	if again := len(model.helpLines()); again != wide {
+		test.Errorf("lines back at 120 columns = %d, want %d", again, wide)
+	}
 }
 
 func TestHelpConfigMarksOnlyOptionsChangedFromTheDefault(test *testing.T) {
@@ -283,4 +331,84 @@ func optionNames() []string {
 		names = append(names, option.Name)
 	}
 	return names
+}
+
+// The description column wraps in place at 20 columns and stacks at 19.
+func TestHelpConfigLayoutThreshold(test *testing.T) {
+	activeTheme := newModel(newFake("v")).theme
+	var values options.Values
+	// Far wider than needed, the heading shows where the description column starts.
+	wide := ansi.Strip(helpConfigLines(activeTheme, values, 200)[0])
+	leftWidth := strings.Index(wide, "Description")
+	tests := []struct {
+		name         string
+		descriptions int
+		wantStacked  bool
+	}{
+		{"19 stacks", 19, true},
+		{"20 wraps in the column", 20, false},
+	}
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			lines := helpConfigLines(activeTheme, values, leftWidth+testCase.descriptions)
+			header := ansi.Strip(lines[0])
+			if stacked := !strings.Contains(header, "Description"); stacked != testCase.wantStacked {
+				test.Errorf("header %q: stacked = %v, want %v", header, stacked, testCase.wantStacked)
+			}
+			if testCase.wantStacked && !strings.HasPrefix(ansi.Strip(lines[2]), "    ") {
+				test.Errorf("stacked description row = %q, want a 4-space indent", ansi.Strip(lines[2]))
+			}
+		})
+	}
+}
+
+// Stacked descriptions wrap at the width minus their indent, so none overflows.
+func TestHelpConfigStackedDescriptionsWrap(test *testing.T) {
+	const width = 48
+	activeTheme := newModel(newFake("v")).theme
+	var descriptionRows int
+	for _, line := range helpConfigLines(activeTheme, options.Values{}, width) {
+		plain := ansi.Strip(line)
+		if !strings.HasPrefix(plain, "    ") {
+			continue // option rows are cut at the edge when narrower than their columns
+		}
+		descriptionRows++
+		if got := lipgloss.Width(plain); got > width {
+			test.Errorf("row %q is %d columns wide, want at most %d", plain, got, width)
+		}
+	}
+	if optionCount := len(options.All()); descriptionRows <= optionCount {
+		test.Errorf("%d stacked description rows for %d options: none wrapped", descriptionRows, optionCount)
+	}
+}
+
+// Scrolled to the bottom, the offset follows the body through a resize narrower
+// and back: it is clamped, the counter matches it and no blank tail shows.
+func TestHelpConfigResizeKeepsTheScrollClamped(test *testing.T) {
+	const height = 10
+	model := sizedModel(120, height)
+	enterLine(model, "help config")
+	pressAll(model, "G")
+	wantOffset := model.helpOffset
+	for _, width := range []int{120, 60, 120} {
+		model.Update(tea.WindowSizeMsg{Width: width, Height: height})
+		lines := model.helpLines()
+		_, contentHeight := model.contentSize()
+		rows := helpBodyRows(contentHeight)
+		wantOffset = min(wantOffset, len(lines)-rows)
+		if model.helpOffset != wantOffset {
+			test.Errorf("width %d: offset = %d, want %d", width, model.helpOffset, wantOffset)
+		}
+		screenLines := strings.Split(screen(model), "\n")
+		counter := fmt.Sprintf("%d–%d of %d", wantOffset+1, wantOffset+rows, len(lines))
+		if !strings.Contains(screenLines[0], counter) {
+			test.Errorf("width %d: title %q lacks %q", width, screenLines[0], counter)
+		}
+		for index := range rows {
+			want := strings.TrimRight(ansi.Strip(lines[wantOffset+index]), " ")
+			if got := strings.TrimRight(screenLines[index+2], " "); got != want {
+				test.Errorf("width %d: body row %d = %q, want %q", width, index, got, want)
+			}
+		}
+	}
 }
