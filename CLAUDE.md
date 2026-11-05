@@ -43,7 +43,7 @@ internal/diff/                          unified-diff parsing and modelling (pure
 internal/config/                        config file loading and validation
 internal/options/                       yes/no options shared by the config file and `:set` (non-UI)
 internal/editor/                        $EDITOR handoff for writing comments
-internal/browseropener/            open a URL in the browser with the cleaned environment (non-UI)
+internal/browseropener/                 open a URL in the browser with the cleaned environment (non-UI)
 internal/environment/                   environment for programs strig starts (token variables removed)
 internal/localthreads/                  the local-thread store, the file that keeps it between runs, and the save bookkeeping (non-UI)
 internal/plugins/                       run the user's configured command plugins and read their effects (non-UI)

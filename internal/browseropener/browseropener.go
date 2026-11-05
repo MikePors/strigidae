@@ -73,9 +73,8 @@ func (opener *Opener) run(name string, arguments []string) error {
 	if command.Env == nil {
 		command.Env = []string{}
 	}
-	// A nil Stdout and Stderr send the output to the null device.
-	command.Stdout = nil
-	command.Stderr = nil
+	// Stdout and Stderr stay nil, which sends output to the null device, so it
+	// can never reach the TUI.
 	if opener.options.Run != nil {
 		return opener.options.Run(command)
 	}
