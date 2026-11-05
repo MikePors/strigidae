@@ -1,6 +1,7 @@
 package options
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -44,5 +45,13 @@ func TestDeclarationsAreUnique(test *testing.T) {
 			test.Errorf("bad or duplicate declaration: %+v", option)
 		}
 		seen[option.Name] = true
+	}
+}
+
+func TestEveryOptionHasADescription(test *testing.T) {
+	for _, option := range All() {
+		if strings.TrimSpace(option.Description) == "" {
+			test.Errorf("option %q has no description", option.Name)
+		}
 	}
 }

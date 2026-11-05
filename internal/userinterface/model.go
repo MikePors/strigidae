@@ -112,6 +112,7 @@ type Model struct {
 	sequenceGeneration int
 
 	showHelp    bool
+	helpContent helpContent    // what the open help shows
 	helpOffset  int            // top body line of the help; always within the body
 	confirm     *confirmPrompt // open yes/no question, or nil
 	commandLine commandLine
@@ -217,6 +218,8 @@ func (model *Model) update(message tea.Msg) tea.Cmd {
 		return model.setTheme(theme.New(message.IsDark()))
 	case setRequestedMessage:
 		return model.set(message.arguments)
+	case helpRequestedMessage:
+		return model.help(message.topic)
 	case themeRequestedMessage:
 		return model.loadTheme(message.value)
 	case themeLoadedMessage:
@@ -454,8 +457,7 @@ func (model *Model) dispatch(sequence string, count int) tea.Cmd {
 	keyMessage := keys.Message{Sequence: sequence, Count: count}
 	switch {
 	case key.Matches(keyMessage, model.keys.Help):
-		model.showHelp = true
-		model.helpOffset = 0
+		model.openHelp(helpKeys)
 		return nil
 	case key.Matches(keyMessage, model.keys.Command):
 		return model.commandLine.open()
@@ -466,6 +468,13 @@ func (model *Model) dispatch(sequence string, count int) tea.Cmd {
 // helpLines is the help's scrolling body at the current size and bindings.
 func (model *Model) helpLines() []string {
 	width, _ := model.contentSize()
+	switch model.helpContent {
+	case helpTopics:
+		return helpTopicLines(model.theme)
+	case helpConfig:
+		return helpConfigLines(model.theme, model.options)
+	case helpKeys:
+	}
 	return helpBody(model.theme, model.top().Title(), model.keys.FullHelp(), model.top().FullHelp(), width)
 }
 
@@ -553,7 +562,7 @@ func (model *Model) content() string {
 	width, height := model.contentSize()
 	var text string
 	if model.showHelp {
-		text = renderHelp(model.theme, model.helpLines(), height, model.helpOffset)
+		text = renderHelp(model.theme, helpTitle(model.helpContent), model.helpLines(), height, model.helpOffset)
 	} else {
 		text = model.top().Render(width, height)
 	}
