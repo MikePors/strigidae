@@ -51,7 +51,10 @@ type Client struct {
 	cacheAccount string
 }
 
-var _ github.Client = (*Client)(nil)
+var (
+	_ github.Client        = (*Client)(nil)
+	_ github.CacheIdentity = (*Client)(nil)
+)
 
 // New builds a Client. It returns an error wrapping github.ErrNotAuthenticated
 // when no token can be found.

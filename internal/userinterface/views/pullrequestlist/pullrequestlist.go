@@ -482,7 +482,7 @@ func (view *View) switchTab(step int) tea.Cmd {
 // what is loaded.
 func (view *View) maybeLoadMore() tea.Cmd {
 	current := view.current()
-	if current.stale || current.next == "" || current.loading || current.moreFailed || current.loadingMore || current.window.Cursor() < len(current.pullRequests)-1-loadMoreMargin {
+	if current.next == "" || current.loading || current.moreFailed || current.loadingMore || current.window.Cursor() < len(current.pullRequests)-1-loadMoreMargin {
 		return nil
 	}
 	current.loadingMore = true

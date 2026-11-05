@@ -92,3 +92,32 @@ func TestDeniedSectionKeepsFallbackSelection(test *testing.T) {
 		test.Fatal("cursor jumped back to the recovered section")
 	}
 }
+
+func TestRefreshSkipsCachedSnapshot(test *testing.T) {
+	client := fake.New()
+	view := newView(client, testTabs(test), nil)
+	target := &view.tabs[0].sections[0]
+	original := pullRequest("acme/widgets", 1, "Original live result", time.Hour)
+	client.SetSearchResults(target.search, []github.PullRequest{original})
+	settle(view, view.Init())
+	view.cache = listcache.New(test.TempDir(), "example.test", "alice", func() time.Time { return testNow })
+	key := listcache.Key{Kind: "search", Query: target.search, Limit: github.PageRequest{Limit: target.limit}.Size()}
+	stale := pullRequest("acme/widgets", 2, "Old snapshot", time.Hour)
+	if err := view.cache.Save(key, []github.PullRequest{stale}, testNow); err != nil {
+		test.Fatal(err)
+	}
+	fresh := pullRequest("acme/widgets", 3, "Fresh result", time.Hour)
+	client.SetSearchResults(target.search, []github.PullRequest{fresh})
+	commands := press(view, "R")().(tea.BatchMsg)
+	if target.stale || len(target.pullRequests) != 1 || target.pullRequests[0].Number != original.Number {
+		test.Fatal("refresh changed the current rows before loading")
+	}
+	message, ok := commands[0]().(sectionLoadedMessage)
+	if !ok || message.cached {
+		test.Fatal("refresh read the disk snapshot instead of loading live results")
+	}
+	view.Update(message)
+	if target.stale || target.loading || len(target.pullRequests) != 1 || target.pullRequests[0].Number != fresh.Number {
+		test.Fatal("refresh did not install fresh results")
+	}
+}

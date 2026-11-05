@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/github/fake"
@@ -160,5 +161,45 @@ func TestDeniedNextPageRemovesSnapshot(test *testing.T) {
 	}
 	if _, hit := view.cache.Load(key); hit {
 		test.Fatal("denied page left a reusable snapshot")
+	}
+}
+
+func TestNextPagePreservesFirstPageSnapshot(test *testing.T) {
+	view := newView(fakeWith(makePullRequests(60)), nil)
+	view.cache = listcache.New(test.TempDir(), "example.test", "alice", func() time.Time { return testNow })
+	cached, fresh := startupCommands(test, view.Init())
+	deliver(test, view, cached)
+	deliver(test, view, fresh)
+	key := listcache.Key{Kind: "repository", Repository: testRepository, Limit: github.DefaultPageSize}
+	first, hit := view.cache.Load(key)
+	if !hit || len(first) != github.DefaultPageSize {
+		test.Fatal("first page was not cached")
+	}
+	deliver(test, view, view.fetch(0, github.PageRequest{After: view.current().next}, true))
+	if len(view.current().pullRequests) != 60 {
+		test.Fatal("second page did not append")
+	}
+	after, hit := view.cache.Load(key)
+	if !hit {
+		test.Fatal("pagination removed snapshot")
+	}
+	if difference := cmp.Diff(first, after); difference != "" {
+		test.Fatalf("pagination replaced snapshot: %s", difference)
+	}
+}
+
+func TestDeniedRefreshCannotPageOldCursor(test *testing.T) {
+	client := fakeWith(makePullRequests(60))
+	view := loadedView(test, client, nil)
+	if view.current().next == "" {
+		test.Fatal("expected another page")
+	}
+	client.SetError(fake.MethodListPullRequests, github.ErrForbidden)
+	deliver(test, view, press(view, "R"))
+	if len(view.current().pullRequests) != 0 {
+		test.Fatal("denied refresh retained rows")
+	}
+	if command := press(view, "j"); command != nil {
+		test.Fatal("cursor movement requested an old next page after access denial")
 	}
 }

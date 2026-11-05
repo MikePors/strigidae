@@ -66,10 +66,7 @@ func newApplication(repositoryFlag string, configuration config.Config, dependen
 		return application{}, err
 	}
 	var cache *listcache.Store
-	if identity, ok := client.(interface {
-		Host() string
-		CacheAccount() string
-	}); ok {
+	if identity, ok := client.(github.CacheIdentity); ok {
 		cache = listcache.New(listcache.DefaultDirectory(), identity.Host(), identity.CacheAccount(), nil)
 	}
 	return application{cache: cache, client: client, repository: target.Repository, theme: theme.Default(), dashboard: dashboard, notice: notice, config: configuration, currentBranch: checkoutBranch(repositoryFlag, dashboard, dependencies)}, nil

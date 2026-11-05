@@ -31,7 +31,10 @@ Run `strig` outside a git checkout, or in one with no GitHub remote (and without
 ## List cache
 
 Dashboard sections and repository PR lists start with their last successful
-first-page results, marked `stale`, while a fresh request runs. A successful
+initial-page results, marked `stale`, while a fresh request runs. The repository
+list normally fetches 30 rows; after paging, `R` can refresh and cache up to 100
+rows at once. Restarting shows that snapshot until the live 30-row first page
+arrives, with further rows loaded as you scroll. A successful
 refresh replaces them (including an empty result) and removes the label. A
 network failure keeps the cached rows; an authentication or access failure clears
 them. Opening a PR still loads its details and diff from GitHub.
