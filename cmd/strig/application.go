@@ -9,6 +9,7 @@ import (
 	"github.com/MikePors/strigidae/internal/config"
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/gitrepository"
+	"github.com/MikePors/strigidae/internal/listcache"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 	"github.com/MikePors/strigidae/internal/userinterface/theme/scheme"
 	"github.com/MikePors/strigidae/internal/userinterface/theme/terminalpalette"
@@ -16,6 +17,7 @@ import (
 
 // application is everything the TUI needs, resolved before it starts.
 type application struct {
+	cache      *listcache.Store
 	client     github.Client
 	repository github.Repository
 	// scheme is the theme the config chose, or nil for the built-in one.
@@ -63,7 +65,14 @@ func newApplication(repositoryFlag string, configuration config.Config, dependen
 	if err != nil {
 		return application{}, err
 	}
-	return application{client: client, repository: target.Repository, theme: theme.Default(), dashboard: dashboard, notice: notice, config: configuration, currentBranch: checkoutBranch(repositoryFlag, dashboard, dependencies)}, nil
+	var cache *listcache.Store
+	if identity, ok := client.(interface {
+		Host() string
+		CacheAccount() string
+	}); ok {
+		cache = listcache.New(listcache.DefaultDirectory(), identity.Host(), identity.CacheAccount(), nil)
+	}
+	return application{cache: cache, client: client, repository: target.Repository, theme: theme.Default(), dashboard: dashboard, notice: notice, config: configuration, currentBranch: checkoutBranch(repositoryFlag, dashboard, dependencies)}, nil
 }
 
 // checkoutBranch is the branch of the checkout strig was started in, which

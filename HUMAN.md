@@ -76,3 +76,17 @@ Checks only the maintainer can do, such as live verification against real GitHub
   4. Run `:ask` while the sleep is running, then `:q` before it ends, and open the same pull request again from the list: the thread should be there and, once the run ends, answered. Quit strig: the answer is gone on the next start (it is kept in memory only).
   5. Push a new commit to the pull request's branch (or use another pull request head), press `R`: the thread should show `[outdated]`, muted, after the last row of its file. Report whether that reads clearly.
   6. Make the script print an answer with terminal escapes (`\u001b[2J\u001b]0;pwned\u0007x`): the screen must not clear and the terminal title must not change.
+
+## #92 — cached list startup
+
+- With `gh` logged in (no token environment override), run `strig -R OWNER/REPO`,
+  wait for the list, and exit with `:q`. Start it again with a slow or disconnected
+  network: cached rows should show `(stale)` immediately and remain on transient
+  failure. Press `R` after reconnecting; fresh rows should replace them and the
+  label should disappear.
+- Repeat with `strig` outside a checkout for dashboard sections, and switch tabs
+  with `g t`. Report any cursor jumps or labels clipped at your terminal size.
+- Switch `gh` accounts on the same host and restart: the previous account's rows
+  must not appear. Repeat with a token environment override: no cache is reused.
+- Stop strig, delete its cache directory (see README), and restart: normal live
+  loading should work. Report OS, terminal size, and any unexpected behavior.

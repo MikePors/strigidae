@@ -87,9 +87,9 @@ func askTerminal() (terminalpalette.Reply, error) {
 // or in one with no GitHub remote), else the repository's pull request list.
 func firstView(application application) userinterface.View {
 	if application.dashboard {
-		return dashboard.New(application.client, application.config.Tabs, application.theme, dashboard.Options{Notice: application.notice, Timeouts: application.timeouts(), Clipboard: systemClipboard(), Open: systemBrowser().Open})
+		return dashboard.New(application.client, application.config.Tabs, application.theme, dashboard.Options{Cache: application.cache, Notice: application.notice, Timeouts: application.timeouts(), Clipboard: systemClipboard(), Open: systemBrowser().Open})
 	}
-	return pullrequestlist.New(application.client, application.repository, application.config.Tabs, application.theme, pullrequestlist.Options{Timeouts: application.timeouts(), Clipboard: systemClipboard(), Open: systemBrowser().Open, CurrentBranch: application.currentBranch})
+	return pullrequestlist.New(application.client, application.repository, application.config.Tabs, application.theme, pullrequestlist.Options{Cache: application.cache, Timeouts: application.timeouts(), Clipboard: systemClipboard(), Open: systemBrowser().Open, CurrentBranch: application.currentBranch})
 }
 
 // systemClipboard is the real clipboard tool lookup.

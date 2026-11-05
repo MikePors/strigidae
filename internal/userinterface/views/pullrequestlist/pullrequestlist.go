@@ -3,6 +3,7 @@ package pullrequestlist
 
 import (
 	"fmt"
+	"log/slog"
 	"time"
 
 	"charm.land/bubbles/v2/key"
@@ -11,6 +12,7 @@ import (
 	"github.com/MikePors/strigidae/internal/clipboard"
 	"github.com/MikePors/strigidae/internal/config"
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/listcache"
 	"github.com/MikePors/strigidae/internal/options"
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/components/scroll"
@@ -31,6 +33,7 @@ const (
 // The repository, tab and sequence identify the request: every view receives
 // every command result, and a refresh supersedes any page still in flight.
 type pullRequestsLoadedMessage struct {
+	cached     bool
 	repository github.Repository
 	tab        int
 	sequence   int
@@ -43,6 +46,8 @@ type pullRequestsLoadedMessage struct {
 
 // Options configures New. Zero values select the real behaviour.
 type Options struct {
+	// Cache supplies account-scoped startup snapshots; nil disables persistence.
+	Cache *listcache.Store
 	// Now supplies the current time for relative ages.
 	Now func() time.Time
 	// Open opens a URL in the browser; it runs inside a tea.Cmd.
@@ -73,6 +78,7 @@ type tab struct {
 	// same rows in the order drawn (stacks under their parents, see
 	// stackOrder), with the indent depth of each in depths. Everything the
 	// user sees or selects goes through pullRequests.
+	stale        bool
 	loaded       []github.PullRequest
 	pullRequests []github.PullRequest
 	depths       []int
@@ -89,6 +95,7 @@ type tab struct {
 
 // View lists one repository's open pull requests.
 type View struct {
+	cache      *listcache.Store
 	client     github.Client
 	repository github.Repository
 	theme      theme.Theme
@@ -171,6 +178,7 @@ func New(client github.Client, repository github.Repository, configured []config
 		tabs = append(tabs, tab{name: current.Name, author: author, query: authorQuery(repository, author)})
 	}
 	return &View{
+		cache:      options.Cache,
 		client:     client,
 		repository: repository,
 		theme:      activeTheme,
@@ -260,7 +268,10 @@ func (view *View) reload(index int) tea.Cmd {
 func (view *View) fetch(index int, pageRequest github.PageRequest, more bool) tea.Cmd {
 	client, repository, timeouts := view.client, view.repository, view.timeouts
 	query, sequence := view.tabs[index].query, view.tabs[index].sequence
-	return func() tea.Msg {
+	cache := view.cache
+	key := listcache.Key{Kind: "repository", Repository: repository, Query: query, Limit: github.DefaultPageSize}
+	started := time.Now()
+	fresh := func() tea.Msg {
 		ctx, cancel := timeouts.LoadContext()
 		defer cancel()
 		var page github.Page[github.PullRequest]
@@ -270,8 +281,29 @@ func (view *View) fetch(index int, pageRequest github.PageRequest, more bool) te
 		} else {
 			page, err = client.SearchPullRequests(ctx, query, pageRequest)
 		}
+		if !more {
+			if err == nil {
+				if saveError := cache.Save(key, page.Items, started); saveError != nil {
+					slog.Debug("save list cache", "err", saveError)
+				}
+			} else if listcache.Denied(err) {
+				if removeError := cache.Remove(key); removeError != nil {
+					slog.Debug("remove list cache", "err", removeError)
+				}
+			}
+		}
 		return pullRequestsLoadedMessage{repository: repository, tab: index, sequence: sequence, more: more, page: page, err: err}
 	}
+	if cache == nil || more || sequence != 1 {
+		return fresh
+	}
+	return tea.Sequence(func() tea.Msg {
+		items, ok := cache.Load(key)
+		if !ok {
+			return nil
+		}
+		return pullRequestsLoadedMessage{repository: repository, tab: index, sequence: sequence, cached: true, page: github.Page[github.PullRequest]{Items: items}}
+	}, fresh)
 }
 
 // Update implements userinterface.View.
@@ -313,6 +345,15 @@ func (view *View) loaded(message pullRequestsLoadedMessage) tea.Cmd {
 	if message.sequence != current.sequence {
 		return nil // superseded by a refresh
 	}
+	if message.cached {
+		if !current.loading {
+			return nil
+		}
+		current.stale = true
+		current.setLoaded(message.page.Items)
+		current.search.Refresh(view.searchListOf(current))
+		return nil
+	}
 	if message.more {
 		current.loadingMore = false
 	} else {
@@ -320,6 +361,12 @@ func (view *View) loaded(message pullRequestsLoadedMessage) tea.Cmd {
 	}
 	if message.err != nil {
 		current.err = message.err
+		if listcache.Denied(message.err) {
+			current.setLoaded(nil)
+			current.next = ""
+			current.stale = false
+			current.search.Refresh(view.searchListOf(current))
+		}
 		current.moreFailed = message.more // stop auto-paging until R
 
 		failure := fmt.Errorf("load pull requests in %s: %w", view.repository, message.err)
@@ -329,6 +376,7 @@ func (view *View) loaded(message pullRequestsLoadedMessage) tea.Cmd {
 		return userinterface.Error(terminaltext.SafeError(failure))
 	}
 	current.err = nil
+	current.stale = false
 	current.next = message.page.Next
 	if message.more {
 		current.setLoaded(append(current.loaded, message.page.Items...))
@@ -436,7 +484,7 @@ func (view *View) switchTab(step int) tea.Cmd {
 // what is loaded.
 func (view *View) maybeLoadMore() tea.Cmd {
 	current := view.current()
-	if current.next == "" || current.loading || current.moreFailed || current.loadingMore || current.window.Cursor() < len(current.pullRequests)-1-loadMoreMargin {
+	if current.stale || current.next == "" || current.loading || current.moreFailed || current.loadingMore || current.window.Cursor() < len(current.pullRequests)-1-loadMoreMargin {
 		return nil
 	}
 	current.loadingMore = true
