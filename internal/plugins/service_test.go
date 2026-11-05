@@ -220,3 +220,76 @@ func TestStopKillsTheService(test *testing.T) {
 		test.Error("a run after Stop started the service again")
 	}
 }
+
+// A run that joined a process just before it ended or was retired reports the
+// exit, not the raw write error.
+func TestServiceWriteToAnEndedProcessReportsExited(test *testing.T) {
+	for _, testCase := range []struct {
+		name string
+		end  func(test *testing.T, process *serviceProcess)
+	}{
+		{"broken pipe", func(test *testing.T, process *serviceProcess) {
+			reader, writer, err := os.Pipe()
+			if err != nil {
+				test.Fatal(err)
+			}
+			if err := reader.Close(); err != nil {
+				test.Fatal(err)
+			}
+			// The service keeps its real input, so it does not end by itself.
+			realInput := process.input
+			test.Cleanup(func() { _ = realInput.Close() })
+			process.input = writer
+		}},
+		{"closed file", func(test *testing.T, process *serviceProcess) {
+			// As when the process ended between a run joining it and writing.
+			if err := process.input.Close(); err != nil {
+				test.Fatal(err)
+			}
+		}},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			harness := newServiceHarness(test, time.Minute)
+			if result := harness.run(context.Background(), "ask", "first"); result.err != nil {
+				test.Fatal(result.err)
+			}
+			serving := harness.runner.entries["ask"].service
+			serving.mutex.Lock()
+			process := serving.process
+			serving.mutex.Unlock()
+			testCase.end(test, process)
+			result := harness.run(context.Background(), "ask", "second")
+			if !errors.Is(result.err, ErrExited) || result.err.Error() != `plugin "ask": exited` {
+				test.Errorf("run on an ended process: %v", result.err)
+			}
+		})
+	}
+}
+
+func TestEndedByDeadlineNamesTheTimeoutOnlyWhenItWasTheReason(test *testing.T) {
+	soon, cancelSoon := context.WithTimeout(context.Background(), time.Hour)
+	defer cancelSoon()
+	later, cancelLater := context.WithTimeout(context.Background(), 3*time.Hour)
+	defer cancelLater()
+	for _, testCase := range []struct {
+		name        string
+		caller      context.Context
+		wantTimeout bool
+	}{
+		{"no deadline of the caller", context.Background(), true},
+		{"caller's deadline after the plugin's", later, true},
+		{"caller's deadline before the plugin's", soon, false},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			runContext, cancel := context.WithTimeout(testCase.caller, 2*time.Hour)
+			defer cancel()
+			err := endedByDeadline(testCase.caller, runContext, "ask", 2*time.Hour)
+			if got := errors.Is(err, ErrTimeout); got != testCase.wantTimeout {
+				test.Errorf("%v: timeout = %v, want %v", err, got, testCase.wantTimeout)
+			}
+			if !testCase.wantTimeout && !errors.Is(err, context.DeadlineExceeded) {
+				test.Errorf("%v does not wrap the deadline", err)
+			}
+		})
+	}
+}

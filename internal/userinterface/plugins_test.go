@@ -545,8 +545,19 @@ func TestCloseStopsServicesBeforeWaitingForRuns(test *testing.T) {
 		run()
 		close(done)
 	}()
-	model.Close()
-	<-done
+	closed := make(chan struct{})
+	go func() {
+		model.Close()
+		close(closed)
+	}()
+	// A regression leaves the run waiting for Stop; fail instead of hanging.
+	for _, finished := range []<-chan struct{}{closed, done} {
+		select {
+		case <-finished:
+		case <-time.After(10 * time.Second):
+			test.Fatal("Close did not stop services before waiting for the run")
+		}
+	}
 	runner.mutex.Lock()
 	defer runner.mutex.Unlock()
 	if diff := cmp.Diff([]string{"stopped", "run ended"}, runner.events); diff != "" {

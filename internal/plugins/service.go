@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strconv"
@@ -79,9 +80,12 @@ func (runner *Runner) ask(ctx context.Context, found *entry, request Request) ([
 			return nil, ctx.Err()
 		}
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, os.ErrDeadlineExceeded) {
-			return nil, fmt.Errorf("plugin %q: %w after %s", name, ErrTimeout, found.plugin.Timeout)
+			return nil, endedByDeadline(ctx, runContext, name, found.plugin.Timeout)
 		}
-		return nil, fmt.Errorf("write request to plugin %q: %w", name, err)
+		// write retired the process, so the stream is gone: the process ended or
+		// its input is broken or closed. The cause is for the log only.
+		runner.logger.Warn("write to the plugin service failed", "plugin", name, "err", err)
+		return nil, fmt.Errorf("plugin %q: %w", name, ErrExited)
 	}
 	runner.sent(name)
 	select {
@@ -95,7 +99,19 @@ func (runner *Runner) ask(ctx context.Context, found *entry, request Request) ([
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	return nil, fmt.Errorf("plugin %q: %w after %s", name, ErrTimeout, found.plugin.Timeout)
+	return nil, endedByDeadline(ctx, runContext, name, found.plugin.Timeout)
+}
+
+// endedByDeadline words the end of a run at its deadline. When the caller's
+// own deadline is the one that came first, the plugin's timeout is not the
+// reason, so it is not named.
+func endedByDeadline(ctx, runContext context.Context, name string, timeout time.Duration) error {
+	if parent, ok := ctx.Deadline(); ok {
+		if own, _ := runContext.Deadline(); !own.Before(parent) {
+			return fmt.Errorf("plugin %q: %w", name, context.DeadlineExceeded)
+		}
+	}
+	return fmt.Errorf("plugin %q: %w after %s", name, ErrTimeout, timeout)
 }
 
 // begin hands out a run of the service, starting the process if needed.
@@ -147,6 +163,7 @@ func (serving *service) write(ctx context.Context, process *serviceProcess, line
 	}
 	deadline, _ := ctx.Deadline() // the zero time is no deadline
 	if err := process.input.SetWriteDeadline(deadline); err != nil {
+		serving.retire(process) // the input is closed or cannot time out
 		return err
 	}
 	interrupted := make(chan struct{})
@@ -203,30 +220,42 @@ func (runner *Runner) startService(serving *service) (*serviceProcess, error) {
 	if err != nil {
 		return nil, errors.Join(err, inputReader.Close(), inputWriter.Close())
 	}
+	// Standard error is a pipe of ours, not a writer for exec to copy from:
+	// Wait would then also wait for a child that keeps it open, and the dead
+	// process would stay current for that long.
+	errorReader, errorWriter, err := os.Pipe()
+	if err != nil {
+		return nil, errors.Join(err, inputReader.Close(), inputWriter.Close(), outputReader.Close(), outputWriter.Close())
+	}
 	command := exec.CommandContext(runner.serviceContext, program, serving.onRun[1:]...)
 	command.Env = runner.environment
-	command.Stdin, command.Stdout = inputReader, outputWriter
-	standardError, flushLog := runner.standardErrorSink(serving.name)
-	command.Stderr = &boundedLog{writer: standardError, remaining: MaximumErrorOutputSize, cutOff: func() {
-		flushLog() // the cut line comes before the note about it
-		runner.logger.Warn("plugin standard error cut off", "plugin", serving.name, "limit", MaximumErrorOutputSize)
-	}}
+	command.Stdin, command.Stdout, command.Stderr = inputReader, outputWriter, errorWriter
 	command.WaitDelay = runner.waitDelay
 	detach(command)
 	startError := command.Start()
 	// The child has its own copies; strig keeps only its ends.
-	closeError := errors.Join(inputReader.Close(), outputWriter.Close())
+	closeError := errors.Join(inputReader.Close(), outputWriter.Close(), errorWriter.Close())
 	if startError != nil {
-		return nil, errors.Join(startError, inputWriter.Close(), outputReader.Close())
+		return nil, errors.Join(startError, inputWriter.Close(), outputReader.Close(), errorReader.Close())
 	}
 	if closeError != nil {
 		runner.logger.Warn("close the service's pipe ends", "plugin", serving.name, "err", closeError)
 	}
 	process := &serviceProcess{input: inputWriter, writing: make(chan struct{}, 1), child: command.Process, pending: map[string]*pendingRun{}}
 	read := make(chan error, 1)
+	copied := make(chan struct{})
+	standardError, flushLog := runner.standardErrorSink(serving.name)
+	bounded := &boundedLog{writer: standardError, remaining: MaximumErrorOutputSize, cutOff: func() {
+		flushLog() // the cut line comes before the note about it
+		runner.logger.Warn("plugin standard error cut off", "plugin", serving.name, "limit", MaximumErrorOutputSize)
+	}}
 	started = true
 	go func() { read <- runner.readService(serving, process, outputReader, command) }()
-	go runner.waitService(serving, process, command, outputReader, read, flushLog)
+	go func() {
+		defer close(copied)
+		_, _ = io.Copy(bounded, errorReader) // boundedLog never fails; a read deadline ends it
+	}()
+	go runner.waitService(serving, process, command, [2]*os.File{outputReader, errorReader}, read, copied, flushLog)
 	return process, nil
 }
 
@@ -297,7 +326,7 @@ func (runner *Runner) serviceLine(serving *service, process *serviceProcess, lin
 
 // waitService waits for the process to end, then fails its runs still under
 // way, so the next run starts it again.
-func (runner *Runner) waitService(serving *service, process *serviceProcess, command *exec.Cmd, output *os.File, read <-chan error, flushLog func()) {
+func (runner *Runner) waitService(serving *service, process *serviceProcess, command *exec.Cmd, readers [2]*os.File, read <-chan error, copied <-chan struct{}, flushLog func()) {
 	defer runner.serviceProcesses.Done()
 	waitError := command.Wait()
 	// A new run must not join this process while its old output drains.
@@ -307,14 +336,23 @@ func (runner *Runner) waitService(serving *service, process *serviceProcess, com
 	}
 	serving.mutex.Unlock()
 	runner.exited(serving.name)
-	// Something the service started can hold its output open; reading stops
-	// a moment after the service itself ended.
+	// Something the service started can hold its output or standard error
+	// open; reading stops a moment after the service itself ended.
 	var readError error
-	select {
-	case readError = <-read:
-	case <-time.After(runner.waitDelay):
-		_ = output.SetReadDeadline(time.Now())
-		readError = <-read
+	expired := time.After(runner.waitDelay)
+	for open := 2; open > 0; {
+		select {
+		case readError = <-read:
+			open--
+		case <-copied:
+			copied = nil
+			open--
+		case <-expired:
+			expired = nil
+			for _, reader := range readers {
+				_ = reader.SetReadDeadline(time.Now())
+			}
+		}
 	}
 	flushLog()
 	runner.logger.Info("plugin service ended", "plugin", serving.name, "err", waitError)
@@ -332,7 +370,7 @@ func (runner *Runner) waitService(serving *service, process *serviceProcess, com
 	if serving.process == process {
 		serving.process = nil
 	}
-	if err := errors.Join(output.Close(), process.input.Close()); err != nil {
+	if err := errors.Join(readers[0].Close(), readers[1].Close(), process.input.Close()); err != nil {
 		runner.logger.Warn("close the service's pipes", "plugin", serving.name, "err", err)
 	}
 }

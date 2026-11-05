@@ -61,10 +61,14 @@ func TestServicePeer(test *testing.T) {
 		if err := json.Unmarshal(scanner.Bytes(), &request); err != nil {
 			os.Exit(3)
 		}
-		if request.Arguments == "exit-with-open-output" {
+		if request.Arguments == "exit-with-open-output" || request.Arguments == "exit-with-open-error" {
 			child := exec.Command(os.Args[0], "-test.run=^TestServicePeer$")
 			child.Env = append(os.Environ(), "STRIG_TEST_SERVICE=hold-output")
-			child.Stdout = os.Stdout
+			if request.Arguments == "exit-with-open-output" {
+				child.Stdout = os.Stdout
+			} else {
+				child.Stderr = os.Stderr
+			}
 			ready, readyWriter, err := os.Pipe()
 			if err != nil {
 				os.Exit(4)
@@ -272,8 +276,15 @@ func TestServiceWaitingWriterCanCancel(test *testing.T) {
 	}
 }
 
-// A dead process cannot receive another run while a child holds its output.
+// A dead process cannot receive another run while a child holds its output or
+// its standard error.
 func TestServiceRestartsBeforeOldOutputDrains(test *testing.T) {
+	for _, held := range []string{"exit-with-open-output", "exit-with-open-error"} {
+		test.Run(held, func(test *testing.T) { restartsBeforeOldOutputDrains(test, held) })
+	}
+}
+
+func restartsBeforeOldOutputDrains(test *testing.T, held string) {
 	harness := backpressureHarness(test)
 	exited := make(chan string, 8)
 	harness.runner.exited = func(name string) { exited <- name }
@@ -291,7 +302,7 @@ func TestServiceRestartsBeforeOldOutputDrains(test *testing.T) {
 		_ = syscall.Kill(identifier, syscall.SIGUSR1)
 	})
 	result := make(chan outcome, 1)
-	go func() { result <- harness.run(context.Background(), "ask", "exit-with-open-output") }()
+	go func() { result <- harness.run(context.Background(), "ask", held) }()
 	receive(test, exited)
 	if next := harness.run(context.Background(), "ask", "next"); next.err != nil || len(next.effects) != 1 || next.effects[0].Text != "next" {
 		test.Errorf("next run joined dead process: %v, %v", next.effects, next.err)
@@ -307,5 +318,50 @@ func TestServiceRestartsBeforeOldOutputDrains(test *testing.T) {
 	_ = syscall.Kill(identifier, syscall.SIGUSR1)
 	if old := receive(test, result); !errors.Is(old.err, ErrExited) {
 		test.Errorf("old run: %v", old.err)
+	}
+}
+
+// onceLiveContext reports no error on its first check, as the write does
+// before it starts, and the real one afterwards. It never reports done, so the
+// waiting for the writer cannot end early. Its deadline has passed, so the
+// write is interrupted without a single byte written.
+type onceLiveContext struct {
+	context.Context
+	checked bool
+}
+
+func (ctx *onceLiveContext) Done() <-chan struct{} { return nil }
+
+func (ctx *onceLiveContext) Err() error {
+	if !ctx.checked {
+		ctx.checked = true
+		return nil
+	}
+	return ctx.Context.Err()
+}
+
+// A write interrupted with 0 bytes written leaves complete framing, so the
+// service stays usable. The deadline has passed, so the write is rejected
+// before any byte is sent.
+func TestServiceInterruptedWriteWithNothingWrittenKeepsProcess(test *testing.T) {
+	harness := backpressureHarness(test)
+	if result := harness.run(context.Background(), "ask", "ready"); result.err != nil {
+		test.Fatal(result.err)
+	}
+	serving := harness.runner.entries["ask"].service
+	serving.mutex.Lock()
+	process := serving.process
+	serving.mutex.Unlock()
+	expired, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+	err := serving.write(&onceLiveContext{Context: expired}, process, []byte("{}\n"))
+	if !errors.Is(err, context.DeadlineExceeded) {
+		test.Fatalf("interrupted write: %v", err)
+	}
+	serving.mutex.Lock()
+	current := serving.process
+	serving.mutex.Unlock()
+	if current != process {
+		test.Error("an interrupted write with nothing written retired the service")
 	}
 }
