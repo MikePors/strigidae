@@ -114,6 +114,7 @@ type Model struct {
 	showHelp    bool
 	helpContent helpContent    // what the open help shows
 	helpOffset  int            // top body line of the help; always within the body
+	helpSearch  helpSearch     // the open help's search; cleared when it closes or changes page
 	confirm     *confirmPrompt // open yes/no question, or nil
 	commandLine commandLine
 	status      struct {
@@ -348,6 +349,7 @@ func (model *Model) pop() tea.Cmd {
 
 func (model *Model) resetKeys() {
 	model.showHelp = false
+	model.helpSearch = helpSearch{}
 	model.confirm = nil
 	model.commandLine.close()
 	model.matcher.Reset()
@@ -468,6 +470,9 @@ func (model *Model) dispatch(sequence string, count int) tea.Cmd {
 // helpLines is the help's scrolling body at the current size and bindings.
 func (model *Model) helpLines() []string {
 	width, _ := model.contentSize()
+	if model.helpMarking() {
+		width = max(1, width-helpGutter)
+	}
 	switch model.helpContent {
 	case helpTopics:
 		return helpTopicLines(model.theme)
@@ -491,6 +496,11 @@ func (model *Model) clampHelp() {
 // handleHelpKey runs a key press while the help is open. Only the global
 // bindings are matched, and nothing reaches the view.
 func (model *Model) handleHelpKey(message tea.KeyPressMsg) tea.Cmd {
+	if key.Matches(message, model.keys.Cancel) && model.helpSearch.active() {
+		model.helpSearch = helpSearch{} // the first esc clears the search
+		model.matcher.Reset()
+		return nil
+	}
 	if key.Matches(message, model.keys.Help, model.keys.Cancel) {
 		model.resetKeys()
 		return nil
@@ -502,8 +512,24 @@ func (model *Model) handleHelpKey(message tea.KeyPressMsg) tea.Cmd {
 		generation := model.sequenceGeneration
 		return model.tick(model.sequenceWait, func(time.Time) tea.Msg { return sequenceTimeoutMessage{generation: generation} })
 	case keys.Matched:
-		model.scrollHelp(result.Sequence, result.Count)
+		return model.helpAction(result.Sequence, result.Count)
 	}
+	return nil
+}
+
+// helpAction runs a resolved global key in the help: search keys here, the
+// movement keys scroll.
+func (model *Model) helpAction(sequence string, count int) tea.Cmd {
+	keyMessage := keys.Message{Sequence: sequence, Count: count}
+	switch {
+	case key.Matches(keyMessage, model.keys.Search):
+		return model.beginHelpSearch()
+	case key.Matches(keyMessage, model.keys.NextMatch):
+		return model.stepHelpSearch(true, keyMessage.Repeat())
+	case key.Matches(keyMessage, model.keys.PreviousMatch):
+		return model.stepHelpSearch(false, keyMessage.Repeat())
+	}
+	model.scrollHelp(sequence, count)
 	return nil
 }
 
@@ -562,7 +588,7 @@ func (model *Model) content() string {
 	width, height := model.contentSize()
 	var text string
 	if model.showHelp {
-		text = renderHelp(model.theme, helpTitle(model.helpContent), model.helpLines(), height, model.helpOffset)
+		text = renderHelp(model.theme, helpTitle(model.helpContent)+model.helpSearchHint(), model.markedHelpLines(), height, model.helpOffset)
 	} else {
 		text = model.top().Render(width, height)
 	}

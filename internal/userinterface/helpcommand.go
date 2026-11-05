@@ -69,6 +69,7 @@ func (model *Model) openHelp(content helpContent) {
 	model.showHelp = true
 	model.helpContent = content
 	model.helpOffset = 0
+	model.helpSearch = helpSearch{} // a search belongs to the page it was made on
 }
 
 // helpTitle names the open overlay on its title line.
