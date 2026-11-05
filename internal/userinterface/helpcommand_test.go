@@ -105,7 +105,6 @@ func TestHelpUnknownTopicIsAnErrorAndOpensNothing(test *testing.T) {
 	}{
 		{"help nonsense", "unknown help topic: nonsense"},
 		{"help keys extra", "unknown help topic: keys extra"},
-		{"help foo\x1b[31m", "unknown help topic: foo[31m"},
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.line, func(test *testing.T) {
@@ -116,6 +115,53 @@ func TestHelpUnknownTopicIsAnErrorAndOpensNothing(test *testing.T) {
 			}
 			if model.status.kind != statusError || model.status.text != testCase.want {
 				test.Errorf("status = %q (kind %v), want error %q", model.status.text, model.status.kind, testCase.want)
+			}
+		})
+	}
+}
+
+// The command line strips escapes before the command runs, so the topic is
+// given straight to the handler to prove the handler cleans it too.
+func TestHelpUnknownTopicGivenDirectlyIsCleaned(test *testing.T) {
+	model := sizedModel(100, 40)
+	follow(model, model.help("foo\x1b[31m"))
+	if model.showHelp {
+		test.Error("an unknown topic opened the overlay")
+	}
+	if model.status.kind != statusError || strings.ContainsRune(model.status.text, '\x1b') || !strings.Contains(model.status.text, "foo") {
+		test.Errorf("status = %q (kind %v), want an error naming foo without an escape byte", model.status.text, model.status.kind)
+	}
+}
+
+func TestQuestionMarkAfterHelpConfigShowsTheKeyHelp(test *testing.T) {
+	tests := []struct {
+		name   string
+		height int
+		scroll bool
+	}{
+		{"at the top", 40, false},
+		{"after scrolling the config list", 8, true},
+	}
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			fresh := sizedModel(100, testCase.height)
+			press(fresh, "?")
+
+			model := sizedModel(100, testCase.height)
+			enterLine(model, "help config")
+			if testCase.scroll {
+				if len(model.helpLines()) <= helpBodyRows(testCase.height-1) {
+					test.Fatal("the config list fits: nothing to scroll")
+				}
+				pressAll(model, "G")
+				if model.helpOffset == 0 {
+					test.Fatal("the config list did not scroll")
+				}
+			}
+			press(model, "esc")
+			press(model, "?")
+			if diff := cmp.Diff(screen(fresh), screen(model)); diff != "" {
+				test.Errorf("? after :help config differs from ? on a fresh model (-fresh, +after):\n%s", diff)
 			}
 		})
 	}
