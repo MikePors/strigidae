@@ -236,7 +236,9 @@ func TestServiceWriteToAnEndedProcessReportsExited(test *testing.T) {
 			if err := reader.Close(); err != nil {
 				test.Fatal(err)
 			}
-			_ = process.input.Close()
+			// The service keeps its real input, so it does not end by itself.
+			realInput := process.input
+			test.Cleanup(func() { _ = realInput.Close() })
 			process.input = writer
 		}},
 		{"closed file", func(test *testing.T, process *serviceProcess) {
