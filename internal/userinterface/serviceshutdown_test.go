@@ -50,7 +50,7 @@ func TestCloseStopsServicesEvenWhenAFileWriteIsStuck(test *testing.T) {
 func TestCloseStopsServicesEvenWhenARunIsStuck(test *testing.T) {
 	runner := &shutdownRunner{started: make(chan struct{}), stopped: make(chan struct{}), release: make(chan struct{})}
 	model, _ := pluginModel(test, runner, newPullRequestView(pullRequestSeven))
-	model.pluginQuitWait = 20 * time.Millisecond
+	model.pluginQuitWait = 500 * time.Millisecond
 	run := startRun(model, pullRequestSeven)
 	ended := make(chan struct{})
 	go func() { run(); close(ended) }()
@@ -62,6 +62,13 @@ func TestCloseStopsServicesEvenWhenARunIsStuck(test *testing.T) {
 	case <-runner.stopped:
 	case <-time.After(time.Second):
 		test.Fatal("stuck run prevented stopping services")
+	}
+	// The run is stuck, so only the end of the quit wait lets Close return:
+	// Stop must have started before that.
+	select {
+	case <-closed:
+		test.Fatal("Stop started only after the quit wait ended")
+	default:
 	}
 	select {
 	case <-closed:
