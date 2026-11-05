@@ -255,6 +255,8 @@ func TestReactPickerToggles(test *testing.T) {
 	}
 }
 
+// The highlight is checked before the reload runs, so it must come from the
+// local update alone.
 func TestReactHighlightFollowsTheToggle(test *testing.T) {
 	tests := []struct {
 		name     string
@@ -270,7 +272,7 @@ func TestReactHighlightFollowsTheToggle(test *testing.T) {
 			inliner := newInliner(test)
 			inliner.seedReactions()
 			inliner.toComment(0)
-			inliner.react(testCase.argument)
+			inliner.toggleWithoutReload(testCase.argument)
 			out := inliner.diffView().Render(inliner.view.paneWidth, inliner.view.paneHeight)
 			for _, part := range testCase.want {
 				style, text, _ := strings.Cut(part, ":")
