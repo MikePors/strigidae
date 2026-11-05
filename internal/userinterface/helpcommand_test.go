@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/google/go-cmp/cmp"
 
@@ -358,5 +359,56 @@ func TestHelpConfigLayoutThreshold(test *testing.T) {
 				test.Errorf("stacked description row = %q, want a 4-space indent", ansi.Strip(lines[2]))
 			}
 		})
+	}
+}
+
+// Stacked descriptions wrap at the width minus their indent, so none overflows.
+func TestHelpConfigStackedDescriptionsWrap(test *testing.T) {
+	const width = 48
+	activeTheme := newModel(newFake("v")).theme
+	var descriptionRows int
+	for _, line := range helpConfigLines(activeTheme, options.Values{}, width) {
+		plain := ansi.Strip(line)
+		if !strings.HasPrefix(plain, "    ") {
+			continue // option rows are cut at the edge when narrower than their columns
+		}
+		descriptionRows++
+		if got := lipgloss.Width(plain); got > width {
+			test.Errorf("row %q is %d columns wide, want at most %d", plain, got, width)
+		}
+	}
+	if optionCount := len(options.All()); descriptionRows <= optionCount {
+		test.Errorf("%d stacked description rows for %d options: none wrapped", descriptionRows, optionCount)
+	}
+}
+
+// Scrolled to the bottom, the offset follows the body through a resize narrower
+// and back: it is clamped, the counter matches it and no blank tail shows.
+func TestHelpConfigResizeKeepsTheScrollClamped(test *testing.T) {
+	const height = 10
+	model := sizedModel(120, height)
+	enterLine(model, "help config")
+	pressAll(model, "G")
+	wantOffset := model.helpOffset
+	for _, width := range []int{120, 60, 120} {
+		model.Update(tea.WindowSizeMsg{Width: width, Height: height})
+		lines := model.helpLines()
+		_, contentHeight := model.contentSize()
+		rows := helpBodyRows(contentHeight)
+		wantOffset = min(wantOffset, len(lines)-rows)
+		if model.helpOffset != wantOffset {
+			test.Errorf("width %d: offset = %d, want %d", width, model.helpOffset, wantOffset)
+		}
+		screenLines := strings.Split(screen(model), "\n")
+		counter := fmt.Sprintf("%d–%d of %d", wantOffset+1, wantOffset+rows, len(lines))
+		if !strings.Contains(screenLines[0], counter) {
+			test.Errorf("width %d: title %q lacks %q", width, screenLines[0], counter)
+		}
+		for index := range rows {
+			want := strings.TrimRight(ansi.Strip(lines[wantOffset+index]), " ")
+			if got := strings.TrimRight(screenLines[index+2], " "); got != want {
+				test.Errorf("width %d: body row %d = %q, want %q", width, index, got, want)
+			}
+		}
 	}
 }
