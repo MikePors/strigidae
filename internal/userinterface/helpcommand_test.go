@@ -299,10 +299,9 @@ func TestHelpConfigRelaysOutOnResize(test *testing.T) {
 	if narrow := len(model.helpLines()); narrow <= wide {
 		test.Errorf("lines at 60 columns = %d, want more than %d at 120", narrow, wide)
 	}
-	for _, line := range strings.Split(screen(model), "\n") {
-		if strings.Contains(line, "hide resolved threads from the diff pane") {
-			test.Errorf("description not wrapped at 60 columns: %q", line)
-		}
+	model.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	if again := len(model.helpLines()); again != wide {
+		test.Errorf("lines back at 120 columns = %d, want %d", again, wide)
 	}
 }
 
@@ -331,4 +330,33 @@ func optionNames() []string {
 		names = append(names, option.Name)
 	}
 	return names
+}
+
+// The description column wraps in place at 20 columns and stacks at 19.
+func TestHelpConfigLayoutThreshold(test *testing.T) {
+	activeTheme := newModel(newFake("v")).theme
+	var values options.Values
+	// Far wider than needed, the heading shows where the description column starts.
+	wide := ansi.Strip(helpConfigLines(activeTheme, values, 200)[0])
+	leftWidth := strings.Index(wide, "Description")
+	tests := []struct {
+		name         string
+		descriptions int
+		wantStacked  bool
+	}{
+		{"19 stacks", 19, true},
+		{"20 wraps in the column", 20, false},
+	}
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			lines := helpConfigLines(activeTheme, values, leftWidth+testCase.descriptions)
+			header := ansi.Strip(lines[0])
+			if stacked := !strings.Contains(header, "Description"); stacked != testCase.wantStacked {
+				test.Errorf("header %q: stacked = %v, want %v", header, stacked, testCase.wantStacked)
+			}
+			if testCase.wantStacked && !strings.HasPrefix(ansi.Strip(lines[2]), "    ") {
+				test.Errorf("stacked description row = %q, want a 4-space indent", ansi.Strip(lines[2]))
+			}
+		})
+	}
 }
