@@ -49,6 +49,9 @@ func (view *fakeView) Update(message tea.Msg) (View, tea.Cmd) {
 	if key, ok := message.(tea.KeyPressMsg); ok && key.String() == "esc" {
 		view.capture = false
 	}
+	if _, ok := message.(endCaptureMessage); ok {
+		view.capture = false
+	}
 	if _, ok := message.(resultMessage); ok {
 		view.results++
 		view.loading = false
@@ -788,6 +791,52 @@ func TestCapturedSequences(test *testing.T) {
 			press(model, "?")
 			if model.commandLine.active || model.showHelp {
 				test.Error("global actions escaped capture")
+			}
+		})
+	}
+}
+
+// endCaptureMessage simulates an asynchronous reload ending a modal selection.
+type endCaptureMessage struct{}
+
+func TestCaptureEndClearsPendingInput(test *testing.T) {
+	for _, prefix := range []string{"5", "g"} {
+		test.Run(prefix, func(test *testing.T) {
+			view := newFake("selection")
+			view.capture = true
+			view.captured = keys.DefaultGlobal().Bindings()
+			model := newModel(view)
+			timeout := press(model, prefix)
+			_, _ = model.Update(endCaptureMessage{})
+			if model.matcher.Pending() {
+				test.Fatal("pending input survived the end of capture")
+			}
+			press(model, "j")
+			if difference := cmp.Diff([]keys.Message{{Sequence: "j"}}, view.keyMessages()); difference != "" {
+				test.Errorf("keys (-want +got):\n%s", difference)
+			}
+			press(model, "2")
+			run(model, timeout)
+			if got := model.bar().pending; got != "2" {
+				test.Errorf("stale capture timer changed new count: %q", got)
+			}
+		})
+	}
+}
+
+func TestCapturedBindingsOverrideGlobalActions(test *testing.T) {
+	for _, pressed := range []string{"?", ":"} {
+		test.Run(pressed, func(test *testing.T) {
+			view := newFake("selection")
+			view.capture = true
+			view.captured = []key.Binding{key.NewBinding(key.WithKeys(pressed))}
+			model := newModel(view)
+			press(model, pressed)
+			if model.showHelp || model.commandLine.active {
+				test.Fatal("captured binding ran a global action")
+			}
+			if difference := cmp.Diff([]keys.Message{{Sequence: pressed}}, view.keyMessages()); difference != "" {
+				test.Errorf("keys (-want +got):\n%s", difference)
 			}
 		})
 	}
