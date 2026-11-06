@@ -258,6 +258,9 @@ func (view *View) ShortHelp() []key.Binding {
 // FullHelp implements userinterface.View. It also registers every multi-key sequence the
 // workspace and its file pane react to.
 func (view *View) FullHelp() [][]key.Binding {
+	if view.visualActive() {
+		return [][]key.Binding{view.CapturedBindings()}
+	}
 	if view.mode == contentComments {
 		return [][]key.Binding{
 			{view.bind.PaneLeft, view.bind.PaneRight, view.bind.NextFile, view.bind.PreviousFile, view.bind.FilePicker},
@@ -421,10 +424,13 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		}
 		return view, view.search.Prompt(message, view.searchList())
 	case keys.Message:
+		if view.visualActive() {
+			return view, view.visualKey(message)
+		}
 		return view, view.handleKey(message)
 	case tea.KeyPressMsg:
 		if view.visualActive() {
-			return view, view.visualKey(message)
+			return view, view.visualKey(keys.Message{Sequence: message.String()})
 		}
 		if view.review.chooser != nil {
 			return view, view.review.chooserKey(message, view.reviewEnvironment())

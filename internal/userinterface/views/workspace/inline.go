@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"slices"
 	"strings"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/components/diffview"
+	"github.com/MikePors/strigidae/internal/userinterface/keys"
 	"github.com/MikePors/strigidae/internal/userinterface/terminaltext"
 )
 
@@ -224,19 +226,33 @@ func (view *View) startVisual() tea.Cmd {
 		return userinterface.Info("move onto a diff line to select lines")
 	}
 	view.focus = paneRight
-	return userinterface.Info("-- VISUAL LINE --  j/k extend, c comment, esc cancel")
+	return userinterface.Info("-- VISUAL LINE --  [count]j/k, gg/G extend, c comment, esc cancel")
 }
 
-// visualKey handles a raw key while a line selection is in progress. The
-// workspace captures keys then, and esc always leaves.
-func (view *View) visualKey(message tea.KeyPressMsg) tea.Cmd {
+// CapturedBindings implements userinterface.CapturedKeyBindings.
+func (view *View) CapturedBindings() []key.Binding {
+	if !view.visualActive() {
+		return nil
+	}
+	return []key.Binding{
+		view.bind.VisualExit, view.bind.VisualDown, view.bind.VisualUp,
+		view.globalKeys.Top, view.globalKeys.Bottom, view.bind.Comment,
+	}
+}
+
+// visualKey handles matched movement while a line selection is in progress.
+func (view *View) visualKey(message keys.Message) tea.Cmd {
 	switch {
 	case key.Matches(message, view.bind.VisualExit):
 		view.filePane.VisualEnd()
 	case key.Matches(message, view.bind.VisualDown):
-		return refusal(view.filePane.VisualMove(1))
+		return refusal(view.filePane.VisualMove(message.Repeat()))
 	case key.Matches(message, view.bind.VisualUp):
-		return refusal(view.filePane.VisualMove(-1))
+		return refusal(view.filePane.VisualMove(-message.Repeat()))
+	case key.Matches(message, view.globalKeys.Top):
+		return refusal(view.filePane.VisualMove(-math.MaxInt))
+	case key.Matches(message, view.globalKeys.Bottom):
+		return refusal(view.filePane.VisualMove(math.MaxInt))
 	case key.Matches(message, view.bind.Comment):
 		return view.invoke(view.entryNamed("new-comment"), invocation{})
 	}

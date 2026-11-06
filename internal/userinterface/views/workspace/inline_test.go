@@ -944,7 +944,7 @@ func TestVisualModeEndsWhenTheSelectionOrTheDiffChanges(test *testing.T) {
 		inliner := newInliner(test)
 		inliner.moveTo(github.SideRight, 10)
 		inliner.press("V")
-		inliner.press("R")
+		inliner.run(inliner.view.load())
 		if inliner.view.CapturesKeys() {
 			test.Error("visual mode outlived a diff reload")
 		}
@@ -1927,6 +1927,58 @@ func TestInlineFailedPostDeletesOnlyTheReviewItCreated(test *testing.T) {
 			}
 			if len(inliner.view.drafts) != 1 {
 				test.Errorf("draft not kept: %v", inliner.view.drafts)
+			}
+		})
+	}
+}
+
+func TestVisualMotionsThroughRoot(test *testing.T) {
+	for _, testCase := range []struct {
+		name        string
+		start       int
+		pressed     []string
+		first, last int
+	}{
+		{"five down selects six lines", 14, []string{"5", "j"}, 14, 19},
+		{"five up selects six lines", 19, []string{"5", "k"}, 14, 19},
+		{"count resets after motion", 14, []string{"3", "j", "k"}, 14, 16},
+		{"multi digit count stops at hunk", 14, []string{"1", "0", "j"}, 14, 19},
+		{"bottom stops at hunk", 14, []string{"G"}, 14, 19},
+		{"top stops before deletions", 19, []string{"g", "g"}, 14, 19},
+		{"top stops at hunk", 46, []string{"g", "g"}, 42, 46},
+		{"bottom reaches end", 46, []string{"G"}, 46, 48},
+		{"reversing crosses anchor", 16, []string{"2", "j", "4", "k"}, 14, 16},
+		{"unbound key clears count", 14, []string{"5", "x", "j"}, 14, 15},
+		{"arrows accept counts", 14, []string{"3", "down", "2", "up"}, 14, 15},
+		{"globals stay suppressed", 14, []string{":", "?", "R", "j"}, 14, 15},
+		{"escape clears pending count", 14, []string{"5", "esc", "V", "j"}, 14, 15},
+		{"escape clears pending sequence", 14, []string{"g", "esc", "V", "j"}, 14, 15},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			inliner := newInliner(test)
+			noTick := func(time.Duration, func(time.Time) tea.Msg) tea.Cmd { return nil }
+			model := userinterface.New(inliner.view, theme.New(true), userinterface.Options{Tick: noTick, ViewCommands: Commands()})
+			_, _ = model.Update(tea.WindowSizeMsg{Width: 110, Height: 41})
+			inliner.moveTo(github.SideRight, testCase.start)
+			for _, pressed := range append([]string{"V"}, testCase.pressed...) {
+				message := tea.KeyPressMsg{Text: pressed}
+				switch pressed {
+				case "esc":
+					message = tea.KeyPressMsg{Code: tea.KeyEscape}
+				case "down":
+					message = tea.KeyPressMsg{Code: tea.KeyDown}
+				case "up":
+					message = tea.KeyPressMsg{Code: tea.KeyUp}
+				}
+				_, _ = model.Update(message)
+			}
+			context := inliner.diffView().Context()
+			want := diffview.Range{Path: clientPath, Side: github.SideRight, Start: testCase.first, End: testCase.last}
+			if !inliner.view.visualActive() || !context.HasLines {
+				test.Fatal("selection is not active")
+			}
+			if difference := cmp.Diff(want, context.Lines); difference != "" {
+				test.Errorf("selection (-want +got):\n%s", difference)
 			}
 		})
 	}

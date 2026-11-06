@@ -7,6 +7,7 @@ package userinterface
 
 import (
 	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -59,13 +60,22 @@ type View interface {
 
 // KeyCapturer is optionally implemented by views with a focused text input.
 // While CapturesKeys returns true the root forwards every key as a raw
-// tea.KeyPressMsg without interpreting it.
+// tea.KeyPressMsg without interpreting it, unless CapturedKeyBindings opts
+// into count and sequence matching.
 //
 // There is no ctrl+c escape hatch, so a capturer MUST release capture when it
 // receives esc. Every capturer is covered by TestCapturersReleaseOnEsc; add
 // new ones to its table. The root's command line is the reference pattern.
 type KeyCapturer interface {
 	CapturesKeys() bool
+}
+
+// CapturedKeyBindings lets a KeyCapturer use the shell's count and sequence
+// matcher while keeping exclusive control of the keyboard. A nil slice keeps
+// raw-key capture; a non-nil slice matches only these bindings and delivers
+// keys.Message without running global actions. Unmatched keys remain raw.
+type CapturedKeyBindings interface {
+	CapturedBindings() []key.Binding
 }
 
 // Loader is optionally implemented by views that load data. The root shows
