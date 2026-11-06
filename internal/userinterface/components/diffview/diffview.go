@@ -26,8 +26,11 @@
 // Review threads (SetThreads) are placed under the line they are anchored to
 // and take extra rows: one header row, plus the comments while expanded.
 // Threads that no longer map onto a line of the diff are listed after the last
-// row. Only the visible rows are ever styled or highlighted, and highlighted
-// rows are cached, so scrolling a 5k-line file never re-lexes it.
+// row. Only the visible rows are ever styled, and a hunk is highlighted when
+// the first of its rows is drawn: its old and new sides are each lexed as one
+// block, so a comment or string that opens and closes inside the hunk is
+// coloured whole, and the spans of every row are cached. Scrolling a 5k-line
+// file never re-lexes a hunk. What opened above the hunk is not known.
 package diffview
 
 import (
