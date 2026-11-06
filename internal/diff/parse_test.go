@@ -419,6 +419,22 @@ func TestObjectIdentifiers(test *testing.T) {
 			wantNew: "fedcba9876543210fedcba9876543210fedcba98",
 		},
 		{
+			name:    "carriage return after the identifiers, no mode",
+			text:    "diff --git a/run.sh b/run.sh\r\nold mode 100644\r\nnew mode 100755\r\nindex 5555555..6666666\r\n--- a/run.sh\r\n+++ b/run.sh\r\n",
+			path:    "run.sh",
+			wantOld: "5555555", wantNew: "6666666",
+		},
+		{
+			name: "option-looking identifier is ignored",
+			text: "diff --git a/x b/x\nindex -p..abc1234 100644\n",
+			path: "x",
+		},
+		{
+			name: "non-hex identifier is ignored",
+			text: "diff --git a/x b/x\nindex abc1234..zzz 100644\n",
+			path: "x",
+		},
+		{
 			name: "combined-diff index line is ignored",
 			text: "diff --git a/x b/x\nindex 1111111,2222222..3333333\n",
 			path: "x",
