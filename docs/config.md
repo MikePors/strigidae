@@ -226,9 +226,12 @@ hidden hunks, notices and each line of a comment thread. So `5j` moves to the
 row marked `5` below. With `wrap` on, a long line's continuation rows have no
 number. Rows further than 9999 rows away (the largest count) are left blank.
 The numbers are for `j` / `k` outside a line selection: in visual mode (`V`)
-`j` / `k` move one diff line at a time and skip thread rows.
-The column takes five cells from the code area. `G` with a count still goes to
-a new-side line number.
+counts on `j` / `k` count diff lines, skipping thread rows, and stop at
+selection boundaries. Thus `5j` in visual mode need not land on the row marked
+`5`. Bare `gg` / `G` extend to the first / last selectable line within the
+hunk without mixing added and deleted lines.
+The column takes five cells from the code area. Outside visual mode, `G` with
+a count goes to a new-side line number; visual mode currently ignores that count.
 
 ### `tabs`
 

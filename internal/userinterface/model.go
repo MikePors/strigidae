@@ -199,8 +199,20 @@ func (model *Model) contentSize() (width, height int) { return model.width, max(
 
 // Update implements tea.Model.
 func (model *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
+	captured := model.capturesKeys()
 	command := model.update(message)
+	if captured != model.capturesKeys() {
+		// Reloads and other asynchronous results can end a modal selection.
+		// Its unfinished count or sequence must not reach the next mode.
+		model.matcher.Reset()
+		model.sequenceGeneration++
+	}
 	return model, tea.Batch(command, model.syncSpinner())
+}
+
+func (model *Model) capturesKeys() bool {
+	capturer, ok := model.top().(KeyCapturer)
+	return ok && capturer.CapturesKeys()
 }
 
 func (model *Model) update(message tea.Msg) tea.Cmd {
@@ -381,6 +393,13 @@ func (model *Model) syncSpinner() tea.Cmd {
 
 // bindings returns every binding active now, for sequence matching.
 func (model *Model) bindings() []key.Binding {
+	if capturer, ok := model.top().(KeyCapturer); ok && capturer.CapturesKeys() {
+		if bindings, ok := model.top().(CapturedKeyBindings); ok {
+			if captured := bindings.CapturedBindings(); captured != nil {
+				return captured
+			}
+		}
+	}
 	out := model.keys.Bindings()
 	for _, bindings := range model.top().FullHelp() {
 		out = append(out, bindings...)
@@ -420,8 +439,11 @@ func (model *Model) handleKey(message tea.KeyPressMsg) tea.Cmd {
 			model.resetKeys()
 			return model.commandLine.open()
 		}
-		model.resetKeys()
-		return model.forward(message)
+		bindings, hasCapturedBindings := model.top().(CapturedKeyBindings)
+		if !hasCapturedBindings || bindings.CapturedBindings() == nil {
+			model.resetKeys()
+			return model.forward(message)
+		}
 	}
 
 	result := model.matcher.Feed(pressed, model.bindings())
@@ -457,6 +479,9 @@ func (model *Model) expireSequence(generation int) tea.Cmd {
 // Command, everything else goes to the view.
 func (model *Model) dispatch(sequence string, count int) tea.Cmd {
 	keyMessage := keys.Message{Sequence: sequence, Count: count}
+	if capturer, ok := model.top().(KeyCapturer); ok && capturer.CapturesKeys() {
+		return model.forward(keyMessage)
+	}
 	switch {
 	case key.Matches(keyMessage, model.keys.Help):
 		return model.openHelp(helpKeys)

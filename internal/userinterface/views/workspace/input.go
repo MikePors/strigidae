@@ -49,7 +49,7 @@ func defaultBindings() bindings {
 		Viewed:          bind("v", "v", "toggle file viewed"),
 		ReviewHunk:      bind("m", "m", "toggle hunk reviewed at the diff cursor (kept by strig until it quits)"),
 
-		Visual:        bind("V", "V", "select diff lines for a multi-line comment"),
+		Visual:        bind("V", "V", "select diff lines: [count]j/k extend, gg/G extend to boundary, c comment, esc cancel"),
 		EditComment:   bind("e", "e", "edit the comment of yours under the cursor (diff pane; also :edit-comment)"),
 		DeleteComment: bind("D", "D", "delete the comment of yours under the cursor (diff pane; also :delete-comment)"),
 		VisualDown:    key.NewBinding(key.WithKeys("j", "down"), key.WithHelp("j", "extend selection down")),
