@@ -34,6 +34,10 @@ type Remote struct {
 	// Host is the GitHub host, e.g. "github.com" or a GitHub Enterprise host.
 	Host       string
 	Repository github.Repository
+	// Name is the name of the git remote the repository was read from, e.g.
+	// "origin". It is empty when the repository did not come from a remote
+	// (ParseURL, or -R).
+	Name string
 }
 
 // Runner runs git with args in dir and returns its trimmed standard output.
@@ -83,6 +87,7 @@ func Infer(ctx context.Context, run Runner, directory string, knownHost func(hos
 			unknown = append(unknown, remote.Host)
 			continue
 		}
+		remote.Name = name
 		return remote, nil
 	}
 	if len(unknown) > 0 {
