@@ -2,11 +2,14 @@ package gitrepository
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -164,13 +167,30 @@ func snapshot(test *testing.T, directory string) (references string, fetchHeadEx
 }
 
 func TestFetchPullRequestHeadMakesTheBlobReadable(test *testing.T) {
-	fixture := newPullRequestFixture(test)
+	for _, testCase := range []struct {
+		name   string
+		config []string // git config key and value pairs for the checkout
+	}{
+		{"default configuration", nil},
+		{"pull requests mapped to remote-tracking refs", []string{"--add", "remote.origin.fetch", "+refs/pull/*/head:refs/remotes/origin/pr/*"}},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			fixture := newPullRequestFixture(test)
+			if testCase.config != nil {
+				runGit(test, fixture.checkout, append([]string{"config"}, testCase.config...)...)
+			}
+			assertFetchMakesTheBlobReadable(test, fixture)
+		})
+	}
+}
+
+func assertFetchMakesTheBlobReadable(test *testing.T, fixture pullRequestFixture) {
+	test.Helper()
 	ctx := context.Background()
 	if _, err := ReadBlob(ctx, fixture.checkout, fixture.identifier); !errors.Is(err, ErrBlobNotFound) {
 		test.Fatalf("before the fetch: err = %v, want ErrBlobNotFound", err)
 	}
-	referencesBefore, _ := snapshot(test, fixture.checkout)
-	_, fetchHeadBefore := snapshot(test, fixture.checkout)
+	referencesBefore, fetchHeadBefore := snapshot(test, fixture.checkout)
 
 	if err := FetchPullRequestHead(ctx, fixture.checkout, "origin", 1); err != nil {
 		test.Fatal(err)
@@ -238,7 +258,8 @@ func lookup(variables []string, name string) (string, bool) {
 func TestFetchCommandArguments(test *testing.T) {
 	command := newFetchCommand(context.Background(), "/work", "upstream", 42, nil, "")
 	want := []string{
-		"git", "fetch", "--no-write-fetch-head", "--no-tags", "--quiet", "--",
+		"git", "fetch", "--no-write-fetch-head", "--refmap=", "--no-tags",
+		"--no-auto-maintenance", "--no-recurse-submodules", "--quiet", "--",
 		"upstream", "refs/pull/42/head",
 	}
 	if diff := cmp.Diff(want, command.Args); diff != "" {
@@ -265,6 +286,7 @@ func TestFetchEnvironmentDisablesPrompting(test *testing.T) {
 		{"configured ssh command is kept", []string{"PATH=/bin"}, "ssh -i /keys/work", "ssh -i /keys/work -o BatchMode=yes", true},
 		{"the user's GIT_SSH_COMMAND wins", []string{"GIT_SSH_COMMAND=ssh -v"}, "ssh -i /keys/work", "ssh -v", true},
 		{"the user's GIT_SSH is not replaced", []string{"GIT_SSH=/usr/bin/plink"}, "", "", false},
+		{"core.sshCommand beats GIT_SSH and gets BatchMode", []string{"GIT_SSH=/usr/bin/plink"}, "ssh -i /keys/work", "ssh -i /keys/work -o BatchMode=yes", true},
 	} {
 		test.Run(testCase.name, func(test *testing.T) {
 			command := newFetchCommand(context.Background(), "/work", "origin", 1, testCase.base, testCase.configuredSSHCommand)
@@ -291,4 +313,69 @@ func TestFetchEnvironmentDropsTokens(test *testing.T) {
 	if _, found := lookup(command.Env, "KEPT"); !found {
 		test.Error("KEPT was dropped")
 	}
+}
+
+// TestReadBlobIgnoresReferencesNamedLikeTheIdentifier: git resolves a short
+// name to a branch or tag before an object, so a ref named like the blob's
+// abbreviation must not change what is read.
+func TestReadBlobIgnoresReferencesNamedLikeTheIdentifier(test *testing.T) {
+	for _, testCase := range []struct {
+		name   string
+		create func(test *testing.T, directory, name, decoy string)
+	}{
+		{"tag pointing at another blob", func(test *testing.T, directory, name, decoy string) {
+			runGit(test, directory, "tag", name, decoy)
+		}},
+		{"branch", func(test *testing.T, directory, name, _ string) {
+			runGit(test, directory, "branch", name)
+		}},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			directory := newRepository(test)
+			identifier := writeBlob(test, directory, []byte("the real blob\n"))
+			decoy := writeBlob(test, directory, []byte("decoy\n"))
+			short := identifier[:7]
+			testCase.create(test, directory, short, decoy)
+			got, err := ReadBlob(context.Background(), directory, short)
+			if err != nil {
+				test.Fatal(err)
+			}
+			if string(got) != "the real blob\n" {
+				test.Errorf("contents = %q, want the real blob", got)
+			}
+		})
+	}
+}
+
+// TestReadBlobSkipsOtherObjectTypes: an abbreviation shared by a blob and a
+// commit still finds the blob.
+func TestReadBlobSkipsOtherObjectTypes(test *testing.T) {
+	directory := newRepository(test)
+	commit := runGit(test, directory, "rev-parse", "HEAD")
+	// Find, in process, contents whose blob name shares the commit's first
+	// four digits (about one in 65536), then write only that blob.
+	for i := range 1 << 22 {
+		contents := "blob " + strconv.Itoa(i) + "\n"
+		if blobName(contents)[:4] != commit[:4] {
+			continue
+		}
+		if identifier := writeBlob(test, directory, []byte(contents)); identifier[:4] != commit[:4] {
+			test.Fatalf("git named the blob %s, want the prefix %s", identifier, commit[:4])
+		}
+		got, err := ReadBlob(context.Background(), directory, commit[:4])
+		if err != nil {
+			test.Fatal(err)
+		}
+		if string(got) != contents {
+			test.Errorf("contents = %q, want %q", got, contents)
+		}
+		return
+	}
+	test.Fatal("no contents gave a blob name with the commit's prefix")
+}
+
+// blobName is the SHA-1 object name git gives a blob with these contents.
+func blobName(contents string) string {
+	sum := sha1.Sum([]byte("blob " + strconv.Itoa(len(contents)) + "\x00" + contents))
+	return hex.EncodeToString(sum[:])
 }
