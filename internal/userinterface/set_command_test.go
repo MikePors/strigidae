@@ -19,8 +19,13 @@ func TestApplySet(test *testing.T) {
 		wantText  string
 		wantError string
 	}{
-		{name: "bare shows the defaults", arguments: "", wantText: "wrapscan hlsearch nowrap nohideviewed nohidereviewed noautoviewed nohideresolved noskipresolved norelativenumber"},
-		{name: "bare shows the current values", start: options.Values{"wrapscan": false}, arguments: "  ", want: options.Values{"wrapscan": false}, wantText: "nowrapscan hlsearch nowrap nohideviewed nohidereviewed noautoviewed nohideresolved noskipresolved norelativenumber"},
+		{name: "bare with nothing changed", arguments: "", wantText: "no options changed"},
+		{name: "bare lists only what differs from the default", start: options.Values{"wrapscan": false, "wrap": true}, arguments: "  ", want: options.Values{"wrapscan": false, "wrap": true}, wantText: "nowrapscan wrap"},
+		{name: "bare skips a value set to its default", start: options.Values{"wrapscan": true, "hlsearch": false}, arguments: "", want: options.Values{"wrapscan": true, "hlsearch": false}, wantText: "nohlsearch"},
+		{name: "bare after setting back to the default", start: options.Values{"wrapscan": true}, arguments: "", want: options.Values{"wrapscan": true}, wantText: "no options changed"},
+		{name: "all lists every option", arguments: "all", wantText: "wrapscan hlsearch nowrap nohideviewed nohidereviewed noautoviewed nohideresolved noskipresolved norelativenumber"},
+		{name: "all shows the current values", start: options.Values{"wrapscan": false}, arguments: " all ", want: options.Values{"wrapscan": false}, wantText: "nowrapscan hlsearch nowrap nohideviewed nohidereviewed noautoviewed nohideresolved noskipresolved norelativenumber"},
+		{name: "all can't be mixed with options", arguments: "all wrap", wantError: "unknown option: all"},
 		{name: "turn off", arguments: "nowrapscan", want: options.Values{"wrapscan": false}, wantText: "nowrapscan"},
 		{name: "turn on", start: options.Values{"hlsearch": false}, arguments: "hlsearch", want: options.Values{"hlsearch": true}, wantText: "hlsearch"},
 		{name: "several", arguments: "nowrapscan nohlsearch", want: options.Values{"wrapscan": false, "hlsearch": false}, wantText: "nowrapscan nohlsearch"},
@@ -109,12 +114,28 @@ func TestSetCommandChangesOptionsForEveryView(test *testing.T) {
 		test.Errorf("status = %+v, want the new value", model.status)
 	}
 
+	// Replace the status first, so a bare :set that did nothing would fail.
+	drive(model, Info("stale"))
 	drive(model, parseCommand("set", model.top(), model.viewCommands))
+	if model.status.text != "nowrapscan" || model.status.kind != statusInfo {
+		test.Errorf("bare :set shows %+v", model.status)
+	}
+	drive(model, Info("stale"))
+	drive(model, parseCommand("set all", model.top(), model.viewCommands))
 	if model.status.text != "nowrapscan hlsearch nowrap nohideviewed nohidereviewed noautoviewed nohideresolved noskipresolved norelativenumber" {
-		test.Errorf("bare :set shows %q", model.status.text)
+		test.Errorf(":set all shows %q", model.status.text)
 	}
 	if got := len(optionsSeen(below)); got != 1 {
-		test.Errorf("a bare :set sent a message; %d in all, want 1", got)
+		test.Errorf(":set and :set all sent a message; %d in all, want 1", got)
+	}
+}
+
+func TestBareSetWithNothingChanged(test *testing.T) {
+	model := setModel(newFake("v"), nil)
+	drive(model, Info("stale"))
+	drive(model, parseCommand("set", model.top(), model.viewCommands))
+	if model.status.text != "no options changed" || model.status.kind != statusInfo {
+		test.Errorf("bare :set with the defaults shows %+v", model.status)
 	}
 }
 

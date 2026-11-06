@@ -132,7 +132,7 @@ func helpConfigLines(activeTheme theme.Theme, values options.Values, width int) 
 	rows := [][4]string{{"Option", "Value", "Default", "Description"}}
 	for _, option := range options.All() {
 		value := values.Describe(option.Name)
-		if value != defaults.Describe(option.Name) {
+		if values.Differs(option.Name) {
 			value += "*"
 		}
 		rows = append(rows, [4]string{option.Name, value, defaults.Describe(option.Name), option.Description})

@@ -119,9 +119,29 @@ func (values Values) Describe(name string) string {
 
 // String describes every option, for example "wrapscan nohlsearch".
 func (values Values) String() string {
+	return strings.Join(values.describeWhere(func(Option) bool { return true }), " ")
+}
+
+// Differs reports whether the option called name has a value other than its
+// default. A value set explicitly to the default does not differ.
+func (values Values) Differs(name string) bool {
+	option, _ := Lookup(name)
+	return values.Get(name) != option.Default
+}
+
+// Changed describes the options whose value differs from their default, in
+// declaration order. It is empty when none does.
+func (values Values) Changed() string {
+	changed := func(option Option) bool { return values.Differs(option.Name) }
+	return strings.Join(values.describeWhere(changed), " ")
+}
+
+func (values Values) describeWhere(include func(Option) bool) []string {
 	var words []string
 	for _, option := range All() {
-		words = append(words, values.Describe(option.Name))
+		if include(option) {
+			words = append(words, values.Describe(option.Name))
+		}
 	}
-	return strings.Join(words, " ")
+	return words
 }

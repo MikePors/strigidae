@@ -21,13 +21,22 @@ func setCommand(arguments string) tea.Cmd {
 }
 
 // applySet applies the words of a `:set` line to current. `name` turns an
-// option on, `noname` turns it off, `name?` shows it, and no words show all.
+// option on, `noname` turns it off, `name?` shows it, no words show the
+// options that differ from their defaults, and `all` alone shows every option.
 // A line either changes options or asks about them, not both. It returns the
-// new values, the text to show, and whether anything was set. On any error
+// new values, the text to show, and whether anything was applied. On any error
 // nothing changes: the returned values are current.
-func applySet(arguments string, current options.Values) (updated options.Values, text string, changed bool, err error) {
+func applySet(arguments string, current options.Values) (updated options.Values, text string, applied bool, err error) {
 	words := strings.Fields(arguments)
 	if len(words) == 0 {
+		text = current.Changed()
+		if text == "" {
+			text = "no options changed"
+		}
+		return current, text, false, nil
+	}
+	// "all" is reserved: no option may be called all, or this would shadow it.
+	if len(words) == 1 && words[0] == "all" {
 		return current, current.String(), false, nil
 	}
 	updated = current
@@ -91,11 +100,11 @@ func unknownOption(name string) error {
 // set handles a `:set` line: it changes the options for this session (the
 // config file is never written), tells every view, and shows the result.
 func (model *Model) set(arguments string) tea.Cmd {
-	updated, text, changed, err := applySet(arguments, model.options)
+	updated, text, applied, err := applySet(arguments, model.options)
 	if err != nil {
 		return Error(err)
 	}
-	if !changed {
+	if !applied {
 		return Info(text)
 	}
 	model.options = updated
