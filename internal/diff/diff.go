@@ -115,9 +115,12 @@ type File struct {
 	// Similarity is the rename/copy similarity percentage (0 when absent).
 	Similarity int
 	// OldObjectIdentifier and NewObjectIdentifier name the file's content on
-	// each side, as written on the diff's "index" line (abbreviated hex). They
-	// are empty when the diff has no index line, and for the side that does
-	// not exist (the old side of an added file, the new side of a deleted one).
+	// each side, as written on the diff's "index" line: hexadecimal, usually
+	// abbreviated, in the diff's own case. They are empty when the diff has no
+	// index line or a malformed one, and for the side that does not exist (the
+	// old side of an added file, the new side of a deleted one). Binary files
+	// have them too. For a submodule (mode 160000 on the index line, which is
+	// not kept) they name commits in the submodule, not blobs.
 	OldObjectIdentifier, NewObjectIdentifier string
 	Hunks                                    []Hunk
 	// PatchMissing is set on a diff built file by file when GitHub gave this
