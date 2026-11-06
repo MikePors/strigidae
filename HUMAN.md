@@ -90,3 +90,15 @@ Checks only the maintainer can do, such as live verification against real GitHub
   must not appear. Repeat with a token environment override: no cache is reused.
 - Stop strig, delete its cache directory (see README), and restart: normal live
   loading should work. Report OS, terminal size, and any unexpected behavior.
+
+## #36 — image rendering prototype
+
+- Run `go run ./cmd/imageprobe -protocol kitty` in Ghostty and
+  `go run ./cmd/imageprobe -protocol iterm2` in WezTerm. Press `r` once the
+  screen appears. Report terminal version and whether the gradient appears.
+- Scroll with `j`/`k` until the image is partially and fully outside the pane.
+  Toggle the covering overlay with `h`, resize, and press `r` again. Report
+  missing images, stale pixels, overlap with text, or literal placeholder glyphs.
+- Quit with `q`; check that the shell has no remaining image or altered cursor.
+  The iTerm2 path is a diagnostic for repaint ordering, not a completed fallback.
+  See `docs/design/36-inline-images.md` for the implementation gate.
