@@ -69,6 +69,8 @@ func (model model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		switch message.String() {
 		case "q", "ctrl+c":
 			if model.protocol == "kitty" {
+				// Best effort: Raw is queued, so this is not proof that the
+				// delete is flushed before Bubble Tea leaves the alternate screen.
 				return model, tea.Sequence(tea.Raw(fmt.Sprintf("\x1b_Ga=d,d=I,i=%d,q=2\x1b\\", imageIdentifier)), tea.Quit)
 			}
 			return model, tea.Quit
@@ -138,6 +140,7 @@ func (model model) View() tea.View {
 }
 
 func placeholderRow(row, columns int) string {
+	// The foreground encodes an image identifier, not a theme colour.
 	// The first six row diacritics from Kitty's protocol table. Explicit
 	// row markers survive vertical clipping; columns inherit left to right.
 	diacritics := []rune{0x0305, 0x030d, 0x030e, 0x0310, 0x0312, 0x033d}

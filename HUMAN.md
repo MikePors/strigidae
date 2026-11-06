@@ -100,5 +100,11 @@ Checks only the maintainer can do, such as live verification against real GitHub
   Toggle the covering overlay with `h`, resize, and press `r` again. Report
   missing images, stale pixels, overlap with text, or literal placeholder glyphs.
 - Quit with `q`; check that the shell has no remaining image or altered cursor.
+  This checks visible artifacts only: the queued Kitty delete may flush after
+  the alternate screen has been left, so it does not prove image-store cleanup.
   The iTerm2 path is a diagnostic for repaint ordering, not a completed fallback.
   See `docs/design/36-inline-images.md` for the implementation gate.
+- Attach screenshots or recordings and terminal versions. Record TERM,
+  COLORTERM and any multiplexer. Run directly in each terminal first: truecolor
+  is needed for the Kitty identifier, and the probe does not wrap tmux APC
+  passthrough. Also run the Kitty probe in WezTerm to check its installed version.

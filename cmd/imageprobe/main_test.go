@@ -89,3 +89,54 @@ func TestInlineVisibility(test *testing.T) {
 		})
 	}
 }
+
+func TestTransmissionProtocol(test *testing.T) {
+	for _, testCase := range []struct {
+		name, protocol        string
+		width, height, offset int
+		covered               bool
+		want                  string
+	}{
+		{
+			name: "kitty virtual placement", protocol: "kitty", width: 80, height: 24,
+			want: "\x1b_Ga=T,f=100,t=d,U=1,q=2,i=424242,c=32,r=6;YWJj\x1b\\",
+		},
+		{
+			name: "inline origin", protocol: "iterm2", width: 80, height: 24,
+			want: "\x1b7\x1b[5;3H\x1b]1337;File=inline=1;width=32;height=6;preserveAspectRatio=1:YWJj\a\x1b8",
+		},
+		{
+			name: "top edge fits", protocol: "iterm2", width: 80, height: 24, offset: 3,
+			want: "\x1b7\x1b[2;3H\x1b]1337;File=inline=1;width=32;height=6;preserveAspectRatio=1:YWJj\a\x1b8",
+		},
+		{name: "top edge clipped", protocol: "iterm2", width: 80, height: 24, offset: 4},
+		{
+			name: "bottom edge fits", protocol: "iterm2", width: 80, height: 11,
+			want: "\x1b7\x1b[5;3H\x1b]1337;File=inline=1;width=32;height=6;preserveAspectRatio=1:YWJj\a\x1b8",
+		},
+		{name: "bottom edge clipped", protocol: "iterm2", width: 80, height: 10},
+		{
+			name: "minimum width fits", protocol: "iterm2", width: 5, height: 24,
+			want: "\x1b7\x1b[5;3H\x1b]1337;File=inline=1;width=1;height=6;preserveAspectRatio=1:YWJj\a\x1b8",
+		},
+		{name: "width too narrow", protocol: "iterm2", width: 4, height: 24},
+		{name: "overlay", protocol: "iterm2", width: 80, height: 24, covered: true},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			probe := model{protocol: testCase.protocol, payload: "YWJj", width: testCase.width, height: testCase.height, offset: testCase.offset, covered: testCase.covered}
+			if got := probe.transmission(); got != testCase.want {
+				test.Errorf("transmission = %q, want %q", got, testCase.want)
+			}
+		})
+	}
+}
+
+func TestPlaceholderProtocol(test *testing.T) {
+	for row, marker := range []string{"\u0305", "\u030d", "\u030e", "\u0310", "\u0312", "\u033d"} {
+		// These bytes are protocol data: 6*65536 + 121*256 + 50 = 424242.
+		want := "\x1b[38;2;6;121;50m\U0010eeee" + marker + "\U0010eeee\x1b[39m"
+		if got := placeholderRow(row, 2); got != want {
+			test.Errorf("row %d = %q, want %q", row, got, want)
+		}
+	}
+}
