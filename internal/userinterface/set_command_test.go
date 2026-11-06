@@ -114,16 +114,28 @@ func TestSetCommandChangesOptionsForEveryView(test *testing.T) {
 		test.Errorf("status = %+v, want the new value", model.status)
 	}
 
+	// Replace the status first, so a bare :set that did nothing would fail.
+	drive(model, Info("stale"))
 	drive(model, parseCommand("set", model.top(), model.viewCommands))
-	if model.status.text != "nowrapscan" {
-		test.Errorf("bare :set shows %q", model.status.text)
+	if model.status.text != "nowrapscan" || model.status.kind != statusInfo {
+		test.Errorf("bare :set shows %+v", model.status)
 	}
+	drive(model, Info("stale"))
 	drive(model, parseCommand("set all", model.top(), model.viewCommands))
 	if model.status.text != "nowrapscan hlsearch nowrap nohideviewed nohidereviewed noautoviewed nohideresolved noskipresolved norelativenumber" {
 		test.Errorf(":set all shows %q", model.status.text)
 	}
 	if got := len(optionsSeen(below)); got != 1 {
 		test.Errorf(":set and :set all sent a message; %d in all, want 1", got)
+	}
+}
+
+func TestBareSetWithNothingChanged(test *testing.T) {
+	model := setModel(newFake("v"), nil)
+	drive(model, Info("stale"))
+	drive(model, parseCommand("set", model.top(), model.viewCommands))
+	if model.status.text != "no options changed" || model.status.kind != statusInfo {
+		test.Errorf("bare :set with the defaults shows %+v", model.status)
 	}
 }
 
