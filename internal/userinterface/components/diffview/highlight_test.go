@@ -7,6 +7,8 @@ import (
 
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/lexers"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/MikePors/strigidae/internal/diff"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
@@ -316,5 +318,54 @@ func benchmarkRenderAddedFile(benchmark *testing.B, count int) {
 		model.SetFile(file)
 		model.SetSize(120, 50)
 		model.Render(120, 50)
+	}
+}
+
+// TestRenderSurvivesAHighlighterWithTooFewResults: a Highlighter that returns
+// fewer results than lines is not trusted; its side is drawn as plain text
+// instead of panicking on a missing result.
+func TestRenderSurvivesAHighlighterWithTooFewResults(test *testing.T) {
+	model := New(theme.New(true), WithHighlighter(func(string, []string) [][]Span { return nil }))
+	model.SetFile(hunkFile("main.go", []codeLine{
+		{diff.Context, "package main"},
+		{diff.Delete, "var removed = 1"},
+		{diff.Add, "var added = 2"},
+	}))
+	model.SetSize(80, 10)
+	rendered := ansi.Strip(model.Render(80, 10))
+	for _, text := range []string{"package main", "var removed = 1", "var added = 2"} {
+		if !strings.Contains(rendered, text) {
+			test.Errorf("rendered diff lacks %q:\n%s", text, rendered)
+		}
+	}
+}
+
+// alteringLexer wraps a real lexer and changes the text of its tokens, as a
+// faulty lexer might.
+type alteringLexer struct{ chroma.Lexer }
+
+func (lexer alteringLexer) Tokenise(options *chroma.TokeniseOptions, text string) (chroma.Iterator, error) {
+	inner, err := lexer.Lexer.Tokenise(options, text)
+	if err != nil {
+		return nil, err
+	}
+	return func() chroma.Token {
+		token := inner()
+		token.Value = strings.ReplaceAll(token.Value, "x", "y")
+		return token
+	}, nil
+}
+
+// TestLexBlockShowsAlteredLinesPlain: a line whose spans no longer join back to
+// its text is drawn plain, so wrong code is never shown; other lines keep
+// their colours.
+func TestLexBlockShowsAlteredLinesPlain(test *testing.T) {
+	lines := []string{"var x = 1", "var z = 2"}
+	result := lexBlock(alteringLexer{lexers.Get("go")}, lines)
+	if diff := cmp.Diff(plain(lines[0]), result[0]); diff != "" {
+		test.Errorf("altered line (-want +got):\n%s", diff)
+	}
+	if joined(result[1]) != lines[1] || !anyIn(result[1], chroma.Keyword) {
+		test.Errorf("untouched line = %+v, want it highlighted", result[1])
 	}
 }
