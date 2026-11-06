@@ -4,10 +4,14 @@
 // request list and the Files pane share it.
 //
 // Currently every row stays and matching rows are marked; the matching rule
-// is the single function Match, so another rule can replace it.
+// is matching.Rows (reached through Match), so another rule can replace it.
 package search
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/MikePors/strigidae/internal/userinterface/matching"
+)
 
 // Glyph is drawn in the left column of a matching row, in the theme's
 // SearchMarker style.
@@ -17,27 +21,9 @@ const Glyph = "•"
 // cursor and the match glyph side by side, drawn in the row's own style.
 const SelectedGlyph = ">" + Glyph
 
-// Match returns the indices of the rows whose text matches query. Currently a
-// row matches when every space-separated word of the query appears in its
-// text, ignoring case. An empty query matches nothing.
-func Match(query string, rows []string) []int {
-	words := strings.Fields(strings.ToLower(query))
-	if len(words) == 0 {
-		return nil
-	}
-	var matches []int
-rows:
-	for i, text := range rows {
-		lower := strings.ToLower(text)
-		for _, word := range words {
-			if !strings.Contains(lower, word) {
-				continue rows
-			}
-		}
-		matches = append(matches, i)
-	}
-	return matches
-}
+// Match returns the indices of the rows whose text matches query. The rule
+// is matching.Rows, shared with the help overlay's search.
+func Match(query string, rows []string) []int { return matching.Rows(query, rows) }
 
 // State is one list's search. The zero value is no search.
 type State struct {

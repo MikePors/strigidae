@@ -1,10 +1,10 @@
-Help: config  ? / esc to close  16–22 of 22            
-                                                       
-skipresolved    noskipresolved    noskipresolved       
-    make ) and ( pass over resolved threads            
-relativenumber  norelativenumber  norelativenumber     
-    number diff rows by distance from the cursor       
-                                                       
-:set name / :set noname to change    * changed from the
-default                                                
+Help: config  ? / esc to close  16–22 of 22              
+                                                         
+  skipresolved    noskipresolved    noskipresolved       
+      make ) and ( pass over resolved threads            
+  relativenumber  norelativenumber  norelativenumber     
+      number diff rows by distance from the cursor       
+                                                         
+  :set name / :set noname to change    * changed from the
+  default                                                
  v  ? help  zq test sequence                                

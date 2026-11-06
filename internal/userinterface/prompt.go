@@ -64,7 +64,7 @@ func (model *Model) promptKey(message tea.KeyPressMsg) tea.Cmd {
 	finish := func(state PromptState) tea.Cmd {
 		text := model.commandLine.input.Value()
 		model.commandLine.close()
-		return model.forward(PromptResultMessage{Prefix: prefix, Text: text, State: state})
+		return model.deliverPrompt(PromptResultMessage{Prefix: prefix, Text: text, State: state})
 	}
 	switch message.String() {
 	case "esc":
@@ -85,7 +85,16 @@ func (model *Model) promptInput(message tea.Msg) tea.Cmd {
 	prefix, before := model.commandLine.prompt, model.commandLine.input.Value()
 	command := model.commandLine.update(message)
 	if after := model.commandLine.input.Value(); after != before {
-		return tea.Batch(command, model.forward(PromptResultMessage{Prefix: prefix, Text: after, State: PromptChanged}))
+		return tea.Batch(command, model.deliverPrompt(PromptResultMessage{Prefix: prefix, Text: after, State: PromptChanged}))
 	}
 	return command
+}
+
+// deliverPrompt reports a prompt to the help overlay when it is open, since it
+// owns the keys, and to the top view otherwise.
+func (model *Model) deliverPrompt(result PromptResultMessage) tea.Cmd {
+	if model.showHelp {
+		return model.helpPrompt(result)
+	}
+	return model.forward(result)
 }

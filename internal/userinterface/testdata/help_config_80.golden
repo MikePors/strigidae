@@ -1,26 +1,26 @@
 Help: config  ? / esc to close                                                  
                                                                                 
-Option          Value             Default           Description                 
-wrapscan        wrapscan          wrapscan          n and N continue past the   
-                                                    last or first match         
-hlsearch        hlsearch          hlsearch          mark the rows that match a  
-                                                    search                      
-wrap            nowrap            nowrap            continue long diff lines on 
-                                                    the next rows               
-hideviewed      nohideviewed      nohideviewed      hide files marked viewed    
-                                                    from the Files pane         
-hidereviewed    nohidereviewed    nohidereviewed    hide hunks marked reviewed  
-                                                    from the diff pane          
-autoviewed      noautoviewed      noautoviewed      reviewing a file's last hunk
-                                                    marks it viewed             
-hideresolved    nohideresolved    nohideresolved    hide resolved threads from  
-                                                    the diff pane               
-skipresolved    noskipresolved    noskipresolved    make ) and ( pass over      
-                                                    resolved threads            
-relativenumber  norelativenumber  norelativenumber  number diff rows by distance
-                                                    from the cursor             
+  Option          Value             Default           Description               
+  wrapscan        wrapscan          wrapscan          n and N continue past the 
+                                                      last or first match       
+  hlsearch        hlsearch          hlsearch          mark the rows that match a
+                                                      search                    
+  wrap            nowrap            nowrap            continue long diff lines  
+                                                      on the next rows          
+  hideviewed      nohideviewed      nohideviewed      hide files marked viewed  
+                                                      from the Files pane       
+  hidereviewed    nohidereviewed    nohidereviewed    hide hunks marked reviewed
+                                                      from the diff pane        
+  autoviewed      noautoviewed      noautoviewed      reviewing a file's last   
+                                                      hunk marks it viewed      
+  hideresolved    nohideresolved    nohideresolved    hide resolved threads from
+                                                      the diff pane             
+  skipresolved    noskipresolved    noskipresolved    make ) and ( pass over    
+                                                      resolved threads          
+  relativenumber  norelativenumber  norelativenumber  number diff rows by       
+                                                      distance from the cursor  
                                                                                 
-:set name / :set noname to change    * changed from the default                 
+  :set name / :set noname to change    * changed from the default               
 
 
 

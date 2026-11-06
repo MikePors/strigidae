@@ -54,6 +54,7 @@ internal/userinterface/                 app shell, View interface, status bar, c
 internal/userinterface/keys/            keymap registry and multi-key sequence handling
 internal/userinterface/theme/           Lip Gloss styles; every colour lives here
 internal/userinterface/terminaltext/    sanitising of untrusted text (Clean, CleanBlock); imports no other userinterface package
+internal/userinterface/matching/        match rule shared by list and help search; imports no other userinterface package
 internal/userinterface/components/      reusable widgets (picker, markdown pane, diff pane, …)
 internal/userinterface/views/<view>/    one package per screen: pullrequestlist, workspace, dashboard, …
 ```

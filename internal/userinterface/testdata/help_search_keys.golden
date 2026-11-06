@@ -1,0 +1,20 @@
+Help  /page  ? / esc to close  1–17 of 23                             
+                                                                      
+  Global                                        v                     
+  j        down                                 zq       test sequence
+  k        up                                                         
+  gg       top                                                        
+  G        bottom                                                     
+• ctrl+d   half page down                                             
+• ctrl+u   half page up                                               
+• ctrl+f   page down                                                  
+• ctrl+b   page up                                                    
+                                                                      
+  zt       cursor line to the top                                     
+  zz       cursor line to the middle                                  
+  zb       cursor line to the bottom                                  
+                                                                      
+  enter    open / select                                              
+  o        open in browser                                            
+  R        refresh                                                    
+ v  ? help  zq test sequence                                                    
