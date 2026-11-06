@@ -405,7 +405,7 @@ func TestHelpConfigResizeKeepsTheScrollClamped(test *testing.T) {
 			test.Errorf("width %d: title %q lacks %q", width, screenLines[0], counter)
 		}
 		for index := range rows {
-			want := strings.TrimRight(ansi.Strip(lines[wantOffset+index]), " ")
+			want := strings.TrimRight(ansi.Strip(model.markedHelpLines()[wantOffset+index]), " ")
 			if got := strings.TrimRight(screenLines[index+2], " "); got != want {
 				test.Errorf("width %d: body row %d = %q, want %q", width, index, got, want)
 			}

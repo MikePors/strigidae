@@ -28,8 +28,9 @@ type helpSearch struct {
 	// last is the last query submitted; enter on an empty prompt repeats it.
 	last string
 	// While typing: where the view was and the search to go back to on esc.
-	originOffset  int
-	previousQuery string
+	originOffset    int
+	previousQuery   string
+	previousCurrent int
 }
 
 func (search helpSearch) active() bool { return search.query != "" }
@@ -51,14 +52,14 @@ func (model *Model) helpSearchMatches() []int {
 	return matching.Rows(model.helpSearch.query, rows)
 }
 
-// markedHelpLines is the body to draw: with the marker on, a gutter in which
-// matching rows carry the theme's search marker.
+// markedHelpLines is the body to draw, each row behind a gutter in which, with
+// the marker on, matching rows carry the theme's search marker.
 func (model *Model) markedHelpLines() []string {
 	lines := model.helpLines()
-	if !model.helpMarking() {
-		return lines
+	var matches []int
+	if model.helpMarking() {
+		matches = model.helpSearchMatches()
 	}
-	matches := model.helpSearchMatches()
 	marked := make([]string, len(lines))
 	for i, line := range lines {
 		gutter := strings.Repeat(" ", helpGutter)
@@ -86,7 +87,7 @@ func (model *Model) showHelpRow(row int) {
 // beginHelpSearch opens the prompt for a new search from the top of the view.
 func (model *Model) beginHelpSearch() tea.Cmd {
 	search := &model.helpSearch
-	search.originOffset, search.previousQuery = model.helpOffset, search.query
+	search.originOffset, search.previousQuery, search.previousCurrent = model.helpOffset, search.query, search.current
 	return model.commandLine.openPrompt(helpSearchPrefix)
 }
 
@@ -105,6 +106,7 @@ func (model *Model) helpPrompt(result PromptResultMessage) tea.Cmd {
 		model.typeHelpSearch(query)
 	case PromptCancelled:
 		model.typeHelpSearch(search.previousQuery)
+		search.current = search.previousCurrent
 		model.helpOffset = search.originOffset
 		model.clampHelp()
 	case PromptSubmitted:
@@ -156,6 +158,14 @@ func (model *Model) stepHelpSearch(forward bool, count int) tea.Cmd {
 	}
 	wrap := model.options.WrapScan()
 	row := search.current
+	if _, height := model.contentSize(); row < model.helpOffset || row >= model.helpOffset+helpBodyRows(height) {
+		// The match is off screen (the user scrolled): step from the top of
+		// the view, as a pager does.
+		row = model.helpOffset - 1
+		if !forward {
+			row = model.helpOffset
+		}
+	}
 	for range max(count, 1) {
 		next, ok := neighbouringMatch(matches, row, forward, wrap)
 		if !ok {

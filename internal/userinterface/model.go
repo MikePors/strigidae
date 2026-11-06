@@ -459,8 +459,7 @@ func (model *Model) dispatch(sequence string, count int) tea.Cmd {
 	keyMessage := keys.Message{Sequence: sequence, Count: count}
 	switch {
 	case key.Matches(keyMessage, model.keys.Help):
-		model.openHelp(helpKeys)
-		return nil
+		return model.openHelp(helpKeys)
 	case key.Matches(keyMessage, model.keys.Command):
 		return model.commandLine.open()
 	}
@@ -470,9 +469,7 @@ func (model *Model) dispatch(sequence string, count int) tea.Cmd {
 // helpLines is the help's scrolling body at the current size and bindings.
 func (model *Model) helpLines() []string {
 	width, _ := model.contentSize()
-	if model.helpMarking() {
-		width = max(1, width-helpGutter)
-	}
+	width = max(1, width-helpGutter) // the marker gutter is always reserved
 	switch model.helpContent {
 	case helpTopics:
 		return helpTopicLines(model.theme)
@@ -497,7 +494,7 @@ func (model *Model) clampHelp() {
 // bindings are matched, and nothing reaches the view.
 func (model *Model) handleHelpKey(message tea.KeyPressMsg) tea.Cmd {
 	if key.Matches(message, model.keys.Cancel) && model.helpSearch.active() {
-		model.helpSearch = helpSearch{} // the first esc clears the search
+		model.helpSearch = helpSearch{last: model.helpSearch.last} // the first esc clears the search; enter on an empty prompt still repeats it
 		model.matcher.Reset()
 		return nil
 	}

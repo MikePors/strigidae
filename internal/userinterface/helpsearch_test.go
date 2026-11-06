@@ -225,3 +225,108 @@ func TestHelpSearchGoldens(test *testing.T) {
 	press(keys, "enter")
 	golden.Assert(test, "help_search_keys", screen(keys), false)
 }
+
+func TestHelpSearchStepsFromTheScreenWhenTheMatchIsOffScreen(test *testing.T) {
+	model := helpModel(newLongHelpView(60), 60, 12)
+	typeSearch(model, "action 5")
+	press(model, "enter")
+	press(model, "G")
+	top := model.helpOffset
+	if model.helpSearch.current >= top {
+		test.Fatalf("setup: the current match %d should be above the screen top %d", model.helpSearch.current, top)
+	}
+	press(model, "n")
+	if model.helpSearch.current < top {
+		test.Errorf("n landed on %d, above the top of the screen %d", model.helpSearch.current, top)
+	}
+	pressAll(model, "g", "g", "G")
+	top = model.helpOffset
+	press(model, "N")
+	if model.helpSearch.current >= top {
+		test.Errorf("N landed on %d, want a match before the top of the screen %d", model.helpSearch.current, top)
+	}
+}
+
+func TestHelpSearchEscKeepsTheLastQueryForRepeat(test *testing.T) {
+	model := sizedModel(80, 20)
+	enterLine(model, "help config")
+	typeSearch(model, "wrap")
+	press(model, "enter")
+	press(model, "esc")
+	press(model, "/")
+	press(model, "enter")
+	if model.helpSearch.query != "wrap" {
+		test.Errorf("query after repeat = %q, want wrap", model.helpSearch.query)
+	}
+}
+
+func TestHelpSearchCancelRestoresTheEarlierSearch(test *testing.T) {
+	model := helpModel(newLongHelpView(60), 60, 12)
+	typeSearch(model, "action 5")
+	press(model, "enter")
+	pressAll(model, "n", "n")
+	current, offset := model.helpSearch.current, model.helpOffset
+	typeSearch(model, "zzz")
+	press(model, "esc")
+	if model.helpSearch.query != "action 5" || model.helpSearch.current != current || model.helpOffset != offset {
+		test.Fatalf("after esc: query %q current %d offset %d, want action 5, %d, %d",
+			model.helpSearch.query, model.helpSearch.current, model.helpOffset, current, offset)
+	}
+	press(model, "n")
+	matches := model.helpSearchMatches()
+	want := matches[0]
+	for i, match := range matches {
+		if match == current && i+1 < len(matches) {
+			want = matches[i+1]
+		}
+	}
+	if model.helpSearch.current != want {
+		test.Errorf("n went to %d, want %d (the match after %d)", model.helpSearch.current, want, current)
+	}
+}
+
+func TestHelpSearchCountWithN(test *testing.T) {
+	model := helpModel(newLongHelpView(60), 60, 12)
+	typeSearch(model, "action 5")
+	press(model, "enter")
+	matches := model.helpSearchMatches()
+	pressAll(model, "3", "n")
+	if model.helpSearch.current != matches[3] {
+		test.Errorf("3n landed on %d, want the fourth match %d", model.helpSearch.current, matches[3])
+	}
+}
+
+func TestHelpColonIsBlockedWhileSearching(test *testing.T) {
+	model := sizedModel(80, 20)
+	enterLine(model, "help config")
+	typeSearch(model, "wrap")
+	press(model, "enter")
+	press(model, ":")
+	if model.commandLine.active {
+		test.Errorf(": opened the command line inside the help")
+	}
+}
+
+func TestHelpOpeningCancelsTheViewsPrompt(test *testing.T) {
+	view := newPrompting()
+	model := newModel(view)
+	model.Update(tea.WindowSizeMsg{Width: 80, Height: 20})
+	press(model, "/")
+	press(model, "a")
+	follow(model, func() tea.Msg { return helpRequestedMessage{topic: "config"} })
+	results := view.promptResults()
+	if len(results) == 0 || results[len(results)-1].State != PromptCancelled {
+		test.Fatalf("the view's prompt results = %#v, want a cancel last", results)
+	}
+	if !model.showHelp || model.commandLine.active {
+		test.Fatalf("help open = %v, command line active = %v", model.showHelp, model.commandLine.active)
+	}
+	before := len(results)
+	pressAll(model, "/", "w", "r")
+	if len(view.promptResults()) != before {
+		test.Errorf("keys typed in the help reached the view's search")
+	}
+	if model.helpSearch.query != "wr" {
+		test.Errorf("help query = %q, want wr", model.helpSearch.query)
+	}
+}

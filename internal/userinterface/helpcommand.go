@@ -53,23 +53,31 @@ func helpCommand(arguments string) tea.Cmd {
 // help opens the overlay for topic, or the topic list when it is empty.
 func (model *Model) help(topic string) tea.Cmd {
 	if topic == "" {
-		model.openHelp(helpTopics)
-		return nil
+		return model.openHelp(helpTopics)
 	}
 	for _, candidate := range helpTopicTable() {
 		if candidate.name == topic {
-			model.openHelp(candidate.content)
-			return nil
+			return model.openHelp(candidate.content)
 		}
 	}
 	return Error(fmt.Errorf("unknown help topic: %s", terminaltext.Clean(topic)))
 }
 
-func (model *Model) openHelp(content helpContent) {
+// openHelp shows a page. A prompt the top view had open is cancelled first, so
+// its results cannot reach the overlay; the view hears about it in the
+// returned command.
+func (model *Model) openHelp(content helpContent) tea.Cmd {
+	var command tea.Cmd
+	if model.commandLine.active && model.commandLine.prompt != "" {
+		result := PromptResultMessage{Prefix: model.commandLine.prompt, Text: model.commandLine.input.Value(), State: PromptCancelled}
+		model.commandLine.close()
+		command = model.forward(result)
+	}
 	model.showHelp = true
 	model.helpContent = content
 	model.helpOffset = 0
-	model.helpSearch = helpSearch{} // a search belongs to the page it was made on
+	model.helpSearch = helpSearch{last: model.helpSearch.last} // a search belongs to the page it was made on
+	return command
 }
 
 // helpTitle names the open overlay on its title line.
