@@ -96,8 +96,9 @@ an absolute path or a `~/` path. The protocol and the rules of a run are in
 ### Options
 
 Optional yes/no keys, written at the top level next to `theme`. Each is also
-a `:set` option (`:set nowrapscan`, `:set wrap`, `:set` alone to show
-them), which changes it for the running session without touching the file.
+a `:set` option (`:set nowrapscan`, `:set wrap`), which changes it for the
+running session without touching the file. `:set` alone shows the options that
+differ from their defaults and `:set all` shows every one.
 `:help config` lists every option with its current value, its default and a
 one-line description.
 The value must be an unquoted YAML boolean: `true` or `false` (`True` and

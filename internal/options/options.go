@@ -119,9 +119,22 @@ func (values Values) Describe(name string) string {
 
 // String describes every option, for example "wrapscan nohlsearch".
 func (values Values) String() string {
+	return strings.Join(values.describeWhere(func(Option) bool { return true }), " ")
+}
+
+// Changed describes the options whose value differs from their default, in
+// declaration order. It is empty when none does.
+func (values Values) Changed() string {
+	changed := func(option Option) bool { return values.Get(option.Name) != option.Default }
+	return strings.Join(values.describeWhere(changed), " ")
+}
+
+func (values Values) describeWhere(include func(Option) bool) []string {
 	var words []string
 	for _, option := range All() {
-		words = append(words, values.Describe(option.Name))
+		if include(option) {
+			words = append(words, values.Describe(option.Name))
+		}
 	}
-	return strings.Join(words, " ")
+	return words
 }

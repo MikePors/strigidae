@@ -38,6 +38,25 @@ func TestString(test *testing.T) {
 	}
 }
 
+func TestChanged(test *testing.T) {
+	for name, testCase := range map[string]struct {
+		values Values
+		want   string
+	}{
+		"defaults":             {nil, ""},
+		"set to the default":   {Values{WrapScan: true, Wrap: false}, ""},
+		"one off":              {Values{WrapScan: false}, "nowrapscan"},
+		"one on":               {Values{Wrap: true}, "wrap"},
+		"in declaration order": {Values{RelativeNumber: true, HighlightSearch: false, WrapScan: true}, "nohlsearch relativenumber"},
+	} {
+		test.Run(name, func(test *testing.T) {
+			if diff := cmp.Diff(testCase.want, testCase.values.Changed()); diff != "" {
+				test.Error(diff)
+			}
+		})
+	}
+}
+
 func TestDeclarationsAreUnique(test *testing.T) {
 	seen := map[string]bool{}
 	for _, option := range All() {
