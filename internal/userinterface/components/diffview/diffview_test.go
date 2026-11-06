@@ -490,3 +490,67 @@ func TestRenderUnknownTokenKeepsRowBackground(test *testing.T) {
 		test.Errorf("the added line is not drawn plain on its background:\n%q", out)
 	}
 }
+
+// TestRenderHighlightsMixedHunkOnce proves a hunk with one side that fits a
+// block and one that does not lexes the fitting side once: later rows on the
+// other side cost one single-line lexing each, and context rows take the
+// fitting side's spans.
+func TestRenderHighlightsMixedHunkOnce(test *testing.T) {
+	long := "x := \"" + strings.Repeat("a", maximumHighlightLength) + "\""
+	mixedHunk := func(large diff.LineKind) *diff.File {
+		hunk := diff.Hunk{OldStart: 1, NewStart: 1}
+		for i := range 3 {
+			hunk.Lines = append(hunk.Lines, diff.Line{Kind: diff.Context, Old: i + 1, New: i + 1, Text: fmt.Sprintf("var context%d = %d", i, i)})
+		}
+		small := diff.Add
+		if large == diff.Add {
+			small = diff.Delete
+		}
+		for i := range 3 {
+			hunk.Lines = append(hunk.Lines, diff.Line{Kind: small, Text: fmt.Sprintf("var small%d = %d", i, i)})
+		}
+		for i := range 60 {
+			text := fmt.Sprintf("var large%d = %d", i, i)
+			if i == 0 {
+				text = long // pushes this side over the per-line limit
+			}
+			hunk.Lines = append(hunk.Lines, diff.Line{Kind: large, Text: text})
+		}
+		return &diff.File{NewPath: "main.go", OldPath: "main.go", Status: diff.Modified, Hunks: []diff.Hunk{hunk}}
+	}
+	for _, testCase := range []struct {
+		name  string
+		large diff.LineKind
+	}{
+		{"added side too large", diff.Add},
+		{"deleted side too large", diff.Delete},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			blocks, singles := 0, 0
+			inner := ChromaHighlighter()
+			model := New(theme.New(true), WithHighlighter(func(path string, lines []string) [][]Span {
+				if len(lines) == 1 {
+					singles++
+				} else {
+					blocks++
+				}
+				return inner(path, lines)
+			}))
+			model.SetFile(mixedHunk(testCase.large))
+			model.SetSize(100, 40)
+
+			model.Render(100, 40)
+			// 39 code rows show: 3 context and 3 small-side rows from one
+			// block, and 33 rows of the large side lexed one by one.
+			if blocks != 1 || singles != 33 {
+				test.Fatalf("first render: %d blocks and %d single rows, want 1 and 33", blocks, singles)
+			}
+			model.CursorDown(1)
+			model.ScrollDown(10)
+			model.Render(100, 40)
+			if blocks != 1 || singles != 43 {
+				test.Errorf("scrolling by 10: %d blocks and %d single rows, want 1 and 43", blocks, singles)
+			}
+		})
+	}
+}

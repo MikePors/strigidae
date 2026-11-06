@@ -144,7 +144,11 @@ type Model struct {
 	threadFade func(identifier string) (step int, fading bool) // see SetThreadFade; nil: none fade
 
 	cache map[int][]Span // highlighted rows, by base row index; reset per file
-	saved *position      // position kept while a message replaces the file
+	// highlighted holds the hunks whose sides have been lexed, so a row the
+	// block did not cover (its side was too large) costs only its own lexing.
+	// Reset with cache.
+	highlighted map[int]bool
+	saved       *position // position kept while a message replaces the file
 
 	width, height int
 
@@ -166,7 +170,7 @@ type Model struct {
 
 // New returns an empty diff pane.
 func New(activeTheme theme.Theme, options ...Option) *Model {
-	model := &Model{theme: activeTheme, highlight: ChromaHighlighter(), cache: map[int][]Span{}, now: time.Now, open: map[string]bool{}}
+	model := &Model{theme: activeTheme, highlight: ChromaHighlighter(), cache: map[int][]Span{}, highlighted: map[int]bool{}, now: time.Now, open: map[string]bool{}}
 	for _, option := range options {
 		option(model)
 	}
@@ -260,6 +264,7 @@ func (model *Model) reset() {
 	model.base, model.rows, model.hunkRow = nil, nil, nil
 	model.fileThreads, model.attach, model.orphans, model.blocks, model.owners = nil, nil, nil, nil, nil
 	model.cache = map[int][]Span{}
+	model.highlighted = map[int]bool{}
 	model.wrapStarts = nil
 	model.window.Reset()
 	model.maximumWidth, model.numberWidth = 0, 0

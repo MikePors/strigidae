@@ -220,9 +220,12 @@ func (model *Model) spansFor(i int) []Span {
 	if spans, ok := model.cache[baseIndex]; ok {
 		return spans
 	}
-	model.highlightHunk(baseIndex)
-	if spans, ok := model.cache[baseIndex]; ok {
-		return spans
+	if hunk := model.base[baseIndex].hunk; !model.highlighted[hunk] {
+		model.highlighted[hunk] = true
+		model.highlightHunk(baseIndex)
+		if spans, ok := model.cache[baseIndex]; ok {
+			return spans
+		}
 	}
 	// The row's side is too large to lex in one piece: lex just this row.
 	spans := model.highlightSide(model.file.Path(), []string{model.rows[i].text})[0]
@@ -233,8 +236,10 @@ func (model *Model) spansFor(i int) []Span {
 // highlightHunk lexes the old side (context and deleted lines) and the new
 // side (context and added lines) of the hunk holding base row baseIndex, each
 // as one block, and caches the spans of every row. Context rows take the new
-// side's spans. "No newline" markers are no code and take no part. A side
-// that does not fit one block (see fitsBlock) is left to be lexed row by row.
+// side's spans, or the old side's when only the old side fits. "No newline"
+// markers are no code and take no part. A side that does not fit one block
+// (see fitsBlock) is left to be lexed row by row. spansFor calls it once per
+// hunk.
 func (model *Model) highlightHunk(baseIndex int) {
 	first := baseIndex
 	for first > 0 && model.base[first-1].line != nil {
@@ -259,15 +264,16 @@ func (model *Model) highlightHunk(baseIndex int) {
 		}
 	}
 	path := model.file.Path()
+	newFits := fitsBlock(newLines)
 	if fitsBlock(oldLines) {
 		oldSpans := model.highlightSide(path, oldLines)
 		for position, index := range oldRows {
-			if model.base[index].line.Kind == diff.Delete {
+			if model.base[index].line.Kind == diff.Delete || !newFits {
 				model.cache[index] = oldSpans[position]
 			}
 		}
 	}
-	if fitsBlock(newLines) {
+	if newFits {
 		newSpans := model.highlightSide(path, newLines)
 		for position, index := range newRows {
 			model.cache[index] = newSpans[position]
