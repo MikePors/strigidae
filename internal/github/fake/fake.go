@@ -66,7 +66,7 @@ type Call struct {
 	ReviewIdentifier string
 	// PullRequestIdentifier, Path and Viewed are set by the methods that take them:
 	// PullRequestIdentifier by SetFileViewed, StartReview and MergePullRequest, Path by
-	// SetFileViewed and AddReviewThread, Viewed by SetFileViewed.
+	// SetFileViewed, AddReviewThread and FileText, Viewed by SetFileViewed.
 	PullRequestIdentifier string
 	Path                  string
 	Viewed                bool
