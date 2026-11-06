@@ -4,7 +4,7 @@ Checks only the maintainer can do, such as live verification against real GitHub
 
 ## Live checks
 
-- [ ] **Fetching a pull request's head never prompts, over HTTPS and SSH** (#267). Only local repositories stand in for the remote in the tests. Reachable from strig once #262 lands; until then, check what strig will run: `git fetch --no-write-fetch-head --no-tags --quiet -- <remote> refs/pull/<number>/head` with stdin closed, `GIT_TERMINAL_PROMPT=0` and `GIT_SSH_COMMAND='ssh -o BatchMode=yes'`.
+- [ ] **Fetching a pull request's head never prompts, over HTTPS and SSH** (#267). Only local repositories stand in for the remote in the tests. Reachable from strig once #262 lands; until then, check what strig will run: `git fetch --no-write-fetch-head --refmap= --no-tags --no-auto-maintenance --no-recurse-submodules --quiet -- <remote> refs/pull/<number>/head` with stdin closed, `GIT_TERMINAL_PROMPT=0` and `GIT_SSH_COMMAND='ssh -o BatchMode=yes'`.
   1. Once #262 is merged: in a checkout of a repository you can reach over HTTPS with no stored credentials (`git credential reject`, or a private repository), open a pull request whose blobs are not local and open a modified file. strig must not stop, ask for a username, or draw anything over the TUI; the file just keeps its per-hunk colours.
   2. Repeat with an SSH remote, a passphrase-protected key and no agent (`env -u SSH_AUTH_SOCK strig`). It must not ask for the passphrase or a host key, and must not hang.
   3. With a working login (HTTPS credential helper, or SSH key in an agent), open the same file: the whole-file colours should appear. Afterwards `git status`, `git branch -a`, `git for-each-ref` and `.git/FETCH_HEAD` must look exactly as before.

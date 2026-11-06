@@ -379,3 +379,21 @@ func blobName(contents string) string {
 	sum := sha1.Sum([]byte("blob " + strconv.Itoa(len(contents)) + "\x00" + contents))
 	return hex.EncodeToString(sum[:])
 }
+
+// TestReadBlobIgnoresReplaceReferences: `git replace` makes git show another
+// object in a blob's place; ReadBlob returns the blob's own contents.
+func TestReadBlobIgnoresReplaceReferences(test *testing.T) {
+	directory := newRepository(test)
+	identifier := writeBlob(test, directory, []byte("the real blob\n"))
+	replacement := writeBlob(test, directory, []byte("replacement\n"))
+	runGit(test, directory, "replace", identifier, replacement)
+	for _, name := range []string{identifier, identifier[:7]} {
+		got, err := ReadBlob(context.Background(), directory, name)
+		if err != nil {
+			test.Fatal(err)
+		}
+		if string(got) != "the real blob\n" {
+			test.Errorf("ReadBlob(%s) = %q, want the real blob", name, got)
+		}
+	}
+}

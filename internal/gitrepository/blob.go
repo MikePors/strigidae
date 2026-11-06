@@ -31,9 +31,12 @@ const subprocessWaitDelay = 2 * time.Second
 //
 // The identifier is only ever matched against objects: a branch or tag that
 // happens to be named like it is ignored (git itself prefers the ref), and an
-// abbreviation shared with a commit or tree still finds the one blob. Git is
-// never allowed to fetch a missing object (a partial clone would otherwise go
-// to the network) or to prompt.
+// abbreviation shared with a commit or tree still finds the one blob. Replace
+// refs are ignored, so the contents are the blob's own. It never goes to the
+// network: rev-parse --disambiguate lists only objects already present, so a
+// blob a partial clone left out is reported missing rather than fetched
+// (GIT_NO_LAZY_FETCH, on git 2.44 and later, is a second guard). It never
+// prompts.
 //
 // Unlike Runner it does not trim the output: a file's trailing newline, or its
 // absence, is content.
@@ -82,12 +85,12 @@ func resolveBlob(ctx context.Context, directory, abbreviation string) (string, e
 }
 
 // runLocalGit runs git in directory with input on standard input and returns
-// its untrimmed standard output. Git may neither fetch missing objects nor
-// prompt. A failure carries git's diagnostics; a cancelled ctx yields its error.
+// its untrimmed standard output. Git may not prompt, follow replace refs, or
+// (on git 2.44 and later) fetch missing objects. A failure carries git's diagnostics; a cancelled ctx yields its error.
 func runLocalGit(ctx context.Context, directory string, input io.Reader, arguments ...string) ([]byte, error) {
 	command := exec.CommandContext(ctx, "git", arguments...)
 	command.Dir = directory
-	command.Env = append(environment.Scrub(os.Environ()), "GIT_NO_LAZY_FETCH=1", "GIT_TERMINAL_PROMPT=0")
+	command.Env = append(environment.Scrub(os.Environ()), "GIT_NO_LAZY_FETCH=1", "GIT_NO_REPLACE_OBJECTS=1", "GIT_TERMINAL_PROMPT=0")
 	command.WaitDelay = subprocessWaitDelay
 	command.Stdin = input
 	var output, diagnostics bytes.Buffer
