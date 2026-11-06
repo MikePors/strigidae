@@ -63,20 +63,20 @@ func (model *Model) help(topic string) tea.Cmd {
 	return Error(fmt.Errorf("unknown help topic: %s", terminaltext.Clean(topic)))
 }
 
-// openHelp shows a page. A prompt the top view had open is cancelled first, so
-// its results cannot reach the overlay; the view hears about it in the
-// returned command.
+// openHelp shows a page. A prompt that was open (the top view's, or the help's
+// own) is cancelled first, so its results cannot reach the wrong receiver; the
+// receiver hears about it in the returned command.
 func (model *Model) openHelp(content helpContent) tea.Cmd {
 	var command tea.Cmd
 	if model.commandLine.active && model.commandLine.prompt != "" {
 		result := PromptResultMessage{Prefix: model.commandLine.prompt, Text: model.commandLine.input.Value(), State: PromptCancelled}
 		model.commandLine.close()
-		command = model.forward(result)
+		command = model.deliverPrompt(result) // the prompt may be the help's own
 	}
 	model.showHelp = true
 	model.helpContent = content
 	model.helpOffset = 0
-	model.helpSearch = helpSearch{last: model.helpSearch.last} // a search belongs to the page it was made on
+	model.helpSearch = helpSearch{last: model.helpSearch.last} // the query belongs to the page; last is kept so an empty enter repeats it
 	return command
 }
 

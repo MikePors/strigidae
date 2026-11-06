@@ -1,6 +1,7 @@
 package userinterface
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -262,14 +263,14 @@ func TestHelpSearchEscKeepsTheLastQueryForRepeat(test *testing.T) {
 
 func TestHelpSearchCancelRestoresTheEarlierSearch(test *testing.T) {
 	model := helpModel(newLongHelpView(60), 60, 12)
-	typeSearch(model, "action 5")
+	typeSearch(model, "action")
 	press(model, "enter")
 	pressAll(model, "n", "n")
 	current, offset := model.helpSearch.current, model.helpOffset
 	typeSearch(model, "zzz")
 	press(model, "esc")
-	if model.helpSearch.query != "action 5" || model.helpSearch.current != current || model.helpOffset != offset {
-		test.Fatalf("after esc: query %q current %d offset %d, want action 5, %d, %d",
+	if model.helpSearch.query != "action" || model.helpSearch.current != current || model.helpOffset != offset {
+		test.Fatalf("after esc: query %q current %d offset %d, want action, %d, %d",
 			model.helpSearch.query, model.helpSearch.current, model.helpOffset, current, offset)
 	}
 	press(model, "n")
@@ -321,6 +322,9 @@ func TestHelpOpeningCancelsTheViewsPrompt(test *testing.T) {
 	if !model.showHelp || model.commandLine.active {
 		test.Fatalf("help open = %v, command line active = %v", model.showHelp, model.commandLine.active)
 	}
+	if last := results[len(results)-1]; last.Prefix != "/" || last.Text != "a" {
+		test.Errorf("cancel = %#v, want prefix / and text a", last)
+	}
 	before := len(results)
 	pressAll(model, "/", "w", "r")
 	if len(view.promptResults()) != before {
@@ -329,4 +333,66 @@ func TestHelpOpeningCancelsTheViewsPrompt(test *testing.T) {
 	if model.helpSearch.query != "wr" {
 		test.Errorf("help query = %q, want wr", model.helpSearch.query)
 	}
+}
+
+func TestHelpOpeningCancelsTheHelpsOwnPrompt(test *testing.T) {
+	view := newPrompting()
+	model := newModel(view)
+	model.Update(tea.WindowSizeMsg{Width: 80, Height: 20})
+	press(model, ":")
+	for _, character := range "help config" {
+		press(model, string(character))
+	}
+	command := press(model, "enter") // the message has not landed yet
+	pressAll(model, "?", "/", "a")
+	follow(model, command)
+	if !model.showHelp || model.helpContent != helpConfig || model.commandLine.active {
+		test.Fatalf("help open = %v, content %v, command line active = %v", model.showHelp, model.helpContent, model.commandLine.active)
+	}
+	if results := view.promptResults(); len(results) != 0 {
+		test.Errorf("the view heard %#v about a prompt it never opened", results)
+	}
+	if model.helpSearch.active() {
+		test.Errorf("the cancelled search is still active: %q", model.helpSearch.query)
+	}
+}
+
+func TestHelpSearchStepBoundaries(test *testing.T) {
+	setup := func() (*Model, []int) {
+		model := helpModel(newLongHelpView(60), 60, 12)
+		typeSearch(model, "action 1")
+		press(model, "enter")
+		return model, model.helpSearchMatches()
+	}
+	_, height := sizedModel(60, 12).contentSize()
+	rows := helpBodyRows(height)
+
+	test.Run("N finds the match on the row just above the screen", func(test *testing.T) {
+		model, matches := setup()
+		model.helpOffset = matches[1] + 1
+		model.clampHelp()
+		if model.helpOffset != matches[1]+1 {
+			test.Fatalf("setup: offset = %d, want %d", model.helpOffset, matches[1]+1)
+		}
+		model.helpSearch.current = matches[0]
+		press(model, "N")
+		if model.helpSearch.current != matches[1] {
+			test.Errorf("N landed on %d, want the row just above the screen, %d", model.helpSearch.current, matches[1])
+		}
+	})
+
+	test.Run("a match on the row just below the screen is off screen", func(test *testing.T) {
+		model, matches := setup()
+		model.helpOffset = matches[0]
+		model.clampHelp()
+		below := model.helpOffset + rows
+		if !slices.Contains(matches, below) || model.helpOffset != matches[0] {
+			test.Fatalf("setup: no match at row %d below the screen (matches %v)", below, matches)
+		}
+		model.helpSearch.current = below
+		press(model, "n")
+		if model.helpSearch.current != matches[0] {
+			test.Errorf("n landed on %d, want the first match at the top of the screen, %d", model.helpSearch.current, matches[0])
+		}
+	})
 }
