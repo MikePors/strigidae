@@ -19,12 +19,16 @@ func TestFileText(test *testing.T) {
 		fixture  string
 		wantText string
 		wantErr  error
+		// fixtureText is text the fixture returns that must not leak into an error.
+		fixtureText string
 	}{
-		{"text file", "FileText.json", "package main\n\n/* a comment\n   over lines */\nfunc main() {}\n", nil},
-		{"missing path or commit", "FileText.missing.json", "", github.ErrNotFound},
-		{"directory", "FileText.tree.json", "", github.ErrNotFound},
-		{"binary file", "FileText.binary.json", "", github.ErrNoFileText},
-		{"truncated file", "FileText.truncated.json", "", github.ErrNoFileText},
+		{"text file", "FileText.json", "package main\n\n/* a comment\n   over lines */\nfunc main() {}\n", nil, ""},
+		{"empty file", "FileText.empty.json", "", nil, ""},
+		{"missing path or commit", "FileText.missing.json", "", github.ErrNotFound, ""},
+		{"directory", "FileText.tree.json", "", github.ErrNotFound, ""},
+		{"binary file", "FileText.binary.json", "", github.ErrNoFileText, ""},
+		{"binary file with text", "FileText.binarywithtext.json", "", github.ErrNoFileText, "binary bytes"},
+		{"truncated file", "FileText.truncated.json", "", github.ErrNoFileText, "very large file"},
 	} {
 		test.Run(testCase.name, func(test *testing.T) {
 			testServer := &server{}
@@ -39,7 +43,7 @@ func TestFileText(test *testing.T) {
 			if diff := cmp.Diff(testCase.wantText, text); diff != "" {
 				test.Errorf("text (-want +got):\n%s", diff)
 			}
-			if err != nil && strings.Contains(err.Error(), "func main") {
+			if testCase.fixtureText != "" && strings.Contains(err.Error(), testCase.fixtureText) {
 				test.Errorf("error %q carries file contents", err)
 			}
 			calls := testServer.Calls()
