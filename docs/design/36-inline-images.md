@@ -3,7 +3,7 @@
 Maintainer decision (2026-11-06, implementation conversation): when asked
 whether supported terminals should display images automatically or show
 placeholders until expanded, the maintainer answered "Display images
-automatically". Automatically load and display images on supported terminals.
+automatically".
 Keep placeholders while loading, on failure, and on unsupported terminals.
 
 This branch begins with the protocol prototype requested by the issue. The
@@ -34,9 +34,11 @@ columns inherit left to right. The iTerm2 path reserves blank cells and uses
 It deliberately does not paper over repaint ordering with a timer.
 
 Automated checks verify sample PNG dimensions, transmission chunk size,
-placeholder cell widths and clipping, exact protocol bytes (placement, cursor
+placeholder cell widths and clipping, exact protocol bytes (placement, deletion, cursor
 coordinates, image identifier and row diacritics), and the iTerm2 visibility
-guard at the top, bottom and minimum-width boundaries. They do
+guard at the top and bottom edges and the chosen width-5 threshold. The width
+threshold reserves margins; a one-column image at column 3 would also fit in
+widths 3 and 4, but the probe deliberately suppresses it there. These tests do
 not establish that either terminal actually displays the image correctly.
 
 ## Findings and remaining design gate

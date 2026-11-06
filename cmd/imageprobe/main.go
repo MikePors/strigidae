@@ -1,4 +1,4 @@
-// Command imageprobe exercises image placement through Bubble Tea before the
+// Command imageprobe temporarily exercises image placement through Bubble Tea before the
 // production markdown renderer adopts a graphics protocol. It uses generated
 // pixels only: no network, credentials, or files are read.
 package main
@@ -71,7 +71,7 @@ func (model model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			if model.protocol == "kitty" {
 				// Best effort: Raw is queued, so this is not proof that the
 				// delete is flushed before Bubble Tea leaves the alternate screen.
-				return model, tea.Sequence(tea.Raw(fmt.Sprintf("\x1b_Ga=d,d=I,i=%d,q=2\x1b\\", imageIdentifier)), tea.Quit)
+				return model, tea.Sequence(deleteImage(), tea.Quit)
 			}
 			return model, tea.Quit
 		case "j":
@@ -91,6 +91,10 @@ func (model model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 
 func (model model) dimensions() (int, int) {
 	return min(32, max(1, model.width-4)), 6
+}
+
+func deleteImage() tea.Cmd {
+	return tea.Raw(fmt.Sprintf("\x1b_Ga=d,d=I,i=%d,q=2\x1b\\", imageIdentifier))
 }
 
 func (model model) transmission() string {

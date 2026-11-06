@@ -70,23 +70,10 @@ func TestSampleImage(test *testing.T) {
 	}
 }
 
-func TestInlineVisibility(test *testing.T) {
-	for _, testCase := range []struct {
-		name             string
-		offset, height   int
-		covered, visible bool
-	}{
-		{name: "full", height: 24, visible: true},
-		{name: "top clipped", offset: 4, height: 24},
-		{name: "bottom clipped", height: 10},
-		{name: "overlay", height: 24, covered: true},
-	} {
-		test.Run(testCase.name, func(test *testing.T) {
-			probe := model{protocol: "iterm2", width: 80, height: testCase.height, offset: testCase.offset, covered: testCase.covered}
-			if visible := probe.transmission() != ""; visible != testCase.visible {
-				test.Errorf("draw = %v, want %v", visible, testCase.visible)
-			}
-		})
+func TestDeleteImageProtocol(test *testing.T) {
+	message, ok := deleteImage()().(tea.RawMsg)
+	if !ok || message.Msg != "\x1b_Ga=d,d=I,i=424242,q=2\x1b\\" {
+		test.Fatalf("delete command = %#v, want targeted image-data deletion", message)
 	}
 }
 
@@ -116,10 +103,10 @@ func TestTransmissionProtocol(test *testing.T) {
 		},
 		{name: "bottom edge clipped", protocol: "iterm2", width: 80, height: 10},
 		{
-			name: "minimum width fits", protocol: "iterm2", width: 5, height: 24,
+			name: "width threshold accepted", protocol: "iterm2", width: 5, height: 24,
 			want: "\x1b7\x1b[5;3H\x1b]1337;File=inline=1;width=1;height=6;preserveAspectRatio=1:YWJj\a\x1b8",
 		},
-		{name: "width too narrow", protocol: "iterm2", width: 4, height: 24},
+		{name: "below width threshold", protocol: "iterm2", width: 4, height: 24},
 		{name: "overlay", protocol: "iterm2", width: 80, height: 24, covered: true},
 	} {
 		test.Run(testCase.name, func(test *testing.T) {
