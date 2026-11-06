@@ -38,6 +38,26 @@ func TestString(test *testing.T) {
 	}
 }
 
+func TestDiffers(test *testing.T) {
+	for name, testCase := range map[string]struct {
+		values Values
+		option string
+		want   bool
+	}{
+		"unset":                  {nil, WrapScan, false},
+		"set to the default":     {Values{WrapScan: true}, WrapScan, false},
+		"off by default, set on": {Values{Wrap: true}, Wrap, true},
+		"on by default, set off": {Values{WrapScan: false}, WrapScan, true},
+		"another option differs": {Values{Wrap: true}, WrapScan, false},
+	} {
+		test.Run(name, func(test *testing.T) {
+			if got := testCase.values.Differs(testCase.option); got != testCase.want {
+				test.Errorf("Differs(%q) = %v, want %v", testCase.option, got, testCase.want)
+			}
+		})
+	}
+}
+
 func TestChanged(test *testing.T) {
 	for name, testCase := range map[string]struct {
 		values Values
@@ -60,7 +80,8 @@ func TestChanged(test *testing.T) {
 func TestDeclarationsAreUnique(test *testing.T) {
 	seen := map[string]bool{}
 	for _, option := range All() {
-		if option.Name == "" || seen[option.Name] {
+		// :set all lists every option, so no option may take that name.
+		if option.Name == "" || option.Name == "all" || seen[option.Name] {
 			test.Errorf("bad or duplicate declaration: %+v", option)
 		}
 		seen[option.Name] = true

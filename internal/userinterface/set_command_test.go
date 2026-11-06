@@ -123,7 +123,7 @@ func TestSetCommandChangesOptionsForEveryView(test *testing.T) {
 		test.Errorf(":set all shows %q", model.status.text)
 	}
 	if got := len(optionsSeen(below)); got != 1 {
-		test.Errorf("a bare :set sent a message; %d in all, want 1", got)
+		test.Errorf(":set and :set all sent a message; %d in all, want 1", got)
 	}
 }
 
