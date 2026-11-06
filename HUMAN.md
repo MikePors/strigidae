@@ -90,3 +90,9 @@ Checks only the maintainer can do, such as live verification against real GitHub
   must not appear. Repeat with a token environment override: no cache is reused.
 - Stop strig, delete its cache directory (see README), and restart: normal live
   loading should work. Report OS, terminal size, and any unexpected behavior.
+
+- [ ] **`FileText` reads a file's text at a commit from real GitHub** (#260). The GraphQL `object(expression: "<commit>:<path>")` query has only been tested against hand-written fixtures. Nothing on screen uses it yet, so this can be done once #262 lands and highlights from the whole file; until then it needs a throwaway `main` that calls `network.New(...).FileText`.
+  1. Against a real pull request's head commit (the full 40-character SHA), read a small text file the pull request touches. The returned text should match `git show <sha>:<path>` exactly, including line endings and a missing final newline.
+  2. Read a binary file (for example a PNG) and a text file over about 1 MB. Each should fail with `ErrNoFileText`, not `ErrNotFound`. Report the size at which a text file starts to come back as truncated, if it does.
+  3. Read a path that does not exist at that commit, a path that was added by a later commit, and a directory path. Each should fail with `ErrNotFound`.
+  4. Report any case where the text came back wrong or the error was not the one above.
