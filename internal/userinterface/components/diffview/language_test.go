@@ -3,6 +3,7 @@ package diffview
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/lexers"
@@ -19,7 +20,7 @@ func lexedAs(test *testing.T, name string, lines []string) [][]Span {
 	if lexer == nil {
 		test.Fatalf("no lexer called %q", name)
 	}
-	return lexBlock(chroma.Coalesce(lexer), lines)
+	return lexBlock(chroma.Coalesce(lexer), lines, time.Now)
 }
 
 // allPlain returns lines as a Highlighter reports a file with no language.

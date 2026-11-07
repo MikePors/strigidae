@@ -2,6 +2,7 @@ package diffview
 
 import (
 	"strings"
+	"time"
 
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/lexers"
@@ -41,6 +42,21 @@ const maximumHighlightLength = 2000
 // lines, keeps that to under 100 ms for a side, twice that for both.
 const maximumBlockSize = 128 * 1024
 
+// blockBudget bounds the time one block may take to lex. Some input makes
+// block lexing slow: in the Go and JavaScript lexers every unclosed "/*" scans
+// to the end of the block, so a block of such lines is quadratic (128 KiB of
+// them took 16 s). Chroma lexes as its token iterator is read, so lexing stops
+// when the budget runs out and the rest of the block is lexed line by line,
+// which costs what ordinary code does. A full block of ordinary code takes
+// about 75 ms (BenchmarkHighlightHunkSide), so the budget leaves it whole.
+const blockBudget = 100 * time.Millisecond
+
+// tokensPerClockRead is how many tokens pass between readings of the clock:
+// reading it for every token costs ordinary code about 3%. In the slowest
+// known case 16 tokens take a few milliseconds, so the budget overruns by
+// little.
+const tokensPerClockRead = 16
+
 // ChromaHighlighter returns the default Highlighter, backed by Chroma. It
 // remembers the lexer chosen for each path, so the (slow) file-name matching
 // happens once per file, and the lexer chosen for each first line, so a
@@ -53,7 +69,10 @@ func ChromaHighlighter() Highlighter {
 	return func(path, firstLine string, lines []string) [][]Span {
 		lexer, seen := lexerFor[path]
 		if !seen {
-			if lexer = lexers.Match(path); lexer != nil {
+			if lexer = lexers.Match(path); lexer != nil && broken(lexer) {
+				lexer = nil
+			}
+			if lexer != nil {
 				lexer = chroma.Coalesce(lexer)
 			}
 			lexerFor[strings.Clone(path)] = lexer
@@ -82,8 +101,23 @@ func ChromaHighlighter() Highlighter {
 			}
 			return result
 		}
-		return lexBlock(lexer, lines)
+		return lexBlock(lexer, lines, time.Now)
 	}
+}
+
+// broken reports whether lexer is one known to hang or panic on some input,
+// and so must never run. A lexer that spins without returning a token cannot
+// be stopped from Go, and a panic on the UI goroutine ends strig.
+// TestNoRegisteredLexerIsBroken finds them; drop an entry once a Chroma
+// version that fixes it is pinned.
+func broken(lexer chroma.Lexer) bool {
+	switch lexer.Config().Name {
+	case "JSONata", "Jungle": // loop forever on "/* a"
+		return true
+	case "YANG": // panics on a "/*" inside a block comment: its rules push a state that does not exist
+		return true
+	}
+	return false
 }
 
 // fitsBlock reports whether lines may be lexed as one text.
@@ -99,8 +133,10 @@ func fitsBlock(lines []string) bool {
 }
 
 // lexBlock lexes lines as one text and splits the tokens back into lines. A
-// line whose spans do not join back to its text is plain.
-func lexBlock(lexer chroma.Lexer, lines []string) [][]Span {
+// line whose spans do not join back to its text is plain. When lexing takes
+// longer than blockBudget by the clock now, it stops, and the lines from the
+// one it stopped in on are lexed one at a time.
+func lexBlock(lexer chroma.Lexer, lines []string, now func() time.Time) [][]Span {
 	result := make([][]Span, len(lines))
 	item, err := lexer.Tokenise(nil, strings.Join(lines, "\n"))
 	if err != nil {
@@ -109,8 +145,10 @@ func lexBlock(lexer chroma.Lexer, lines []string) [][]Span {
 		}
 		return result
 	}
+	deadline := now().Add(blockBudget)
 	current := 0
-	for _, token := range item.Tokens() {
+	finished := len(lines) // lines before this one were lexed in the block
+	for count, token := 1, item(); token != chroma.EOF; count, token = count+1, item() {
 		tokenType := standard(token.Type)
 		for index, piece := range strings.Split(token.Value, "\n") {
 			if index > 0 {
@@ -123,8 +161,15 @@ func lexBlock(lexer chroma.Lexer, lines []string) [][]Span {
 				result[current] = append(result[current], Span{Text: piece, Token: tokenType})
 			}
 		}
+		if count%tokensPerClockRead == 0 && current < len(lines) && now().After(deadline) {
+			finished = current // the current line may be only partly lexed
+			break
+		}
 	}
-	for i, line := range lines {
+	for i := finished; i < len(lines); i++ {
+		result[i] = lexLine(lexer, lines[i])
+	}
+	for i, line := range lines[:finished] {
 		if joined(result[i]) != line {
 			result[i] = plain(line) // lexer altered the text; never show wrong code
 		}
