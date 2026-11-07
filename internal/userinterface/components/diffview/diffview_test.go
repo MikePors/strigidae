@@ -328,9 +328,9 @@ func bigFile(count int) *diff.File {
 func TestRenderHighlightsHunkOnce(test *testing.T) {
 	var blocks [][]string
 	inner := ChromaHighlighter()
-	model := New(theme.New(true), WithHighlighter(func(path string, lines []string) [][]Span {
+	model := New(theme.New(true), WithHighlighter(func(path, firstLine string, lines []string) [][]Span {
 		blocks = append(blocks, lines)
-		return inner(path, lines)
+		return inner(path, firstLine, lines)
 	}))
 	model.SetFile(bigFile(3000))
 	model.SetSize(100, 40)
@@ -362,12 +362,12 @@ func TestRenderHighlightsHunkOnce(test *testing.T) {
 func TestRenderHighlightsOversizedSideRowByRow(test *testing.T) {
 	calls := 0
 	inner := ChromaHighlighter()
-	model := New(theme.New(true), WithHighlighter(func(path string, lines []string) [][]Span {
+	model := New(theme.New(true), WithHighlighter(func(path, firstLine string, lines []string) [][]Span {
 		calls++
 		if len(lines) != 1 {
 			test.Errorf("lexed a block of %d lines, want single rows", len(lines))
 		}
-		return inner(path, lines)
+		return inner(path, firstLine, lines)
 	}))
 	model.SetFile(bigFile(6000)) // each side is over the cap
 	model.SetSize(100, 40)
@@ -406,7 +406,7 @@ func TestRenderHighlightsEachHunkWhenDrawn(test *testing.T) {
 	}
 	file := &diff.File{OldPath: "a.go", NewPath: "a.go", Hunks: []diff.Hunk{hunk(1), hunk(100)}}
 	calls := 0
-	model := New(theme.New(true), WithHighlighter(func(_ string, lines []string) [][]Span {
+	model := New(theme.New(true), WithHighlighter(func(_, _ string, lines []string) [][]Span {
 		calls++
 		return make([][]Span, len(lines))
 	}))
@@ -475,7 +475,7 @@ func TestRenderUsesTokenTypeStyles(test *testing.T) {
 // theme has no style for (a custom Highlighter may report any) is drawn plain
 // on the row's background.
 func TestRenderUnknownTokenKeepsRowBackground(test *testing.T) {
-	model := New(theme.New(true), WithHighlighter(func(_ string, lines []string) [][]Span {
+	model := New(theme.New(true), WithHighlighter(func(_, _ string, lines []string) [][]Span {
 		spans := make([][]Span, len(lines))
 		for i, line := range lines {
 			spans[i] = []Span{{Text: line}} // token type 0 has no style
@@ -528,13 +528,13 @@ func TestRenderHighlightsMixedHunkOnce(test *testing.T) {
 		test.Run(testCase.name, func(test *testing.T) {
 			blocks, singles := 0, 0
 			inner := ChromaHighlighter()
-			model := New(theme.New(true), WithHighlighter(func(path string, lines []string) [][]Span {
+			model := New(theme.New(true), WithHighlighter(func(path, firstLine string, lines []string) [][]Span {
 				if len(lines) == 1 {
 					singles++
 				} else {
 					blocks++
 				}
-				return inner(path, lines)
+				return inner(path, firstLine, lines)
 			}))
 			model.SetFile(mixedHunk(testCase.large))
 			model.SetSize(100, 40)

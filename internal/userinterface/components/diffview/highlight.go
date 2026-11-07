@@ -16,14 +16,18 @@ type Span struct {
 }
 
 // Highlighter splits a block of code lines into typed spans, one result per
-// line. path selects the language (by file name). For every line the
-// concatenated span text must equal the line.
+// line. path selects the language by file name. firstLine is the first line of
+// the file the block belongs to (on the same side of the change), or "" when
+// it is not known; when the name picks no language, a shebang in firstLine
+// does. It is passed with every block of that side, whether or not the block
+// begins the file: it comes from the file, not from the block.
+// For every line the concatenated span text must equal the line.
 //
 // The lines are lexed together, so a construct that opens and closes inside
 // the block (a block comment, a docstring, a raw string) is coloured on every
 // line it covers. Anything that opened above the block is not known and is
 // coloured as code (#262 reads the whole file to fix that).
-type Highlighter func(path string, lines []string) [][]Span
+type Highlighter func(path, firstLine string, lines []string) [][]Span
 
 // maximumHighlightLength bounds the line length we are willing to lex; longer lines
 // (minified bundles) render as plain text, and a block holding one is lexed
@@ -39,16 +43,31 @@ const maximumBlockSize = 128 * 1024
 
 // ChromaHighlighter returns the default Highlighter, backed by Chroma. It
 // remembers the lexer chosen for each path, so the (slow) file-name matching
-// happens once per file.
+// happens once per file, and the lexer chosen for each first line, so a
+// shebang is looked up once. Both depend only on their key, so nothing it
+// remembers can go stale when a file is replaced. A file whose name picks no
+// lexer is coloured from the shebang in firstLine, and is plain without one.
 func ChromaHighlighter() Highlighter {
 	lexerFor := map[string]chroma.Lexer{}
-	return func(path string, lines []string) [][]Span {
+	lexerForFirstLine := map[string]chroma.Lexer{}
+	return func(path, firstLine string, lines []string) [][]Span {
 		lexer, seen := lexerFor[path]
 		if !seen {
 			if lexer = lexers.Match(path); lexer != nil {
 				lexer = chroma.Coalesce(lexer)
 			}
-			lexerFor[path] = lexer
+			lexerFor[strings.Clone(path)] = lexer
+		}
+		if lexer == nil && strings.HasPrefix(firstLine, "#!") {
+			lexer, seen = lexerForFirstLine[firstLine]
+			if !seen {
+				if lexer = languageFromShebang(firstLine); lexer != nil {
+					lexer = chroma.Coalesce(lexer)
+				}
+				// The line is a slice of the whole diff text; a copy keeps
+				// the key from holding that text alive.
+				lexerForFirstLine[strings.Clone(firstLine)] = lexer
+			}
 		}
 		result := make([][]Span, len(lines))
 		if lexer == nil {
