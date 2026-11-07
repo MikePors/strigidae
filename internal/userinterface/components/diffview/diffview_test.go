@@ -323,41 +323,103 @@ func bigFile(count int) *diff.File {
 	return &diff.File{OldPath: "big.go", NewPath: "big.go", Hunks: []diff.Hunk{hunk}}
 }
 
-func TestRenderOnlyHighlightsVisibleWindow(test *testing.T) {
+// TestRenderHighlightsHunkOnce proves drawing one row of a hunk lexes both
+// sides of the hunk once, and moving within the hunk lexes nothing more.
+func TestRenderHighlightsHunkOnce(test *testing.T) {
+	var blocks [][]string
+	inner := ChromaHighlighter()
+	model := New(theme.New(true), WithHighlighter(func(path string, lines []string) [][]Span {
+		blocks = append(blocks, lines)
+		return inner(path, lines)
+	}))
+	model.SetFile(bigFile(3000))
+	model.SetSize(100, 40)
+
+	model.Render(100, 40)
+	if len(blocks) != 2 {
+		test.Fatalf("first render lexed %d blocks, want the old and the new side of the hunk", len(blocks))
+	}
+	// bigFile: 3 of every 5 lines are context, 1 deleted, 1 added.
+	if len(blocks[0]) != 2400 || len(blocks[1]) != 2400 {
+		test.Errorf("sides have %d and %d lines, want 2400 each", len(blocks[0]), len(blocks[1]))
+	}
+	model.Render(100, 40)
+	model.ScrollRight(10)
+	model.CursorDown(1)
+	model.ScrollDown(10)
+	model.Render(100, 40)
+	model.ScrollUp(10)
+	model.GotoBottom()
+	model.Render(100, 40)
+	if len(blocks) != 2 {
+		test.Errorf("scrolling within the hunk lexed again: %d blocks in total", len(blocks))
+	}
+}
+
+// TestRenderHighlightsOversizedSideRowByRow proves a side too large to lex in
+// one piece is lexed as its rows are drawn, so opening a huge file stays
+// smooth.
+func TestRenderHighlightsOversizedSideRowByRow(test *testing.T) {
 	calls := 0
 	inner := ChromaHighlighter()
-	model := New(theme.New(true), WithHighlighter(func(path, text string) []Span {
+	model := New(theme.New(true), WithHighlighter(func(path string, lines []string) [][]Span {
 		calls++
-		return inner(path, text)
+		if len(lines) != 1 {
+			test.Errorf("lexed a block of %d lines, want single rows", len(lines))
+		}
+		return inner(path, lines)
 	}))
-	model.SetFile(bigFile(5000))
+	model.SetFile(bigFile(6000)) // each side is over the cap
 	model.SetSize(100, 40)
 
 	model.Render(100, 40)
 	if calls != 39 {
-		test.Fatalf("first render highlighted %d lines, want the 39 visible code rows", calls)
+		test.Fatalf("first render lexed %d times, want the 39 visible code rows", calls)
 	}
 	model.Render(100, 40)
 	model.ScrollRight(10)
 	model.Render(100, 40)
 	if calls != 39 {
-		test.Errorf("re-render and horizontal scroll re-highlighted: %d calls", calls)
+		test.Errorf("re-render and horizontal scroll lexed again: %d calls", calls)
 	}
 	model.CursorDown(1)
 	model.ScrollDown(10)
 	model.Render(100, 40)
 	if calls != 49 {
-		test.Errorf("scrolling by 10 should highlight exactly 10 new lines, got %d total", calls)
+		test.Errorf("scrolling by 10 should lex exactly 10 new rows, got %d total", calls)
 	}
 	model.ScrollUp(10)
 	model.Render(100, 40)
 	if calls != 49 {
 		test.Errorf("scrolling back should hit the cache, got %d total", calls)
 	}
+}
+
+// TestRenderHighlightsEachHunkWhenDrawn proves a hunk nobody draws is never
+// lexed, and the file's other hunks are lexed on their own.
+func TestRenderHighlightsEachHunkWhenDrawn(test *testing.T) {
+	hunk := func(start int) diff.Hunk {
+		return diff.Hunk{OldStart: start, OldLines: 1, NewStart: start, NewLines: 2, Lines: []diff.Line{
+			{Kind: diff.Context, Old: start, New: start, Text: "context"},
+			{Kind: diff.Add, New: start + 1, Text: "added"},
+		}}
+	}
+	file := &diff.File{OldPath: "a.go", NewPath: "a.go", Hunks: []diff.Hunk{hunk(1), hunk(100)}}
+	calls := 0
+	model := New(theme.New(true), WithHighlighter(func(_ string, lines []string) [][]Span {
+		calls++
+		return make([][]Span, len(lines))
+	}))
+	model.SetFile(file)
+	model.SetSize(60, 3) // the header and two rows of the first hunk
+	model.Render(60, 3)
+	if calls != 2 {
+		test.Fatalf("first hunk: %d calls, want 2", calls)
+	}
 	model.GotoBottom()
-	model.Render(100, 40)
-	if calls > 100 {
-		test.Errorf("jump to bottom highlighted %d lines in total", calls)
+	model.Render(60, 3)
+	if calls != 4 {
+		test.Errorf("second hunk: %d calls in total, want 4", calls)
 	}
 }
 
@@ -413,8 +475,12 @@ func TestRenderUsesTokenTypeStyles(test *testing.T) {
 // theme has no style for (a custom Highlighter may report any) is drawn plain
 // on the row's background.
 func TestRenderUnknownTokenKeepsRowBackground(test *testing.T) {
-	model := New(theme.New(true), WithHighlighter(func(_, text string) []Span {
-		return []Span{{Text: text}} // token type 0 has no style
+	model := New(theme.New(true), WithHighlighter(func(_ string, lines []string) [][]Span {
+		spans := make([][]Span, len(lines))
+		for i, line := range lines {
+			spans[i] = []Span{{Text: line}} // token type 0 has no style
+		}
+		return spans
 	}))
 	model.SetFile(bigFile(5))
 	model.SetSize(80, 8)
@@ -422,5 +488,69 @@ func TestRenderUnknownTokenKeepsRowBackground(test *testing.T) {
 	want := model.styles.variants[0][kindAdd].code[chroma.Text].Render("\tx := 4 // new")
 	if !strings.Contains(out, want) {
 		test.Errorf("the added line is not drawn plain on its background:\n%q", out)
+	}
+}
+
+// TestRenderHighlightsMixedHunkOnce proves a hunk with one side that fits a
+// block and one that does not lexes the fitting side once: later rows on the
+// other side cost one single-line lexing each, and context rows take the
+// fitting side's spans.
+func TestRenderHighlightsMixedHunkOnce(test *testing.T) {
+	long := "x := \"" + strings.Repeat("a", maximumHighlightLength) + "\""
+	mixedHunk := func(large diff.LineKind) *diff.File {
+		hunk := diff.Hunk{OldStart: 1, NewStart: 1}
+		for i := range 3 {
+			hunk.Lines = append(hunk.Lines, diff.Line{Kind: diff.Context, Old: i + 1, New: i + 1, Text: fmt.Sprintf("var context%d = %d", i, i)})
+		}
+		small := diff.Add
+		if large == diff.Add {
+			small = diff.Delete
+		}
+		for i := range 3 {
+			hunk.Lines = append(hunk.Lines, diff.Line{Kind: small, Text: fmt.Sprintf("var small%d = %d", i, i)})
+		}
+		for i := range 60 {
+			text := fmt.Sprintf("var large%d = %d", i, i)
+			if i == 0 {
+				text = long // pushes this side over the per-line limit
+			}
+			hunk.Lines = append(hunk.Lines, diff.Line{Kind: large, Text: text})
+		}
+		return &diff.File{NewPath: "main.go", OldPath: "main.go", Status: diff.Modified, Hunks: []diff.Hunk{hunk}}
+	}
+	for _, testCase := range []struct {
+		name  string
+		large diff.LineKind
+	}{
+		{"added side too large", diff.Add},
+		{"deleted side too large", diff.Delete},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			blocks, singles := 0, 0
+			inner := ChromaHighlighter()
+			model := New(theme.New(true), WithHighlighter(func(path string, lines []string) [][]Span {
+				if len(lines) == 1 {
+					singles++
+				} else {
+					blocks++
+				}
+				return inner(path, lines)
+			}))
+			model.SetFile(mixedHunk(testCase.large))
+			model.SetSize(100, 40)
+
+			model.Render(100, 40)
+			// 39 code rows show: 3 context and 3 small-side rows from one
+			// block, and 33 rows of the large side lexed one by one.
+			if blocks != 1 || singles != 33 {
+				test.Fatalf("first render: %d blocks and %d single rows, want 1 and 33", blocks, singles)
+			}
+			model.CursorDown(1)
+			model.ScrollDown(10)
+			model.Render(100, 40)
+			if blocks != 1 || singles != 43 {
+				test.Errorf("scrolling by 10: %d blocks and %d single rows, want 1 and 43", blocks, singles)
+			}
+		})
 	}
 }
