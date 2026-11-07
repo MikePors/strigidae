@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/MikePors/strigidae/internal/diff"
 	"github.com/MikePors/strigidae/internal/github"
@@ -16,11 +17,18 @@ import (
 // per-hunk ones.
 const MaximumFileSize = 1 << 20
 
+// fileBudget bounds the time HighlightFile may lex one file. An ordinary file
+// of MaximumFileSize takes about a second; hostile text can make a lexer
+// quadratic (lines of unclosed "/*" in Go: 256 KiB took over a minute), and
+// the budget stops it.
+const fileBudget = 5 * time.Second
+
 // Reasons HighlightFile gives no spans.
 var (
 	ErrFileTooLarge = errors.New("file too large to highlight whole")
 	ErrFileBinary   = errors.New("binary file")
 	ErrNoLanguage   = errors.New("no language for the file")
+	ErrLexTimeout   = errors.New("lexing the whole file took too long")
 )
 
 // HighlightFile lexes the whole text of one side of a file and returns the
@@ -30,10 +38,17 @@ var (
 // spans do not join back to its text is nil.
 //
 // The language is picked as the Highlighter picks it: by path, else by the
-// shebang on the text's first line. It shares nothing with a Highlighter and
-// touches neither the Chroma style registry nor Glamour, so it may run in a
-// tea.Cmd.
+// shebang on the text's first line, never a broken lexer. Lexing that takes
+// longer than fileBudget fails with ErrLexTimeout rather than give part of the
+// file, so the rows keep their per-hunk colours. It shares nothing with a
+// Highlighter and touches neither the Chroma style registry nor Glamour, so it
+// may run in a tea.Cmd.
 func HighlightFile(path string, contents []byte) ([][]Span, error) {
+	return highlightFile(path, contents, time.Now)
+}
+
+// highlightFile is HighlightFile timed by the clock now.
+func highlightFile(path string, contents []byte, now func() time.Time) ([][]Span, error) {
 	if len(contents) > MaximumFileSize {
 		return nil, fmt.Errorf("%w: %d bytes", ErrFileTooLarge, len(contents))
 	}
@@ -47,14 +62,17 @@ func HighlightFile(path string, contents []byte) ([][]Span, error) {
 	}
 	lexer := lexerForPath(path)
 	if lexer == nil {
-		lexer = lexerForShebang(lines[0])
+		lexer = languageFromShebang(lines[0])
 	}
 	if lexer == nil {
 		return nil, ErrNoLanguage
 	}
-	spans, err := tokenLines(lexer, lines)
+	spans, finished, err := tokenLines(lexer, lines, now, fileBudget)
 	if err != nil {
 		return nil, fmt.Errorf("lex: %w", err)
+	}
+	if finished < len(lines) {
+		return nil, fmt.Errorf("%w: stopped at line %d of %d", ErrLexTimeout, finished+1, len(lines))
 	}
 	for i, line := range lines {
 		if joined(spans[i]) != line {
