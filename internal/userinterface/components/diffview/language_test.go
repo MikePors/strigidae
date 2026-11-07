@@ -314,6 +314,8 @@ func TestFirstLines(test *testing.T) {
 		{"deleted file", hunk(1, 0, codeLine{diff.Delete, "old"}), "old", ""},
 		{"hunk lower down", hunk(40, 40, codeLine{diff.Context, "#!/bin/sh"}), "", ""},
 		{"no hunks", &diff.File{}, "", ""},
+		{"empty first line above a shebang", hunk(1, 1, codeLine{diff.Context, ""}, codeLine{diff.Context, "#!/bin/sh"}), "", ""},
+		{"empty deleted first line above a deleted shebang", hunk(1, 1, codeLine{diff.Delete, ""}, codeLine{diff.Delete, "#!/bin/sh"}, codeLine{diff.Add, "new"}), "", "new"},
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
@@ -322,5 +324,33 @@ func TestFirstLines(test *testing.T) {
 				test.Errorf("firstLines = %q, %q; want %q, %q", oldFirst, newFirst, testCase.wantOld, testCase.wantNew)
 			}
 		})
+	}
+}
+
+// TestRowByRowFallbackUsesTheRowsSide: a deleted row of a side too large to
+// lex as one block is lexed alone, with the old side's first line, so a
+// swapped shebang still colours it in the old language.
+func TestRowByRowFallbackUsesTheRowsSide(test *testing.T) {
+	firstLineFor := map[string]string{}
+	model := New(theme.New(true), WithHighlighter(func(_, firstLine string, lines []string) [][]Span {
+		result := make([][]Span, len(lines))
+		for i, line := range lines {
+			if len(lines) == 1 {
+				firstLineFor[line] = firstLine
+			}
+			result[i] = plain(line)
+		}
+		return result
+	}))
+	tooLong := strings.Repeat("x", maximumHighlightLength+1) // the old side can't be one block
+	model.SetFile(hunkFile("run", []codeLine{
+		{diff.Delete, "#!/bin/sh"},
+		{diff.Delete, tooLong},
+		{diff.Add, "#!/usr/bin/env python3"},
+	}))
+	model.SetSize(80, 10)
+	model.Render(80, 10)
+	if got, ok := firstLineFor["#!/bin/sh"]; !ok || got != "#!/bin/sh" {
+		test.Errorf("deleted row lexed with first line %q (lexed alone: %v), want the old side's %q", got, ok, "#!/bin/sh")
 	}
 }

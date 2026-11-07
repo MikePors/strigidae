@@ -20,7 +20,7 @@ type Span struct {
 // the file the block belongs to (on the same side of the change), or "" when
 // it is not known; when the name picks no language, a shebang in firstLine
 // does. It is passed with every block of that side, whether or not the block
-// begins the file, and is the file's own line, never one of the block's.
+// begins the file: it comes from the file, not from the block.
 // For every line the concatenated span text must equal the line.
 //
 // The lines are lexed together, so a construct that opens and closes inside
@@ -56,15 +56,17 @@ func ChromaHighlighter() Highlighter {
 			if lexer = lexers.Match(path); lexer != nil {
 				lexer = chroma.Coalesce(lexer)
 			}
-			lexerFor[path] = lexer
+			lexerFor[strings.Clone(path)] = lexer
 		}
-		if lexer == nil && firstLine != "" {
+		if lexer == nil && strings.HasPrefix(firstLine, "#!") {
 			lexer, seen = lexerForFirstLine[firstLine]
 			if !seen {
 				if lexer = languageFromShebang(firstLine); lexer != nil {
 					lexer = chroma.Coalesce(lexer)
 				}
-				lexerForFirstLine[firstLine] = lexer
+				// The line is a slice of the whole diff text; a copy keeps
+				// the key from holding that text alive.
+				lexerForFirstLine[strings.Clone(firstLine)] = lexer
 			}
 		}
 		result := make([][]Span, len(lines))
