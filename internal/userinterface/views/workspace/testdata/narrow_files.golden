@@ -2,12 +2,12 @@ open #7 Add retry policy to sync client
 alice · changes requested · main ← feat/retry · [enhancemen…
 ╭─ Files 0/5 viewed ───────────────────────────────────────╮
 │  Overview                                                │
+│  Comments (5)                                            │
 │>   M internal/sync/client.go                          +25│
 │    A internal/sync/retry.go                          +214│
 │    D internal/sync/legacy.go                          -90│
 │    R …g-directory-name/retry-policy-and-backoff.md +12 -3│
 │    M README.md                                      +2 -1│
-│                                                          │
 │                                                          │
 │                                                          │
 │                                                          │

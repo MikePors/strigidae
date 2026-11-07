@@ -213,13 +213,137 @@ func (model *Model) renderHunk(i int, header string, current int) string {
 	return model.styles.hunk[current].Render(text)
 }
 
-// spansFor returns the highlighted spans of row i, highlighting on first use.
+// spansFor returns the highlighted spans of row i: from the whole file when
+// SetFileSpans gave a matching line, else from its hunk. The first row of a
+// hunk to be drawn highlights the whole hunk and caches every row of it.
 func (model *Model) spansFor(i int) []Span {
 	baseIndex := model.rows[i].baseIndex
-	if span, ok := model.cache[baseIndex]; ok {
-		return span
+	if spans, ok := model.wholeSpans(baseIndex); ok {
+		return spans
 	}
-	span := model.highlight(model.file.Path(), model.rows[i].text)
-	model.cache[baseIndex] = span
-	return span
+	if spans, ok := model.cache[baseIndex]; ok {
+		return spans
+	}
+	if hunk := model.base[baseIndex].hunk; !model.highlighted[hunk] {
+		model.highlighted[hunk] = true
+		model.highlightHunk(baseIndex)
+		if spans, ok := model.cache[baseIndex]; ok {
+			return spans
+		}
+	}
+	// The row's side is too large to lex in one piece: lex just this row.
+	firstLine := model.newFirstLine
+	if model.rows[i].line.Kind == diff.Delete {
+		firstLine = model.oldFirstLine
+	}
+	spans := model.highlightSide(model.file.Path(), firstLine, []string{model.rows[i].text})[0]
+	model.cache[baseIndex] = spans
+	return spans
+}
+
+// highlightHunk lexes the old side (context and deleted lines) and the new
+// side (context and added lines) of the hunk holding base row baseIndex, each
+// as one block, and caches the spans of every row. Context rows take the new
+// side's spans, or the old side's when only the old side fits. "No newline"
+// markers are no code and take no part. A side that does not fit one block
+// (see fitsBlock) is left to be lexed row by row. spansFor calls it once per
+// hunk.
+func (model *Model) highlightHunk(baseIndex int) {
+	first := baseIndex
+	for first > 0 && model.base[first-1].line != nil {
+		first--
+	}
+	last := baseIndex
+	for last+1 < len(model.base) && model.base[last+1].line != nil {
+		last++
+	}
+	var oldRows, newRows []int
+	var oldLines, newLines []string
+	for index := first; index <= last; index++ {
+		row := model.base[index]
+		switch row.line.Kind {
+		case diff.Delete:
+			oldRows, oldLines = append(oldRows, index), append(oldLines, row.text)
+		case diff.Add:
+			newRows, newLines = append(newRows, index), append(newLines, row.text)
+		case diff.Context:
+			oldRows, oldLines = append(oldRows, index), append(oldLines, row.text)
+			newRows, newLines = append(newRows, index), append(newLines, row.text)
+		}
+	}
+	path := model.file.Path()
+	newFits := fitsBlock(newLines)
+	if fitsBlock(oldLines) {
+		oldSpans := model.highlightSide(path, model.oldFirstLine, oldLines)
+		for position, index := range oldRows {
+			if model.base[index].line.Kind == diff.Delete || !newFits {
+				model.cache[index] = oldSpans[position]
+			}
+		}
+	}
+	if newFits {
+		newSpans := model.highlightSide(path, model.newFirstLine, newLines)
+		for position, index := range newRows {
+			model.cache[index] = newSpans[position]
+		}
+	}
+}
+
+// highlightSide highlights one side of a hunk; firstLine is that side's first
+// line of the file, or "" when the diff does not contain it. A Highlighter
+// that returns the wrong number of lines is not trusted: its side is plain.
+func (model *Model) highlightSide(path, firstLine string, lines []string) [][]Span {
+	if len(lines) == 0 {
+		return nil
+	}
+	spans := model.highlight(path, firstLine, lines)
+	if len(spans) == len(lines) {
+		return spans
+	}
+	spans = make([][]Span, len(lines))
+	for i, line := range lines {
+		spans[i] = plain(line)
+	}
+	return spans
+}
+
+// firstLines returns the first line of the file on the old side and on the new
+// side, each only when the diff holds it: the first hunk starts at line 1 of
+// that side. The text is what the rows show. A side the diff does not reach
+// the top of is "", as is a side with no first line (an added file has no old
+// side). It reads the hunks, not what is drawn, so it does not depend on the
+// order the hunks are shown in or on a hunk being hidden.
+func firstLines(file *diff.File) (oldFirst, newFirst string) {
+	if len(file.Hunks) == 0 {
+		return "", ""
+	}
+	hunk := file.Hunks[0]
+	oldWanted, newWanted := hunk.OldStart == 1, hunk.NewStart == 1
+	for _, line := range hunk.Lines {
+		text, _ := displayText(line.Text)
+		switch line.Kind {
+		case diff.Delete:
+			if oldWanted && oldFirst == "" {
+				oldFirst = text
+			}
+			oldWanted = false
+		case diff.Add:
+			if newWanted && newFirst == "" {
+				newFirst = text
+			}
+			newWanted = false
+		case diff.Context:
+			if oldWanted && oldFirst == "" {
+				oldFirst = text
+			}
+			if newWanted && newFirst == "" {
+				newFirst = text
+			}
+			oldWanted, newWanted = false, false
+		}
+		if !oldWanted && !newWanted {
+			break
+		}
+	}
+	return oldFirst, newFirst
 }

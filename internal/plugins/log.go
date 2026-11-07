@@ -20,8 +20,10 @@ func (runner *Runner) skippedEffect(name, effect string) {
 
 // lineLog turns what a plugin writes into one log record per line. The text
 // is an attribute, not the message, so the handler quotes whatever it holds.
-// It is used by one run only (exec writes from one goroutine and joins it
-// before Run returns), so it needs no lock; the logger itself is safe to share.
+// One goroutine writes it at a time and flushes it only after that goroutine
+// has ended (exec's copy, joined before Run returns; for a service, strig's own
+// copy, flushed once waitService sees it end), so it needs no lock; the logger
+// itself is safe to share.
 type lineLog struct {
 	logger  *slog.Logger
 	pending []byte

@@ -13,6 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/MikePors/strigidae/internal/localthreads"
 	"github.com/MikePors/strigidae/internal/options"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
@@ -102,8 +103,8 @@ type Model struct {
 	pluginRuns     map[int]pluginRun
 	pluginRunning  sync.WaitGroup // runs whose command has not returned; see Close
 	quitting       bool           // quit began and is waiting for plugin runs
-	localThreads   localThreadStore
-	localFiles     localThreadFiles
+	localThreads   localthreads.Store
+	localFiles     localthreads.Files
 	clock          func() time.Time
 
 	width, height      int
@@ -111,7 +112,9 @@ type Model struct {
 	sequenceGeneration int
 
 	showHelp    bool
+	helpContent helpContent    // what the open help shows
 	helpOffset  int            // top body line of the help; always within the body
+	helpSearch  helpSearch     // the open help's search; cleared when it closes or changes page
 	confirm     *confirmPrompt // open yes/no question, or nil
 	commandLine commandLine
 	status      struct {
@@ -157,8 +160,8 @@ func New(root View, activeTheme theme.Theme, startup Options) *Model {
 	}
 	return &Model{
 		clock:           startup.Clock,
-		localThreads:    localThreadStore{limit: startup.LocalThreadLimit, bytes: startup.LocalThreadBytes},
-		localFiles:      localThreadFiles{directory: startup.StateDirectory},
+		localThreads:    localthreads.Store{Limit: startup.LocalThreadLimit, Bytes: startup.LocalThreadBytes},
+		localFiles:      localthreads.Files{Directory: startup.StateDirectory, Logger: startup.Logger},
 		stack:           []View{root},
 		theme:           activeTheme,
 		keys:            keys.DefaultGlobal(),
@@ -196,8 +199,20 @@ func (model *Model) contentSize() (width, height int) { return model.width, max(
 
 // Update implements tea.Model.
 func (model *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
+	captured := model.capturesKeys()
 	command := model.update(message)
+	if captured != model.capturesKeys() {
+		// Reloads and other asynchronous results can end a modal selection.
+		// Its unfinished count or sequence must not reach the next mode.
+		model.matcher.Reset()
+		model.sequenceGeneration++
+	}
 	return model, tea.Batch(command, model.syncSpinner())
+}
+
+func (model *Model) capturesKeys() bool {
+	capturer, ok := model.top().(KeyCapturer)
+	return ok && capturer.CapturesKeys()
 }
 
 func (model *Model) update(message tea.Msg) tea.Cmd {
@@ -216,6 +231,8 @@ func (model *Model) update(message tea.Msg) tea.Cmd {
 		return model.setTheme(theme.New(message.IsDark()))
 	case setRequestedMessage:
 		return model.set(message.arguments)
+	case helpRequestedMessage:
+		return model.help(message.topic)
 	case themeRequestedMessage:
 		return model.loadTheme(message.value)
 	case themeLoadedMessage:
@@ -322,7 +339,7 @@ func (model *Model) push(view View) tea.Cmd {
 		view, _ = view.Update(PluginsMessage{Commands: model.pluginCommands})
 		model.stack[len(model.stack)-1] = view
 	}
-	if threads := model.localThreads.snapshot(); len(threads) > 0 {
+	if threads := model.localThreads.Snapshot(); len(threads) > 0 {
 		view, _ = view.Update(LocalThreadsMessage{Threads: threads})
 		model.stack[len(model.stack)-1] = view
 	}
@@ -344,6 +361,7 @@ func (model *Model) pop() tea.Cmd {
 
 func (model *Model) resetKeys() {
 	model.showHelp = false
+	model.helpSearch = helpSearch{}
 	model.confirm = nil
 	model.commandLine.close()
 	model.matcher.Reset()
@@ -375,6 +393,13 @@ func (model *Model) syncSpinner() tea.Cmd {
 
 // bindings returns every binding active now, for sequence matching.
 func (model *Model) bindings() []key.Binding {
+	if capturer, ok := model.top().(KeyCapturer); ok && capturer.CapturesKeys() {
+		if bindings, ok := model.top().(CapturedKeyBindings); ok {
+			if captured := bindings.CapturedBindings(); captured != nil {
+				return captured
+			}
+		}
+	}
 	out := model.keys.Bindings()
 	for _, bindings := range model.top().FullHelp() {
 		out = append(out, bindings...)
@@ -414,8 +439,11 @@ func (model *Model) handleKey(message tea.KeyPressMsg) tea.Cmd {
 			model.resetKeys()
 			return model.commandLine.open()
 		}
-		model.resetKeys()
-		return model.forward(message)
+		bindings, hasCapturedBindings := model.top().(CapturedKeyBindings)
+		if !hasCapturedBindings || bindings.CapturedBindings() == nil {
+			model.resetKeys()
+			return model.forward(message)
+		}
 	}
 
 	result := model.matcher.Feed(pressed, model.bindings())
@@ -451,11 +479,12 @@ func (model *Model) expireSequence(generation int) tea.Cmd {
 // Command, everything else goes to the view.
 func (model *Model) dispatch(sequence string, count int) tea.Cmd {
 	keyMessage := keys.Message{Sequence: sequence, Count: count}
+	if capturer, ok := model.top().(KeyCapturer); ok && capturer.CapturesKeys() {
+		return model.forward(keyMessage)
+	}
 	switch {
 	case key.Matches(keyMessage, model.keys.Help):
-		model.showHelp = true
-		model.helpOffset = 0
-		return nil
+		return model.openHelp(helpKeys)
 	case key.Matches(keyMessage, model.keys.Command):
 		return model.commandLine.open()
 	}
@@ -465,6 +494,14 @@ func (model *Model) dispatch(sequence string, count int) tea.Cmd {
 // helpLines is the help's scrolling body at the current size and bindings.
 func (model *Model) helpLines() []string {
 	width, _ := model.contentSize()
+	width = max(1, width-helpGutter) // the marker gutter is always reserved
+	switch model.helpContent {
+	case helpTopics:
+		return helpTopicLines(model.theme)
+	case helpConfig:
+		return helpConfigLines(model.theme, model.options, width)
+	case helpKeys:
+	}
 	return helpBody(model.theme, model.top().Title(), model.keys.FullHelp(), model.top().FullHelp(), width)
 }
 
@@ -481,6 +518,11 @@ func (model *Model) clampHelp() {
 // handleHelpKey runs a key press while the help is open. Only the global
 // bindings are matched, and nothing reaches the view.
 func (model *Model) handleHelpKey(message tea.KeyPressMsg) tea.Cmd {
+	if key.Matches(message, model.keys.Cancel) && model.helpSearch.active() {
+		model.helpSearch = helpSearch{last: model.helpSearch.last} // the first esc clears the search; enter on an empty prompt still repeats it
+		model.matcher.Reset()
+		return nil
+	}
 	if key.Matches(message, model.keys.Help, model.keys.Cancel) {
 		model.resetKeys()
 		return nil
@@ -492,8 +534,24 @@ func (model *Model) handleHelpKey(message tea.KeyPressMsg) tea.Cmd {
 		generation := model.sequenceGeneration
 		return model.tick(model.sequenceWait, func(time.Time) tea.Msg { return sequenceTimeoutMessage{generation: generation} })
 	case keys.Matched:
-		model.scrollHelp(result.Sequence, result.Count)
+		return model.helpAction(result.Sequence, result.Count)
 	}
+	return nil
+}
+
+// helpAction runs a resolved global key in the help: search keys here, the
+// movement keys scroll.
+func (model *Model) helpAction(sequence string, count int) tea.Cmd {
+	keyMessage := keys.Message{Sequence: sequence, Count: count}
+	switch {
+	case key.Matches(keyMessage, model.keys.Search):
+		return model.beginHelpSearch()
+	case key.Matches(keyMessage, model.keys.NextMatch):
+		return model.stepHelpSearch(true, keyMessage.Repeat())
+	case key.Matches(keyMessage, model.keys.PreviousMatch):
+		return model.stepHelpSearch(false, keyMessage.Repeat())
+	}
+	model.scrollHelp(sequence, count)
 	return nil
 }
 
@@ -552,7 +610,7 @@ func (model *Model) content() string {
 	width, height := model.contentSize()
 	var text string
 	if model.showHelp {
-		text = renderHelp(model.theme, model.helpLines(), height, model.helpOffset)
+		text = renderHelp(model.theme, helpTitle(model.helpContent)+model.helpSearchHint(), model.markedHelpLines(), height, model.helpOffset)
 	} else {
 		text = model.top().Render(width, height)
 	}

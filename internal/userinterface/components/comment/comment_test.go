@@ -70,3 +70,33 @@ func containsEsc(text string) bool {
 	}
 	return false
 }
+
+func TestReactionTextStylesOwnReactions(test *testing.T) {
+	activeTheme := theme.New(true)
+	own := activeTheme.OwnReaction.Render
+	other := activeTheme.Muted.Render
+	reactionList := []github.ReactionSummary{
+		{Content: github.ReactionThumbsUp, Count: 3, ViewerReacted: true},
+		{Content: github.ReactionLaugh, Count: 1},
+		{Content: github.ReactionRocket},
+		{Content: github.ReactionHeart, Count: 2, ViewerReacted: true},
+	}
+	thumbsUp, laugh, heart := github.ReactionThumbsUp.Emoji()+" 3", github.ReactionLaugh.Emoji()+" 1", github.ReactionHeart.Emoji()+" 2"
+	tests := []struct {
+		name  string
+		width int
+		want  string
+	}{
+		{"one line", 0, own(thumbsUp) + " " + other(laugh) + " " + own(heart)},
+		// "👍 3 😄 1" is 9 columns, so a width of 9 breaks only before the heart.
+		{"wrapped", 9, own(thumbsUp) + " " + other(laugh) + "\n" + own(heart)},
+	}
+	for _, testCase := range tests {
+		if got := ReactionText(activeTheme, reactionList, testCase.width); got != testCase.want {
+			test.Errorf("%s: got %q, want %q", testCase.name, got, testCase.want)
+		}
+	}
+	if activeTheme.OwnReaction.Render("x") == activeTheme.Muted.Render("x") {
+		test.Error("own reactions look the same as the others")
+	}
+}

@@ -189,3 +189,14 @@ func TestNoBracketPrefixSequences(test *testing.T) {
 		}
 	}
 }
+
+func TestVisualMotionsInNormalHelp(test *testing.T) {
+	harness := openClientDiff(test, 160, 200)
+	model, _ := rootFor(harness)
+	_, _ = model.Update(tea.KeyPressMsg{Text: "?"})
+	for _, description := range []string{"[count]j/k extend", "gg/G extend to boundary"} {
+		if !strings.Contains(model.View().Content, description) {
+			test.Errorf("normal help does not describe %q", description)
+		}
+	}
+}

@@ -1,7 +1,6 @@
 // Package workspace is the PR workspace: one screen per pull request made of
-// tiled panes. The left Files pane lists an Overview entry and the changed
-// files; the right pane shows the PR description and conversation, or the
-// selected file's diff.
+// tiled panes. The Files sidebar lists Overview, Comments, and changed files.
+// The right pane shows the overview, the conversation index, or a file diff.
 package workspace
 
 import (
@@ -9,6 +8,7 @@ import (
 	"time"
 
 	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/MikePors/strigidae/internal/clipboard"
@@ -22,6 +22,18 @@ import (
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
+
+// contentMode identifies the content shown in the right pane.
+type contentMode int
+
+const (
+	contentOverview contentMode = iota
+	contentComments
+	contentFile
+)
+
+// commentsEntry identifies a sidebar destination, never a diff file index.
+const commentsEntry = -1
 
 // pane identifies which pane has focus.
 type pane int
@@ -42,8 +54,8 @@ func WithClock(now func() time.Time) Option { return func(view *View) { view.now
 // pass its own current theme.
 func WithTheme(activeTheme theme.Theme) Option { return func(view *View) { view.theme = activeTheme } }
 
-// WithOpener replaces how `o` opens the pull request URL, which by default is
-// the user's browser.
+// WithOpener replaces how `o` opens the pull request URL, which strig's
+// startup supplies (the user's browser).
 func WithOpener(open func(url string) error) Option { return func(view *View) { view.open = open } }
 
 // WithTimeouts sets the deadlines of the GitHub calls; zero fields select the defaults.
@@ -120,6 +132,10 @@ type View struct {
 	hunkMarks        *HunkMarks       // hunks marked reviewed; shared with other workspaces by WithHunkMarks
 	hunkFingerprints fingerprintCache // fingerprints of the last file asked about
 
+	wholeFiles       *WholeFiles           // nil: files are coloured hunk by hunk; see wholefile.go
+	wholeFilePending map[wholeFileKey]bool // sides being read for this view
+	wholeFileRetried map[wholeFileKey]bool // sides read again after running out of time
+
 	window  scroll.Window  // Files pane: over rows
 	rows    []int          // the entry each Files pane row shows; see hideviewed.go
 	current int            // the entry the right pane shows
@@ -134,11 +150,15 @@ type View struct {
 	localThreads []userinterface.LocalThread
 	// searchPane is the pane the search being typed belongs to; the prompt's
 	// results go to it.
-	searchPane pane
-	overview   overview
-	picker     *picker.Model // non-nil while the file picker is open
-	review     reviewFlow    // submitting a review (see review.go)
-	merge      mergeFlow     // merging the pull request (see merge.go)
+	searchPane     pane
+	mode           contentMode
+	comments       commentsPane
+	searchComments bool
+	detailErr      error
+	overview       overview
+	picker         *picker.Model // non-nil while the file picker is open
+	review         reviewFlow    // submitting a review (see review.go)
+	merge          mergeFlow     // merging the pull request (see merge.go)
 	// pickerItems are the paths the picker was built from; a choice is
 	// resolved by path because a refresh may replace the file list meanwhile.
 	pickerItems []string
@@ -175,8 +195,8 @@ func New(client github.Client, repository github.Repository, number int, options
 		number:         number,
 		now:            time.Now,
 		tick:           tea.Tick,
-		rows:           []int{0},
-		open:           openInBrowser,
+		rows:           []int{0, commentsEntry},
+		open:           UnavailableBrowser,
 		theme:          theme.Default(),
 		globalKeys:     keys.DefaultGlobal(),
 		bind:           defaultBindings(),
@@ -193,6 +213,7 @@ func New(client github.Client, repository github.Repository, number int, options
 	}
 	view.markdownRenderer = markdown.New(view.theme)
 	view.overview = newOverview()
+	view.comments.viewport = viewport.New()
 	if view.filePane == nil {
 		view.filePane = newDiffPane(view.theme, func() time.Time { return view.now() }, view.wrap)
 	}
@@ -230,12 +251,27 @@ func (view *View) Resumed() tea.Cmd { return nil }
 
 // ShortHelp implements userinterface.View.
 func (view *View) ShortHelp() []key.Binding {
+	if view.mode == contentComments {
+		selectKey := view.globalKeys.Select
+		selectKey.SetHelp("enter", "jump to code")
+		return []key.Binding{view.bind.PaneLeft, selectKey, view.bind.Reply, view.bind.ResolveThread, view.globalKeys.Search}
+	}
 	return []key.Binding{view.bind.PaneLeft, view.bind.PaneRight, view.bind.FilePicker, view.globalKeys.Open}
 }
 
 // FullHelp implements userinterface.View. It also registers every multi-key sequence the
 // workspace and its file pane react to.
 func (view *View) FullHelp() [][]key.Binding {
+	if view.visualActive() {
+		return [][]key.Binding{view.CapturedBindings()}
+	}
+	if view.mode == contentComments {
+		return [][]key.Binding{
+			{view.bind.PaneLeft, view.bind.PaneRight, view.bind.NextFile, view.bind.PreviousFile, view.bind.FilePicker},
+			{view.bind.OverviewComment, view.bind.Reply, view.bind.ResolveThread},
+			view.searchHelp(),
+		}
+	}
 	out := [][]key.Binding{
 		{view.bind.PaneLeft, view.bind.PaneRight, view.bind.NextFile, view.bind.PreviousFile, view.bind.FilePicker},
 		{view.bind.NextSection, view.bind.PreviousSection, view.bind.Comment, view.bind.OverviewComment, view.bind.Reply, view.bind.Viewed, view.bind.ReviewHunk},
@@ -247,6 +283,12 @@ func (view *View) FullHelp() [][]key.Binding {
 
 // Update implements userinterface.View.
 func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
+	next, command := view.update(message)
+	// Whatever the message, the shown file may have changed.
+	return next, tea.Batch(command, view.wholeFileSides())
+}
+
+func (view *View) update(message tea.Msg) (userinterface.View, tea.Cmd) {
 	if command, ok := view.review.update(message, view.reviewEnvironment()); ok {
 		return view, command
 	}
@@ -258,9 +300,13 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		view.width, view.height = message.Width, message.Height
 		view.layout()
 	case userinterface.OptionsMessage:
+		hideReviewedChanged := view.options.HideReviewed() != message.Values.HideReviewed()
 		view.options = message.Values
 		view.wrap = message.Values.Wrap()
 		view.filePane.SetWrap(view.wrap)
+		if hideReviewedChanged {
+			view.filePane.SetHunkHiding(view.hunkHidden, view.hunkFade)
+		}
 		view.filePane.SetHideResolved(message.Values.HideResolved())
 		view.filePane.SetSkipResolved(message.Values.SkipResolved())
 		view.filePane.SetRelativeNumber(message.Values.RelativeNumber())
@@ -300,6 +346,10 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 	case fadeMessage:
 		if message.owner == view {
 			return view, view.fadeTicked(message)
+		}
+	case wholeFileMessage:
+		if message.owner == view {
+			view.wholeFileRead(message)
 		}
 	case viewedMessage:
 		if view.viewedMine(message) {
@@ -379,15 +429,22 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		}
 		return view, view.commentRead(message)
 	case userinterface.PromptResultMessage:
+		if view.searchComments {
+			view.syncComments()
+			return view, view.comments.search.Prompt(message, view.commentsSearchList())
+		}
 		if view.searchPane == paneRight {
 			return view, view.filePane.SearchPrompt(message)
 		}
 		return view, view.search.Prompt(message, view.searchList())
 	case keys.Message:
+		if view.visualActive() {
+			return view, view.visualKey(message)
+		}
 		return view, view.handleKey(message)
 	case tea.KeyPressMsg:
 		if view.visualActive() {
-			return view, view.visualKey(message)
+			return view, view.visualKey(keys.Message{Sequence: message.String()})
 		}
 		if view.review.chooser != nil {
 			return view, view.review.chooserKey(message, view.reviewEnvironment())

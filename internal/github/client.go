@@ -107,4 +107,20 @@ type Client interface {
 	// request already open for the head, an unknown branch) comes back as an
 	// error.
 	CreatePullRequest(ctx context.Context, in CreatePullRequestInput) (PullRequest, error)
+	// FileText returns the text of the file at path in the commit with the
+	// given full object identifier. A path or commit that does not exist, or a
+	// path that is not a file, yields ErrNotFound. A binary file, or one too
+	// large for GitHub to return in full, yields ErrNoFileText; callers
+	// should fall back quietly.
+	FileText(ctx context.Context, repository Repository, commitObjectIdentifier, path string) (string, error)
+}
+
+// CacheIdentity is the optional locally known identity used to isolate list
+// snapshots. An empty account disables caching when credentials override the
+// active gh account or the identity cannot be established without a request.
+type CacheIdentity interface {
+	// Host returns the effective GitHub host.
+	Host() string
+	// CacheAccount returns the locally known authenticated account, or empty.
+	CacheAccount() string
 }

@@ -137,6 +137,7 @@ const (
 // state ReviewPending are the viewer's own unsubmitted drafts; they stay in
 // the list and have a zero SubmittedAt, so sort or filter them deliberately.
 type Review struct {
+	URL         string
 	Identifier  string
 	Author      string
 	State       ReviewState

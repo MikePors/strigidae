@@ -70,17 +70,17 @@ func (hidden *hideHarness) wantRows(want ...int) {
 
 func TestHideViewedLeavesViewedFilesOutAndBringsThemBack(test *testing.T) {
 	hidden := newHideHarness(test, false, viewed, unviewed, viewed)
-	hidden.wantRows(0, 1, 2, 3, 4, 5)
+	hidden.wantRows(0, commentsEntry, 1, 2, 3, 4, 5)
 
 	hidden.send(userinterface.OptionsMessage{Values: options.Values{options.HideViewed: true}})
-	hidden.wantRows(0, 2, 4, 5)
+	hidden.wantRows(0, commentsEntry, 2, 4, 5)
 	screen := hidden.screen()
 	if strings.Contains(screen, "sync/client.go") || !strings.Contains(screen, "retry.go") || !strings.Contains(screen, "Overview") {
 		test.Errorf("hidden screen:\n%s", screen)
 	}
 
 	hidden.send(userinterface.OptionsMessage{Values: options.Values{options.HideViewed: false}})
-	hidden.wantRows(0, 1, 2, 3, 4, 5)
+	hidden.wantRows(0, commentsEntry, 1, 2, 3, 4, 5)
 	if !strings.Contains(hidden.screen(), "sync/client.go") {
 		test.Errorf("nohideviewed did not bring the file back:\n%s", hidden.screen())
 	}
@@ -95,11 +95,11 @@ func TestHideViewedTitleStillCountsEveryFile(test *testing.T) {
 
 func TestViewedMovesTheCursorOnAndTheFileLeavesAfterTheGracePeriod(test *testing.T) {
 	hidden := newHideHarness(test, true)
-	hidden.press("j", "v") // client.go
+	hidden.press("j", "j", "v") // client.go
 	if got := hidden.view.selection(); got != 2 {
 		test.Errorf("after v the cursor is on entry %d, want 2", got)
 	}
-	hidden.wantRows(0, 1, 2, 3, 4, 5) // still listed
+	hidden.wantRows(0, commentsEntry, 1, 2, 3, 4, 5) // still listed
 	if len(hidden.ticks) != 1 || hidden.ticks[0].after != fadeInterval {
 		test.Fatalf("timers = %+v, want one of %v", hidden.ticks, fadeInterval)
 	}
@@ -112,13 +112,13 @@ func TestViewedMovesTheCursorOnAndTheFileLeavesAfterTheGracePeriod(test *testing
 		if got := hidden.view.fades.step(fadeKey(firstFile)); got != step {
 			test.Fatalf("fade step = %d, want %d", got, step)
 		}
-		hidden.wantRows(0, 1, 2, 3, 4, 5)
+		hidden.wantRows(0, commentsEntry, 1, 2, 3, 4, 5)
 		if len(hidden.ticks) != 1 {
 			test.Fatalf("step %d: %d timers waiting, want 1", step, len(hidden.ticks))
 		}
 	}
 	hidden.fire(fadeInterval) // 8 seconds in
-	hidden.wantRows(0, 2, 3, 4, 5)
+	hidden.wantRows(0, commentsEntry, 2, 3, 4, 5)
 	if len(hidden.ticks) != 0 {
 		test.Errorf("%d timers left after the file left", len(hidden.ticks))
 	}
@@ -132,14 +132,14 @@ func TestViewedMovesTheCursorOnAndTheFileLeavesAfterTheGracePeriod(test *testing
 
 func TestFadingRowsUseTheThemesFadeStyles(test *testing.T) {
 	hidden := newHideHarness(test, true)
-	hidden.press("j", "v")
+	hidden.press("j", "j", "v")
 	for step := 1; step <= theme.FadeSteps; step++ {
 		hidden.fire(fadeInterval)
 		opening, _, _ := strings.Cut(hidden.view.theme.Fade[step-1].Render("x"), "x")
 		if opening == "" {
 			test.Fatalf("fade style %d adds no styling", step)
 		}
-		row := hidden.view.fileRows(40, 10)[1]
+		row := hidden.view.fileRows(40, 10)[2]
 		if !strings.Contains(row, opening) || !strings.Contains(row, "client.go") {
 			test.Errorf("step %d row %q lacks the theme's fade style %q", step, row, opening)
 		}
@@ -148,10 +148,10 @@ func TestFadingRowsUseTheThemesFadeStyles(test *testing.T) {
 
 func TestViewedAtTheEndMovesTheCursorBack(test *testing.T) {
 	hidden := newHideHarness(test, true, viewed, viewed, viewed, viewed)
-	hidden.wantRows(0, 5)
-	hidden.press("j", "v")
-	if got := hidden.view.selection(); got != 0 {
-		test.Errorf("after the last file the cursor is on entry %d, want Overview", got)
+	hidden.wantRows(0, commentsEntry, 5)
+	hidden.press("j", "j", "v")
+	if hidden.view.current != 0 || hidden.view.mode != contentOverview {
+		test.Errorf("after the last file: entry=%d mode=%v, want Overview", hidden.view.current, hidden.view.mode)
 	}
 
 	other := newHideHarness(test, true, viewed)
@@ -163,7 +163,7 @@ func TestViewedAtTheEndMovesTheCursorBack(test *testing.T) {
 
 func TestViewedAgainWhileFadingTakesTheMarkBack(test *testing.T) {
 	hidden := newHideHarness(test, true)
-	hidden.press("j", "v", "k", "v")
+	hidden.press("j", "j", "v", "k", "v")
 	if hidden.stateOf() != unviewed || hidden.serverState() != unviewed {
 		test.Errorf("file is %q here and %q on the server, want unviewed", hidden.stateOf(), hidden.serverState())
 	}
@@ -171,46 +171,46 @@ func TestViewedAgainWhileFadingTakesTheMarkBack(test *testing.T) {
 		test.Error("the fade goes on")
 	}
 	hidden.fire(fadeDuration)
-	hidden.wantRows(0, 1, 2, 3, 4, 5)
+	hidden.wantRows(0, commentsEntry, 1, 2, 3, 4, 5)
 }
 
 func TestStaleFadeTimersAreIgnored(test *testing.T) {
 	test.Run("after the option is turned off", func(test *testing.T) {
 		hidden := newHideHarness(test, true)
-		hidden.press("j", "v")
+		hidden.press("j", "j", "v")
 		hidden.send(userinterface.OptionsMessage{Values: options.Values{options.HideViewed: false}})
-		hidden.wantRows(0, 1, 2, 3, 4, 5)
+		hidden.wantRows(0, commentsEntry, 1, 2, 3, 4, 5)
 		if hidden.stateOf() != viewed {
 			test.Error("turning the option off un-marked the file")
 		}
 		hidden.send(userinterface.OptionsMessage{Values: options.Values{options.HideViewed: true}})
-		hidden.wantRows(0, 2, 3, 4, 5) // viewed and no longer fading: hidden at once
-		hidden.fire(fadeDuration)      // the old timer arrives late
-		hidden.wantRows(0, 2, 3, 4, 5)
+		hidden.wantRows(0, commentsEntry, 2, 3, 4, 5) // viewed and no longer fading: hidden at once
+		hidden.fire(fadeDuration)                     // the old timer arrives late
+		hidden.wantRows(0, commentsEntry, 2, 3, 4, 5)
 	})
 	test.Run("after the mark was taken back and given again", func(test *testing.T) {
 		hidden := newHideHarness(test, true)
-		hidden.press("j", "v", "k", "v", "v")
+		hidden.press("j", "j", "v", "k", "v", "v")
 		first := hidden.ticks[0]
 		hidden.ticks = hidden.ticks[1:]
 		hidden.clock = hidden.clock.Add(fadeDuration)
 		hidden.send(first.function(hidden.clock)) // the first run's timer
-		hidden.wantRows(0, 1, 2, 3, 4, 5)
+		hidden.wantRows(0, commentsEntry, 1, 2, 3, 4, 5)
 		hidden.fire(0) // the second run's timer, now due
-		hidden.wantRows(0, 2, 3, 4, 5)
+		hidden.wantRows(0, commentsEntry, 2, 3, 4, 5)
 	})
 	test.Run("from another workspace", func(test *testing.T) {
 		hidden := newHideHarness(test, true)
-		hidden.press("j", "v")
+		hidden.press("j", "j", "v")
 		hidden.clock = hidden.clock.Add(fadeDuration)
 		hidden.send(fadeMessage{owner: nil, key: fadeKey(firstFile), generation: 1})
-		hidden.wantRows(0, 1, 2, 3, 4, 5)
+		hidden.wantRows(0, commentsEntry, 1, 2, 3, 4, 5)
 	})
 }
 
 func TestNextAndPreviousFileSkipHiddenFiles(test *testing.T) {
 	hidden := newHideHarness(test, true, unviewed, viewed, viewed)
-	hidden.press("j", "}")
+	hidden.press("j", "j", "}")
 	if got := hidden.view.selection(); got != 4 {
 		test.Errorf("} went to entry %d, want 4", got)
 	}
@@ -247,13 +247,13 @@ func TestSearchMarksFollowTheRowsWhenAFileLeaves(test *testing.T) {
 	hidden.searchFor("retry", userinterface.PromptSubmitted) // cursor on retry.go
 	hidden.press("j", "v")                                   // legacy.go fades, cursor on the retry-policy doc
 	hidden.fire(fadeDuration)
-	hidden.wantRows(0, 1, 2, 4, 5)
+	hidden.wantRows(0, commentsEntry, 1, 2, 4, 5)
 
 	var marked []bool
 	for _, row := range hidden.view.fileRows(60, 10) {
 		marked = append(marked, strings.Contains(ansi.Strip(row), search.Glyph))
 	}
-	if diff := cmp.Diff([]bool{false, false, true, true, false}, marked); diff != "" {
+	if diff := cmp.Diff([]bool{false, false, false, true, true, false}, marked); diff != "" {
 		test.Errorf("marked rows (-want +got):\n%s", diff)
 	}
 	hidden.press("n")
@@ -264,12 +264,12 @@ func TestSearchMarksFollowTheRowsWhenAFileLeaves(test *testing.T) {
 
 func TestRefreshMovesThePaneOffAFileThatIsHiddenNow(test *testing.T) {
 	hidden := newHideHarness(test, true)
-	hidden.press("j")
+	hidden.press("j", "j")
 	if err := hidden.client.SetFileViewed(test.Context(), "PR_7", firstFile, true); err != nil {
 		test.Fatal(err)
 	}
 	hidden.press("R")
-	hidden.wantRows(0, 2, 3, 4, 5)
+	hidden.wantRows(0, commentsEntry, 2, 3, 4, 5)
 	if hidden.view.selection() != hidden.view.cursorEntry() || hidden.view.selection() != 2 {
 		test.Errorf("pane shows entry %d, cursor on %d, want both 2", hidden.view.selection(), hidden.view.cursorEntry())
 	}
@@ -281,14 +281,14 @@ func TestRefreshMovesThePaneOffAFileThatIsHiddenNow(test *testing.T) {
 
 func TestRefreshInTheMiddleOfAFadeKeepsTheFile(test *testing.T) {
 	hidden := newHideHarness(test, true)
-	hidden.press("j", "v", "k") // client.go fading, cursor back on it
+	hidden.press("j", "j", "v", "k") // client.go fading, cursor back on it
 	hidden.press("R")
-	hidden.wantRows(0, 1, 2, 3, 4, 5)
+	hidden.wantRows(0, commentsEntry, 1, 2, 3, 4, 5)
 	if hidden.view.selection() != 1 {
 		test.Errorf("the refresh moved the pane to entry %d", hidden.view.selection())
 	}
 	hidden.fire(fadeDuration)
-	hidden.wantRows(0, 2, 3, 4, 5)
+	hidden.wantRows(0, commentsEntry, 2, 3, 4, 5)
 	if hidden.view.selection() != hidden.view.cursorEntry() {
 		test.Error("the pane stayed on the file that left")
 	}
@@ -297,7 +297,7 @@ func TestRefreshInTheMiddleOfAFadeKeepsTheFile(test *testing.T) {
 func TestRefusedMarkStopsFadingAtOnce(test *testing.T) {
 	hidden := newHideHarness(test, true)
 	hidden.client.SetError(fake.MethodSetFileViewed, errors.New("refused"))
-	hidden.press("j", "v")
+	hidden.press("j", "j", "v")
 	if hidden.stateOf() == viewed {
 		test.Fatalf("the refused mark shows as %q", hidden.stateOf())
 	}

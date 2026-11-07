@@ -30,10 +30,10 @@ func TestCopyFilename(test *testing.T) {
 		focus pane
 		want  string
 	}{
-		{"files pane", []string{"j"}, paneFiles, "internal/sync/client.go"},
-		{"files pane, second file", []string{"j", "j"}, paneFiles, "internal/sync/retry.go"},
-		{"diff pane", []string{"j", "j", "l"}, paneRight, "internal/sync/retry.go"},
-		{"renamed file copies the new path", []string{"j", "j", "j", "j", "l"}, paneRight, "docs/design/a-very-long-directory-name/retry-policy-and-backoff.md"},
+		{"files pane", []string{"j", "j"}, paneFiles, "internal/sync/client.go"},
+		{"files pane, second file", []string{"j", "j", "j"}, paneFiles, "internal/sync/retry.go"},
+		{"diff pane", []string{"j", "j", "j", "l"}, paneRight, "internal/sync/retry.go"},
+		{"renamed file copies the new path", []string{"j", "j", "j", "j", "j", "l"}, paneRight, "docs/design/a-very-long-directory-name/retry-policy-and-backoff.md"},
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
@@ -126,7 +126,7 @@ func TestCopyURLRefusesControlCharacters(test *testing.T) {
 
 func TestCopyFilenameRefusesControlCharacters(test *testing.T) {
 	harness := loaded(test, 120, 30)
-	harness.press("j")
+	harness.press("j", "j")
 	harness.view.detail.Files[0].Path = "a\x1b]52;c;x\x07b.go"
 	messages := copyCommand(test, harness.view)
 	if len(messages) != 1 {

@@ -28,6 +28,62 @@ go install github.com/MikePors/strigidae/cmd/strig@latest
 
 Run `strig` outside a git checkout, or in one with no GitHub remote (and without `-R`), to see the dashboard: one tab per entry in the config (by default a single "Me" tab), each tab showing its sections stacked, with pull requests from any repository. `g t` / `g T` switch tabs, `]` / `[` jump between sections, `enter` opens the pull request, `o` opens it in the browser and `R` refreshes the tab, and `/` searches the rows: type to jump to the first match, `enter` keeps the search (matching rows get a marker), `n` / `N` move to the next / previous match and `esc` clears it. The repository's pull request list and the Files pane of a pull request search the same way. In a pull request, `/` searches whichever pane has focus: the Files pane's paths, or the shown file's diff lines and comment threads (only what is drawn; the cursor row shows `>` instead of the marker); each pane keeps its own query, and showing another file clears the diff's. Inside a checkout with a GitHub remote, or with `-R owner/repo`, strig shows that repository's pull requests instead. That list has tabs too: **All** (every open pull request), then one per entry in the config's `tabs:` (by default **Me**) with the repository's open pull requests by that tab's `user`; the tabs' sections are not used there. `g t` / `g T` switch tabs; each tab loads when first shown, keeps its own cursor and search, and `R` refreshes the tab on screen. Stacked pull requests (one whose base branch is another open pull request's head branch in the same repository) are drawn under their parent in that list, with the title indented two spaces per level. A checkout whose remote is on a host strig doesn't know (another forge, or a GitHub Enterprise host you are not signed in to) still exits with an error; pass `-R owner/repo` there.
 
+## List cache
+
+Dashboard sections and repository PR lists start with their last successful
+initial-page results, marked `stale`, while a fresh request runs. The repository
+list normally fetches 30 rows; after paging, `R` can refresh and cache up to 100
+rows at once. Restarting shows that snapshot until the live 30-row first page
+arrives, with further rows loaded as you scroll. A successful
+refresh replaces them (including an empty result) and removes the label. A
+network failure keeps the cached rows; an authentication or access failure clears
+them. Opening a PR still loads its details and diff from GitHub.
+
+Snapshots are accepted for up to 24 hours at startup. This cutoff does not remove
+rows already displayed during a long session. The cache uses the platform cache
+directory: `$XDG_CACHE_HOME/strig` or `~/.cache/strig` on Linux,
+`~/Library/Caches/strig` on macOS, and `%LocalAppData%/strig` on Windows. Stop strig
+and delete that directory to clear it; expired files are ignored, not automatically
+deleted.
+
+Entries are separated by GitHub host, active `gh` account, repository, and query.
+Caching is disabled when the account cannot be established locally, including
+when an environment token overrides `gh` authentication. Only list summaries are
+stored, never tokens, headers, PR details, or diffs. Summaries can contain private
+repository information; files are created with owner-only permissions on Unix.
+Missing, corrupt, or unwritable caches do not stop live loading.
+
+## Syntax colours in a diff
+
+Code in a diff is coloured by language, picked from the file name or else from a
+`#!` first line. Each hunk is coloured on its own at first. When strig runs in a
+checkout of the pull request's repository (not with `-R`), a modified, renamed
+or copied file is then read whole from the checkout, so a hunk that starts
+inside a comment or string opened above it is coloured right. The file is read
+by the blob ids on the diff's `index` line; if the checkout lacks them, strig
+fetches the pull request's head once (`refs/pull/<number>/head`, writing no ref
+and never prompting). Files over 1 MiB a side, binary files, and anything that
+can't be read or takes more than 5 seconds to colour keep the per-hunk colours;
+the reason goes to the log.
+
+## Comments across a pull request
+
+Select **Comments** below Overview in the Files pane, or run `:comments`, to
+browse conversations across every file. `j` / `k` select a conversation and
+expand its replies; `ctrl+d` / `ctrl+u` scroll long conversations. `/` searches
+authors, paths, states, and full comment bodies, including collapsed replies;
+`n` / `N` move between matching conversations and `esc` clears the search.
+
+`enter` jumps to the selected review thread in the diff; `:comments` returns to
+the same conversation. Outdated threads without a current location stay in the
+pane. `o` opens a conversation's GitHub permalink, `r` replies to a review
+thread, `x` resolves or unresolves it after confirmation, and `C` composes a
+PR comment. `:comments unresolved` shows only unresolved review threads;
+`:comments all` restores every conversation. Drafts and local plugin results
+are labelled separately. Files and resolved threads hidden in the diff still
+appear in Comments. `R` refreshes; failed sources retain their prior content
+with a visible notice.
+
 ## Checks, merge state and reviewers
 
 In a pull request, the Overview lists the head commit's checks (failing first) in a "Checks (N)" section, reached with `]` / `[`. `:checks` opens the same list as a picker; `enter` opens the selected check in the browser. The header shows conflicts, "behind base" or "blocked" when one stands in the way of merging, and each reviewer with a mark: `✓` approved, `✗` changes requested, `•` commented, `?` requested and not yet reviewed.
@@ -48,11 +104,13 @@ In a repository's pull request list (any tab; not the dashboard), `:create` and 
 
 ## Command line
 
-`:` opens the command line. `Tab` completes the command name you are typing, and after `:set ` an option name (with its `no` form) and after `:theme ` a theme name. Only the commands that work in the current view are offered. The first `Tab` fills in the first match and lists all matches just above the command line; `Tab` moves to the next match and `shift+tab` to the previous one, both wrapping. Typing a character keeps the match shown and closes the list, `enter` runs the line as shown, and `esc` cancels it.
+`:` opens the command line. `Tab` completes the command name you are typing, and after `:set ` an option name (with its `no` form), after `:help ` a help topic and after `:theme ` a theme name. `:help` lists the topics: `:help keys` is the key help (the same as `?`) and `:help config` lists every option with its value, default and meaning. In any help overlay `/` searches the rows (matching rows are marked while `hlsearch` is on), `n` / `N` move between matches, the first `esc` clears the search and the next closes the overlay. Only the commands that work in the current view are offered. The first `Tab` fills in the first match and lists all matches just above the command line; `Tab` moves to the next match and `shift+tab` to the previous one, both wrapping. Typing a character keeps the match shown and closes the list, `enter` runs the line as shown, and `esc` cancels it.
+
+In a diff, `V` starts a line selection for a comment. Use `j`/`k` or counts such as `5j` (the starting line plus five more lines), and `gg`/`G` to extend toward the top/bottom. Selections stop at hunk boundaries and cannot mix added and deleted lines. Press `c` to comment or `esc` to cancel.
 
 ## Configuration
 
-strig reads an optional YAML config (tabs and the search queries behind their sections) from `$XDG_CONFIG_HOME/strig/config.yml` (default `~/.config/strig/config.yml`); `--config <path>` overrides it and `strig --config-path` prints the location in use. See [docs/config.md](docs/config.md) and [docs/config.example.yml](docs/config.example.yml). The yes/no options (`wrapscan`, `hlsearch`, `wrap` for long diff lines, `hideviewed` for the Files pane, `hidereviewed` for reviewed hunks, `autoviewed` to mark a file viewed once all its hunks are reviewed, `hideresolved` to leave resolved comment threads out of the diff, `skipresolved` so `)` / `(` jump over resolved threads, and `relativenumber` to number diff rows by distance from the cursor) can be set there or with `:set` while strig runs. The `timeouts` key sets how long strig waits for GitHub: `request` (default 10s) for small calls and writes, `load` (default 30s) for diffs, details, threads and PR lists. Colour themes (bundled ones, or any Base16/Base24 scheme file; `strig --list-themes`; `:theme <name or file>` switches while strig runs) are described in [docs/themes.md](docs/themes.md). The `plugins` key adds commands to the pull request workspace that run a program of your own (see [docs/plugins.md](docs/plugins.md)).
+strig reads an optional YAML config (tabs and the search queries behind their sections) from `$XDG_CONFIG_HOME/strig/config.yml` (default `~/.config/strig/config.yml`); `--config <path>` overrides it and `strig --config-path` prints the location in use. See [docs/config.md](docs/config.md) and [docs/config.example.yml](docs/config.example.yml). The yes/no options (`wrapscan`, `hlsearch`, `wrap` for long diff lines, `hideviewed` for the Files pane, `hidereviewed` for reviewed hunks, `autoviewed` to mark a file viewed once all its hunks are reviewed, `hideresolved` to leave resolved comment threads out of the diff, `skipresolved` so `)` / `(` jump over resolved threads, and `relativenumber` to number diff rows by distance from the cursor) can be set there or with `:set` while strig runs (`:set` alone lists the ones changed from their defaults, `:set all` lists every one). The `timeouts` key sets how long strig waits for GitHub: `request` (default 10s) for small calls and writes, `load` (default 30s) for diffs, details, threads and PR lists. Colour themes (bundled ones, or any Base16/Base24 scheme file; `strig --list-themes`; `:theme <name or file>` switches while strig runs) are described in [docs/themes.md](docs/themes.md). The `plugins` key adds commands to the pull request workspace that run a program of your own (see [docs/plugins.md](docs/plugins.md)).
 
 ## License
 

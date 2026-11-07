@@ -23,7 +23,7 @@ func (view *View) Render(width, height int) string {
 
 	var out string
 	switch {
-	case len(current.pullRequests) == 0 && current.loading:
+	case len(current.pullRequests) == 0 && current.loading && !current.stale:
 		out = view.theme.Muted.Render(fmt.Sprintf("Loading pull requests in %s...", view.repositoryName()))
 	case len(current.pullRequests) == 0 && current.err != nil:
 		out = view.errorState(width)
@@ -40,6 +40,9 @@ func (view *View) tabBar(width int) string {
 	names := make([]string, len(view.tabs))
 	for i, current := range view.tabs {
 		names[i] = current.name
+		if current.stale {
+			names[i] += " (stale)"
+		}
 	}
 	return tabbar.Render(view.theme, names, view.active, width)
 }

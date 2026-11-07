@@ -12,6 +12,7 @@ import (
 
 	"github.com/MikePors/strigidae/internal/config"
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/localthreads"
 	"github.com/MikePors/strigidae/internal/plugins"
 	"github.com/MikePors/strigidae/internal/userinterface/terminaltext"
 )
@@ -91,6 +92,10 @@ type CommandLineKeeper interface {
 	KeepsCommandLine() bool
 }
 
+// pluginStopper is a runner with processes that outlive a run, the services
+// of *plugins.Runner: Close stops them alongside cancelling the runs.
+type pluginStopper interface{ Stop() }
+
 // pluginRun is a run the root has started and not yet heard back from.
 type pluginRun struct {
 	identity PullRequestIdentity
@@ -124,7 +129,7 @@ func (model *Model) startPlugin(message RunPluginMessage) tea.Cmd {
 	var shown tea.Cmd
 	if model.showsThread(message.Name) && message.Request.Target != nil {
 		started.thread = model.askLocalThread(message)
-		shown = tea.Batch(model.broadcast(LocalThreadsMessage{Threads: model.localThreads.snapshot()}), model.saveLocalThreads(model.localThreadKey(message)))
+		shown = tea.Batch(model.broadcast(LocalThreadsMessage{Threads: model.localThreads.Snapshot()}), model.saveLocalThreads(model.localThreadKey(message)))
 	}
 	model.pluginRuns[run] = started
 	runner, ctx := model.pluginRunner, model.pluginContext
@@ -155,7 +160,7 @@ func (model *Model) askLocalThread(message RunPluginMessage) string {
 	if question == "" {
 		question = ":" + message.Name
 	}
-	return model.localThreads.add(LocalThread{
+	return model.localThreads.Add(LocalThread{
 		Host:       message.Request.Repository.Host,
 		Asked:      model.clock(),
 		Repository: message.Identity.Repository,
@@ -172,8 +177,8 @@ func (model *Model) askLocalThread(message RunPluginMessage) string {
 
 // localThreadKey is the pull request an asked thread belongs to. Its host is
 // the one in the request, the same the plugin is given.
-func (model *Model) localThreadKey(message RunPluginMessage) pullRequestKey {
-	return pullRequestKey{message.Request.Repository.Host, message.Identity.Repository, message.Identity.Number}
+func (model *Model) localThreadKey(message RunPluginMessage) localthreads.Key {
+	return localthreads.Key{Host: message.Request.Repository.Host, Repository: message.Identity.Repository, Number: message.Identity.Number}
 }
 
 // finishLocalThread fills the thread of a finished run: the answers joined by
@@ -205,10 +210,10 @@ func (model *Model) finishLocalThread(identifier string, message pluginResultMes
 		text = "the plugin gave no answer"
 	}
 	var saved tea.Cmd
-	if key, found := model.localThreads.finish(identifier, state, text); found {
+	if key, found := model.localThreads.Finish(identifier, state, text); found {
 		saved = model.saveLocalThreads(key)
 	}
-	return tea.Batch(model.broadcast(LocalThreadsMessage{Threads: model.localThreads.snapshot()}), saved)
+	return tea.Batch(model.broadcast(LocalThreadsMessage{Threads: model.localThreads.Snapshot()}), saved)
 }
 
 // pluginActive reports whether a run of the pull request the top view shows
@@ -331,7 +336,7 @@ func (model *Model) quit() tea.Cmd {
 	return model.tick(model.pluginQuitWait, func(time.Time) tea.Msg { return quitWaitedMessage{} })
 }
 
-// Close cancels every plugin run and waits for them to end, and writes the
+// Close cancels every plugin run, stops the runner's services, and writes the
 // local threads that changed since their last write, all within one quit wait.
 // The writes do not wait for the runs, and do not depend on any command having
 // run. cmd/strig calls it after the program returns, on every path:
@@ -347,21 +352,38 @@ func (model *Model) Close() {
 	if model.pluginCancel != nil {
 		model.pluginCancel()
 	}
-	flushed := model.flushLocalThreads() // its file work runs in a goroutine, beside the wait for the runs
-	select {
-	case <-flushed:
-	case <-timeout:
-		return
+	stopped := model.stopServices()
+	flushed := model.localFiles.Flush(&model.localThreads) // its file work runs in a goroutine, beside the wait for the runs
+	for _, finished := range []<-chan struct{}{flushed, stopped} {
+		select {
+		case <-finished:
+		case <-timeout:
+			return
+		}
 	}
 	if model.pluginCancel != nil {
 		waitFor(&model.pluginRunning, timeout)
 	}
 }
 
-// waitFor waits for the group or the timeout, and says whether the group ended.
-// The caller stops after the first false, so a fired timeout is never waited
-// on twice.
-func waitFor(group *sync.WaitGroup, timeout <-chan time.Time) bool {
+// stopServices starts stopping the runner's services before any quit wait,
+// so a stuck run or file write cannot prevent the kill from being attempted.
+func (model *Model) stopServices() <-chan struct{} {
+	stopped := make(chan struct{})
+	stopper, ok := model.pluginRunner.(pluginStopper)
+	if !ok {
+		close(stopped)
+		return stopped
+	}
+	go func() {
+		stopper.Stop()
+		close(stopped)
+	}()
+	return stopped
+}
+
+// waitFor waits for the group or the remainder of the quit timeout.
+func waitFor(group *sync.WaitGroup, timeout <-chan time.Time) {
 	done := make(chan struct{})
 	go func() {
 		group.Wait()
@@ -369,8 +391,6 @@ func waitFor(group *sync.WaitGroup, timeout <-chan time.Time) bool {
 	}()
 	select {
 	case <-done:
-		return true
 	case <-timeout:
-		return false
 	}
 }

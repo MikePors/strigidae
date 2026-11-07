@@ -78,11 +78,16 @@ func TestWrapRendersContinuationRows(test *testing.T) {
 }
 
 func TestWrapKeepsTintAndHighlighting(test *testing.T) {
-	highlighter := func(_, text string) []Span {
-		if len(text) < 30 {
-			return []Span{{Text: text, Token: chroma.Text}}
+	highlighter := func(_, _ string, lines []string) [][]Span {
+		spans := make([][]Span, len(lines))
+		for i, text := range lines {
+			if len(text) < 30 {
+				spans[i] = []Span{{Text: text, Token: chroma.Text}}
+				continue
+			}
+			spans[i] = []Span{{Text: text[:5], Token: chroma.Keyword}, {Text: text[5:], Token: chroma.LiteralString}}
 		}
-		return []Span{{Text: text[:5], Token: chroma.Keyword}, {Text: text[5:], Token: chroma.LiteralString}}
+		return spans
 	}
 	model := wrapModel(test, 10, WithHighlighter(highlighter))
 	rows := strings.Split(model.Render(21, 10), "\n")

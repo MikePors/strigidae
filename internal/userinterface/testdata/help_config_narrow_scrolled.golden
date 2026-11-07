@@ -1,0 +1,10 @@
+Help: config  ? / esc to close  17–23 of 23               
+                                                          
+      make ) and ( pass over resolved threads             
+  relativenumber  norelativenumber  norelativenumber      
+      number diff rows by distance from the cursor        
+                                                          
+  :set name / noname to change; name! / invname to toggle;
+  name& to reset to built-in default                      
+  * changed from the default                              
+ v  ? help  zq test sequence                                

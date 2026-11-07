@@ -1,6 +1,7 @@
 package options
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -37,12 +38,62 @@ func TestString(test *testing.T) {
 	}
 }
 
+func TestDiffers(test *testing.T) {
+	for name, testCase := range map[string]struct {
+		values Values
+		option string
+		want   bool
+	}{
+		"unset":                  {nil, WrapScan, false},
+		"set to the default":     {Values{WrapScan: true}, WrapScan, false},
+		"off by default, set on": {Values{Wrap: true}, Wrap, true},
+		"on by default, set off": {Values{WrapScan: false}, WrapScan, true},
+		"another option differs": {Values{Wrap: true}, WrapScan, false},
+	} {
+		test.Run(name, func(test *testing.T) {
+			if got := testCase.values.Differs(testCase.option); got != testCase.want {
+				test.Errorf("Differs(%q) = %v, want %v", testCase.option, got, testCase.want)
+			}
+		})
+	}
+}
+
+func TestChanged(test *testing.T) {
+	for name, testCase := range map[string]struct {
+		values Values
+		want   string
+	}{
+		"defaults":             {nil, ""},
+		"set to the default":   {Values{WrapScan: true, Wrap: false}, ""},
+		"one off":              {Values{WrapScan: false}, "nowrapscan"},
+		"one on":               {Values{Wrap: true}, "wrap"},
+		"in declaration order": {Values{RelativeNumber: true, HighlightSearch: false, WrapScan: true}, "nohlsearch relativenumber"},
+	} {
+		test.Run(name, func(test *testing.T) {
+			if diff := cmp.Diff(testCase.want, testCase.values.Changed()); diff != "" {
+				test.Error(diff)
+			}
+		})
+	}
+}
+
 func TestDeclarationsAreUnique(test *testing.T) {
 	seen := map[string]bool{}
 	for _, option := range All() {
-		if option.Name == "" || seen[option.Name] {
+		// Keep declarations distinct from :set keywords and modifier syntax.
+		if option.Name == "" || option.Name == "all" || seen[option.Name] ||
+			strings.HasPrefix(option.Name, "inv") || strings.HasPrefix(option.Name, "no") ||
+			strings.ContainsAny(option.Name, "!?&=") {
 			test.Errorf("bad or duplicate declaration: %+v", option)
 		}
 		seen[option.Name] = true
+	}
+}
+
+func TestEveryOptionHasADescription(test *testing.T) {
+	for _, option := range All() {
+		if strings.TrimSpace(option.Description) == "" {
+			test.Errorf("option %q has no description", option.Name)
+		}
 	}
 }

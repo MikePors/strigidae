@@ -10,8 +10,8 @@ import (
 )
 
 // With the hideviewed option the Files pane lists fewer rows than there are
-// entries. view.rows says which: the entry (0 is Overview, i is Files[i-1])
-// shown on each row, ascending. The window's cursor is a row; view.current is
+// entries. view.rows says which: the sidebar destination (0 is Overview,
+// commentsEntry is Comments, positive i is Files[i-1]) shown on each row. The window's cursor is a row; view.current is
 // an entry, the one whose content the right pane shows. They differ when the
 // file picker opened a file that is hidden: the cursor then waits on the
 // nearest shown row.
@@ -28,7 +28,7 @@ func (view *View) hidden(file github.ChangedFile) bool {
 
 // shownEntries returns the entries the Files pane lists.
 func (view *View) shownEntries() []int {
-	rows := []int{0}
+	rows := []int{0, commentsEntry}
 	for i, file := range view.files() {
 		if !view.hidden(file) {
 			rows = append(rows, i+1)
@@ -97,6 +97,9 @@ func (view *View) moveOffMarked() {
 	next := row + 1
 	if next >= len(view.rows) {
 		next = row - 1
+		for next >= 0 && view.rows[next] == commentsEntry {
+			next--
+		}
 	}
 	if next < 0 {
 		return

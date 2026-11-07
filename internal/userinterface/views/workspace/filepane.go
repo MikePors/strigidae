@@ -79,6 +79,9 @@ type FilePane interface {
 	// SetThreads is called when the pull request's review threads load or
 	// reload; the pane shows the ones on its file.
 	SetThreads(threads []github.ReviewThread)
+	// JumpThread reveals and selects a current thread by identity, or reports
+	// false when its location is unavailable.
+	JumpThread(identifier string) bool
 	// SetThreadExpanded folds the thread with the given identifier open or
 	// closed, replacing whatever the user chose before; it is called after a
 	// thread was resolved or unresolved, together with SetThreads.
@@ -87,6 +90,12 @@ type FilePane interface {
 	// same path comes back with different metadata (change type, counts)
 	// after a refresh. A repeat call for the same path keeps cursor and scroll.
 	SetFile(file github.ChangedFile)
+	// SetFileSpans gives the spans of every line of one side of the shown
+	// file, read whole (diffview.HighlightFile), named by its blob object
+	// identifier. It is called again with the same side after every update
+	// while the file is shown, so it must be cheap then; spans for a file or
+	// side not shown are ignored. Panes without syntax colours ignore it.
+	SetFileSpans(side github.DiffSide, objectIdentifier string, lines [][]diffview.Span)
 	// SetSize gives the pane's inner size; it is called whenever it changes.
 	SetSize(width, height int)
 	// Context returns what is at the pane's cursor: the threads and comment
@@ -118,6 +127,9 @@ type FilePane interface {
 	SetHunkHiding(hidden func(file *diff.File, hunk int) bool, fade func(file *diff.File, hunk int) int)
 	// HiddenHunksChanged says the hidden function's answers changed.
 	HiddenHunksChanged()
+	// HunkReviewedChanged applies an explicit review change to one hunk; other
+	// hunks and files retain any temporary jump reveal.
+	HunkReviewedChanged(file *diff.File, hunk int)
 	// SetThreadFade is called once with how to tell whether a review thread
 	// is fading out and how far (0 to theme.FadeSteps); panes with threads
 	// keep a fading resolved one shown under SetHideResolved and draw it

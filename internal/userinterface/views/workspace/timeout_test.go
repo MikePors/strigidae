@@ -155,7 +155,7 @@ func TestWritesTimeOutAndSayTheyMayHaveGoneThrough(test *testing.T) {
 			harness.run(harness.view.post(target{kind: kindReply, threadIdentifier: "T1"}, "body"))
 		}},
 		{"viewed mark", func(harness *harness) {
-			harness.press("j", "v")
+			harness.press("j", "j", "v")
 		}},
 	}
 	for _, testCase := range tests {

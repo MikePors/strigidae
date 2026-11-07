@@ -3,16 +3,16 @@ package pullrequestlist
 
 import (
 	"fmt"
-	"io"
+	"log/slog"
 	"time"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
-	"github.com/cli/go-gh/v2/pkg/browser"
 
 	"github.com/MikePors/strigidae/internal/clipboard"
 	"github.com/MikePors/strigidae/internal/config"
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/listcache"
 	"github.com/MikePors/strigidae/internal/options"
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/components/scroll"
@@ -33,6 +33,7 @@ const (
 // The repository, tab and sequence identify the request: every view receives
 // every command result, and a refresh supersedes any page still in flight.
 type pullRequestsLoadedMessage struct {
+	cached     bool
 	repository github.Repository
 	tab        int
 	sequence   int
@@ -45,7 +46,9 @@ type pullRequestsLoadedMessage struct {
 
 // Options configures New. Zero values select the real behaviour.
 type Options struct {
-	// Now supplies the current time for relative ages.
+	// Cache supplies account-scoped startup snapshots; nil disables persistence.
+	Cache *listcache.Store
+	// Now supplies the current time for relative ages and cache timestamps.
 	Now func() time.Time
 	// Open opens a URL in the browser; it runs inside a tea.Cmd.
 	Open func(url string) error
@@ -60,6 +63,10 @@ type Options struct {
 	// Edit opens $EDITOR for the text of a new pull request; nil selects the
 	// real editor.
 	Edit workspace.EditFunction
+	// Blobs reads the files of the repository's pull requests from the local
+	// checkout, so the workspaces colour them from their whole text; nil
+	// colours them hunk by hunk.
+	Blobs workspace.BlobReader
 }
 
 // tab is one list of the repository's open pull requests with its own rows,
@@ -75,6 +82,7 @@ type tab struct {
 	// same rows in the order drawn (stacks under their parents, see
 	// stackOrder), with the indent depth of each in depths. Everything the
 	// user sees or selects goes through pullRequests.
+	stale        bool
 	loaded       []github.PullRequest
 	pullRequests []github.PullRequest
 	depths       []int
@@ -91,6 +99,7 @@ type tab struct {
 
 // View lists one repository's open pull requests.
 type View struct {
+	cache      *listcache.Store
 	client     github.Client
 	repository github.Repository
 	theme      theme.Theme
@@ -102,7 +111,10 @@ type View struct {
 	// hunkMarks keeps the hunks marked reviewed in every workspace opened
 	// from here, so they survive closing and reopening a pull request.
 	hunkMarks *workspace.HunkMarks
-	bindings  bindings
+	// wholeFiles keeps the files read whole for every workspace opened from
+	// the list; nil without a checkout to read them from.
+	wholeFiles *workspace.WholeFiles
+	bindings   bindings
 
 	currentBranch  string
 	edit           workspace.EditFunction
@@ -157,10 +169,14 @@ func New(client github.Client, repository github.Repository, configured []config
 		options.Now = time.Now
 	}
 	if options.Open == nil {
-		options.Open = openInBrowser
+		options.Open = workspace.UnavailableBrowser
 	}
 	if options.Edit == nil {
 		options.Edit = workspace.ExecEditor
+	}
+	var wholeFiles *workspace.WholeFiles
+	if options.Blobs != nil {
+		wholeFiles = workspace.NewWholeFiles(options.Blobs)
 	}
 	tabs := []tab{{name: "All"}}
 	for _, current := range configured {
@@ -173,6 +189,7 @@ func New(client github.Client, repository github.Repository, configured []config
 		tabs = append(tabs, tab{name: current.Name, author: author, query: authorQuery(repository, author)})
 	}
 	return &View{
+		cache:      options.Cache,
 		client:     client,
 		repository: repository,
 		theme:      activeTheme,
@@ -188,6 +205,7 @@ func New(client github.Client, repository github.Repository, configured []config
 		currentBranch: options.CurrentBranch,
 		edit:          options.Edit,
 		hunkMarks:     workspace.NewHunkMarks(),
+		wholeFiles:    wholeFiles,
 		tabs:          tabs,
 	}
 }
@@ -201,13 +219,6 @@ func authorQuery(repository github.Repository, author string) string {
 
 // current is the tab being shown.
 func (view *View) current() *tab { return &view.tabs[view.active] }
-
-// openInBrowser discards the launcher's output: it must not touch the screen
-// the TUI owns. This covers a configured launcher; the default fallback writes
-// to cli/browser's globals, which cmd/strig silences at startup.
-func openInBrowser(url string) error {
-	return browser.New("", io.Discard, io.Discard).Browse(url)
-}
 
 // Loading implements userinterface.Loader.
 func (view *View) Loading() bool {
@@ -269,7 +280,10 @@ func (view *View) reload(index int) tea.Cmd {
 func (view *View) fetch(index int, pageRequest github.PageRequest, more bool) tea.Cmd {
 	client, repository, timeouts := view.client, view.repository, view.timeouts
 	query, sequence := view.tabs[index].query, view.tabs[index].sequence
-	return func() tea.Msg {
+	cache := view.cache
+	key := listcache.Key{Kind: "repository", Repository: repository, Query: query, Limit: github.DefaultPageSize}
+	started := view.now()
+	fresh := func() tea.Msg {
 		ctx, cancel := timeouts.LoadContext()
 		defer cancel()
 		var page github.Page[github.PullRequest]
@@ -279,8 +293,27 @@ func (view *View) fetch(index int, pageRequest github.PageRequest, more bool) te
 		} else {
 			page, err = client.SearchPullRequests(ctx, query, pageRequest)
 		}
+		if err == nil && !more {
+			if saveError := cache.Save(key, page.Items, started); saveError != nil {
+				slog.Debug("save list cache", "err", saveError)
+			}
+		} else if listcache.Denied(err) {
+			if removeError := cache.Remove(key); removeError != nil {
+				slog.Debug("remove list cache", "err", removeError)
+			}
+		}
 		return pullRequestsLoadedMessage{repository: repository, tab: index, sequence: sequence, more: more, page: page, err: err}
 	}
+	if cache == nil || more || sequence != 1 {
+		return fresh
+	}
+	return tea.Sequence(func() tea.Msg {
+		items, ok := cache.Load(key)
+		if !ok {
+			return nil
+		}
+		return pullRequestsLoadedMessage{repository: repository, tab: index, sequence: sequence, cached: true, page: github.Page[github.PullRequest]{Items: items}}
+	}, fresh)
 }
 
 // Update implements userinterface.View.
@@ -322,6 +355,15 @@ func (view *View) loaded(message pullRequestsLoadedMessage) tea.Cmd {
 	if message.sequence != current.sequence {
 		return nil // superseded by a refresh
 	}
+	if message.cached {
+		if !current.loading {
+			return nil
+		}
+		current.stale = true
+		current.setLoaded(message.page.Items)
+		current.search.Refresh(view.searchListOf(current))
+		return nil
+	}
 	if message.more {
 		current.loadingMore = false
 	} else {
@@ -329,6 +371,12 @@ func (view *View) loaded(message pullRequestsLoadedMessage) tea.Cmd {
 	}
 	if message.err != nil {
 		current.err = message.err
+		if listcache.Denied(message.err) {
+			current.setLoaded(nil)
+			current.next = ""
+			current.stale = false
+			current.search.Refresh(view.searchListOf(current))
+		}
 		current.moreFailed = message.more // stop auto-paging until R
 
 		failure := fmt.Errorf("load pull requests in %s: %w", view.repository, message.err)
@@ -338,6 +386,7 @@ func (view *View) loaded(message pullRequestsLoadedMessage) tea.Cmd {
 		return userinterface.Error(terminaltext.SafeError(failure))
 	}
 	current.err = nil
+	current.stale = false
 	current.next = message.page.Next
 	if message.more {
 		current.setLoaded(append(current.loaded, message.page.Items...))
@@ -473,6 +522,7 @@ func (view *View) openPullRequest(number int) tea.Cmd {
 		workspace.WithWrap(view.options.Wrap()),
 		workspace.WithTimeouts(view.timeouts),
 		workspace.WithClipboard(view.clipboard),
+		workspace.WithWholeFiles(view.wholeFiles),
 	))
 }
 

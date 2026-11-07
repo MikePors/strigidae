@@ -109,6 +109,10 @@ func (pane *diffPane) SetHunkHiding(hidden func(file *diff.File, hunk int) bool,
 	pane.diffView.SetHunkFade(fade)
 }
 
+func (pane *diffPane) HunkReviewedChanged(file *diff.File, hunk int) {
+	pane.diffView.HunkReviewedChanged(file, hunk)
+}
+
 func (pane *diffPane) HiddenHunksChanged() { pane.diffView.HiddenHunksChanged() }
 
 func (pane *diffPane) SetThreadFade(fade func(identifier string) (step int, fading bool)) {
@@ -124,6 +128,10 @@ func (pane *diffPane) SetThreadExpanded(identifier string, expanded bool) {
 func (pane *diffPane) SetThreads(threads []github.ReviewThread) { pane.diffView.SetThreads(threads) }
 
 func (pane *diffPane) SetSize(width, height int) { pane.diffView.SetSize(width, height) }
+
+func (pane *diffPane) SetFileSpans(side github.DiffSide, objectIdentifier string, lines [][]diffview.Span) {
+	pane.diffView.SetFileSpans(side, objectIdentifier, lines)
+}
 
 func (pane *diffPane) SetDiff(diffState DiffState) {
 	pane.state = diffState
@@ -259,3 +267,6 @@ func (pane *diffPane) FullHelp() [][]key.Binding {
 	bindings := pane.bind
 	return [][]key.Binding{{bindings.NextHunk, bindings.PreviousHunk, bindings.NextThread, bindings.PreviousThread}, {bindings.ToggleThread, bindings.OpenThread, bindings.CloseThread}, {bindings.ScrollLeft, bindings.ScrollRight, bindings.HalfScrollLeft, bindings.HalfScrollRight}}
 }
+
+// JumpThread implements explicit navigation from the Comments pane.
+func (pane *diffPane) JumpThread(identifier string) bool { return pane.diffView.JumpThread(identifier) }

@@ -26,8 +26,13 @@
 // Review threads (SetThreads) are placed under the line they are anchored to
 // and take extra rows: one header row, plus the comments while expanded.
 // Threads that no longer map onto a line of the diff are listed after the last
-// row. Only the visible rows are ever styled or highlighted, and highlighted
-// rows are cached, so scrolling a 5k-line file never re-lexes it.
+// row. Only the visible rows are ever styled, and a hunk is highlighted when
+// the first of its rows is drawn: its old and new sides are each lexed as one
+// block, so a comment or string that opens and closes inside the hunk is
+// coloured whole, and the spans of every row are cached. Scrolling a 5k-line
+// file never re-lexes a hunk. What opened above the hunk is not known until
+// the host gives the spans of the whole file (SetFileSpans); rows then take
+// those.
 package diffview
 
 import (
@@ -117,6 +122,7 @@ type Model struct {
 
 	now              func() time.Time
 	markdownRenderer *markdown.Renderer
+	revealedThread   string                // explicit Comments jump, cleared on file change
 	threads          []github.ReviewThread // all of the pull request's threads
 	fileThreads      []github.ReviewThread // the ones on the shown file
 	attach           map[int][]int         // base row -> indexes in fileThreads
@@ -140,7 +146,21 @@ type Model struct {
 	threadFade func(identifier string) (step int, fading bool) // see SetThreadFade; nil: none fade
 
 	cache map[int][]Span // highlighted rows, by base row index; reset per file
-	saved *position      // position kept while a message replaces the file
+	// highlighted holds the hunks whose sides have been lexed, so a row the
+	// block did not cover (its side was too large) costs only its own lexing.
+	// Reset with cache.
+	highlighted map[int]bool
+	// oldFirstLine and newFirstLine are the first line of the file on each
+	// side when the diff contains it, or "". They are worked out when the file
+	// is set, from the hunks themselves (shown, hidden or not drawn yet), and
+	// handed to the Highlighter for every block of that side.
+	oldFirstLine, newFirstLine string
+	// oldWhole and newWhole are the spans of the whole file on each side,
+	// once SetFileSpans gives them; wholeRows remembers what each row takes
+	// from them. Reset with the file.
+	oldWhole, newWhole wholeSide
+	wholeRows          map[int]wholeRow
+	saved              *position // position kept while a message replaces the file
 
 	width, height int
 
@@ -162,7 +182,7 @@ type Model struct {
 
 // New returns an empty diff pane.
 func New(activeTheme theme.Theme, options ...Option) *Model {
-	model := &Model{theme: activeTheme, highlight: ChromaHighlighter(), cache: map[int][]Span{}, now: time.Now, open: map[string]bool{}}
+	model := &Model{theme: activeTheme, highlight: ChromaHighlighter(), cache: map[int][]Span{}, highlighted: map[int]bool{}, now: time.Now, open: map[string]bool{}}
 	for _, option := range options {
 		option(model)
 	}
@@ -250,11 +270,15 @@ func TooLargeMessage() string {
 }
 
 func (model *Model) reset() {
+	model.revealedThread = ""
 	model.blockCache = nil
 	model.visual = false // base rows are about to change
 	model.base, model.rows, model.hunkRow = nil, nil, nil
 	model.fileThreads, model.attach, model.orphans, model.blocks, model.owners = nil, nil, nil, nil, nil
 	model.cache = map[int][]Span{}
+	model.highlighted = map[int]bool{}
+	model.oldFirstLine, model.newFirstLine = "", ""
+	model.oldWhole, model.newWhole, model.wholeRows = wholeSide{}, wholeSide{}, map[int]wholeRow{}
 	model.wrapStarts = nil
 	model.window.Reset()
 	model.maximumWidth, model.numberWidth = 0, 0
@@ -281,6 +305,7 @@ func (model *Model) build(file *diff.File) {
 		}
 	}
 	model.numberWidth = max(len(strconv.Itoa(maximumNumber)), 3)
+	model.oldFirstLine, model.newFirstLine = firstLines(file)
 	model.placeThreads()
 	model.layout()
 }

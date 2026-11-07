@@ -48,15 +48,21 @@ func (pane *stubPane) SetRelativeNumber(bool)                     {}
 func (pane *stubPane) SetHunkReviewed(func(*diff.File, int) bool) {}
 
 func (pane *stubPane) SetHunkHiding(func(*diff.File, int) bool, func(*diff.File, int) int) {}
-func (pane *stubPane) HiddenHunksChanged()                                                 {}
-func (pane *stubPane) SetThreadFade(func(string) (int, bool))                              {}
-func (pane *stubPane) ThreadFadesChanged()                                                 {}
+func (pane *stubPane) HunkReviewedChanged(*diff.File, int)                                 {}
+
+func (pane *stubPane) HiddenHunksChanged()                    {}
+func (pane *stubPane) SetThreadFade(func(string) (int, bool)) {}
+func (pane *stubPane) ThreadFadesChanged()                    {}
 
 func (pane *stubPane) SetThreadExpanded(string, bool) {}
+
+func (pane *stubPane) JumpThread(string) bool { return false }
 
 func (pane *stubPane) SetThreads([]github.ReviewThread) {}
 
 func (pane *stubPane) SetFile(file github.ChangedFile) { pane.files = append(pane.files, file.Path) }
+
+func (pane *stubPane) SetFileSpans(github.DiffSide, string, [][]diffview.Span) {}
 
 func (pane *stubPane) SetSize(width, height int) {
 	pane.sizes = append(pane.sizes, [2]int{width, height})
@@ -79,7 +85,7 @@ func TestSetFileOnChangedMetadata(test *testing.T) {
 	harness := loaded(test, 100, 30)
 	pane := &recordPane{}
 	harness.view.filePane = pane
-	harness.press("j")
+	harness.press("j", "j")
 	if len(pane.files) != 1 {
 		test.Fatalf("SetFile calls = %v", pane.files)
 	}

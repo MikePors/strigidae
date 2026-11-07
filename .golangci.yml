@@ -32,6 +32,7 @@ linters:
             - "**/internal/userinterface/keys/**"
             - "**/internal/userinterface/theme/**"
             - "**/internal/userinterface/terminaltext/**"
+            - "**/internal/userinterface/matching/**"
             - "**/internal/userinterface/components/**"
           deny:
             - pkg: github.com/MikePors/strigidae/internal/userinterface/views
@@ -44,9 +45,11 @@ linters:
             - "**/internal/options/**"
             - "**/internal/editor/**"
             - "**/internal/clipboard/**"
+            - "**/internal/browseropener/**"
             - "**/internal/environment/**"
             - "**/internal/plugins/**"
             - "**/internal/localthreads/**"
+            - "**/internal/listcache/**"
             - "**/internal/gitrepository/**"
             - "**/internal/logging/**"
             - "**/internal/version/**"

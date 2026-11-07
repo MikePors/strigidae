@@ -20,13 +20,14 @@ import (
 
 // fakeView records what the root sends it.
 type fakeView struct {
-	title   string
-	next    key.Binding // view-specific sequence "z q" (arbitrary; no real binding uses it)
-	capture bool
-	loading bool
-	resumed int
-	results int
-	got     []tea.Msg
+	title    string
+	next     key.Binding // view-specific sequence "z q" (arbitrary; no real binding uses it)
+	capture  bool
+	captured []key.Binding
+	loading  bool
+	resumed  int
+	results  int
+	got      []tea.Msg
 }
 
 func newFake(title string) *fakeView {
@@ -48,18 +49,22 @@ func (view *fakeView) Update(message tea.Msg) (View, tea.Cmd) {
 	if key, ok := message.(tea.KeyPressMsg); ok && key.String() == "esc" {
 		view.capture = false
 	}
+	if _, ok := message.(endCaptureMessage); ok {
+		view.capture = false
+	}
 	if _, ok := message.(resultMessage); ok {
 		view.results++
 		view.loading = false
 	}
 	return view, nil
 }
-func (view *fakeView) Render(_, _ int) string    { return view.title + " body" }
-func (view *fakeView) Title() string             { return view.title }
-func (view *fakeView) ShortHelp() []key.Binding  { return []key.Binding{view.next} }
-func (view *fakeView) FullHelp() [][]key.Binding { return [][]key.Binding{{view.next}} }
-func (view *fakeView) CapturesKeys() bool        { return view.capture }
-func (view *fakeView) last() tea.Msg             { return view.got[len(view.got)-1] }
+func (view *fakeView) Render(_, _ int) string          { return view.title + " body" }
+func (view *fakeView) Title() string                   { return view.title }
+func (view *fakeView) ShortHelp() []key.Binding        { return []key.Binding{view.next} }
+func (view *fakeView) FullHelp() [][]key.Binding       { return [][]key.Binding{{view.next}} }
+func (view *fakeView) CapturedBindings() []key.Binding { return view.captured }
+func (view *fakeView) CapturesKeys() bool              { return view.capture }
+func (view *fakeView) last() tea.Msg                   { return view.got[len(view.got)-1] }
 func (view *fakeView) keyMessages() (out []keys.Message) {
 	for _, message := range view.got {
 		if key, ok := message.(keys.Message); ok {
@@ -758,4 +763,81 @@ func TestCommandLineStaysOneRow(test *testing.T) {
 		}
 	}
 	golden.Assert(test, "command_line_overflow", got, false)
+}
+
+func TestCapturedSequences(test *testing.T) {
+	for _, prefix := range []string{"5", "g"} {
+		test.Run(prefix, func(test *testing.T) {
+			view := newFake("selection")
+			view.capture = true
+			view.captured = []key.Binding{
+				key.NewBinding(key.WithKeys("j")),
+				key.NewBinding(key.WithKeys("g g")),
+			}
+			model := newModel(view)
+			command := press(model, prefix)
+			if got := model.bar().pending; got != prefix {
+				test.Fatalf("pending = %q, want %q", got, prefix)
+			}
+			run(model, command)
+			if model.matcher.Pending() {
+				test.Fatal("captured prefix survived timeout")
+			}
+			press(model, "j")
+			if difference := cmp.Diff([]keys.Message{{Sequence: "j"}}, view.keyMessages()); difference != "" {
+				test.Errorf("keys (-want +got):\n%s", difference)
+			}
+			press(model, ":")
+			press(model, "?")
+			if model.commandLine.active || model.showHelp {
+				test.Error("global actions escaped capture")
+			}
+		})
+	}
+}
+
+// endCaptureMessage simulates an asynchronous reload ending a modal selection.
+type endCaptureMessage struct{}
+
+func TestCaptureEndClearsPendingInput(test *testing.T) {
+	for _, prefix := range []string{"5", "g"} {
+		test.Run(prefix, func(test *testing.T) {
+			view := newFake("selection")
+			view.capture = true
+			view.captured = keys.DefaultGlobal().Bindings()
+			model := newModel(view)
+			timeout := press(model, prefix)
+			_, _ = model.Update(endCaptureMessage{})
+			if model.matcher.Pending() {
+				test.Fatal("pending input survived the end of capture")
+			}
+			press(model, "j")
+			if difference := cmp.Diff([]keys.Message{{Sequence: "j"}}, view.keyMessages()); difference != "" {
+				test.Errorf("keys (-want +got):\n%s", difference)
+			}
+			press(model, "2")
+			run(model, timeout)
+			if got := model.bar().pending; got != "2" {
+				test.Errorf("stale capture timer changed new count: %q", got)
+			}
+		})
+	}
+}
+
+func TestCapturedBindingsOverrideGlobalActions(test *testing.T) {
+	for _, pressed := range []string{"?", ":"} {
+		test.Run(pressed, func(test *testing.T) {
+			view := newFake("selection")
+			view.capture = true
+			view.captured = []key.Binding{key.NewBinding(key.WithKeys(pressed))}
+			model := newModel(view)
+			press(model, pressed)
+			if model.showHelp || model.commandLine.active {
+				test.Fatal("captured binding ran a global action")
+			}
+			if difference := cmp.Diff([]keys.Message{{Sequence: pressed}}, view.keyMessages()); difference != "" {
+				test.Errorf("keys (-want +got):\n%s", difference)
+			}
+		})
+	}
 }

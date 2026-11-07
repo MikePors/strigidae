@@ -80,9 +80,14 @@ func TestWindow(test *testing.T) {
 	}
 }
 
+// highlightLine highlights one line as a block of its own.
+func highlightLine(highlighter Highlighter, path, text string) []Span {
+	return highlighter(path, "", []string{text})[0]
+}
+
 func TestChromaHighlighter(test *testing.T) {
 	highlighter := ChromaHighlighter()
-	spans := highlighter("x.go", "func main() { return 42 } // hi")
+	spans := highlightLine(highlighter, "x.go", "func main() { return 42 } // hi")
 	if joined(spans) != "func main() { return 42 } // hi" {
 		test.Fatalf("text altered: %v", spans)
 	}
@@ -102,14 +107,14 @@ func TestChromaHighlighter(test *testing.T) {
 			test.Errorf("span %q has non-standard token type %v", span.Text, span.Token)
 		}
 	}
-	if got := highlighter("notes.unknownext", "just text"); len(got) != 1 || got[0].Token != chroma.Text {
+	if got := highlightLine(highlighter, "notes.unknownext", "just text"); len(got) != 1 || got[0].Token != chroma.Text {
 		test.Errorf("unknown extension should be plain: %+v", got)
 	}
-	if got := highlighter("x.go", ""); got != nil {
+	if got := highlightLine(highlighter, "x.go", ""); got != nil {
 		test.Errorf("empty line: %+v", got)
 	}
 	long := strings.Repeat("x", maximumHighlightLength+1)
-	if got := highlighter("x.go", long); len(got) != 1 || got[0].Token != chroma.Text {
+	if got := highlightLine(highlighter, "x.go", long); len(got) != 1 || got[0].Token != chroma.Text {
 		test.Error("very long lines should skip lexing")
 	}
 }
@@ -123,7 +128,7 @@ func TestHighlighterHasNoErrorSpans(test *testing.T) {
 		{"x.js", "don't do this */"},
 		{"x.go", "raw string end`"},
 	} {
-		spans := highlighter(testCase.path, testCase.text)
+		spans := highlightLine(highlighter, testCase.path, testCase.text)
 		for _, span := range spans {
 			if span.Token == chroma.Error {
 				test.Errorf("%s %q: span %q is an error token", testCase.path, testCase.text, span.Text)

@@ -186,7 +186,7 @@ func TestDiffPaneStates(test *testing.T) {
 func TestGoldenDiffPane(test *testing.T) {
 	test.Run("populated", func(test *testing.T) {
 		harness := openClientDiff(test, 100, 24)
-		harness.press("j", "j")
+		harness.press("j", "j", "j")
 		golden.Assert(test, "diff_populated", harness.render(), false)
 	})
 	test.Run("hscroll", func(test *testing.T) {

@@ -203,6 +203,8 @@ func (parser *parser) headerLine(line string) {
 	case strings.HasPrefix(line, "similarity index "):
 		text := strings.TrimSuffix(strings.TrimSpace(line[len("similarity index "):]), "%")
 		file.Similarity, _ = strconv.Atoi(text)
+	case strings.HasPrefix(line, "index "):
+		file.OldObjectIdentifier, file.NewObjectIdentifier = parseIndexLine(line[len("index "):])
 	case strings.HasPrefix(line, "rename from "):
 		file.Status = Renamed
 		file.OldPath = unquote(line[len("rename from "):])
@@ -226,6 +228,38 @@ func (parser *parser) headerLine(line string) {
 			file.NewPath = path
 		}
 	}
+}
+
+// parseIndexLine reads the operands of "index <old>..<new>[ <mode>]". An
+// all-zero identifier (the missing side of an added or deleted file) becomes
+// empty. A line that is not two hex identifiers, such as a combined diff's
+// "index a,b..c", yields two empty strings.
+func parseIndexLine(operands string) (oldIdentifier, newIdentifier string) {
+	identifiers, _, _ := strings.Cut(strings.TrimRight(operands, "\r"), " ")
+	oldIdentifier, newIdentifier, ok := strings.Cut(identifiers, "..")
+	if !ok || !isHex(oldIdentifier) || !isHex(newIdentifier) {
+		return "", ""
+	}
+	return nonZero(oldIdentifier), nonZero(newIdentifier)
+}
+
+func isHex(text string) bool {
+	if text == "" {
+		return false
+	}
+	for _, character := range text {
+		if !strings.ContainsRune("0123456789abcdefABCDEF", character) {
+			return false
+		}
+	}
+	return true
+}
+
+func nonZero(identifier string) string {
+	if strings.Trim(identifier, "0") == "" {
+		return ""
+	}
+	return identifier
 }
 
 // patchPath extracts the path from a "--- a/x" or "+++ b/x" operand. /dev/null

@@ -21,20 +21,31 @@ func setCommand(arguments string) tea.Cmd {
 }
 
 // applySet applies the words of a `:set` line to current. `name` turns an
-// option on, `noname` turns it off, `name?` shows it, and no words show all.
+// option on, `noname` turns it off, `name?` shows it.
+// `name!` and `invname` toggle, and `name&` restores the built-in default.
+// Bare `:set` shows the options that differ from their defaults, and
+// `all` alone shows every option.
 // A line either changes options or asks about them, not both. It returns the
-// new values, the text to show, and whether anything was set. On any error
+// new values, the text to show, and whether anything was applied. On any error
 // nothing changes: the returned values are current.
-func applySet(arguments string, current options.Values) (updated options.Values, text string, changed bool, err error) {
+func applySet(arguments string, current options.Values) (updated options.Values, text string, applied bool, err error) {
 	words := strings.Fields(arguments)
 	if len(words) == 0 {
+		text = current.Changed()
+		if text == "" {
+			text = "no options changed"
+		}
+		return current, text, false, nil
+	}
+	// "all" is reserved: no option may be called all, or this would shadow it.
+	if len(words) == 1 && words[0] == "all" {
 		return current, current.String(), false, nil
 	}
 	updated = current
 	var shown []string
 	queries := 0
 	for _, word := range words {
-		name, query, value, wordErr := parseSetWord(word)
+		name, query, value, wordErr := parseSetWord(word, updated)
 		if wordErr != nil {
 			return current, "", false, wordErr
 		}
@@ -56,13 +67,44 @@ func applySet(arguments string, current options.Values) (updated options.Values,
 }
 
 // parseSetWord splits one word into an option name and what to do with it.
-func parseSetWord(word string) (name string, query, value bool, err error) {
+func parseSetWord(word string, current options.Values) (name string, query, value bool, err error) {
+	if _, ok := options.Lookup(word); ok {
+		return word, false, true, nil
+	}
+	name = word
+	toggle, reset := false, false
+	switch {
+	case strings.HasSuffix(word, "!"):
+		name, toggle = strings.TrimSuffix(word, "!"), true
+	case strings.HasSuffix(word, "&"):
+		name, reset = strings.TrimSuffix(word, "&"), true
+	case strings.HasPrefix(word, "inv"):
+		name, toggle = strings.TrimPrefix(word, "inv"), true
+	}
+	if toggle || reset {
+		if name == "" {
+			return "", false, false, errors.New("missing option name")
+		}
+		option, ok := options.Lookup(name)
+		if !ok {
+			_, negated := options.Lookup(strings.TrimPrefix(name, "no"))
+			_, inverted := options.Lookup(strings.TrimPrefix(name, "inv"))
+			if negated || inverted || strings.ContainsAny(name, "!?&=") {
+				return "", false, false, fmt.Errorf("invalid :set form: %s", terminaltext.Clean(word))
+			}
+			return "", false, false, unknownOption(word)
+		}
+		if reset {
+			return name, false, option.Default, nil
+		}
+		return name, false, !current.Get(name), nil
+	}
 	if name, found := strings.CutSuffix(word, "?"); found {
 		if name == "" {
 			return "", false, false, errors.New("missing option name")
 		}
 		if _, ok := options.Lookup(name); !ok {
-			return "", false, false, unknownOption(name)
+			return "", false, false, unknownOption(word)
 		}
 		return name, true, false, nil
 	}
@@ -71,10 +113,7 @@ func parseSetWord(word string) (name string, query, value bool, err error) {
 		if _, ok := options.Lookup(bare); ok {
 			return "", false, false, fmt.Errorf("%s is on or off: use :set %s or :set no%s", bare, bare, bare)
 		}
-		return "", false, false, unknownOption(name)
-	}
-	if _, ok := options.Lookup(word); ok {
-		return word, false, true, nil
+		return "", false, false, unknownOption(word)
 	}
 	if name, found := strings.CutPrefix(word, "no"); found {
 		if _, ok := options.Lookup(name); ok {
@@ -91,11 +130,11 @@ func unknownOption(name string) error {
 // set handles a `:set` line: it changes the options for this session (the
 // config file is never written), tells every view, and shows the result.
 func (model *Model) set(arguments string) tea.Cmd {
-	updated, text, changed, err := applySet(arguments, model.options)
+	updated, text, applied, err := applySet(arguments, model.options)
 	if err != nil {
 		return Error(err)
 	}
-	if !changed {
+	if !applied {
 		return Info(text)
 	}
 	model.options = updated

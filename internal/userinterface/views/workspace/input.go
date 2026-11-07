@@ -1,12 +1,11 @@
 package workspace
 
 import (
+	"errors"
 	"fmt"
-	"io"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
-	"github.com/cli/go-gh/v2/pkg/browser"
 
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
@@ -45,12 +44,12 @@ func defaultBindings() bindings {
 		PreviousSection: bind("[", "[", "previous section (overview)"),
 		Comment:         bind("c", "c", "new comment on the diff line / selection (lines only)"),
 		OverviewComment: bind("C", "C", "new top-level comment on the pull request"),
-		Reply:           bind("r", "r", "reply to the comment thread at the cursor (diff pane)"),
-		ResolveThread:   bind("x", "x", "resolve or unresolve the comment thread at the cursor (diff pane; also :resolve, :unresolve)"),
+		Reply:           bind("r", "r", "reply to the selected review thread (diff or Comments)"),
+		ResolveThread:   bind("x", "x", "resolve or unresolve the selected review thread (diff or Comments; also :resolve, :unresolve)"),
 		Viewed:          bind("v", "v", "toggle file viewed"),
 		ReviewHunk:      bind("m", "m", "toggle hunk reviewed at the diff cursor (kept by strig until it quits)"),
 
-		Visual:        bind("V", "V", "select diff lines for a multi-line comment"),
+		Visual:        bind("V", "V", "select diff lines: [count]j/k extend, gg/G extend to boundary, c comment, esc cancel"),
 		EditComment:   bind("e", "e", "edit the comment of yours under the cursor (diff pane; also :edit-comment)"),
 		DeleteComment: bind("D", "D", "delete the comment of yours under the cursor (diff pane; also :delete-comment)"),
 		VisualDown:    key.NewBinding(key.WithKeys("j", "down"), key.WithHelp("j", "extend selection down")),
@@ -59,16 +58,24 @@ func defaultBindings() bindings {
 	}
 }
 
-func openInBrowser(url string) error {
-	return browser.New("", io.Discard, io.Discard).Browse(url)
+// UnavailableBrowser is the opener a view has when none was injected: it
+// reports that no browser can be opened rather than starting one.
+func UnavailableBrowser(string) error {
+	return errors.New("no browser opener configured")
 }
 
 func (view *View) handleKey(message keys.Message) tea.Cmd {
+	if view.mode == contentComments && view.focus == paneRight {
+		if command, handled := view.commentsKey(message); handled {
+			return command
+		}
+	}
 	if chosen, ok := view.keyEntry(message); ok {
 		return view.invoke(chosen, invocation{message: message})
 	}
 	switch {
 	case view.diffSearchFocused() && key.Matches(message, view.globalKeys.Search):
+		view.searchComments = false
 		view.searchPane = paneRight
 		return view.filePane.StartSearch()
 	case view.diffSearchFocused() && key.Matches(message, view.globalKeys.NextMatch):
@@ -78,6 +85,7 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 	case view.diffSearchFocused() && key.Matches(message, view.globalKeys.Cancel):
 		view.filePane.ClearSearch()
 	case view.focus == paneFiles && key.Matches(message, view.globalKeys.Search):
+		view.searchComments = false
 		view.searchPane = paneFiles
 		return view.search.Start(view.searchList())
 	case view.focus == paneFiles && key.Matches(message, view.globalKeys.NextMatch):
@@ -114,6 +122,9 @@ func (view *View) stepFile(delta int) {
 	// Hidden files are skipped: count along the shown file entries.
 	var before, after []int
 	for _, entry := range view.rows[1:] {
+		if entry <= 0 {
+			continue
+		}
 		if entry < view.selection() {
 			before = append(before, entry)
 		} else if entry > view.selection() {

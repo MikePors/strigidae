@@ -17,13 +17,13 @@ const (
 
 // PromptRequest implements userinterface.Prompter.
 func (view *View) PromptRequest() (prefix string, ok bool) {
-	return search.Prefix, view.search.TakeRequest() || view.filePane.TakeSearchRequest()
+	return search.Prefix, view.comments.search.TakeRequest() || view.search.TakeRequest() || view.filePane.TakeSearchRequest()
 }
 
 // searchHelp lists the search keys, which act on the focused pane.
 func (view *View) searchHelp() []key.Binding {
 	searchKey, next, previous := view.globalKeys.Search, view.globalKeys.NextMatch, view.globalKeys.PreviousMatch
-	searchKey.SetHelp("/", "search the focused pane (Files or diff)")
+	searchKey.SetHelp("/", "search the focused pane (Files, Comments or diff)")
 	next.SetHelp("n", "next match in the focused pane")
 	previous.SetHelp("N", "previous match in the focused pane")
 	return []key.Binding{searchKey, next, previous}
@@ -36,6 +36,10 @@ func (view *View) searchList() search.List {
 		Items: func() []search.Item {
 			items := []search.Item{{Identity: overviewKey}}
 			for _, entry := range view.rows[1:] {
+				if entry == commentsEntry {
+					items = append(items, search.Item{Identity: "comments"})
+					continue
+				}
 				file := view.files()[entry-1]
 				items = append(items, search.Item{Text: terminaltext.Clean(file.Path), Identity: fileKeyPrefix + file.Path})
 			}

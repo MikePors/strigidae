@@ -94,6 +94,7 @@ type Theme struct {
 	StateClosed      lipgloss.Style
 	Author           lipgloss.Style // comment and PR authors
 	Pending          lipgloss.Style // pending (draft) review marker
+	OwnReaction      lipgloss.Style // a reaction the viewer added (emoji and count); others are Muted
 	ErrorText        lipgloss.Style // inline error messages in content areas
 	SectionHeading   lipgloss.Style // "Description" / "Conversation" headings
 	SearchMarker     lipgloss.Style // the mark in the left column of rows that match the search
@@ -206,6 +207,7 @@ func newTheme(palette Palette, roles Roles, syntax string, overridden map[string
 		StateClosed:      bold(roles.Error),
 		Author:           lipgloss.NewStyle().Bold(true),
 		Pending:          bold(roles.Warning),
+		OwnReaction:      foreground(roles.Accent),
 		ErrorText:        bold(roles.Error),
 		SectionHeading:   bold(roles.Accent),
 		SearchMarker:     bold(roles.Accent),

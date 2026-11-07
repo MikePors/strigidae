@@ -9,6 +9,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
 func TestDescriptionReactions(test *testing.T) {
@@ -19,8 +20,6 @@ func TestDescriptionReactions(test *testing.T) {
 		absent    string
 	}{
 		{name: "none", reactions: nil, absent: "👍"},
-		// ViewerReacted has no visible effect yet (comments do not show it
-		// either), so the viewer's own reaction is counted like any other.
 		{name: "counts", reactions: []github.ReactionSummary{{Content: github.ReactionThumbsUp, Count: 2, ViewerReacted: true}, {Content: github.ReactionEyes, Count: 1}}, want: "👍 2 👀 1"},
 		{name: "zero count hidden", reactions: []github.ReactionSummary{{Content: github.ReactionRocket, Count: 0}}, absent: "🚀"},
 	}
@@ -53,6 +52,23 @@ func TestDescriptionReactions(test *testing.T) {
 				test.Errorf("unexpected %q:\n%s", testCase.absent, between)
 			}
 		})
+	}
+}
+
+func TestDescriptionOwnReactionsInTheAccentStyle(test *testing.T) {
+	detail := testDetail()
+	detail.Body = "Short description."
+	detail.Reactions = []github.ReactionSummary{
+		{Content: github.ReactionThumbsUp, Count: 2, ViewerReacted: true},
+		{Content: github.ReactionEyes, Count: 1},
+	}
+	harness := newHarness(test, 100, 60)
+	harness.client.SetPullRequest(detail)
+	harness.run(harness.view.Init())
+	activeTheme := theme.New(true)
+	want := activeTheme.OwnReaction.Render("👍 2") + " " + activeTheme.Muted.Render("👀 1")
+	if out := harness.render(); !strings.Contains(out, want) {
+		test.Errorf("want the viewer's 👍 in the own-reaction style and 👀 muted:\n%q", out)
 	}
 }
 

@@ -1,0 +1,20 @@
+open #7 Add retry policy to sync client
+alice · changes requested · main ← feat/retry · [enhancement] [sync] · reviewers: bob ?, team core …
+╭─ Files 0/5 viewed ─────────╮╭─ Comments ─────────────────────────────────────────────────────────╮
+│  Overview                  ││Unresolved · 0 of 5 conversations                                   │
+│> Comments (5)              ││No unresolved threads. :comments all shows every conversation.      │
+│    M …al/sync/client.go +25││                                                                    │
+│    A …al/sync/retry.go +214││                                                                    │
+│    D …al/sync/legacy.go -90││                                                                    │
+│    R …and-backoff.md +12 -3││                                                                    │
+│    M README.md        +2 -1││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯

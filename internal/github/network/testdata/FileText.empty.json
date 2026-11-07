@@ -1,0 +1,7 @@
+{"data": {"repository": {"object": {
+  "__typename": "Blob",
+  "text": "",
+  "isBinary": false,
+  "isTruncated": false,
+  "byteSize": 0
+}}}}

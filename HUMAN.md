@@ -4,6 +4,40 @@ Checks only the maintainer can do, such as live verification against real GitHub
 
 ## Live checks
 
+- [ ] **A hunk that starts inside a comment is coloured from the whole file, in a real terminal** (#262). The tests use an in-memory blob reader and check token types, not the colours on screen or a real checkout.
+  1. In a checkout of a repository (no `-R`), run `strig` and open a pull request that modifies a file inside a long block comment or docstring, so the hunk starts below the line that opens it. Open the file: the hunk's comment lines may flash code colours, then turn the comment colour without a pause or a message. Take a before/after screenshot (the "before" is the same file opened with `strig -R owner/repo`, which keeps per-hunk colours).
+  2. Use a pull request from a fork, or whose head you have never fetched: the colours should still change after a moment (strig fetches `refs/pull/<number>/head` once). Afterwards `git status`, `git branch -a` and `.git/FETCH_HEAD` look as before.
+  3. Open a modified file over 1 MiB, and one in a pull request while offline: both keep per-hunk colours, and `strig --log-path`'s file says why.
+  4. Report the language, whether the colours changed, how long it took, and any pause or message.
+
+- [ ] **An extensionless script is coloured by its shebang, in a real terminal** (#261). The tests check token types, not the colours on screen.
+  1. Run `strig -R owner/repo` and open a pull request that changes (or adds) an extensionless script with a `#!/usr/bin/env python3` or `#!/bin/sh` first line, such as `bin/release`. Open the file: the diff should be coloured as Python (or shell), the shebang line included.
+  2. Open a file with no extension and no shebang (a `NOTES` file, or a Go file called `main`): it stays one plain colour. In a script whose diff has several hunks, a hunk that starts further down than line 1 is coloured like the first one, whichever you scroll to first, and also when the first hunk is marked reviewed and hidden.
+  3. Open a change that swaps the shebang (`#!/bin/sh` for `#!/usr/bin/env python3`): the deleted lines are coloured as shell and the added lines as Python.
+  4. Report the file, the language colours you saw, and any extensionless file coloured as the wrong language.
+
+- [ ] **A multi-line comment or string is coloured whole in a hunk, in a real terminal** (#259). The tests check token types, not the colours on screen.
+  1. Run `strig -R owner/repo` and open a pull request whose diff has a block comment over several lines (`/* … */`, a Python docstring or a raw string) that opens and closes inside one hunk, as added lines. Every line of it should have the comment (or string) colour, not the code colours.
+  2. Open a hunk where a comment opens on a deleted line and closes on a context line: the deleted line is a comment, the context line is not. Scroll a file of several thousand lines: drawing its first screen should not pause noticeably.
+  3. Report the language, the colours you saw and any pause.
+
+- [ ] **Fetching a pull request's head never prompts, over HTTPS and SSH** (#267). Only local repositories stand in for the remote in the tests. Reachable from strig once #262 lands; until then, check what strig will run: `git fetch --no-write-fetch-head --refmap= --no-tags --no-auto-maintenance --no-recurse-submodules --quiet -- <remote> refs/pull/<number>/head` with stdin closed, `GIT_TERMINAL_PROMPT=0` and `GIT_SSH_COMMAND='ssh -o BatchMode=yes'`.
+  1. Once #262 is merged: in a checkout of a repository you can reach over HTTPS with no stored credentials (`git credential reject`, or a private repository), open a pull request whose blobs are not local and open a modified file. strig must not stop, ask for a username, or draw anything over the TUI; the file just keeps its per-hunk colours.
+  2. Repeat with an SSH remote, a passphrase-protected key and no agent (`env -u SSH_AUTH_SOCK strig`). It must not ask for the passphrase or a host key, and must not hang.
+  3. With a working login (HTTPS credential helper, or SSH key in an agent), open the same file: the whole-file colours should appear. Afterwards `git status`, `git branch -a`, `git for-each-ref` and `.git/FETCH_HEAD` must look exactly as before.
+  4. Report the transport, whether anything prompted or hung, and any ref or `FETCH_HEAD` change.
+
+- [ ] **`o` opens the browser without the token variables, in a real terminal** (#145). Only a fake command runner is tested.
+  1. With no `GH_BROWSER`, no `BROWSER` and no gh config `browser` set, open a pull request in strig and press `o`. The default browser should open the pull request and nothing should be printed over the TUI. Do this on Linux, on macOS and on Windows (Windows now runs `rundll32 url.dll,FileProtocolHandler` as a child process instead of an in-process call).
+  2. Run `GH_BROWSER='sh -c "env > /tmp/env.txt" --' GH_TOKEN=x strig`, press `o` on a pull request, then check `/tmp/env.txt`: it must contain no `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN` or `GITHUB_ENTERPRISE_TOKEN`, and should still have `PATH` and `HOME`.
+  3. Report the platform, whether the browser opened, anything drawn over the TUI, and any token variable found in `/tmp/env.txt`.
+
+- [ ] **Comments pane in a real terminal** (#233).
+  1. Run `strig -R owner/repo`, open a test PR containing PR comments, review summaries, resolved and outdated threads, and drafts. Select Comments below Overview, then try `:comments unresolved` and `:comments all`.
+  2. Search for text in a reply with `/`, move with `n` / `N`, and confirm the matching conversation expands. Read a long conversation with `ctrl+d` / `ctrl+u`; resize below 80 columns and use `h` / `l` to switch focus.
+  3. Press `enter` on a current thread, including a deleted-side thread and a hidden resolved thread. Check the exact code/thread is selected. Run `:comments` to return. An outdated thread must stay in Comments with a notice; `o` must open its permalink. Check a review summary's permalink too.
+  4. Reply to and resolve a test review thread from Comments, checking the confirmation and the result on GitHub. Repeat with local plugin results: writes and browser opening must be refused. Report any wrong target, missing content, or terminal overflow.
+
 - [ ] **Local threads survive restarting strig** (#202). Only files in a temporary directory are tested.
   1. Configure a `lines` plugin with `show: thread` (for example `docs/plugins.md`'s `ask`), open a pull request, move onto a diff line and run `:ask why?`. Wait for the answer, then quit (`:qa`) and start `strig` again on the same pull request. The question and the answer should be back on the same lines.
   2. Run `:ask` with a plugin that takes a while, quit while the thread says `waiting for an answer…`, start `strig` again and open the pull request. The thread should say `no answer: strig was closed`.
@@ -65,3 +99,41 @@ Checks only the maintainer can do, such as live verification against real GitHub
   4. Run `:ask` while the sleep is running, then `:q` before it ends, and open the same pull request again from the list: the thread should be there and, once the run ends, answered. Quit strig: the answer is gone on the next start (it is kept in memory only).
   5. Push a new commit to the pull request's branch (or use another pull request head), press `R`: the thread should show `[outdated]`, muted, after the last row of its file. Report whether that reads clearly.
   6. Make the script print an answer with terminal escapes (`\u001b[2J\u001b]0;pwned\u0007x`): the screen must not clear and the terminal title must not change.
+
+## #92 — cached list startup
+
+- With `gh` logged in (no token environment override), run `strig -R OWNER/REPO`,
+  wait for the list, and exit with `:q`. Start it again with a slow or disconnected
+  network: cached rows should show `(stale)` immediately and remain on transient
+  failure. Press `R` after reconnecting; fresh rows should replace them and the
+  label should disappear.
+- Repeat with `strig` outside a checkout for dashboard sections, and switch tabs
+  with `g t`. Report any cursor jumps or labels clipped at your terminal size.
+- Switch `gh` accounts on the same host and restart: the previous account's rows
+  must not appear. Repeat with a token environment override: no cache is reused.
+- Stop strig, delete its cache directory (see README), and restart: normal live
+  loading should work. Report OS, terminal size, and any unexpected behavior.
+
+- [ ] **`FileText` reads a file's text at a commit from real GitHub** (#260). The GraphQL `object(expression: "<commit>:<path>")` query has only been tested against hand-written fixtures. Nothing on screen uses it yet, so this can be done once #262 lands and highlights from the whole file; until then it needs a throwaway `main` that calls `network.New(...).FileText`.
+  1. Against a real pull request's head commit (the full 40-character SHA), read a small text file the pull request touches. The returned text should match `git show <sha>:<path>` exactly, including line endings and a missing final newline.
+  2. Read a binary file (for example a PNG) and a text file over about 1 MB. Each should fail with `ErrNoFileText`, not `ErrNotFound`. Report the size at which a text file starts to come back as truncated, if it does.
+  3. Read a path that does not exist at that commit, a path that was added by a later commit, and a directory path. Each should fail with `ErrNotFound`.
+  4. Report any case where the text came back wrong or the error was not the one above.
+
+## #36 — image rendering prototype
+
+- Run `go run ./cmd/imageprobe -protocol kitty` in Ghostty and
+  `go run ./cmd/imageprobe -protocol iterm2` in WezTerm. Press `r` once the
+  screen appears. Report terminal version and whether the gradient appears.
+- Scroll with `j`/`k` until the image is partially and fully outside the pane.
+  Toggle the covering overlay with `h`, resize, and press `r` again. Report
+  missing images, stale pixels, overlap with text, or literal placeholder glyphs.
+- Quit with `q`; check that the shell has no remaining image or altered cursor.
+  This checks visible artifacts only: the queued Kitty delete may flush after
+  the alternate screen has been left, so it does not prove image-store cleanup.
+  The iTerm2 path is a diagnostic for repaint ordering, not a completed fallback.
+  See `docs/design/36-inline-images.md` for the implementation gate.
+- Attach screenshots or recordings and terminal versions. Record TERM,
+  COLORTERM and any multiplexer. Run directly in each terminal first: truecolor
+  is needed for the Kitty identifier, and the probe does not wrap tmux APC
+  passthrough. Also run the Kitty probe in WezTerm to check its installed version.

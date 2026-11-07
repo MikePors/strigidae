@@ -171,7 +171,7 @@ func TestHostileTextNeverReachesTheScreen(test *testing.T) {
 		test.Errorf("the overview should list the threads:\n%s", out)
 	}
 	harness.press("h", "G", "k")
-	harness.press("j", "j", "j") // the hostile diff lines under the cursor, too
+	harness.press("j", "j", "j", "j") // the hostile diff lines under the cursor, too
 	assertTame(test, "cursor in hostile hunk", harness.render())
 
 	harness.press("f")

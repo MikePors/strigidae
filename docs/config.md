@@ -73,8 +73,10 @@ Optional. Commands that run a program of your own, each with a `command` name
 (a plain word), an `on_run` list (the program and its arguments), a `target`
 (`lines` or `pull-request`), an optional `show` (`thread`, only with
 `target: lines`: the answer is drawn in the diff as a local thread, see
-[plugins.md](plugins.md)) and an optional `timeout` (default `60s`).
-Command names must be unique. Plugins are read only from this file, never from
+[plugins.md](plugins.md)), an optional `timeout` (default `60s`) and an
+optional `service` (a plain word: the plugin's runs go to one long-running
+process, shared by the plugins with the same `service`, which must have the
+same `on_run`; see [plugins.md](plugins.md)). Command names must be unique. Plugins are read only from this file, never from
 a repository.
 
 ```yaml
@@ -94,8 +96,15 @@ an absolute path or a `~/` path. The protocol and the rules of a run are in
 ### Options
 
 Optional yes/no keys, written at the top level next to `theme`. Each is also
-a `:set` option (`:set nowrapscan`, `:set wrap`, `:set` alone to show
-them), which changes it for the running session without touching the file.
+a `:set` option (`:set nowrapscan`, `:set wrap`), which changes it for the
+running session without touching the file. `:set` alone shows the options that
+differ from their defaults and `:set all` shows every one.
+Use `:set name!` or `:set invname` to toggle an option, and `:set name&`
+to restore its built-in default, not its config file value. Changes can share
+a line (for example, `:set wrap! invhlsearch wrapscan&`); an unknown option
+leaves the whole line unapplied. Tab completes option names and their `no` forms.
+`:help config` lists every option with its current value, its default and a
+one-line description.
 The value must be an unquoted YAML boolean: `true` or `false` (`True` and
 `TRUE` also work). Quoted values and `yes` / `no` are errors naming the line, for example
 `config.yml:3: wrapscan must be true or false`.
@@ -221,9 +230,12 @@ hidden hunks, notices and each line of a comment thread. So `5j` moves to the
 row marked `5` below. With `wrap` on, a long line's continuation rows have no
 number. Rows further than 9999 rows away (the largest count) are left blank.
 The numbers are for `j` / `k` outside a line selection: in visual mode (`V`)
-`j` / `k` move one diff line at a time and skip thread rows.
-The column takes five cells from the code area. `G` with a count still goes to
-a new-side line number.
+counts on `j` / `k` count diff lines, skipping thread rows, and stop at
+selection boundaries. Thus `5j` in visual mode need not land on the row marked
+`5`. Bare `gg` / `G` extend to the first / last selectable line within the
+hunk without mixing added and deleted lines.
+The column takes five cells from the code area. Outside visual mode, `G` with
+a count goes to a new-side line number; visual mode currently ignores that count.
 
 ### `tabs`
 

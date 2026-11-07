@@ -6,16 +6,16 @@ package dashboard
 
 import (
 	"fmt"
-	"io"
+	"log/slog"
 	"time"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
-	"github.com/cli/go-gh/v2/pkg/browser"
 
 	"github.com/MikePors/strigidae/internal/clipboard"
 	"github.com/MikePors/strigidae/internal/config"
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/listcache"
 	"github.com/MikePors/strigidae/internal/options"
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/components/scroll"
@@ -30,6 +30,7 @@ import (
 // section and sequence identify the request: every view receives every
 // command result, and a refresh supersedes a search still in flight.
 type sectionLoadedMessage struct {
+	cached                 bool
 	tab, section, sequence int
 	page                   github.Page[github.PullRequest]
 	err                    error
@@ -37,7 +38,9 @@ type sectionLoadedMessage struct {
 
 // Options configures New. Zero values select the real behaviour.
 type Options struct {
-	// Now supplies the current time for relative ages.
+	// Cache supplies account-scoped startup snapshots; nil disables persistence.
+	Cache *listcache.Store
+	// Now supplies the current time for relative ages and cache timestamps.
 	Now func() time.Time
 	// Open opens a URL in the browser; it runs inside a tea.Cmd.
 	Open func(url string) error
@@ -59,6 +62,7 @@ type section struct {
 	limit    int
 	sequence int // latest request; older results are ignored
 
+	stale        bool
 	pullRequests []github.PullRequest
 	loading      bool
 	err          error
@@ -77,6 +81,7 @@ type tab struct {
 
 // View shows the tabs.
 type View struct {
+	cache      *listcache.Store
 	client     github.Client
 	theme      theme.Theme
 	options    options.Values // the `:set` options, sent by the root
@@ -127,9 +132,10 @@ func New(client github.Client, tabs []config.Tab, activeTheme theme.Theme, optio
 		options.Now = time.Now
 	}
 	if options.Open == nil {
-		options.Open = openInBrowser
+		options.Open = workspace.UnavailableBrowser
 	}
 	view := &View{
+		cache:      options.Cache,
 		client:     client,
 		theme:      activeTheme,
 		globalKeys: keys.DefaultGlobal(),
@@ -165,12 +171,6 @@ func New(client github.Client, tabs []config.Tab, activeTheme theme.Theme, optio
 // in queries, so this never duplicates one.
 func searchQuery(configured config.Section) string {
 	return configured.Query + " sort:" + string(configured.Sort) + "-" + string(configured.Order)
-}
-
-// openInBrowser discards the launcher's output: it must not touch the screen
-// the TUI owns.
-func openInBrowser(url string) error {
-	return browser.New("", io.Discard, io.Discard).Browse(url)
 }
 
 // Loading implements userinterface.Loader.
@@ -245,13 +245,34 @@ func (view *View) load(index int) tea.Cmd {
 // search runs one query. The closure captures copies, so it shares no state
 // with the view.
 func (view *View) search(tabIndex, sectionIndex int, target section) tea.Cmd {
-	client, timeouts := view.client, view.timeouts
-	return func() tea.Msg {
+	client, timeouts, cache := view.client, view.timeouts, view.cache
+	key := listcache.Key{Kind: "search", Query: target.search, Limit: github.PageRequest{Limit: target.limit}.Size()}
+	started := view.now()
+	fresh := func() tea.Msg {
 		ctx, cancel := timeouts.LoadContext()
 		defer cancel()
 		page, err := client.SearchPullRequests(ctx, target.search, github.PageRequest{Limit: target.limit})
+		if err == nil {
+			if saveError := cache.Save(key, page.Items, started); saveError != nil {
+				slog.Debug("save list cache", "err", saveError)
+			}
+		} else if listcache.Denied(err) {
+			if removeError := cache.Remove(key); removeError != nil {
+				slog.Debug("remove list cache", "err", removeError)
+			}
+		}
 		return sectionLoadedMessage{tab: tabIndex, section: sectionIndex, sequence: target.sequence, page: page, err: err}
 	}
+	if cache == nil || target.sequence != 1 {
+		return fresh
+	}
+	return tea.Sequence(func() tea.Msg {
+		items, ok := cache.Load(key)
+		if !ok {
+			return nil
+		}
+		return sectionLoadedMessage{tab: tabIndex, section: sectionIndex, sequence: target.sequence, cached: true, page: github.Page[github.PullRequest]{Items: items}}
+	}, fresh)
 }
 
 // Update implements userinterface.View.
@@ -283,12 +304,26 @@ func (view *View) loaded(message sectionLoadedMessage) {
 	if message.sequence != target.sequence {
 		return // superseded by a refresh
 	}
+	if message.cached {
+		if !target.loading {
+			return
+		}
+		target.stale = true
+		target.pullRequests = message.page.Items
+		current.search.Refresh(current.searchList())
+		return
+	}
 	target.loading = false
 	target.err = message.err
-	if message.err != nil {
+	if message.err != nil && !listcache.Denied(message.err) {
 		return // keep the rows from the last good load
 	}
-	target.pullRequests = message.page.Items
+	target.stale = false
+	if message.err != nil {
+		target.pullRequests = nil
+	} else {
+		target.pullRequests = message.page.Items
+	}
 	current.search.Refresh(current.searchList())
 	if current.total() == 0 {
 		current.anchor = nil // start from the top when rows come back

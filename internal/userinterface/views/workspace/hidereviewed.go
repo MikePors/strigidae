@@ -35,13 +35,16 @@ func (view *View) hunkMarkChanged(file *diff.File, hunk int, reviewed bool) tea.
 	key := view.hunkFadeKey(file, hunk)
 	if !reviewed {
 		view.fades.cancel(key)
-		view.filePane.HiddenHunksChanged()
+		view.filePane.HunkReviewedChanged(file, hunk)
 		return nil
 	}
 	if !view.options.HideReviewed() {
+		view.filePane.HunkReviewedChanged(file, hunk)
 		return nil
 	}
-	return view.fadeCommand(key, view.fades.begin(key, view.now()))
+	generation := view.fades.begin(key, view.now())
+	view.filePane.HunkReviewedChanged(file, hunk)
+	return view.fadeCommand(key, generation)
 }
 
 // hunkFadeTicked handles a timer of a hunk's fade: the hunk is hidden once

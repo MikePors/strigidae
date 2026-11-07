@@ -17,7 +17,7 @@ func autoHideHarness(test *testing.T, hideViewed, hideReviewed bool) *hideHarnes
 		options.HideViewed:   hideViewed,
 		options.HideReviewed: hideReviewed,
 	}})
-	hidden.press("j", "l")
+	hidden.press("j", "j", "l")
 	return hidden
 }
 
@@ -32,10 +32,10 @@ func TestAutoViewedFileFadesAndCanBeTakenBack(test *testing.T) {
 	if !hidden.view.fades.active(fadeKey(firstFile)) {
 		test.Fatal("the auto-marked file is not fading")
 	}
-	hidden.wantRows(0, 1, 2, 3, 4, 5) // still listed
+	hidden.wantRows(0, commentsEntry, 1, 2, 3, 4, 5) // still listed
 
 	hidden.fire(fadeDuration)
-	hidden.wantRows(0, 2, 3, 4, 5)
+	hidden.wantRows(0, commentsEntry, 2, 3, 4, 5)
 
 	// Back to a second run, taking the mark back while it fades.
 	again := autoHideHarness(test, true, false)
@@ -47,7 +47,7 @@ func TestAutoViewedFileFadesAndCanBeTakenBack(test *testing.T) {
 		test.Error("the fade goes on after the undo")
 	}
 	again.fire(fadeDuration)
-	again.wantRows(0, 1, 2, 3, 4, 5)
+	again.wantRows(0, commentsEntry, 1, 2, 3, 4, 5)
 	if _, auto := again.view.hunkMarks.autoViewed[fileKey{again.view.repository, again.view.number, clientPath}]; auto {
 		test.Error("a file the user took back is still remembered as auto-marked")
 	}

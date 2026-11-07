@@ -79,7 +79,7 @@ func TestToggleViewed(test *testing.T) {
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
 			harness := viewedHarness(test, 100, 24, testCase.start)
-			harness.press("j", "v")
+			harness.press("j", "j", "v")
 			if got := harness.stateOf(); got != testCase.want {
 				test.Errorf("state = %q, want %q", got, testCase.want)
 			}
@@ -96,7 +96,7 @@ func TestToggleViewed(test *testing.T) {
 
 func TestToggleViewedFromRightPane(test *testing.T) {
 	harness := viewedHarness(test, 100, 24)
-	harness.press("j", "l", "v")
+	harness.press("j", "j", "l", "v")
 	if got := harness.stateOf(); got != github.FileViewed {
 		test.Errorf("state = %q", got)
 	}
@@ -118,7 +118,7 @@ func (harness *harness) viewedCountForTest() int { return harness.view.viewedCou
 func TestToggleViewedRevertsOnError(test *testing.T) {
 	harness := viewedHarness(test, 100, 24, github.FileDismissed)
 	harness.client.SetError(fake.MethodSetFileViewed, errors.New("boom \x1b[31mred"))
-	harness.press("j", "v")
+	harness.press("j", "j", "v")
 	if got := harness.stateOf(); got != github.FileDismissed {
 		test.Errorf("state = %q, want the original dismissed", got)
 	}
@@ -133,7 +133,7 @@ func TestFilesTitleShowsProgress(test *testing.T) {
 	if !strings.Contains(ansi.Strip(harness.render()), "Files 2/5 viewed") {
 		test.Errorf("no progress in title:\n%s", ansi.Strip(harness.render()))
 	}
-	harness.press("j", "j", "v") // second file: dismissed becomes viewed
+	harness.press("j", "j", "j", "v") // second file: dismissed becomes viewed
 	if !strings.Contains(ansi.Strip(harness.render()), "Files 3/5 viewed") {
 		test.Error("title did not update at once")
 	}
@@ -161,6 +161,6 @@ func TestViewedRowsAreStyled(test *testing.T) {
 
 func TestGoldenViewedStates(test *testing.T) {
 	harness := viewedHarness(test, 100, 20, github.FileViewed, github.FileDismissed, github.FileUnviewed, github.FileViewed)
-	harness.press("j", "j")
+	harness.press("j", "j", "j")
 	golden.Assert(test, "files_viewed", harness.render(), false)
 }

@@ -72,6 +72,7 @@
           "nodes": [
             {
               "id": "PRR_kwDOExample01",
+              "url": "https://github.com/MikePors/strigidae/pull/27#pullrequestreview-1",
               "state": "CHANGES_REQUESTED",
               "body": "Please add tests.",
               "submittedAt": "2026-10-18T13:00:00Z",

@@ -19,21 +19,21 @@ func TestParseURL(test *testing.T) {
 		want    Remote
 		wantErr bool
 	}{
-		{"git@github.com:MikePors/strigidae.git", Remote{"github.com", repository("MikePors", "strigidae")}, false},
-		{"git@github.com:MikePors/strigidae", Remote{"github.com", repository("MikePors", "strigidae")}, false},
-		{"ghe.example.com:team/app.git", Remote{"ghe.example.com", repository("team", "app")}, false},
-		{"ssh://git@github.com/o/r.git", Remote{"github.com", repository("o", "r")}, false},
-		{"ssh://git@ghe.example.com:2222/o/r", Remote{"ghe.example.com", repository("o", "r")}, false},
-		{"ssh://git@ssh.github.com:443/o/r.git", Remote{"github.com", repository("o", "r")}, false},
-		{"https://github.com/o/r.git", Remote{"github.com", repository("o", "r")}, false},
-		{"https://github.com/o/r/", Remote{"github.com", repository("o", "r")}, false},
-		{"https://user:tok@ghe.example.com/o/r.git", Remote{"ghe.example.com", repository("o", "r")}, false},
-		{"git://github.com/o/r.git", Remote{"github.com", repository("o", "r")}, false},
-		{"  https://github.com/o/r.git\n", Remote{"github.com", repository("o", "r")}, false},
-		{"https://GitHub.com/o/r", Remote{"github.com", repository("o", "r")}, false},
-		{"https://github.com:443/o/r.git", Remote{"github.com", repository("o", "r")}, false},
-		{"git@ssh.github.com:o/r.git", Remote{"github.com", repository("o", "r")}, false},
-		{"git@GitHub.com:o/r.git", Remote{"github.com", repository("o", "r")}, false},
+		{"git@github.com:MikePors/strigidae.git", Remote{Host: "github.com", Repository: repository("MikePors", "strigidae")}, false},
+		{"git@github.com:MikePors/strigidae", Remote{Host: "github.com", Repository: repository("MikePors", "strigidae")}, false},
+		{"ghe.example.com:team/app.git", Remote{Host: "ghe.example.com", Repository: repository("team", "app")}, false},
+		{"ssh://git@github.com/o/r.git", Remote{Host: "github.com", Repository: repository("o", "r")}, false},
+		{"ssh://git@ghe.example.com:2222/o/r", Remote{Host: "ghe.example.com", Repository: repository("o", "r")}, false},
+		{"ssh://git@ssh.github.com:443/o/r.git", Remote{Host: "github.com", Repository: repository("o", "r")}, false},
+		{"https://github.com/o/r.git", Remote{Host: "github.com", Repository: repository("o", "r")}, false},
+		{"https://github.com/o/r/", Remote{Host: "github.com", Repository: repository("o", "r")}, false},
+		{"https://user:tok@ghe.example.com/o/r.git", Remote{Host: "ghe.example.com", Repository: repository("o", "r")}, false},
+		{"git://github.com/o/r.git", Remote{Host: "github.com", Repository: repository("o", "r")}, false},
+		{"  https://github.com/o/r.git\n", Remote{Host: "github.com", Repository: repository("o", "r")}, false},
+		{"https://GitHub.com/o/r", Remote{Host: "github.com", Repository: repository("o", "r")}, false},
+		{"https://github.com:443/o/r.git", Remote{Host: "github.com", Repository: repository("o", "r")}, false},
+		{"git@ssh.github.com:o/r.git", Remote{Host: "github.com", Repository: repository("o", "r")}, false},
+		{"git@GitHub.com:o/r.git", Remote{Host: "github.com", Repository: repository("o", "r")}, false},
 		{"", Remote{}, true},
 		{"/home/me/repo", Remote{}, true},
 		{"../repo", Remote{}, true},
@@ -90,16 +90,16 @@ func TestInferKnownHosts(test *testing.T) {
 		want      Remote
 		wantHosts []string // set when an UnknownHostError is expected
 	}{
-		{"known origin", map[string]string{"origin": "git@github.com:o/r.git"}, Remote{"github.com", github.Repository{Owner: "o", Name: "r"}}, nil},
+		{"known origin", map[string]string{"origin": "git@github.com:o/r.git"}, Remote{Host: "github.com", Repository: github.Repository{Owner: "o", Name: "r"}, Name: "origin"}, nil},
 		{
 			"gitlab upstream falls back to github origin",
 			map[string]string{"upstream": "git@gitlab.com:o/r.git", "origin": "git@github.com:me/r.git"},
-			Remote{"github.com", github.Repository{Owner: "me", Name: "r"}},
+			Remote{Host: "github.com", Repository: github.Repository{Owner: "me", Name: "r"}, Name: "origin"},
 			nil,
 		},
 		{"ssh alias only", map[string]string{"origin": "github-work:acme/app.git"}, Remote{}, []string{"github-work"}},
 		{"both unknown", map[string]string{"upstream": "git@gitlab.com:o/r.git", "origin": "github-work:acme/app.git"}, Remote{}, []string{"gitlab.com", "github-work"}},
-		{"enterprise host", map[string]string{"origin": "https://ghe.example.com/o/r"}, Remote{"ghe.example.com", github.Repository{Owner: "o", Name: "r"}}, nil},
+		{"enterprise host", map[string]string{"origin": "https://ghe.example.com/o/r"}, Remote{Host: "ghe.example.com", Repository: github.Repository{Owner: "o", Name: "r"}, Name: "origin"}, nil},
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
@@ -149,6 +149,30 @@ func TestInfer(test *testing.T) {
 			}
 			if got.Repository != testCase.want {
 				test.Errorf("repo = %v, want %v", got.Repository, testCase.want)
+			}
+		})
+	}
+}
+
+func TestInferNamesTheChosenRemote(test *testing.T) {
+	origin := "https://github.com/fork-owner/repo.git"
+	upstream := "git@github.com:upstream-owner/repo.git"
+	for _, testCase := range []struct {
+		name    string
+		remotes map[string]string
+		want    string
+	}{
+		{"origin only", map[string]string{"origin": origin}, "origin"},
+		{"upstream preferred", map[string]string{"origin": origin, "upstream": upstream}, "upstream"},
+		{"unparsable upstream falls back", map[string]string{"origin": origin, "upstream": "/local/path"}, "origin"},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			got, err := Infer(context.Background(), fakeGit(true, testCase.remotes), "/work", nil)
+			if err != nil {
+				test.Fatal(err)
+			}
+			if got.Name != testCase.want {
+				test.Errorf("Name = %q, want %q", got.Name, testCase.want)
 			}
 		})
 	}

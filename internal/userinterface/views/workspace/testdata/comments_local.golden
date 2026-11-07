@@ -1,0 +1,24 @@
+open #7 Add retry policy to sync client
+alice · changes requested · main ← feat/retry · [enhancement] [sync] · reviewers: bob ?, team core …
+╭─ Files 0/5 viewed ─────────╮╭─ Comments ─────────────────────────────────────────────────────────╮
+│  Overview                  ││9 conversations · 3 unresolved · 1 draft comments                   │
+│> Comments (9)              ││                                                                    │
+│    M …al/sync/client.go +25││  carol requested changes · 1d ago                                  │
+│    A …al/sync/retry.go +214││    The cap should be configurable.                                 │
+│    D …al/sync/legacy.go -90││                                                                    │
+│    R …and-backoff.md +12 -3││  ▸ internal/sync/client.go:12 carol 1 comment · 1d ago [resolved] …│
+│    M README.md        +2 -1││                                                                    │
+│                            ││  bob commented · 2d ago                                            │
+│                            ││    Thanks! Could you add a test for the **jitter** bounds?         │
+│                            ││                                                                    │
+│                            ││  ▸ internal/sync/client.go:3 dave 1 comment · 2d ago [outdated] — …│
+│                            ││                                                                    │
+│                            ││Local (not on GitHub)                                               │
+│                            ││> ▾ internal/sync/client.go:14 you 2 comments                       │
+│                            ││  │ you                                                             │
+│                            ││  │   Why here?                                                     │
+│                            ││  │                                                                 │
+│                            ││  │ answer (local, not on GitHub)                                   │
+│                            ││  │   Local answer                                                  │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
