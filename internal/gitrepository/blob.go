@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -153,9 +154,19 @@ func FetchPullRequestHead(ctx context.Context, directory, remoteName string, num
 		if ctx.Err() != nil {
 			return fmt.Errorf("fetch pull request %d head from %s: %w", number, remoteName, ctx.Err())
 		}
-		return fmt.Errorf("fetch pull request %d head from %s: %w: %s", number, remoteName, err, strings.TrimSpace(diagnostics.String()))
+		return fmt.Errorf("fetch pull request %d head from %s: %w: %s", number, remoteName, err, redactCredentials(strings.TrimSpace(diagnostics.String())))
 	}
 	return nil
+}
+
+// credentialsInURL matches the user information of a URL ("user:token@"),
+// which a remote URL may carry and git may print.
+var credentialsInURL = regexp.MustCompile(`(://)[^/@\s]*@`)
+
+// redactCredentials removes the user information from every URL in git's
+// diagnostics, so a token in a remote URL never reaches the log.
+func redactCredentials(diagnostics string) string {
+	return credentialsInURL.ReplaceAllString(diagnostics, "${1}[redacted]@")
 }
 
 // newFetchCommand builds the git fetch for FetchPullRequestHead. It is separate

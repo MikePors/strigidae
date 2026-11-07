@@ -89,3 +89,37 @@ func TestBlobReaderDoesNotRetryAFailedFetch(test *testing.T) {
 		test.Errorf("fetches (-want +got):\n%s", diff)
 	}
 }
+
+func TestBlobReaderLeavesTheFetchToALaterReadWhenTheDeadlineHasPassed(test *testing.T) {
+	test.Parallel()
+	checkout := &fakeCheckout{
+		present:   map[string]string{},
+		afterHead: map[int]map[string]string{5: {"bbbb": "head"}},
+	}
+	reader := checkout.reader()
+	expired, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := reader.ReadBlob(expired, 5, "bbbb"); !errors.Is(err, context.Canceled) {
+		test.Fatalf("err = %v, want context.Canceled", err)
+	}
+	if len(checkout.fetches) != 0 {
+		test.Fatalf("fetched with an expired context: %v", checkout.fetches)
+	}
+	if text, err := reader.ReadBlob(context.Background(), 5, "bbbb"); err != nil || string(text) != "head" {
+		test.Fatalf("later read = %q, %v", text, err)
+	}
+}
+
+func TestRedactCredentials(test *testing.T) {
+	test.Parallel()
+	tests := []struct{ diagnostics, want string }{
+		{"fatal: unable to access 'https://user:ghp_secret@example.test/o/r.git/': 403", "fatal: unable to access 'https://[redacted]@example.test/o/r.git/': 403"},
+		{"fatal: could not read from https://token@a.test/x and https://b.test/y", "fatal: could not read from https://[redacted]@a.test/x and https://b.test/y"},
+		{"git@github.com: Permission denied (publickey).", "git@github.com: Permission denied (publickey)."},
+	}
+	for _, testCase := range tests {
+		if got := redactCredentials(testCase.diagnostics); got != testCase.want {
+			test.Errorf("redactCredentials(%q) = %q, want %q", testCase.diagnostics, got, testCase.want)
+		}
+	}
+}
