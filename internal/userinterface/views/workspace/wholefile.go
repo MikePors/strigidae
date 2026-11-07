@@ -39,11 +39,12 @@ type WholeFiles struct {
 	reader BlobReader
 	spans  map[wholeFileKey][][]diffview.Span // nil: the side could not be used
 	bytes  int                                // estimated size of spans
+	limit  int                                // bound on bytes; maximumWholeFileBytes
 }
 
 // NewWholeFiles returns an empty cache reading with reader.
 func NewWholeFiles(reader BlobReader) *WholeFiles {
-	return &WholeFiles{reader: reader, spans: map[wholeFileKey][][]diffview.Span{}}
+	return &WholeFiles{reader: reader, spans: map[wholeFileKey][][]diffview.Span{}, limit: maximumWholeFileBytes}
 }
 
 // WithWholeFiles makes the workspace colour files from their whole text (see
@@ -130,15 +131,21 @@ func (view *View) readWholeFile(key wholeFileKey) tea.Cmd {
 // after the update if the file is still shown (wholeFileSides); otherwise it
 // waits in the cache.
 //
-// A read that only ran out of time is not kept, so the side is read again
-// while the file is shown; the reader still fetches at most once per pull
-// request, so the next read fails for good or succeeds.
+// A read that only ran out of time is not kept the first time, so the side
+// is read once more while the file is shown (it may have waited for another
+// read's fetch); a second one is kept as a failure, so a timeout that always
+// expires, or a disk always slower than it, cannot start reads without end.
 func (view *View) wholeFileRead(message wholeFileMessage) {
 	delete(view.wholeFilePending, message.key)
 	if message.err != nil {
 		// The path is left out: it is the pull request author's text.
 		slog.Info("colour a file hunk by hunk: whole file unavailable", "blob", message.key.objectIdentifier, "err", message.err)
-		if errors.Is(message.err, context.DeadlineExceeded) || errors.Is(message.err, context.Canceled) {
+		timedOut := errors.Is(message.err, context.DeadlineExceeded) || errors.Is(message.err, context.Canceled)
+		if timedOut && !view.wholeFileRetried[message.key] {
+			if view.wholeFileRetried == nil {
+				view.wholeFileRetried = map[wholeFileKey]bool{}
+			}
+			view.wholeFileRetried[message.key] = true
 			return
 		}
 	}
@@ -149,7 +156,7 @@ func (view *View) wholeFileRead(message wholeFileMessage) {
 // bound.
 func (files *WholeFiles) keep(key wholeFileKey, lines [][]diffview.Span) {
 	size := spansSize(lines)
-	if files.bytes+size > maximumWholeFileBytes {
+	if files.bytes+size > files.limit {
 		files.spans, files.bytes = map[wholeFileKey][][]diffview.Span{}, 0
 	}
 	files.spans[key] = lines

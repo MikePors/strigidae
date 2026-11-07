@@ -200,6 +200,42 @@ func TestWholeFileTimedOutReadIsReadAgain(test *testing.T) {
 	}
 }
 
+func TestWholeFileSideThatKeepsTimingOutIsReadTwice(test *testing.T) {
+	blobs := bothSides()
+	blobs.timeOuts = 100
+	testHarness, pane := newWholeFileHarness(test, blobs)
+	testHarness.press("}")
+	if diff := cmp.Diff([]string{"7:1111111", "7:1111111", "7:2222222", "7:2222222"}, blobs.reads); diff != "" {
+		test.Errorf("reads (-want +got):\n%s", diff)
+	}
+	// The failure is kept: another file and back reads nothing.
+	testHarness.press("}", "{")
+	if len(blobs.reads) != 4 {
+		test.Errorf("reads after reopening = %v, want two per side", blobs.reads)
+	}
+	if len(pane.order) != 0 {
+		test.Errorf("sides given after timeouts: %v", pane.order)
+	}
+}
+
+// TestWholeFilesStartAgainEmptyPastTheLimit crosses the limit twice, so a
+// reset that forgot the byte count would keep one side at most afterwards.
+func TestWholeFilesStartAgainEmptyPastTheLimit(test *testing.T) {
+	side := [][]diffview.Span{{{Text: "x"}}}
+	files := NewWholeFiles(nil)
+	files.limit = 2 * spansSize(side)
+	sides := []wholeFileKey{{"a", "1"}, {"b", "2"}, {"c", "3"}, {"d", "4"}, {"e", "5"}, {"f", "6"}}
+	for _, key := range sides {
+		files.keep(key, side)
+	}
+	for i, key := range sides {
+		_, kept := files.spans[key]
+		if want := i >= 4; kept != want {
+			test.Errorf("side %v kept = %v, want %v", key, kept, want)
+		}
+	}
+}
+
 func TestWholeFileAddedFileTriggersNoRead(test *testing.T) {
 	blobs := bothSides()
 	testHarness, _ := newWholeFileHarness(test, blobs)

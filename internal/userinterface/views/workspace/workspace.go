@@ -134,6 +134,7 @@ type View struct {
 
 	wholeFiles       *WholeFiles           // nil: files are coloured hunk by hunk; see wholefile.go
 	wholeFilePending map[wholeFileKey]bool // sides being read for this view
+	wholeFileRetried map[wholeFileKey]bool // sides read again after running out of time
 
 	window  scroll.Window  // Files pane: over rows
 	rows    []int          // the entry each Files pane row shows; see hideviewed.go
