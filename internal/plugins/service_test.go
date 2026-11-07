@@ -226,9 +226,11 @@ func TestStopKillsTheService(test *testing.T) {
 func TestServiceWriteToAnEndedProcessReportsExited(test *testing.T) {
 	for _, testCase := range []struct {
 		name string
-		end  func(test *testing.T, process *serviceProcess)
+		// replacement is the input the run finds: a file already closed, or
+		// a pipe whose reader is gone.
+		replacement func(test *testing.T) *os.File
 	}{
-		{"broken pipe", func(test *testing.T, process *serviceProcess) {
+		{"broken pipe", func(test *testing.T) *os.File {
 			reader, writer, err := os.Pipe()
 			if err != nil {
 				test.Fatal(err)
@@ -236,16 +238,18 @@ func TestServiceWriteToAnEndedProcessReportsExited(test *testing.T) {
 			if err := reader.Close(); err != nil {
 				test.Fatal(err)
 			}
-			// The service keeps its real input, so it does not end by itself.
-			realInput := process.input
-			test.Cleanup(func() { _ = realInput.Close() })
-			process.input = writer
+			return writer
 		}},
-		{"closed file", func(test *testing.T, process *serviceProcess) {
+		{"closed file", func(test *testing.T) *os.File {
 			// As when the process ended between a run joining it and writing.
-			if err := process.input.Close(); err != nil {
+			reader, writer, err := os.Pipe()
+			if err != nil {
 				test.Fatal(err)
 			}
+			if err := errors.Join(reader.Close(), writer.Close()); err != nil {
+				test.Fatal(err)
+			}
+			return writer
 		}},
 	} {
 		test.Run(testCase.name, func(test *testing.T) {
@@ -257,7 +261,11 @@ func TestServiceWriteToAnEndedProcessReportsExited(test *testing.T) {
 			serving.mutex.Lock()
 			process := serving.process
 			serving.mutex.Unlock()
-			testCase.end(test, process)
+			// The service keeps its real input, so it cannot end by itself and
+			// let the next run start a fresh process.
+			realInput := process.input
+			test.Cleanup(func() { _ = realInput.Close() })
+			process.input = testCase.replacement(test)
 			result := harness.run(context.Background(), "ask", "second")
 			if !errors.Is(result.err, ErrExited) || result.err.Error() != `plugin "ask": exited` {
 				test.Errorf("run on an ended process: %v", result.err)
