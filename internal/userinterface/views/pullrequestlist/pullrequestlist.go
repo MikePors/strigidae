@@ -63,6 +63,10 @@ type Options struct {
 	// Edit opens $EDITOR for the text of a new pull request; nil selects the
 	// real editor.
 	Edit workspace.EditFunction
+	// Blobs reads the files of the repository's pull requests from the local
+	// checkout, so the workspaces colour them from their whole text; nil
+	// colours them hunk by hunk.
+	Blobs workspace.BlobReader
 }
 
 // tab is one list of the repository's open pull requests with its own rows,
@@ -107,7 +111,10 @@ type View struct {
 	// hunkMarks keeps the hunks marked reviewed in every workspace opened
 	// from here, so they survive closing and reopening a pull request.
 	hunkMarks *workspace.HunkMarks
-	bindings  bindings
+	// wholeFiles keeps the files read whole for every workspace opened from
+	// the list; nil without a checkout to read them from.
+	wholeFiles *workspace.WholeFiles
+	bindings   bindings
 
 	currentBranch  string
 	edit           workspace.EditFunction
@@ -167,6 +174,10 @@ func New(client github.Client, repository github.Repository, configured []config
 	if options.Edit == nil {
 		options.Edit = workspace.ExecEditor
 	}
+	var wholeFiles *workspace.WholeFiles
+	if options.Blobs != nil {
+		wholeFiles = workspace.NewWholeFiles(options.Blobs)
+	}
 	tabs := []tab{{name: "All"}}
 	for _, current := range configured {
 		// The config only allows a GitHub login or @me, so Clean changes nothing
@@ -194,6 +205,7 @@ func New(client github.Client, repository github.Repository, configured []config
 		currentBranch: options.CurrentBranch,
 		edit:          options.Edit,
 		hunkMarks:     workspace.NewHunkMarks(),
+		wholeFiles:    wholeFiles,
 		tabs:          tabs,
 	}
 }
@@ -510,6 +522,7 @@ func (view *View) openPullRequest(number int) tea.Cmd {
 		workspace.WithWrap(view.options.Wrap()),
 		workspace.WithTimeouts(view.timeouts),
 		workspace.WithClipboard(view.clipboard),
+		workspace.WithWholeFiles(view.wholeFiles),
 	))
 }
 

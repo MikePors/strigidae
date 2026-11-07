@@ -55,6 +55,31 @@ func TestCurrentBranchOfTheCheckout(test *testing.T) {
 	}
 }
 
+// Files are read from the checkout only when its remote is the repository
+// shown: with -R the checkout need not be it.
+func TestBlobReaderOnlyForTheCheckoutsRepository(test *testing.T) {
+	origin := "git@github.com:o/r.git"
+	for _, testCase := range []struct {
+		name      string
+		arguments []string
+		want      bool
+	}{
+		{"inferred from the checkout", nil, true},
+		{"-R has none", []string{"-R", "o/r"}, false},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			harness := newHarness(map[string]string{"origin": origin}, true, nil)
+			var stdout, stderr bytes.Buffer
+			if code := run(testCase.arguments, &stdout, &stderr, harness.dependencies); code != 0 {
+				test.Fatalf("exit code = %d: %s", code, stderr.String())
+			}
+			if got := harness.application.blobs != nil; got != testCase.want {
+				test.Errorf("blob reader present = %v, want %v", got, testCase.want)
+			}
+		})
+	}
+}
+
 // The shell is told the commands of every view, so ":merge" on the dashboard
 // says "not available here" instead of "not a command".
 func TestViewCommandsAreCollectedFromTheViews(test *testing.T) {

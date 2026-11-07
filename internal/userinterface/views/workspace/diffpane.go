@@ -129,6 +129,10 @@ func (pane *diffPane) SetThreads(threads []github.ReviewThread) { pane.diffView.
 
 func (pane *diffPane) SetSize(width, height int) { pane.diffView.SetSize(width, height) }
 
+func (pane *diffPane) SetFileSpans(side github.DiffSide, objectIdentifier string, lines [][]diffview.Span) {
+	pane.diffView.SetFileSpans(side, objectIdentifier, lines)
+}
+
 func (pane *diffPane) SetDiff(diffState DiffState) {
 	pane.state = diffState
 	pane.show()
