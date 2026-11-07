@@ -197,12 +197,20 @@ func TestSetToggleAndResetThroughModel(test *testing.T) {
 		arguments string
 		want      options.Values
 		wantError string
+		wantText  string
 	}{
-		{arguments: "wrap!", want: options.Values{"wrap": false, "wrapscan": false}},
-		{arguments: "invwrapscan", want: options.Values{"wrap": true, "wrapscan": true}},
-		{arguments: "wrap& wrapscan&", want: options.Values{"wrap": false, "wrapscan": true}},
-		{arguments: "nowrap wrap! invwrap wrapscan& nowrapscan", want: options.Values{"wrap": false, "wrapscan": false}},
-		{arguments: "wrap! wrap!", want: options.Values{"wrap": true, "wrapscan": false}},
+		{arguments: "wrap!", want: options.Values{"wrap": false, "wrapscan": false}, wantText: "nowrap"},
+		{arguments: "invwrapscan", want: options.Values{"wrap": true, "wrapscan": true}, wantText: "wrapscan"},
+		{arguments: "wrap& wrapscan&", want: options.Values{"wrap": false, "wrapscan": true}, wantText: "nowrap wrapscan"},
+		{arguments: "nowrap wrap! invwrap wrapscan& nowrapscan", want: options.Values{"wrap": false, "wrapscan": false}, wantText: "nowrap nowrap nowrap nowrapscan nowrapscan"},
+		{arguments: "wrap! wrap!", want: options.Values{"wrap": true, "wrapscan": false}, wantText: "wrap wrap"},
+		{arguments: "!", wantError: "missing option name"},
+		{arguments: "&", wantError: "missing option name"},
+		{arguments: "inv", wantError: "missing option name"},
+		{arguments: "wrap! nowrap!", wantError: "invalid :set form: nowrap!"},
+		{arguments: "wrap! invnowrap", wantError: "invalid :set form: invnowrap"},
+		{arguments: "wrap! invwrap?", wantError: "invalid :set form: invwrap?"},
+		{arguments: "wrap! invwrap=1", wantError: "invalid :set form: invwrap=1"},
 		{arguments: "wrap! unknown!", wantError: "unknown option: unknown"},
 		{arguments: "wrap& invunknown", wantError: "unknown option: unknown"},
 		{arguments: "invwrap unknown&", wantError: "unknown option: unknown"},
@@ -225,6 +233,9 @@ func TestSetToggleAndResetThroughModel(test *testing.T) {
 				}
 			} else if diff := cmp.Diff([]options.Values{want}, optionsSeen(root)); diff != "" {
 				test.Errorf("broadcast (-want +got):\n%s", diff)
+			}
+			if testCase.wantError == "" && (model.status.kind != statusInfo || model.status.text != testCase.wantText) {
+				test.Errorf("status = %+v, want %q", model.status, testCase.wantText)
 			}
 			if diff := cmp.Diff(want, model.options); diff != "" {
 				test.Errorf("options (-want +got):\n%s", diff)

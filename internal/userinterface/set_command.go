@@ -23,7 +23,8 @@ func setCommand(arguments string) tea.Cmd {
 // applySet applies the words of a `:set` line to current. `name` turns an
 // option on, `noname` turns it off, `name?` shows it.
 // `name!` and `invname` toggle, and `name&` restores the built-in default.
-// Bare :set shows the options that differ from their defaults, and `all` alone shows every option.
+// Bare `:set` shows the options that differ from their defaults, and
+// `all` alone shows every option.
 // A line either changes options or asks about them, not both. It returns the
 // new values, the text to show, and whether anything was applied. On any error
 // nothing changes: the returned values are current.
@@ -67,6 +68,9 @@ func applySet(arguments string, current options.Values) (updated options.Values,
 
 // parseSetWord splits one word into an option name and what to do with it.
 func parseSetWord(word string, current options.Values) (name string, query, value bool, err error) {
+	if _, ok := options.Lookup(word); ok {
+		return word, false, true, nil
+	}
 	name = word
 	toggle, reset := false, false
 	switch {
@@ -83,6 +87,11 @@ func parseSetWord(word string, current options.Values) (name string, query, valu
 		}
 		option, ok := options.Lookup(name)
 		if !ok {
+			_, negated := options.Lookup(strings.TrimPrefix(name, "no"))
+			_, inverted := options.Lookup(strings.TrimPrefix(name, "inv"))
+			if negated || inverted || strings.ContainsAny(name, "!?&=") {
+				return "", false, false, fmt.Errorf("invalid :set form: %s", terminaltext.Clean(word))
+			}
 			return "", false, false, unknownOption(name)
 		}
 		if reset {
@@ -105,9 +114,6 @@ func parseSetWord(word string, current options.Values) (name string, query, valu
 			return "", false, false, fmt.Errorf("%s is on or off: use :set %s or :set no%s", bare, bare, bare)
 		}
 		return "", false, false, unknownOption(name)
-	}
-	if _, ok := options.Lookup(word); ok {
-		return word, false, true, nil
 	}
 	if name, found := strings.CutPrefix(word, "no"); found {
 		if _, ok := options.Lookup(name); ok {

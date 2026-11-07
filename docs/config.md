@@ -102,8 +102,7 @@ differ from their defaults and `:set all` shows every one.
 Use `:set name!` or `:set invname` to toggle an option, and `:set name&`
 to restore its built-in default, not its config file value. Changes can share
 a line (for example, `:set wrap! invhlsearch wrapscan&`); an unknown option
-leaves the whole line unapplied. Tab completion is unchanged: option names
-and their `no` forms are offered.
+leaves the whole line unapplied. Tab completes option names and their `no` forms.
 `:help config` lists every option with its current value, its default and a
 one-line description.
 The value must be an unquoted YAML boolean: `true` or `false` (`True` and
