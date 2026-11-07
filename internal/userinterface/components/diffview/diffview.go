@@ -30,7 +30,9 @@
 // the first of its rows is drawn: its old and new sides are each lexed as one
 // block, so a comment or string that opens and closes inside the hunk is
 // coloured whole, and the spans of every row are cached. Scrolling a 5k-line
-// file never re-lexes a hunk. What opened above the hunk is not known.
+// file never re-lexes a hunk. What opened above the hunk is not known until
+// the host gives the spans of the whole file (SetFileSpans); rows then take
+// those.
 package diffview
 
 import (
@@ -153,7 +155,12 @@ type Model struct {
 	// is set, from the hunks themselves (shown, hidden or not drawn yet), and
 	// handed to the Highlighter for every block of that side.
 	oldFirstLine, newFirstLine string
-	saved                      *position // position kept while a message replaces the file
+	// oldWhole and newWhole are the spans of the whole file on each side,
+	// once SetFileSpans gives them; wholeRows remembers what each row takes
+	// from them. Reset with the file.
+	oldWhole, newWhole wholeSide
+	wholeRows          map[int]wholeRow
+	saved              *position // position kept while a message replaces the file
 
 	width, height int
 
@@ -271,6 +278,7 @@ func (model *Model) reset() {
 	model.cache = map[int][]Span{}
 	model.highlighted = map[int]bool{}
 	model.oldFirstLine, model.newFirstLine = "", ""
+	model.oldWhole, model.newWhole, model.wholeRows = wholeSide{}, wholeSide{}, map[int]wholeRow{}
 	model.wrapStarts = nil
 	model.window.Reset()
 	model.maximumWidth, model.numberWidth = 0, 0

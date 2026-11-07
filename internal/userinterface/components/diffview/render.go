@@ -213,10 +213,14 @@ func (model *Model) renderHunk(i int, header string, current int) string {
 	return model.styles.hunk[current].Render(text)
 }
 
-// spansFor returns the highlighted spans of row i. The first row of a hunk
-// to be drawn highlights the whole hunk and caches every row of it.
+// spansFor returns the highlighted spans of row i: from the whole file when
+// SetFileSpans gave a matching line, else from its hunk. The first row of a
+// hunk to be drawn highlights the whole hunk and caches every row of it.
 func (model *Model) spansFor(i int) []Span {
 	baseIndex := model.rows[i].baseIndex
+	if spans, ok := model.wholeSpans(baseIndex); ok {
+		return spans
+	}
 	if spans, ok := model.cache[baseIndex]; ok {
 		return spans
 	}
