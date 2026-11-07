@@ -62,6 +62,8 @@ func (pane *stubPane) SetThreads([]github.ReviewThread) {}
 
 func (pane *stubPane) SetFile(file github.ChangedFile) { pane.files = append(pane.files, file.Path) }
 
+func (pane *stubPane) SetFileSpans(github.DiffSide, string, [][]diffview.Span) {}
+
 func (pane *stubPane) SetSize(width, height int) {
 	pane.sizes = append(pane.sizes, [2]int{width, height})
 }

@@ -26,7 +26,8 @@ type Span struct {
 // The lines are lexed together, so a construct that opens and closes inside
 // the block (a block comment, a docstring, a raw string) is coloured on every
 // line it covers. Anything that opened above the block is not known and is
-// coloured as code (#262 reads the whole file to fix that).
+// coloured as code, until spans of the whole file arrive (HighlightFile,
+// Model.SetFileSpans).
 type Highlighter func(path, firstLine string, lines []string) [][]Span
 
 // maximumHighlightLength bounds the line length we are willing to lex; longer lines
@@ -53,17 +54,13 @@ func ChromaHighlighter() Highlighter {
 	return func(path, firstLine string, lines []string) [][]Span {
 		lexer, seen := lexerFor[path]
 		if !seen {
-			if lexer = lexers.Match(path); lexer != nil {
-				lexer = chroma.Coalesce(lexer)
-			}
+			lexer = lexerForPath(path)
 			lexerFor[strings.Clone(path)] = lexer
 		}
 		if lexer == nil && strings.HasPrefix(firstLine, "#!") {
 			lexer, seen = lexerForFirstLine[firstLine]
 			if !seen {
-				if lexer = languageFromShebang(firstLine); lexer != nil {
-					lexer = chroma.Coalesce(lexer)
-				}
+				lexer = lexerForShebang(firstLine)
 				// The line is a slice of the whole diff text; a copy keeps
 				// the key from holding that text alive.
 				lexerForFirstLine[strings.Clone(firstLine)] = lexer
@@ -86,6 +83,22 @@ func ChromaHighlighter() Highlighter {
 	}
 }
 
+// lexerForPath returns the lexer the file name picks, or nil.
+func lexerForPath(path string) chroma.Lexer {
+	if lexer := lexers.Match(path); lexer != nil {
+		return chroma.Coalesce(lexer)
+	}
+	return nil
+}
+
+// lexerForShebang returns the lexer a "#!" first line picks, or nil.
+func lexerForShebang(firstLine string) chroma.Lexer {
+	if lexer := languageFromShebang(firstLine); lexer != nil {
+		return chroma.Coalesce(lexer)
+	}
+	return nil
+}
+
 // fitsBlock reports whether lines may be lexed as one text.
 func fitsBlock(lines []string) bool {
 	size := 0
@@ -101,13 +114,29 @@ func fitsBlock(lines []string) bool {
 // lexBlock lexes lines as one text and splits the tokens back into lines. A
 // line whose spans do not join back to its text is plain.
 func lexBlock(lexer chroma.Lexer, lines []string) [][]Span {
-	result := make([][]Span, len(lines))
-	item, err := lexer.Tokenise(nil, strings.Join(lines, "\n"))
+	result, err := tokenLines(lexer, lines)
 	if err != nil {
+		result = make([][]Span, len(lines))
 		for i, line := range lines {
 			result[i] = plain(line)
 		}
 		return result
+	}
+	for i, line := range lines {
+		if joined(result[i]) != line {
+			result[i] = plain(line) // lexer altered the text; never show wrong code
+		}
+	}
+	return result
+}
+
+// tokenLines lexes lines as one text and splits the tokens back into lines,
+// without checking that each line's spans join back to its text.
+func tokenLines(lexer chroma.Lexer, lines []string) ([][]Span, error) {
+	result := make([][]Span, len(lines))
+	item, err := lexer.Tokenise(nil, strings.Join(lines, "\n"))
+	if err != nil {
+		return nil, err
 	}
 	current := 0
 	for _, token := range item.Tokens() {
@@ -124,12 +153,7 @@ func lexBlock(lexer chroma.Lexer, lines []string) [][]Span {
 			}
 		}
 	}
-	for i, line := range lines {
-		if joined(result[i]) != line {
-			result[i] = plain(line) // lexer altered the text; never show wrong code
-		}
-	}
-	return result
+	return result, nil
 }
 
 // lexLine lexes one line on its own.

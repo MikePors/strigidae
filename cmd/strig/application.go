@@ -41,6 +41,9 @@ type application struct {
 	// currentBranch is the checkout's branch, empty with -R, on a detached
 	// head or outside a checkout.
 	currentBranch string
+	// blobs reads files from the checkout strig was started in; nil with -R
+	// (the checkout need not be the repository shown) or without a checkout.
+	blobs *gitrepository.BlobReader
 }
 
 // newApplication resolves the repository to show and a client for its host.
@@ -69,7 +72,25 @@ func newApplication(repositoryFlag string, configuration config.Config, dependen
 	if identity, ok := client.(github.CacheIdentity); ok {
 		cache = listcache.New(listcache.DefaultDirectory(), identity.Host(), identity.CacheAccount(), nil)
 	}
-	return application{cache: cache, client: client, repository: target.Repository, theme: theme.Default(), dashboard: dashboard, notice: notice, config: configuration, currentBranch: checkoutBranch(repositoryFlag, dashboard, dependencies)}, nil
+	return application{
+		cache: cache, client: client, repository: target.Repository, theme: theme.Default(), dashboard: dashboard, notice: notice, config: configuration,
+		currentBranch: checkoutBranch(repositoryFlag, dashboard, dependencies),
+		blobs:         checkoutBlobs(target, repositoryFlag, dashboard, dependencies),
+	}, nil
+}
+
+// checkoutBlobs reads the pull requests' files from the checkout strig was
+// started in, whose remote target.Name is the repository shown. With -R or
+// on the dashboard there is none.
+func checkoutBlobs(target gitrepository.Remote, repositoryFlag string, dashboard bool, dependencies dependencies) *gitrepository.BlobReader {
+	if repositoryFlag != "" || dashboard || target.Name == "" {
+		return nil
+	}
+	directory, err := dependencies.getWorkingDirectory()
+	if err != nil {
+		return nil
+	}
+	return gitrepository.NewBlobReader(directory, target.Name)
 }
 
 // checkoutBranch is the branch of the checkout strig was started in, which

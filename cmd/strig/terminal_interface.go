@@ -89,7 +89,11 @@ func firstView(application application) userinterface.View {
 	if application.dashboard {
 		return dashboard.New(application.client, application.config.Tabs, application.theme, dashboard.Options{Cache: application.cache, Notice: application.notice, Timeouts: application.timeouts(), Clipboard: systemClipboard(), Open: systemBrowser().Open})
 	}
-	return pullrequestlist.New(application.client, application.repository, application.config.Tabs, application.theme, pullrequestlist.Options{Cache: application.cache, Timeouts: application.timeouts(), Clipboard: systemClipboard(), Open: systemBrowser().Open, CurrentBranch: application.currentBranch})
+	options := pullrequestlist.Options{Cache: application.cache, Timeouts: application.timeouts(), Clipboard: systemClipboard(), Open: systemBrowser().Open, CurrentBranch: application.currentBranch}
+	if application.blobs != nil { // a nil pointer must not become a non-nil interface
+		options.Blobs = application.blobs
+	}
+	return pullrequestlist.New(application.client, application.repository, application.config.Tabs, application.theme, options)
 }
 
 // systemClipboard is the real clipboard tool lookup.
