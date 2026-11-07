@@ -1,0 +1,7 @@
+{"data": {"repository": {"object": {
+  "__typename": "Blob",
+  "text": "package main\n\n/* a comment\n   over lines */\nfunc main() {}\n",
+  "isBinary": false,
+  "isTruncated": false,
+  "byteSize": 63
+}}}}

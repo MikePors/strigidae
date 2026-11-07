@@ -23,6 +23,10 @@ var (
 	// ErrDiffTooLarge means GitHub refuses to produce the diff over the API
 	// because the pull request exceeds its file or line limits.
 	ErrDiffTooLarge = errors.New("diff too large for the GitHub API")
+	// ErrNoFileText means a file exists but its text is not available: it is
+	// binary, or too large for GitHub to return in full. Callers should fall
+	// back quietly rather than report it to the user.
+	ErrNoFileText = errors.New("file text not available")
 )
 
 // RateLimitError means GitHub refused the request because a rate limit was hit.

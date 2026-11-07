@@ -4,6 +4,11 @@ Checks only the maintainer can do, such as live verification against real GitHub
 
 ## Live checks
 
+- [ ] **A multi-line comment or string is coloured whole in a hunk, in a real terminal** (#259). The tests check token types, not the colours on screen.
+  1. Run `strig -R owner/repo` and open a pull request whose diff has a block comment over several lines (`/* … */`, a Python docstring or a raw string) that opens and closes inside one hunk, as added lines. Every line of it should have the comment (or string) colour, not the code colours.
+  2. Open a hunk where a comment opens on a deleted line and closes on a context line: the deleted line is a comment, the context line is not. Scroll a file of several thousand lines: drawing its first screen should not pause noticeably.
+  3. Report the language, the colours you saw and any pause.
+
 - [ ] **`o` opens the browser without the token variables, in a real terminal** (#145). Only a fake command runner is tested.
   1. With no `GH_BROWSER`, no `BROWSER` and no gh config `browser` set, open a pull request in strig and press `o`. The default browser should open the pull request and nothing should be printed over the TUI. Do this on Linux, on macOS and on Windows (Windows now runs `rundll32 url.dll,FileProtocolHandler` as a child process instead of an in-process call).
   2. Run `GH_BROWSER='sh -c "env > /tmp/env.txt" --' GH_TOKEN=x strig`, press `o` on a pull request, then check `/tmp/env.txt`: it must contain no `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN` or `GITHUB_ENTERPRISE_TOKEN`, and should still have `PATH` and `HOME`.
@@ -90,6 +95,12 @@ Checks only the maintainer can do, such as live verification against real GitHub
   must not appear. Repeat with a token environment override: no cache is reused.
 - Stop strig, delete its cache directory (see README), and restart: normal live
   loading should work. Report OS, terminal size, and any unexpected behavior.
+
+- [ ] **`FileText` reads a file's text at a commit from real GitHub** (#260). The GraphQL `object(expression: "<commit>:<path>")` query has only been tested against hand-written fixtures. Nothing on screen uses it yet, so this can be done once #262 lands and highlights from the whole file; until then it needs a throwaway `main` that calls `network.New(...).FileText`.
+  1. Against a real pull request's head commit (the full 40-character SHA), read a small text file the pull request touches. The returned text should match `git show <sha>:<path>` exactly, including line endings and a missing final newline.
+  2. Read a binary file (for example a PNG) and a text file over about 1 MB. Each should fail with `ErrNoFileText`, not `ErrNotFound`. Report the size at which a text file starts to come back as truncated, if it does.
+  3. Read a path that does not exist at that commit, a path that was added by a later commit, and a directory path. Each should fail with `ErrNotFound`.
+  4. Report any case where the text came back wrong or the error was not the one above.
 
 ## #36 — image rendering prototype
 
