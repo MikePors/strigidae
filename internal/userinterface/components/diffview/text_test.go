@@ -82,7 +82,7 @@ func TestWindow(test *testing.T) {
 
 // highlightLine highlights one line as a block of its own.
 func highlightLine(highlighter Highlighter, path, text string) []Span {
-	return highlighter(path, []string{text})[0]
+	return highlighter(path, []string{text}, false)[0]
 }
 
 func TestChromaHighlighter(test *testing.T) {

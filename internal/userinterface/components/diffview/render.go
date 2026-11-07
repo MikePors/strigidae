@@ -228,7 +228,7 @@ func (model *Model) spansFor(i int) []Span {
 		}
 	}
 	// The row's side is too large to lex in one piece: lex just this row.
-	spans := model.highlightSide(model.file.Path(), []string{model.rows[i].text})[0]
+	spans := model.highlightSide(model.file.Path(), []string{model.rows[i].text}, false)[0]
 	model.cache[baseIndex] = spans
 	return spans
 }
@@ -264,9 +264,10 @@ func (model *Model) highlightHunk(baseIndex int) {
 		}
 	}
 	path := model.file.Path()
+	hunk := model.file.Hunks[model.base[baseIndex].hunk]
 	newFits := fitsBlock(newLines)
 	if fitsBlock(oldLines) {
-		oldSpans := model.highlightSide(path, oldLines)
+		oldSpans := model.highlightSide(path, oldLines, hunk.OldStart == 1)
 		for position, index := range oldRows {
 			if model.base[index].line.Kind == diff.Delete || !newFits {
 				model.cache[index] = oldSpans[position]
@@ -274,20 +275,21 @@ func (model *Model) highlightHunk(baseIndex int) {
 		}
 	}
 	if newFits {
-		newSpans := model.highlightSide(path, newLines)
+		newSpans := model.highlightSide(path, newLines, hunk.NewStart == 1)
 		for position, index := range newRows {
 			model.cache[index] = newSpans[position]
 		}
 	}
 }
 
-// highlightSide highlights one side of a hunk. A Highlighter that returns
-// the wrong number of lines is not trusted: its side is plain.
-func (model *Model) highlightSide(path string, lines []string) [][]Span {
+// highlightSide highlights one side of a hunk; startsFile says that it begins
+// at line 1 of the file. A Highlighter that returns the wrong number of lines
+// is not trusted: its side is plain.
+func (model *Model) highlightSide(path string, lines []string, startsFile bool) [][]Span {
 	if len(lines) == 0 {
 		return nil
 	}
-	spans := model.highlight(path, lines)
+	spans := model.highlight(path, lines, startsFile)
 	if len(spans) == len(lines) {
 		return spans
 	}

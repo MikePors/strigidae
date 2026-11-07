@@ -16,14 +16,18 @@ type Span struct {
 }
 
 // Highlighter splits a block of code lines into typed spans, one result per
-// line. path selects the language (by file name). For every line the
-// concatenated span text must equal the line.
+// line. path selects the language by file name; when the name picks none and
+// startsFile is true, the language is taken from the content (see
+// languageFromContent). startsFile says that lines begin at the first line of
+// the file (a hunk side that starts at line 1, or the whole file text); a
+// block that starts further down is never used to guess a language. For every
+// line the concatenated span text must equal the line.
 //
 // The lines are lexed together, so a construct that opens and closes inside
 // the block (a block comment, a docstring, a raw string) is coloured on every
 // line it covers. Anything that opened above the block is not known and is
 // coloured as code (#262 reads the whole file to fix that).
-type Highlighter func(path string, lines []string) [][]Span
+type Highlighter func(path string, lines []string, startsFile bool) [][]Span
 
 // maximumHighlightLength bounds the line length we are willing to lex; longer lines
 // (minified bundles) render as plain text, and a block holding one is lexed
@@ -39,16 +43,31 @@ const maximumBlockSize = 128 * 1024
 
 // ChromaHighlighter returns the default Highlighter, backed by Chroma. It
 // remembers the lexer chosen for each path, so the (slow) file-name matching
-// happens once per file.
+// happens once per file. A language taken from the content is remembered too,
+// and is then used for every block of that path, whether or not it starts the
+// file. Only a choice is remembered, never "no language": a path's old and new
+// side are different texts (a script may gain its shebang in this very
+// change), and at most one block per side starts the file, so a failed guess
+// costs two analyses of a few lines.
 func ChromaHighlighter() Highlighter {
 	lexerFor := map[string]chroma.Lexer{}
-	return func(path string, lines []string) [][]Span {
+	lexerFromContent := map[string]chroma.Lexer{}
+	return func(path string, lines []string, startsFile bool) [][]Span {
 		lexer, seen := lexerFor[path]
 		if !seen {
 			if lexer = lexers.Match(path); lexer != nil {
 				lexer = chroma.Coalesce(lexer)
 			}
 			lexerFor[path] = lexer
+		}
+		if lexer == nil {
+			lexer = lexerFromContent[path]
+		}
+		if lexer == nil && startsFile {
+			if lexer = languageFromContent(lines); lexer != nil {
+				lexer = chroma.Coalesce(lexer)
+				lexerFromContent[path] = lexer
+			}
 		}
 		result := make([][]Span, len(lines))
 		if lexer == nil {
