@@ -357,3 +357,106 @@ func TestParseHunksEmptyAndMalformed(test *testing.T) {
 		test.Errorf("best-effort hunks lost: %+v", hunks)
 	}
 }
+
+func TestObjectIdentifiers(test *testing.T) {
+	testCases := []struct {
+		name    string
+		text    string
+		path    string
+		wantOld string
+		wantNew string
+	}{
+		{
+			name:    "modified file",
+			text:    "diff --git a/main.go b/main.go\nindex 017d41b..3312c04 100644\n--- a/main.go\n+++ b/main.go\n@@ -1 +1 @@\n-a\n+b\n",
+			path:    "main.go",
+			wantOld: "017d41b", wantNew: "3312c04",
+		},
+		{
+			name:    "added file has no old side",
+			text:    "diff --git a/added.go b/added.go\nnew file mode 100644\nindex 0000000..7777777\n--- /dev/null\n+++ b/added.go\n@@ -0,0 +1 @@\n+a\n",
+			path:    "added.go",
+			wantNew: "7777777",
+		},
+		{
+			name:    "deleted file has no new side",
+			text:    "diff --git a/gone.go b/gone.go\ndeleted file mode 100644\nindex 8888888..0000000\n--- a/gone.go\n+++ /dev/null\n@@ -1 +0,0 @@\n-a\n",
+			path:    "gone.go",
+			wantOld: "8888888",
+		},
+		{
+			name:    "rename with changes",
+			text:    "diff --git a/util.go b/lib/util.go\nsimilarity index 80%\nrename from util.go\nrename to lib/util.go\nindex 3333333..4444444 100644\n--- a/util.go\n+++ b/lib/util.go\n@@ -1 +1 @@\n-a\n+b\n",
+			path:    "lib/util.go",
+			wantOld: "3333333", wantNew: "4444444",
+		},
+		{
+			name: "pure rename has no index line",
+			text: "diff --git a/old.txt b/new.txt\nsimilarity index 100%\nrename from old.txt\nrename to new.txt\n",
+			path: "new.txt",
+		},
+		{
+			name:    "mode change with content change",
+			text:    "diff --git a/run.sh b/run.sh\nold mode 100644\nnew mode 100755\nindex 5555555..6666666\n--- a/run.sh\n+++ b/run.sh\n@@ -1 +1 @@\n-a\n+b\n",
+			path:    "run.sh",
+			wantOld: "5555555", wantNew: "6666666",
+		},
+		{
+			name: "mode change alone has no index line",
+			text: "diff --git a/run.sh b/run.sh\nold mode 100644\nnew mode 100755\n",
+			path: "run.sh",
+		},
+		{
+			name: "file-by-file patch has no index line",
+			text: "diff --git a/main.go b/main.go\n--- a/main.go\n+++ b/main.go\n@@ -1 +1 @@\n-a\n+b\n",
+			path: "main.go",
+		},
+		{
+			name:    "full-length identifiers and a carriage return",
+			text:    "diff --git a/x b/x\r\nindex 0123456789abcdef0123456789abcdef01234567..fedcba9876543210fedcba9876543210fedcba98 100644\r\n--- a/x\r\n+++ b/x\r\n",
+			path:    "x",
+			wantOld: "0123456789abcdef0123456789abcdef01234567",
+			wantNew: "fedcba9876543210fedcba9876543210fedcba98",
+		},
+		{
+			name:    "carriage return after the identifiers, no mode",
+			text:    "diff --git a/run.sh b/run.sh\r\nold mode 100644\r\nnew mode 100755\r\nindex 5555555..6666666\r\n--- a/run.sh\r\n+++ b/run.sh\r\n",
+			path:    "run.sh",
+			wantOld: "5555555", wantNew: "6666666",
+		},
+		{
+			name: "option-looking identifier is ignored",
+			text: "diff --git a/x b/x\nindex -p..abc1234 100644\n",
+			path: "x",
+		},
+		{
+			name: "non-hex identifier is ignored",
+			text: "diff --git a/x b/x\nindex abc1234..zzz 100644\n",
+			path: "x",
+		},
+		{
+			name: "combined-diff index line is ignored",
+			text: "diff --git a/x b/x\nindex 1111111,2222222..3333333\n",
+			path: "x",
+		},
+		{
+			name: "malformed index line is ignored",
+			text: "diff --git a/x b/x\nindex nothing\n",
+			path: "x",
+		},
+	}
+	for _, testCase := range testCases {
+		test.Run(testCase.name, func(test *testing.T) {
+			parsed, _ := Parse(testCase.text)
+			file := parsed.File(testCase.path)
+			if file == nil {
+				test.Fatalf("no file %q in %+v", testCase.path, parsed)
+			}
+			got := [2]string{file.OldObjectIdentifier, file.NewObjectIdentifier}
+			want := [2]string{testCase.wantOld, testCase.wantNew}
+			if diff := cmp.Diff(want, got); diff != "" {
+				test.Errorf("object identifiers mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
