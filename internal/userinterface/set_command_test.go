@@ -191,3 +191,47 @@ func TestSetIsAStaticCommandInEveryView(test *testing.T) {
 		test.Errorf("status = %q", model.status.text)
 	}
 }
+
+func TestSetToggleAndResetThroughModel(test *testing.T) {
+	for _, testCase := range []struct {
+		arguments string
+		want      options.Values
+		wantError string
+	}{
+		{arguments: "wrap!", want: options.Values{"wrap": false, "wrapscan": false}},
+		{arguments: "invwrapscan", want: options.Values{"wrap": true, "wrapscan": true}},
+		{arguments: "wrap& wrapscan&", want: options.Values{"wrap": false, "wrapscan": true}},
+		{arguments: "nowrap wrap! invwrap wrapscan& nowrapscan", want: options.Values{"wrap": false, "wrapscan": false}},
+		{arguments: "wrap! wrap!", want: options.Values{"wrap": true, "wrapscan": false}},
+		{arguments: "wrap! unknown!", wantError: "unknown option: unknown"},
+		{arguments: "wrap& invunknown", wantError: "unknown option: unknown"},
+		{arguments: "invwrap unknown&", wantError: "unknown option: unknown"},
+		{arguments: "wrap! wrapscan?", wantError: "can't mix name? with changes in one :set line"},
+	} {
+		test.Run(testCase.arguments, func(test *testing.T) {
+			start := options.Values{"wrap": true, "wrapscan": false}
+			root := newFake("root")
+			model := setModel(root, start)
+			root.got = nil
+			drive(model, parseCommand("set "+testCase.arguments, model.top(), model.viewCommands))
+			want := testCase.want
+			if testCase.wantError != "" {
+				want = start
+				if model.status.kind != statusError || model.status.text != testCase.wantError {
+					test.Errorf("status = %+v, want %q", model.status, testCase.wantError)
+				}
+				if len(optionsSeen(root)) != 0 {
+					test.Error("failed line broadcast options")
+				}
+			} else if diff := cmp.Diff([]options.Values{want}, optionsSeen(root)); diff != "" {
+				test.Errorf("broadcast (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(want, model.options); diff != "" {
+				test.Errorf("options (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(options.Values{"wrap": true, "wrapscan": false}, start); diff != "" {
+				test.Errorf("starting config mutated: %s", diff)
+			}
+		})
+	}
+}
