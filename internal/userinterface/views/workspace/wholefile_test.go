@@ -44,13 +44,19 @@ index 0000000..3333333
 type fakeBlobs struct {
 	texts map[string]string
 	err   error
-	reads []string // "number:identifier", in order
+	// timeOuts is how many reads fail with context.DeadlineExceeded first.
+	timeOuts int
+	reads    []string // "number:identifier", in order
 }
 
 func (blobs *fakeBlobs) ReadBlob(_ context.Context, number int, identifier string) ([]byte, error) {
 	blobs.reads = append(blobs.reads, fmt.Sprintf("%d:%s", number, identifier))
 	if blobs.err != nil {
 		return nil, blobs.err
+	}
+	if blobs.timeOuts > 0 {
+		blobs.timeOuts--
+		return nil, fmt.Errorf("read blob: %w", context.DeadlineExceeded)
 	}
 	text, ok := blobs.texts[identifier]
 	if !ok {
@@ -176,6 +182,21 @@ func TestWholeFileFailedReadKeepsPerHunkColours(test *testing.T) {
 	}
 	if strings.Contains(testHarness.render(), "fetch failed") {
 		test.Error("the failure is on screen")
+	}
+}
+
+func TestWholeFileTimedOutReadIsReadAgain(test *testing.T) {
+	blobs := bothSides()
+	blobs.timeOuts = 1
+	testHarness, pane := newWholeFileHarness(test, blobs)
+	testHarness.press("}")
+	// The harness delivers each result at once, so the retry comes before
+	// the new side is read.
+	if diff := cmp.Diff([]string{"7:1111111", "7:1111111", "7:2222222"}, blobs.reads); diff != "" {
+		test.Errorf("reads (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff([]string{"LEFT:1111111", "RIGHT:2222222"}, pane.order); diff != "" {
+		test.Errorf("sides given to the pane (-want +got):\n%s", diff)
 	}
 }
 

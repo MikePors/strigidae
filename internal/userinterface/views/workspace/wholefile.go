@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 
 	tea "charm.land/bubbletea/v2"
@@ -18,9 +19,15 @@ type BlobReader interface {
 	ReadBlob(ctx context.Context, number int, blobObjectIdentifier string) ([]byte, error)
 }
 
-// maximumWholeFiles bounds how many sides of files WholeFiles keeps; when it
-// is full it starts again empty.
-const maximumWholeFiles = 200
+// maximumWholeFileBytes bounds the memory WholeFiles keeps, as estimated by
+// spansSize; when a side would pass it the cache starts again empty. A 1 MiB
+// side (diffview.MaximumFileSize) of short tokens costs some tens of
+// megabytes, so this keeps a few of the largest files or many ordinary ones.
+const maximumWholeFileBytes = 256 << 20
+
+// spanOverhead is the estimated cost of one span besides its text: the
+// string header, the token type and the slice slot.
+const spanOverhead = 32
 
 // WholeFiles colours a modified, renamed or copied file from its whole text
 // on each side rather than hunk by hunk, so a hunk that starts inside a
@@ -31,6 +38,7 @@ const maximumWholeFiles = 200
 type WholeFiles struct {
 	reader BlobReader
 	spans  map[wholeFileKey][][]diffview.Span // nil: the side could not be used
+	bytes  int                                // estimated size of spans
 }
 
 // NewWholeFiles returns an empty cache reading with reader.
@@ -121,14 +129,41 @@ func (view *View) readWholeFile(key wholeFileKey) tea.Cmd {
 // wholeFileRead keeps the result of reading one side. The pane is given it
 // after the update if the file is still shown (wholeFileSides); otherwise it
 // waits in the cache.
+//
+// A read that only ran out of time is not kept, so the side is read again
+// while the file is shown; the reader still fetches at most once per pull
+// request, so the next read fails for good or succeeds.
 func (view *View) wholeFileRead(message wholeFileMessage) {
 	delete(view.wholeFilePending, message.key)
 	if message.err != nil {
 		// The path is left out: it is the pull request author's text.
 		slog.Info("colour a file hunk by hunk: whole file unavailable", "blob", message.key.objectIdentifier, "err", message.err)
+		if errors.Is(message.err, context.DeadlineExceeded) || errors.Is(message.err, context.Canceled) {
+			return
+		}
 	}
-	if len(view.wholeFiles.spans) >= maximumWholeFiles {
-		view.wholeFiles.spans = map[wholeFileKey][][]diffview.Span{}
+	view.wholeFiles.keep(message.key, message.lines)
+}
+
+// keep stores one side, starting again empty when it would pass the memory
+// bound.
+func (files *WholeFiles) keep(key wholeFileKey, lines [][]diffview.Span) {
+	size := spansSize(lines)
+	if files.bytes+size > maximumWholeFileBytes {
+		files.spans, files.bytes = map[wholeFileKey][][]diffview.Span{}, 0
 	}
-	view.wholeFiles.spans[message.key] = message.lines
+	files.spans[key] = lines
+	files.bytes += size
+}
+
+// spansSize estimates the memory lines hold.
+func spansSize(lines [][]diffview.Span) int {
+	size := 0
+	for _, line := range lines {
+		size += spanOverhead
+		for _, span := range line {
+			size += len(span.Text) + spanOverhead
+		}
+	}
+	return size
 }
