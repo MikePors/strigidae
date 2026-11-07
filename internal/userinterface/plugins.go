@@ -78,10 +78,11 @@ type PluginHost interface {
 	PullRequestIdentity() (identity PullRequestIdentity, ok bool)
 	// Reload reloads what the view shows, as its refresh key does.
 	Reload() tea.Cmd
-	// ReadOnlyCommand runs the view's command name with the arguments, as if
-	// they were typed, when it is one that writes nothing. ok is false for
-	// any other name, which the view leaves alone.
-	ReadOnlyCommand(name, arguments string) (command tea.Cmd, ok bool)
+	// PluginsMayRun reports whether a plugin's command effect may run the
+	// view's command name, which Command then runs. Only commands that write
+	// nothing to GitHub may be allowed.
+	PluginsMayRun(name string) bool
+	Commander
 }
 
 // CommandLineKeeper is implemented by a KeyCapturer that lets ":" open the
@@ -276,8 +277,20 @@ func (model *Model) pluginResult(message pluginResultMessage) tea.Cmd {
 }
 
 // pluginEffects applies the effects in the order the plugin printed them.
-// Their text is the plugin's, so it is cleaned before the status bar.
+// Their text is the plugin's, so it is cleaned before the status bar. A
+// command effect that is refused drops the whole result, so a plugin that
+// tries to write can't hide the refusal behind the notices of its other
+// effects.
 func (model *Model) pluginEffects(host PluginHost, name string, effects []plugins.Effect, inThread bool) tea.Cmd {
+	for _, effect := range effects {
+		if effect.Name != plugins.EffectCommand {
+			continue
+		}
+		if refusal := model.pluginCommandRefusal(host, name, effect.Line); refusal != "" {
+			model.log.Info("plugin result dropped: a command was refused", slog.String("plugin", name))
+			return model.setStatus(refusal, statusError)
+		}
+	}
 	var commands []tea.Cmd
 	answered := slices.ContainsFunc(effects, func(effect plugins.Effect) bool { return effect.Name == plugins.EffectAnswer })
 	for _, effect := range effects {
@@ -295,7 +308,9 @@ func (model *Model) pluginEffects(host PluginHost, name string, effects []plugin
 		case plugins.EffectReload:
 			commands = append(commands, host.Reload())
 		case plugins.EffectCommand:
-			commands = append(commands, model.pluginCommand(host, name, effect.Line))
+			commandName, arguments := splitPluginCommand(effect.Line)
+			command, _ := host.Command(commandName, arguments)
+			commands = append(commands, command)
 		default:
 			model.log.Warn("plugin effect not handled", slog.String("plugin", name), slog.String("effect", effect.Name))
 		}
@@ -303,25 +318,28 @@ func (model *Model) pluginEffects(host PluginHost, name string, effects []plugin
 	return tea.Batch(commands...)
 }
 
-// pluginCommand runs the command line of a command effect, if it is a command
-// of the host that writes nothing: a plugin may show and navigate, never
-// write. The shell's own commands are never run, so a plugin can't quit or
-// change the options. The line is the plugin's, so what is shown of it is
-// cleaned.
-func (model *Model) pluginCommand(host PluginHost, plugin, line string) tea.Cmd {
-	_, name, _, arguments, _ := splitCommandLine(strings.TrimPrefix(strings.TrimSpace(line), ":"))
-	name, arguments = strings.TrimSpace(name), strings.TrimSpace(arguments)
+// pluginCommandRefusal is what the status bar says when a plugin may not run
+// the command line of a command effect, or "" when it may. A plugin may show
+// and navigate, never write, so only the commands the host allows run. The
+// shell's own commands never run, so a plugin can't quit or change the
+// options. The line is the plugin's, so what is shown of it is cleaned.
+func (model *Model) pluginCommandRefusal(host PluginHost, plugin, line string) string {
+	name, _ := splitPluginCommand(line)
 	shell := slices.Contains(CommandNames(), name)
-	if !shell {
-		if command, ok := host.ReadOnlyCommand(name, arguments); ok {
-			return command
-		}
+	if !shell && host.PluginsMayRun(name) {
+		return ""
 	}
 	if !shell && !slices.Contains(model.viewCommands, name) {
-		return model.setStatus("not a command: "+terminaltext.Clean(name), statusError)
+		return "not a command: " + terminaltext.Clean(name)
 	}
-	model.log.Info("plugin command refused", "plugin", plugin, "command", name)
-	return model.setStatus("plugin "+plugin+" can't run :"+terminaltext.Clean(name), statusError)
+	return "plugin " + plugin + " can't run :" + terminaltext.Clean(name)
+}
+
+// splitPluginCommand splits the line of a command effect as the command line
+// does; a leading ":" is allowed.
+func splitPluginCommand(line string) (name, arguments string) {
+	_, name, _, arguments, _ = splitCommandLine(strings.TrimPrefix(strings.TrimSpace(line), ":"))
+	return strings.TrimSpace(name), strings.TrimSpace(arguments)
 }
 
 // quit ends the program. With plugin runs under way they are cancelled and

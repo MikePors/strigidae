@@ -51,6 +51,12 @@ type actionEntry struct {
 	guard writeKind
 	// fresh is the re-read policy; see freshCheck.
 	fresh freshCheck
+	// pluginsMayRun lets a plugin's command effect run the entry's command.
+	// Setting it is a promise that the command never writes to GitHub,
+	// directly or through anything it opens: a plugin may show and navigate,
+	// never write. It is off unless set on purpose; no write guard is not
+	// enough, since some actions without one write (`v` marks a file viewed).
+	pluginsMayRun bool
 	// applies, if set, says whether a key reaches the entry in the view's
 	// current state; otherwise the key falls through to what is behind it.
 	applies func(*View) bool
@@ -239,19 +245,22 @@ func (workspaceBindings *bindings) entries() []actionEntry {
 			run: func(view *View, _ invocation) tea.Cmd { return view.changeDraftState(true) },
 		},
 		{
-			Action: keys.Action{Name: "checks", Command: "checks"},
-			level:  levelPullRequest,
-			run:    func(view *View, _ invocation) tea.Cmd { return view.checksCommand() },
+			Action:        keys.Action{Name: "checks", Command: "checks"},
+			level:         levelPullRequest,
+			pluginsMayRun: true,
+			run:           func(view *View, _ invocation) tea.Cmd { return view.checksCommand() },
 		},
 		{
-			Action: keys.Action{Name: "copy-filename", Command: "copy-filename"},
-			level:  levelFile,
-			run:    func(view *View, _ invocation) tea.Cmd { return view.copyFilename() },
+			Action:        keys.Action{Name: "copy-filename", Command: "copy-filename"},
+			level:         levelFile,
+			pluginsMayRun: true,
+			run:           func(view *View, _ invocation) tea.Cmd { return view.copyFilename() },
 		},
 		{
-			Action: keys.Action{Name: "copy-url", Command: "copy-url"},
-			level:  levelPullRequest,
-			run:    func(view *View, _ invocation) tea.Cmd { return view.copyURL() },
+			Action:        keys.Action{Name: "copy-url", Command: "copy-url"},
+			level:         levelPullRequest,
+			pluginsMayRun: true,
+			run:           func(view *View, _ invocation) tea.Cmd { return view.copyURL() },
 		},
 	}
 }

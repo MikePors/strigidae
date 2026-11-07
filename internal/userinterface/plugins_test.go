@@ -33,7 +33,7 @@ type pullRequestView struct {
 	identity PullRequestIdentity
 	loaded   bool
 	reloads  int
-	ran      []string // the read-only commands run, as "name|arguments"
+	ran      []string // the commands run, as "name|arguments"
 }
 
 func newPullRequestView(identity PullRequestIdentity) *pullRequestView {
@@ -54,14 +54,13 @@ func (view *pullRequestView) Reload() tea.Cmd {
 	return nil
 }
 
-// readOnly is the one command that writes nothing; ReadOnlyCommand records
-// what it ran.
-const readOnly = "copy-filename"
+// allowed is the one command plugins may run; approve is a view command
+// they may not. Command records what it ran.
+const allowed = "copy-filename"
 
-func (view *pullRequestView) ReadOnlyCommand(name, arguments string) (tea.Cmd, bool) {
-	if name != readOnly {
-		return nil, false
-	}
+func (view *pullRequestView) PluginsMayRun(name string) bool { return name == allowed }
+
+func (view *pullRequestView) Command(name, arguments string) (tea.Cmd, bool) {
 	view.ran = append(view.ran, name+"|"+arguments)
 	return nil, true
 }
@@ -165,8 +164,8 @@ func TestPluginEffects(test *testing.T) {
 	}
 }
 
-// A command effect runs a read-only command of the view on screen, and
-// nothing else.
+// A command effect runs a command of the view on screen that plugins may run,
+// and nothing else.
 func TestPluginCommandEffect(test *testing.T) {
 	for _, testCase := range []struct {
 		line     string
@@ -198,11 +197,30 @@ func TestPluginCommandEffect(test *testing.T) {
 	}
 }
 
+// One refused command drops the whole result: nothing runs and only the
+// refusal shows, so it can't be hidden behind the effects around it.
+func TestPluginCommandRefusalDropsTheResult(test *testing.T) {
+	root := newPullRequestView(pullRequestSeven)
+	model, _ := pluginModel(test, &fakeRunner{effects: []plugins.Effect{
+		{Name: plugins.EffectCommand, Line: allowed},
+		{Name: plugins.EffectReload},
+		{Name: plugins.EffectCommand, Line: "approve"},
+		{Name: plugins.EffectNotice, Text: "all done"},
+	}}, root)
+	step(model, startRun(model, pullRequestSeven)())
+	if len(root.ran) != 0 || root.reloads != 0 {
+		test.Errorf("ran %v and reloaded %d times, want nothing", root.ran, root.reloads)
+	}
+	if want := "plugin ask can't run :approve"; model.status.text != want {
+		test.Errorf("status = %q, want %q", model.status.text, want)
+	}
+}
+
 // A command effect for a pull request that is no longer on screen is dropped
 // with the other effects.
 func TestPluginCommandEffectNeedsItsPullRequest(test *testing.T) {
 	root := newPullRequestView(pullRequestSeven)
-	model, _ := pluginModel(test, &fakeRunner{effects: []plugins.Effect{{Name: plugins.EffectCommand, Line: readOnly}}}, root)
+	model, _ := pluginModel(test, &fakeRunner{effects: []plugins.Effect{{Name: plugins.EffectCommand, Line: allowed}}}, root)
 	result := startRun(model, pullRequestSeven)()
 	root.identity = PullRequestIdentity{Repository: pullRequestSeven.Repository, Number: 8}
 	step(model, result)

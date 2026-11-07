@@ -811,22 +811,30 @@ func TestPluginEntriesHaveTheRegistryShape(test *testing.T) {
 	}
 }
 
-// A command effect runs the workspace's read-only commands, and none that
-// write or start another plugin.
-func TestPluginCommandEffectRunsOnlyReadOnlyCommands(test *testing.T) {
+// A command effect runs only the commands that allow plugins, and none that
+// write or start another plugin. :comments writes nothing but is not
+// allowed, so it is refused: no write guard is not enough.
+func TestPluginCommandEffectRunsOnlyAllowedCommands(test *testing.T) {
 	for _, testCase := range []struct {
-		line      string
+		name      string
+		effects   []plugins.Effect
 		wantInfos []string
 		wantError string
 	}{
-		{"checks", []string{"No checks."}, ""}, // the test pull request has none
-		{"approve", nil, "plugin summarize can't run :approve"},
-		{"resolve", nil, "plugin summarize can't run :resolve"},
-		{"summarize", nil, "plugin summarize can't run :summarize"},
+		{"checks", []plugins.Effect{{Name: plugins.EffectCommand, Line: "checks"}}, []string{"No checks."}, ""}, // the test pull request has none
+		{"approve", []plugins.Effect{{Name: plugins.EffectCommand, Line: "approve"}}, nil, "plugin summarize can't run :approve"},
+		{"resolve", []plugins.Effect{{Name: plugins.EffectCommand, Line: "resolve"}}, nil, "plugin summarize can't run :resolve"},
+		{"comments", []plugins.Effect{{Name: plugins.EffectCommand, Line: "comments"}}, nil, "plugin summarize can't run :comments"},
+		{"summarize", []plugins.Effect{{Name: plugins.EffectCommand, Line: "summarize"}}, nil, "plugin summarize can't run :summarize"},
+		// The refusal is not hidden behind the notice of a command run before it.
+		{"checks then approve", []plugins.Effect{
+			{Name: plugins.EffectCommand, Line: "checks"},
+			{Name: plugins.EffectNotice, Text: "done"},
+			{Name: plugins.EffectCommand, Line: "approve"},
+		}, nil, "plugin summarize can't run :approve"},
 	} {
-		test.Run(testCase.line, func(test *testing.T) {
-			runner := &recordingRunner{effects: []plugins.Effect{{Name: plugins.EffectCommand, Line: testCase.line}}}
-			session := newPluginSession(test, runner)
+		test.Run(testCase.name, func(test *testing.T) {
+			session := newPluginSession(test, &recordingRunner{effects: testCase.effects})
 			session.line("summarize")
 			if diff := cmp.Diff(testCase.wantInfos, session.infos); diff != "" {
 				test.Errorf("notices (-want +got):\n%s", diff)
@@ -837,6 +845,9 @@ func TestPluginCommandEffectRunsOnlyReadOnlyCommands(test *testing.T) {
 			if _, asked := session.inliner.lastConfirm(); asked {
 				test.Error("a question was asked")
 			}
+			if session.inliner.view.picker != nil && testCase.wantError != "" {
+				test.Error("a picker opened for a refused result")
+			}
 			if testCase.wantError != "" && !strings.HasSuffix(session.status(), testCase.wantError) {
 				test.Errorf("status = %q, want %q", session.status(), testCase.wantError)
 			}
@@ -844,13 +855,37 @@ func TestPluginCommandEffectRunsOnlyReadOnlyCommands(test *testing.T) {
 	}
 }
 
+// pluginsMayRun is a promise that the command writes nothing, so it is only
+// on entries that have a command, no write guard and are not plugins.
+func TestPluginsMayRunOnlyOnCommandsThatWriteNothing(test *testing.T) {
+	view := newInliner(test).view
+	view.pluginCommands = pluginCommands
+	plugin := map[string]bool{}
+	for _, command := range pluginCommands {
+		plugin[command.Name] = true
+	}
+	var allowed []string
+	for _, entry := range view.entries() {
+		if !entry.pluginsMayRun {
+			continue
+		}
+		allowed = append(allowed, entry.Command)
+		if entry.Command == "" || entry.guard != writeNone || plugin[entry.Command] {
+			test.Errorf("%s allows plugins but has a write guard, is a plugin or has no command: %+v", entry.Name, entry)
+		}
+	}
+	if diff := cmp.Diff([]string{"checks", "copy-filename", "copy-url"}, allowed); diff != "" {
+		test.Errorf("commands plugins may run (-want +got):\n%s", diff)
+	}
+}
+
 // A command a plugin runs keeps the rules of a typed one: a line selection
-// that is still open refuses it.
+// that is still open refuses it. The root runs it through Command.
 func TestPluginCommandEffectDuringASelection(test *testing.T) {
 	session := newPluginSession(test, &recordingRunner{})
 	session.inliner.moveTo(github.SideRight, 17)
 	session.press("V")
-	command, handled := session.inliner.view.ReadOnlyCommand("checks", "")
+	command, handled := session.inliner.view.Command("checks", "")
 	if !handled {
 		test.Fatal(":checks not taken")
 	}

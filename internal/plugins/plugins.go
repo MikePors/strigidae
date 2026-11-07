@@ -59,7 +59,7 @@ const (
 	EffectReload = "reload"
 	// EffectAnswer carries an answer to show to the user.
 	EffectAnswer = "answer"
-	// EffectCommand asks strig to run one of its commands that write nothing;
+	// EffectCommand asks strig to run one of the commands plugins may run;
 	// Line is the command line.
 	EffectCommand = "command"
 )

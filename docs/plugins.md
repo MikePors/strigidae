@@ -219,7 +219,7 @@ The plugin prints JSON lines on standard output. Each line is one *effect*:
 | `error` | `{"text": ...}` | A failure and its reason. With a failure exit status the run fails with this text; with exit 0 the effect is returned like any other |
 | `answer` | `{"text": ...}` | An answer to show to the user: a notice, or the answer of a local thread with `show: thread` |
 | `reload` | `{}` | Reload the pull request on screen, as `R` does |
-| `command` | `{"line": ...}` | Run one of strig's commands that write nothing, as if `:` and the line had been typed: see "Commands a plugin can run" |
+| `command` | `{"line": ...}` | Run one of the commands plugins may run, as if `:` and the line had been typed: see "Commands a plugin can run" |
 
 Rules:
 
@@ -244,10 +244,12 @@ a run's standard error is kept, followed by a note; the rest is dropped.
 
 ## Commands a plugin can run
 
-A `command` effect runs a command of the pull request workspace that writes
-nothing to GitHub: today `:checks`, `:copy-filename` and `:copy-url`, and any
-such command added later. The line is the command and its arguments, as typed
-after `:` (a leading `:` is allowed):
+A `command` effect runs one of the pull request workspace's commands that
+plugins are allowed to run: `:checks`, `:copy-filename` and `:copy-url`. Each
+is allowed on purpose because it writes nothing to GitHub. Every other
+command, including ones added later, is refused unless it is explicitly
+allowed. The line is the command and its arguments, as typed after `:` (a
+leading `:` is allowed):
 
 ```json
 {"name": "command", "data": {"line": "checks"}}
@@ -258,11 +260,13 @@ were printed, and only while that pull request is on screen, like every
 effect. It keeps the rules of a typed command: during a line selection it is
 refused with `end the selection to run :<name>`.
 
-A plugin can show and navigate, never write. A command that writes
-(`:approve`, `:resolve`, `:merge`, ...), a plugin command and strig's own
-commands (`:q`, `:qa`, `:set`, `:theme`) are refused with `plugin <plugin>
-can't run :<name>` in the status bar; a word that is no command says `not a
-command: <name>`.
+A plugin can show and navigate, never write. Any other command, such as one
+that writes (`:approve`, `:resolve`, `:merge`, ...), a plugin command or
+strig's own commands (`:q`, `:qa`, `:set`, `:theme`), is refused with
+`plugin <plugin> can't run :<name>` in the status bar; a word that is no
+command says `not a command: <name>`. A refused or unknown command drops the
+whole result: none of the run's other effects are applied, so the refusal is
+what stays on screen.
 
 ## Exit status
 
