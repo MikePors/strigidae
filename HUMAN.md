@@ -6,8 +6,9 @@ Checks only the maintainer can do, such as live verification against real GitHub
 
 - [ ] **An extensionless script is coloured by its shebang, in a real terminal** (#261). The tests check token types, not the colours on screen.
   1. Run `strig -R owner/repo` and open a pull request that changes (or adds) an extensionless script with a `#!/usr/bin/env python3` or `#!/bin/sh` first line, such as `bin/release`. Open the file: the diff should be coloured as Python (or shell), the shebang line included.
-  2. Open a file with no extension and no shebang (a `NOTES` file): it stays one plain colour. In a script, scroll to a hunk that starts further down than line 1: it stays plain, unless an earlier hunk of the same file was shown first.
-  3. Report the file, the language colours you saw, and any extensionless file coloured as the wrong language (Chroma's content analysis is a guess).
+  2. Open a file with no extension and no shebang (a `NOTES` file, or a Go file called `main`): it stays one plain colour. In a script whose diff has several hunks, a hunk that starts further down than line 1 is coloured like the first one, whichever you scroll to first, and also when the first hunk is marked reviewed and hidden.
+  3. Open a change that swaps the shebang (`#!/bin/sh` for `#!/usr/bin/env python3`): the deleted lines are coloured as shell and the added lines as Python.
+  4. Report the file, the language colours you saw, and any extensionless file coloured as the wrong language.
 
 - [ ] **A multi-line comment or string is coloured whole in a hunk, in a real terminal** (#259). The tests check token types, not the colours on screen.
   1. Run `strig -R owner/repo` and open a pull request whose diff has a block comment over several lines (`/* … */`, a Python docstring or a raw string) that opens and closes inside one hunk, as added lines. Every line of it should have the comment (or string) colour, not the code colours.
