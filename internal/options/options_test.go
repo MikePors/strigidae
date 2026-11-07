@@ -80,8 +80,10 @@ func TestChanged(test *testing.T) {
 func TestDeclarationsAreUnique(test *testing.T) {
 	seen := map[string]bool{}
 	for _, option := range All() {
-		// :set all lists every option, so no option may take that name.
-		if option.Name == "" || option.Name == "all" || seen[option.Name] {
+		// Keep declarations distinct from :set keywords and modifier syntax.
+		if option.Name == "" || option.Name == "all" || seen[option.Name] ||
+			strings.HasPrefix(option.Name, "inv") || strings.HasPrefix(option.Name, "no") ||
+			strings.ContainsAny(option.Name, "!?&=") {
 			test.Errorf("bad or duplicate declaration: %+v", option)
 		}
 		seen[option.Name] = true

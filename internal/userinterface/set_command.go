@@ -92,7 +92,7 @@ func parseSetWord(word string, current options.Values) (name string, query, valu
 			if negated || inverted || strings.ContainsAny(name, "!?&=") {
 				return "", false, false, fmt.Errorf("invalid :set form: %s", terminaltext.Clean(word))
 			}
-			return "", false, false, unknownOption(name)
+			return "", false, false, unknownOption(word)
 		}
 		if reset {
 			return name, false, option.Default, nil
@@ -104,7 +104,7 @@ func parseSetWord(word string, current options.Values) (name string, query, valu
 			return "", false, false, errors.New("missing option name")
 		}
 		if _, ok := options.Lookup(name); !ok {
-			return "", false, false, unknownOption(name)
+			return "", false, false, unknownOption(word)
 		}
 		return name, true, false, nil
 	}
@@ -113,7 +113,7 @@ func parseSetWord(word string, current options.Values) (name string, query, valu
 		if _, ok := options.Lookup(bare); ok {
 			return "", false, false, fmt.Errorf("%s is on or off: use :set %s or :set no%s", bare, bare, bare)
 		}
-		return "", false, false, unknownOption(name)
+		return "", false, false, unknownOption(word)
 	}
 	if name, found := strings.CutPrefix(word, "no"); found {
 		if _, ok := options.Lookup(name); ok {
