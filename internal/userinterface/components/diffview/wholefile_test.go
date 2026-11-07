@@ -161,3 +161,49 @@ func TestHighlightFile(test *testing.T) {
 		})
 	}
 }
+
+// TestFileSpansFollowEachSidesLineNumbers uses a context row whose text is
+// code on its old line and at the new side's line of the same number, but a
+// comment on its own new line. Only the new side, looked up by the new
+// number, colours it as a comment; it is drawn after the old side arrives and
+// again after the new one, so what the first draw worked out must not stick.
+func TestFileSpansFollowEachSidesLineNumbers(test *testing.T) {
+	oldText := "x\nx\ny\n"
+	newText := "x\nx\n/* c\nx\n*/\n"
+	file := &diff.File{
+		OldPath: "x.go", NewPath: "x.go", Status: diff.Modified,
+		OldObjectIdentifier: "1111111", NewObjectIdentifier: "2222222",
+		Hunks: []diff.Hunk{{
+			OldStart: 2, OldLines: 2, NewStart: 4, NewLines: 2,
+			Lines: []diff.Line{
+				{Kind: diff.Context, Old: 2, New: 4, Text: "x"},
+				{Kind: diff.Delete, Old: 3, Text: "y"},
+				{Kind: diff.Add, New: 5, Text: "*/"},
+			},
+		}},
+	}
+	model := New(theme.New(true))
+	model.SetFile(file)
+	model.SetSize(80, 20)
+	oldSpans, err := HighlightFile("x.go", []byte(oldText))
+	if err != nil {
+		test.Fatal(err)
+	}
+	newSpans, err := HighlightFile("x.go", []byte(newText))
+	if err != nil {
+		test.Fatal(err)
+	}
+
+	model.SetFileSpans(github.SideLeft, "1111111", oldSpans)
+	if anyIn(codeRowSpans(model)[0], chroma.Comment) {
+		test.Fatal("with only the old side, the context row is a comment")
+	}
+	model.SetFileSpans(github.SideRight, "2222222", newSpans)
+	rows := codeRowSpans(model)
+	if !allIn(rows[0], chroma.Comment) {
+		test.Errorf("context row = %v, want the comment of new line 4", rows[0])
+	}
+	if !allIn(rows[2], chroma.Comment) {
+		test.Errorf("added row = %v, want the comment's end on new line 5", rows[2])
+	}
+}
