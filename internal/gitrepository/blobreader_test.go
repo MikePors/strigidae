@@ -115,6 +115,7 @@ func TestRedactCredentials(test *testing.T) {
 	tests := []struct{ diagnostics, want string }{
 		{"fatal: unable to access 'https://user:ghp_secret@example.test/o/r.git/': 403", "fatal: unable to access 'https://[redacted]@example.test/o/r.git/': 403"},
 		{"fatal: could not read from https://token@a.test/x and https://b.test/y", "fatal: could not read from https://[redacted]@a.test/x and https://b.test/y"},
+		{"fatal: unable to access 'https://u:p@ss@example.test/o/r.git/'", "fatal: unable to access 'https://[redacted]@example.test/o/r.git/'"},
 		{"git@github.com: Permission denied (publickey).", "git@github.com: Permission denied (publickey)."},
 	}
 	for _, testCase := range tests {

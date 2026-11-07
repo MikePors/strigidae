@@ -161,7 +161,7 @@ func FetchPullRequestHead(ctx context.Context, directory, remoteName string, num
 
 // credentialsInURL matches the user information of a URL ("user:token@"),
 // which a remote URL may carry and git may print.
-var credentialsInURL = regexp.MustCompile(`(://)[^/@\s]*@`)
+var credentialsInURL = regexp.MustCompile(`(://)[^/\s]*@`)
 
 // redactCredentials removes the user information from every URL in git's
 // diagnostics, so a token in a remote URL never reaches the log.
