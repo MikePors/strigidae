@@ -213,13 +213,87 @@ func (model *Model) renderHunk(i int, header string, current int) string {
 	return model.styles.hunk[current].Render(text)
 }
 
-// spansFor returns the highlighted spans of row i, highlighting on first use.
+// spansFor returns the highlighted spans of row i. The first row of a hunk
+// to be drawn highlights the whole hunk and caches every row of it.
 func (model *Model) spansFor(i int) []Span {
 	baseIndex := model.rows[i].baseIndex
-	if span, ok := model.cache[baseIndex]; ok {
-		return span
+	if spans, ok := model.cache[baseIndex]; ok {
+		return spans
 	}
-	span := model.highlight(model.file.Path(), model.rows[i].text)
-	model.cache[baseIndex] = span
-	return span
+	if hunk := model.base[baseIndex].hunk; !model.highlighted[hunk] {
+		model.highlighted[hunk] = true
+		model.highlightHunk(baseIndex)
+		if spans, ok := model.cache[baseIndex]; ok {
+			return spans
+		}
+	}
+	// The row's side is too large to lex in one piece: lex just this row.
+	spans := model.highlightSide(model.file.Path(), []string{model.rows[i].text})[0]
+	model.cache[baseIndex] = spans
+	return spans
+}
+
+// highlightHunk lexes the old side (context and deleted lines) and the new
+// side (context and added lines) of the hunk holding base row baseIndex, each
+// as one block, and caches the spans of every row. Context rows take the new
+// side's spans, or the old side's when only the old side fits. "No newline"
+// markers are no code and take no part. A side that does not fit one block
+// (see fitsBlock) is left to be lexed row by row. spansFor calls it once per
+// hunk.
+func (model *Model) highlightHunk(baseIndex int) {
+	first := baseIndex
+	for first > 0 && model.base[first-1].line != nil {
+		first--
+	}
+	last := baseIndex
+	for last+1 < len(model.base) && model.base[last+1].line != nil {
+		last++
+	}
+	var oldRows, newRows []int
+	var oldLines, newLines []string
+	for index := first; index <= last; index++ {
+		row := model.base[index]
+		switch row.line.Kind {
+		case diff.Delete:
+			oldRows, oldLines = append(oldRows, index), append(oldLines, row.text)
+		case diff.Add:
+			newRows, newLines = append(newRows, index), append(newLines, row.text)
+		case diff.Context:
+			oldRows, oldLines = append(oldRows, index), append(oldLines, row.text)
+			newRows, newLines = append(newRows, index), append(newLines, row.text)
+		}
+	}
+	path := model.file.Path()
+	newFits := fitsBlock(newLines)
+	if fitsBlock(oldLines) {
+		oldSpans := model.highlightSide(path, oldLines)
+		for position, index := range oldRows {
+			if model.base[index].line.Kind == diff.Delete || !newFits {
+				model.cache[index] = oldSpans[position]
+			}
+		}
+	}
+	if newFits {
+		newSpans := model.highlightSide(path, newLines)
+		for position, index := range newRows {
+			model.cache[index] = newSpans[position]
+		}
+	}
+}
+
+// highlightSide highlights one side of a hunk. A Highlighter that returns
+// the wrong number of lines is not trusted: its side is plain.
+func (model *Model) highlightSide(path string, lines []string) [][]Span {
+	if len(lines) == 0 {
+		return nil
+	}
+	spans := model.highlight(path, lines)
+	if len(spans) == len(lines) {
+		return spans
+	}
+	spans = make([][]Span, len(lines))
+	for i, line := range lines {
+		spans[i] = plain(line)
+	}
+	return spans
 }

@@ -4,6 +4,11 @@ Checks only the maintainer can do, such as live verification against real GitHub
 
 ## Live checks
 
+- [ ] **A multi-line comment or string is coloured whole in a hunk, in a real terminal** (#259). The tests check token types, not the colours on screen.
+  1. Run `strig -R owner/repo` and open a pull request whose diff has a block comment over several lines (`/* … */`, a Python docstring or a raw string) that opens and closes inside one hunk, as added lines. Every line of it should have the comment (or string) colour, not the code colours.
+  2. Open a hunk where a comment opens on a deleted line and closes on a context line: the deleted line is a comment, the context line is not. Scroll a file of several thousand lines: drawing its first screen should not pause noticeably.
+  3. Report the language, the colours you saw and any pause.
+
 - [ ] **Fetching a pull request's head never prompts, over HTTPS and SSH** (#267). Only local repositories stand in for the remote in the tests. Reachable from strig once #262 lands; until then, check what strig will run: `git fetch --no-write-fetch-head --refmap= --no-tags --no-auto-maintenance --no-recurse-submodules --quiet -- <remote> refs/pull/<number>/head` with stdin closed, `GIT_TERMINAL_PROMPT=0` and `GIT_SSH_COMMAND='ssh -o BatchMode=yes'`.
   1. Once #262 is merged: in a checkout of a repository you can reach over HTTPS with no stored credentials (`git credential reject`, or a private repository), open a pull request whose blobs are not local and open a modified file. strig must not stop, ask for a username, or draw anything over the TUI; the file just keeps its per-hunk colours.
   2. Repeat with an SSH remote, a passphrase-protected key and no agent (`env -u SSH_AUTH_SOCK strig`). It must not ask for the passphrase or a host key, and must not hang.
@@ -96,3 +101,9 @@ Checks only the maintainer can do, such as live verification against real GitHub
   must not appear. Repeat with a token environment override: no cache is reused.
 - Stop strig, delete its cache directory (see README), and restart: normal live
   loading should work. Report OS, terminal size, and any unexpected behavior.
+
+- [ ] **`FileText` reads a file's text at a commit from real GitHub** (#260). The GraphQL `object(expression: "<commit>:<path>")` query has only been tested against hand-written fixtures. Nothing on screen uses it yet, so this can be done once #262 lands and highlights from the whole file; until then it needs a throwaway `main` that calls `network.New(...).FileText`.
+  1. Against a real pull request's head commit (the full 40-character SHA), read a small text file the pull request touches. The returned text should match `git show <sha>:<path>` exactly, including line endings and a missing final newline.
+  2. Read a binary file (for example a PNG) and a text file over about 1 MB. Each should fail with `ErrNoFileText`, not `ErrNotFound`. Report the size at which a text file starts to come back as truncated, if it does.
+  3. Read a path that does not exist at that commit, a path that was added by a later commit, and a directory path. Each should fail with `ErrNotFound`.
+  4. Report any case where the text came back wrong or the error was not the one above.
