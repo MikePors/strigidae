@@ -286,8 +286,8 @@ func (model *Model) highlightHunk(baseIndex int) {
 }
 
 // highlightSide highlights one side of a hunk; firstLine is that side's first
-// line of the file, or "" when the diff does not contain it. A Highlighter that returns the wrong number of lines
-// is not trusted: its side is plain.
+// line of the file, or "" when the diff does not contain it. A Highlighter
+// that returns the wrong number of lines is not trusted: its side is plain.
 func (model *Model) highlightSide(path, firstLine string, lines []string) [][]Span {
 	if len(lines) == 0 {
 		return nil
