@@ -27,7 +27,8 @@ type Span struct {
 // The lines are lexed together, so a construct that opens and closes inside
 // the block (a block comment, a docstring, a raw string) is coloured on every
 // line it covers. Anything that opened above the block is not known and is
-// coloured as code (#262 reads the whole file to fix that).
+// coloured as code, until spans of the whole file arrive (HighlightFile,
+// Model.SetFileSpans).
 type Highlighter func(path, firstLine string, lines []string) [][]Span
 
 // maximumHighlightLength bounds the line length we are willing to lex; longer lines
@@ -73,9 +74,7 @@ func ChromaHighlighter() Highlighter {
 	return func(path, firstLine string, lines []string) [][]Span {
 		lexer, seen := lexerFor[path]
 		if !seen {
-			if lexer = lexers.Match(path); lexer != nil && broken(lexer) {
-				lexer = nil
-			}
+			lexer = lexerForPath(path)
 			lexerFor[strings.Clone(path)] = lexer
 		}
 		if lexer == nil && strings.HasPrefix(firstLine, "#!") {
@@ -102,6 +101,15 @@ func ChromaHighlighter() Highlighter {
 		}
 		return lexBlock(lexer, lines, time.Now)
 	}
+}
+
+// lexerForPath returns the lexer the file name picks, as Chroma registers it,
+// or nil when it picks none or a broken one.
+func lexerForPath(path string) chroma.Lexer {
+	if lexer := lexers.Match(path); lexer != nil && !broken(lexer) {
+		return lexer
+	}
+	return nil
 }
 
 // broken reports whether lexer is one known to hang or panic on some input,
@@ -141,15 +149,36 @@ func fitsBlock(lines []string) bool {
 // longer than blockBudget by the clock now, it stops, and the lines from the
 // one it stopped in on are lexed one at a time.
 func lexBlock(lexer chroma.Lexer, lines []string, now func() time.Time) [][]Span {
-	result := make([][]Span, len(lines))
-	budgeted := &budgetedLexer{Lexer: lexer, now: now}
-	item, err := chroma.Coalesce(budgeted).Tokenise(nil, strings.Join(lines, "\n"))
+	result, finished, err := tokenLines(lexer, lines, now, blockBudget)
 	if err != nil {
+		result = make([][]Span, len(lines))
 		for i, line := range lines {
 			result[i] = plain(line)
 		}
 		return result
 	}
+	for i := finished; i < len(lines); i++ {
+		result[i] = lexLine(lexer, lines[i])
+	}
+	for i, line := range lines[:finished] {
+		if joined(result[i]) != line {
+			result[i] = plain(line) // lexer altered the text; never show wrong code
+		}
+	}
+	return result
+}
+
+// tokenLines lexes lines as one text with lexer, as Chroma registers it, and
+// splits the tokens back into lines, without checking that each line's spans
+// join back to its text. Lexing stops once budget has passed by the clock now;
+// finished is the number of lines lexed whole, len(lines) unless it stopped.
+func tokenLines(lexer chroma.Lexer, lines []string, now func() time.Time, budget time.Duration) (result [][]Span, finished int, err error) {
+	budgeted := &budgetedLexer{Lexer: lexer, now: now, budget: budget}
+	item, err := chroma.Coalesce(budgeted).Tokenise(nil, strings.Join(lines, "\n"))
+	if err != nil {
+		return nil, 0, err
+	}
+	result = make([][]Span, len(lines))
 	current := 0
 	for token := item(); token != chroma.EOF; token = item() {
 		tokenType := standard(token.Type)
@@ -165,26 +194,18 @@ func lexBlock(lexer chroma.Lexer, lines []string, now func() time.Time) [][]Span
 			}
 		}
 	}
-	finished := len(lines) // lines before this one were lexed in the block
 	if budgeted.expired {
-		finished = min(current, len(lines)) // the current line may be only partly lexed
+		return result, min(current, len(lines)), nil // the current line may be only partly lexed
 	}
-	for i := finished; i < len(lines); i++ {
-		result[i] = lexLine(lexer, lines[i])
-	}
-	for i, line := range lines[:finished] {
-		if joined(result[i]) != line {
-			result[i] = plain(line) // lexer altered the text; never show wrong code
-		}
-	}
-	return result
+	return result, len(lines), nil
 }
 
-// budgetedLexer ends its tokens early, as if the text ended, once blockBudget
-// has passed by the clock now since Tokenise, and then reports expired.
+// budgetedLexer ends its tokens early, as if the text ended, once its
+// budget has passed by the clock now since Tokenise, and then reports expired.
 type budgetedLexer struct {
 	chroma.Lexer
 	now     func() time.Time
+	budget  time.Duration
 	expired bool
 }
 
@@ -194,7 +215,7 @@ func (lexer *budgetedLexer) Tokenise(options *chroma.TokeniseOptions, text strin
 	if err != nil {
 		return nil, err
 	}
-	deadline := lexer.now().Add(blockBudget)
+	deadline := lexer.now().Add(lexer.budget)
 	count := 0
 	return func() chroma.Token {
 		if lexer.expired {

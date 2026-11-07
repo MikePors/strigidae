@@ -53,6 +53,19 @@ stored, never tokens, headers, PR details, or diffs. Summaries can contain priva
 repository information; files are created with owner-only permissions on Unix.
 Missing, corrupt, or unwritable caches do not stop live loading.
 
+## Syntax colours in a diff
+
+Code in a diff is coloured by language, picked from the file name or else from a
+`#!` first line. Each hunk is coloured on its own at first. When strig runs in a
+checkout of the pull request's repository (not with `-R`), a modified, renamed
+or copied file is then read whole from the checkout, so a hunk that starts
+inside a comment or string opened above it is coloured right. The file is read
+by the blob ids on the diff's `index` line; if the checkout lacks them, strig
+fetches the pull request's head once (`refs/pull/<number>/head`, writing no ref
+and never prompting). Files over 1 MiB a side, binary files, and anything that
+can't be read or takes more than 5 seconds to colour keep the per-hunk colours;
+the reason goes to the log.
+
 ## Comments across a pull request
 
 Select **Comments** below Overview in the Files pane, or run `:comments`, to

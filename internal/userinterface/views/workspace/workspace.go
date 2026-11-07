@@ -132,6 +132,10 @@ type View struct {
 	hunkMarks        *HunkMarks       // hunks marked reviewed; shared with other workspaces by WithHunkMarks
 	hunkFingerprints fingerprintCache // fingerprints of the last file asked about
 
+	wholeFiles       *WholeFiles           // nil: files are coloured hunk by hunk; see wholefile.go
+	wholeFilePending map[wholeFileKey]bool // sides being read for this view
+	wholeFileRetried map[wholeFileKey]bool // sides read again after running out of time
+
 	window  scroll.Window  // Files pane: over rows
 	rows    []int          // the entry each Files pane row shows; see hideviewed.go
 	current int            // the entry the right pane shows
@@ -279,6 +283,12 @@ func (view *View) FullHelp() [][]key.Binding {
 
 // Update implements userinterface.View.
 func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
+	next, command := view.update(message)
+	// Whatever the message, the shown file may have changed.
+	return next, tea.Batch(command, view.wholeFileSides())
+}
+
+func (view *View) update(message tea.Msg) (userinterface.View, tea.Cmd) {
 	if command, ok := view.review.update(message, view.reviewEnvironment()); ok {
 		return view, command
 	}
@@ -336,6 +346,10 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 	case fadeMessage:
 		if message.owner == view {
 			return view, view.fadeTicked(message)
+		}
+	case wholeFileMessage:
+		if message.owner == view {
+			view.wholeFileRead(message)
 		}
 	case viewedMessage:
 		if view.viewedMine(message) {

@@ -90,6 +90,12 @@ type FilePane interface {
 	// same path comes back with different metadata (change type, counts)
 	// after a refresh. A repeat call for the same path keeps cursor and scroll.
 	SetFile(file github.ChangedFile)
+	// SetFileSpans gives the spans of every line of one side of the shown
+	// file, read whole (diffview.HighlightFile), named by its blob object
+	// identifier. It is called again with the same side after every update
+	// while the file is shown, so it must be cheap then; spans for a file or
+	// side not shown are ignored. Panes without syntax colours ignore it.
+	SetFileSpans(side github.DiffSide, objectIdentifier string, lines [][]diffview.Span)
 	// SetSize gives the pane's inner size; it is called whenever it changes.
 	SetSize(width, height int)
 	// Context returns what is at the pane's cursor: the threads and comment
