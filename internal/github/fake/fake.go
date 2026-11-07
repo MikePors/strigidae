@@ -45,6 +45,7 @@ const (
 	MethodConvertToDraft     = "ConvertToDraft"
 	MethodListBranches       = "ListBranches"
 	MethodCreatePullRequest  = "CreatePullRequest"
+	MethodFileText           = "FileText"
 )
 
 // Call is one recorded call with the arguments that apply to its method.
@@ -65,10 +66,12 @@ type Call struct {
 	ReviewIdentifier string
 	// PullRequestIdentifier, Path and Viewed are set by the methods that take them:
 	// PullRequestIdentifier by SetFileViewed, StartReview and MergePullRequest, Path by
-	// SetFileViewed and AddReviewThread, Viewed by SetFileViewed.
+	// SetFileViewed, AddReviewThread and FileText, Viewed by SetFileViewed.
 	PullRequestIdentifier string
 	Path                  string
 	Viewed                bool
+	// CommitObjectIdentifier is set by FileText.
+	CommitObjectIdentifier string
 	// SubjectIdentifier and Reaction are set by AddReaction and RemoveReaction.
 	SubjectIdentifier string
 	Reaction          github.ReactionContent
@@ -120,6 +123,7 @@ type Client struct {
 	draftChanges   []DraftChange
 	branches       map[github.Repository][]github.Branch
 	created        []github.CreatePullRequestInput
+	fileTexts      map[fileTextKey]fileTextEntry
 	added          []github.AddThreadInput
 	started        []StartedReview
 	deleted        []string
@@ -143,6 +147,7 @@ func New() *Client {
 		pending:        map[pullRequestKey]github.PendingReview{},
 		merge:          map[github.Repository]MergeSettings{},
 		branches:       map[github.Repository][]github.Branch{},
+		fileTexts:      map[fileTextKey]fileTextEntry{},
 	}
 }
 
