@@ -105,8 +105,11 @@ func ChromaHighlighter() Highlighter {
 }
 
 // broken reports whether lexer is one known to hang or panic on some input,
-// and so must never run. A lexer that spins without returning a token cannot
-// be stopped from Go, and a panic on the UI goroutine ends strig.
+// and so is never chosen by file name or shebang. A lexer that spins without
+// returning a token cannot be stopped from Go, and a panic on the UI goroutine
+// ends strig. Lexers that pick a sub-lexer by name from Chroma's registry (a
+// Markdown code fence) still reach these, as does Glamour's rendering of
+// Markdown (#277).
 // TestNoRegisteredLexerIsBroken finds them; drop an entry once a Chroma
 // version that fixes it is pinned.
 func broken(lexer chroma.Lexer) bool {

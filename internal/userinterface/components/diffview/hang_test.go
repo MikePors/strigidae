@@ -95,8 +95,8 @@ func TestBrokenLexerFilesArePlain(test *testing.T) {
 		test.Run(path, func(test *testing.T) {
 			got := rowSpans(test, hunkFile(path, lines))
 			want := [][]Span{plain("/* a"), plain("/* a")}
-			if diff := cmp.Diff(want, got); diff != "" {
-				test.Errorf("spans (-want +got):\n%s", diff)
+			if difference := cmp.Diff(want, got); difference != "" {
+				test.Errorf("spans (-want +got):\n%s", difference)
 			}
 		})
 	}
