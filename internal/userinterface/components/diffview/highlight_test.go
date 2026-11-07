@@ -256,9 +256,9 @@ func TestHunkNoNewlineMarkerTakesNoPart(test *testing.T) {
 		{diff.Add, "end */"},
 	})
 	var seen []string
-	model := New(theme.New(true), WithHighlighter(func(path string, lines []string, startsFile bool) [][]Span {
+	model := New(theme.New(true), WithHighlighter(func(path, firstLine string, lines []string) [][]Span {
 		seen = append(seen, lines...)
-		return ChromaHighlighter()(path, lines, startsFile)
+		return ChromaHighlighter()(path, firstLine, lines)
 	}))
 	model.SetFile(file)
 	for i, row := range model.rows {
@@ -325,7 +325,7 @@ func benchmarkRenderAddedFile(benchmark *testing.B, count int) {
 // fewer results than lines is not trusted; its side is drawn as plain text
 // instead of panicking on a missing result.
 func TestRenderSurvivesAHighlighterWithTooFewResults(test *testing.T) {
-	model := New(theme.New(true), WithHighlighter(func(string, []string, bool) [][]Span { return nil }))
+	model := New(theme.New(true), WithHighlighter(func(string, string, []string) [][]Span { return nil }))
 	model.SetFile(hunkFile("main.go", []codeLine{
 		{diff.Context, "package main"},
 		{diff.Delete, "var removed = 1"},

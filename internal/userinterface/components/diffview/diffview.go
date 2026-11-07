@@ -148,7 +148,12 @@ type Model struct {
 	// block did not cover (its side was too large) costs only its own lexing.
 	// Reset with cache.
 	highlighted map[int]bool
-	saved       *position // position kept while a message replaces the file
+	// oldFirstLine and newFirstLine are the first line of the file on each
+	// side when the diff contains it, or "". They are worked out when the file
+	// is set, from the hunks themselves (shown, hidden or not drawn yet), and
+	// handed to the Highlighter for every block of that side.
+	oldFirstLine, newFirstLine string
+	saved                      *position // position kept while a message replaces the file
 
 	width, height int
 
@@ -265,6 +270,7 @@ func (model *Model) reset() {
 	model.fileThreads, model.attach, model.orphans, model.blocks, model.owners = nil, nil, nil, nil, nil
 	model.cache = map[int][]Span{}
 	model.highlighted = map[int]bool{}
+	model.oldFirstLine, model.newFirstLine = "", ""
 	model.wrapStarts = nil
 	model.window.Reset()
 	model.maximumWidth, model.numberWidth = 0, 0
@@ -291,6 +297,7 @@ func (model *Model) build(file *diff.File) {
 		}
 	}
 	model.numberWidth = max(len(strconv.Itoa(maximumNumber)), 3)
+	model.oldFirstLine, model.newFirstLine = firstLines(file)
 	model.placeThreads()
 	model.layout()
 }

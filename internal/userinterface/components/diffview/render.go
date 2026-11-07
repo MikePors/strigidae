@@ -228,7 +228,11 @@ func (model *Model) spansFor(i int) []Span {
 		}
 	}
 	// The row's side is too large to lex in one piece: lex just this row.
-	spans := model.highlightSide(model.file.Path(), []string{model.rows[i].text}, false)[0]
+	firstLine := model.newFirstLine
+	if model.rows[i].line.Kind == diff.Delete {
+		firstLine = model.oldFirstLine
+	}
+	spans := model.highlightSide(model.file.Path(), firstLine, []string{model.rows[i].text})[0]
 	model.cache[baseIndex] = spans
 	return spans
 }
@@ -264,10 +268,9 @@ func (model *Model) highlightHunk(baseIndex int) {
 		}
 	}
 	path := model.file.Path()
-	hunk := model.file.Hunks[model.base[baseIndex].hunk]
 	newFits := fitsBlock(newLines)
 	if fitsBlock(oldLines) {
-		oldSpans := model.highlightSide(path, oldLines, hunk.OldStart == 1)
+		oldSpans := model.highlightSide(path, model.oldFirstLine, oldLines)
 		for position, index := range oldRows {
 			if model.base[index].line.Kind == diff.Delete || !newFits {
 				model.cache[index] = oldSpans[position]
@@ -275,21 +278,21 @@ func (model *Model) highlightHunk(baseIndex int) {
 		}
 	}
 	if newFits {
-		newSpans := model.highlightSide(path, newLines, hunk.NewStart == 1)
+		newSpans := model.highlightSide(path, model.newFirstLine, newLines)
 		for position, index := range newRows {
 			model.cache[index] = newSpans[position]
 		}
 	}
 }
 
-// highlightSide highlights one side of a hunk; startsFile says that it begins
-// at line 1 of the file. A Highlighter that returns the wrong number of lines
+// highlightSide highlights one side of a hunk; firstLine is that side's first
+// line of the file, or "" when the diff does not contain it. A Highlighter that returns the wrong number of lines
 // is not trusted: its side is plain.
-func (model *Model) highlightSide(path string, lines []string, startsFile bool) [][]Span {
+func (model *Model) highlightSide(path, firstLine string, lines []string) [][]Span {
 	if len(lines) == 0 {
 		return nil
 	}
-	spans := model.highlight(path, lines, startsFile)
+	spans := model.highlight(path, firstLine, lines)
 	if len(spans) == len(lines) {
 		return spans
 	}
@@ -298,4 +301,45 @@ func (model *Model) highlightSide(path string, lines []string, startsFile bool) 
 		spans[i] = plain(line)
 	}
 	return spans
+}
+
+// firstLines returns the first line of the file on the old side and on the new
+// side, each only when the diff holds it: the first hunk starts at line 1 of
+// that side. The text is what the rows show. A side the diff does not reach
+// the top of is "", as is a side with no first line (an added file has no old
+// side). It reads the hunks, not what is drawn, so it does not depend on the
+// order the hunks are shown in or on a hunk being hidden.
+func firstLines(file *diff.File) (oldFirst, newFirst string) {
+	if len(file.Hunks) == 0 {
+		return "", ""
+	}
+	hunk := file.Hunks[0]
+	oldWanted, newWanted := hunk.OldStart == 1, hunk.NewStart == 1
+	for _, line := range hunk.Lines {
+		text, _ := displayText(line.Text)
+		switch line.Kind {
+		case diff.Delete:
+			if oldWanted && oldFirst == "" {
+				oldFirst = text
+			}
+			oldWanted = false
+		case diff.Add:
+			if newWanted && newFirst == "" {
+				newFirst = text
+			}
+			newWanted = false
+		case diff.Context:
+			if oldWanted && oldFirst == "" {
+				oldFirst = text
+			}
+			if newWanted && newFirst == "" {
+				newFirst = text
+			}
+			oldWanted, newWanted = false, false
+		}
+		if !oldWanted && !newWanted {
+			break
+		}
+	}
+	return oldFirst, newFirst
 }

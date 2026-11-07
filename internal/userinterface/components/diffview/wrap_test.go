@@ -78,7 +78,7 @@ func TestWrapRendersContinuationRows(test *testing.T) {
 }
 
 func TestWrapKeepsTintAndHighlighting(test *testing.T) {
-	highlighter := func(_ string, lines []string, _ bool) [][]Span {
+	highlighter := func(_, _ string, lines []string) [][]Span {
 		spans := make([][]Span, len(lines))
 		for i, text := range lines {
 			if len(text) < 30 {

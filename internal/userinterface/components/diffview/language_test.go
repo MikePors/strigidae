@@ -9,6 +9,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/MikePors/strigidae/internal/diff"
+	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
 // lexedAs returns lines as the named Chroma lexer lexes them as one block.
@@ -30,30 +31,34 @@ func allPlain(lines []string) [][]Span {
 	return spans
 }
 
-func TestLanguageFromContent(test *testing.T) {
+func TestLanguageFromShebang(test *testing.T) {
 	pythonLines := []string{"#!/usr/bin/env python3", "import os", "", "def main():", "    return os.getcwd()  # here"}
 	shellLines := []string{"#!/bin/sh", "set -e", `if [ -n "$HOME" ]; then echo "$HOME"; fi`}
 	tests := []struct {
-		name       string
-		path       string
-		lines      []string
-		startsFile bool
-		language   string // the Chroma lexer expected; "" for plain
+		name      string
+		path      string
+		firstLine string
+		lines     []string
+		language  string // the Chroma lexer expected; "" for plain
 	}{
-		{name: "python through env", path: "bin/release", lines: pythonLines, startsFile: true, language: "python"},
-		{name: "shell", path: "bin/release", lines: shellLines, startsFile: true, language: "bash"},
-		{name: "interpreter with a version", path: "run", lines: []string{"#!/usr/bin/python3.11", "print(1)"}, startsFile: true, language: "python"},
-		{name: "env with a flag and a variable", path: "run", lines: []string{"#!/usr/bin/env -S LANG=C ruby -w", "puts 1"}, startsFile: true, language: "ruby"},
-		{name: "spaces after the marker", path: "run", lines: []string{"#! /usr/bin/perl", "print 1;"}, startsFile: true, language: "perl"},
-		{name: "no shebang but content analysis knows it", path: "main", lines: []string{"package main"}, startsFile: true, language: "go"},
-		{name: "a block that does not start the file stays plain", path: "bin/release", lines: pythonLines, startsFile: false},
-		{name: "an unknown interpreter stays plain", path: "bin/release", lines: []string{"#!/opt/odd/frobnicate", "x"}, startsFile: true},
-		{name: "a bare marker stays plain", path: "bin/release", lines: []string{"#!", "x"}, startsFile: true},
-		{name: "env alone stays plain", path: "bin/release", lines: []string{"#!/usr/bin/env", "x"}, startsFile: true},
-		{name: "plain text stays plain", path: "NOTES", lines: []string{"just words", "and more"}, startsFile: true},
-		{name: "a name match wins over a misleading shebang", path: "tool.py", lines: pythonLines[1:], startsFile: true, language: "python"},
-		{name: "a lexer that can hang is never chosen from content", path: "bin/release", lines: []string{"#!/usr/bin/env jsonata", "$x"}, startsFile: true},
-		{name: "the other lexer that can hang", path: "bin/release", lines: []string{"#!/usr/bin/env jungle", "x"}, startsFile: true},
+		{name: "python through env", path: "bin/release", firstLine: pythonLines[0], lines: pythonLines, language: "python"},
+		{name: "shell", path: "bin/release", firstLine: shellLines[0], lines: shellLines, language: "bash"},
+		{name: "interpreter with a version", path: "run", firstLine: "#!/usr/bin/python3.11", lines: []string{"#!/usr/bin/python3.11", "print(1)"}, language: "python"},
+		{name: "python 2.7 is not a man page", path: "run", firstLine: "#!/usr/bin/python2.7", lines: []string{"print 1"}, language: "python"},
+		{name: "ruby 3.2 is not a man page", path: "run", firstLine: "#!/usr/bin/env ruby3.2", lines: []string{"puts 1"}, language: "ruby"},
+		{name: "lua 5.4 is not a man page", path: "run", firstLine: "#!/usr/bin/lua5.4", lines: []string{"print(1)"}, language: "lua"},
+		{name: "env with a flag and a variable", path: "run", firstLine: "#!/usr/bin/env -S LANG=C ruby -w", lines: []string{"puts 1"}, language: "ruby"},
+		{name: "spaces after the marker", path: "run", firstLine: "#! /usr/bin/perl", lines: []string{"print 1;"}, language: "perl"},
+		{name: "a block that has no first line stays plain", path: "bin/release", firstLine: "", lines: pythonLines},
+		{name: "a first line that is no shebang stays plain", path: "main", firstLine: "package main", lines: []string{"package main", "", "func main() {}"}},
+		{name: "an unknown interpreter stays plain", path: "bin/release", firstLine: "#!/opt/odd/frobnicate", lines: []string{"x"}},
+		{name: "a bare marker stays plain", path: "bin/release", firstLine: "#!", lines: []string{"x"}},
+		{name: "env alone stays plain", path: "bin/release", firstLine: "#!/usr/bin/env", lines: []string{"x"}},
+		{name: "a number is no interpreter", path: "bin/release", firstLine: "#!/usr/bin/env 1", lines: []string{"x"}},
+		{name: "plain text stays plain", path: "NOTES", firstLine: "just words", lines: []string{"just words", "and more"}},
+		{name: "a name match wins over a misleading shebang", path: "tool.py", firstLine: "#!/bin/sh", lines: pythonLines[1:], language: "python"},
+		{name: "a lexer that can hang is never chosen from content", path: "bin/release", firstLine: "#!/usr/bin/env jsonata", lines: []string{"$x"}},
+		{name: "the other lexer that can hang", path: "bin/release", firstLine: "#!/usr/bin/env jungle", lines: []string{"x"}},
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
@@ -61,9 +66,40 @@ func TestLanguageFromContent(test *testing.T) {
 			if testCase.language != "" {
 				want = lexedAs(test, testCase.language, testCase.lines)
 			}
-			got := ChromaHighlighter()(testCase.path, testCase.lines, testCase.startsFile)
+			got := ChromaHighlighter()(testCase.path, testCase.firstLine, testCase.lines)
 			if diff := cmp.Diff(want, got); diff != "" {
 				test.Errorf("spans differ (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// TestShebangNamesTheExactLanguage proves an interpreter is found by Chroma's
+// name or alias only: lexers.Get alone would answer Groff for a name ending in
+// ".1" to ".9", a man page pattern.
+func TestShebangNamesTheExactLanguage(test *testing.T) {
+	tests := []struct {
+		firstLine string
+		want      string // Chroma's name for the language; "" for none
+	}{
+		{"#!/usr/bin/python2.7", "Python"},
+		{"#!/usr/bin/env ruby3.2", "Ruby"},
+		{"#!/usr/bin/lua5.4", "Lua"},
+		{"#!/usr/bin/python3.11", "Python"},
+		{"#!/usr/bin/env python3", "Python"},
+		{"#!/bin/sh", "Bash"},
+		{"#!/usr/bin/env 1", ""},
+		{"#!/usr/bin/7", ""},
+		{"#!/usr/bin/env 2.5", ""},
+	}
+	for _, testCase := range tests {
+		test.Run(testCase.firstLine, func(test *testing.T) {
+			name := ""
+			if lexer := languageFromShebang(testCase.firstLine); lexer != nil {
+				name = lexer.Config().Name
+			}
+			if name != testCase.want {
+				test.Errorf("language = %q, want %q", name, testCase.want)
 			}
 		})
 	}
@@ -73,49 +109,13 @@ func TestLanguageFromContent(test *testing.T) {
 // overridden by the first line: shell text in a .py file is lexed as Python.
 func TestNameMatchWinsOverShebang(test *testing.T) {
 	lines := []string{"#!/bin/sh", "def f(): pass"}
-	got := ChromaHighlighter()("tool.py", lines, true)
+	got := ChromaHighlighter()("tool.py", lines[0], lines)
 	if diff := cmp.Diff(lexedAs(test, "python", lines), got); diff != "" {
 		test.Errorf("spans differ (-want +got):\n%s", diff)
 	}
 	if diff := cmp.Diff(lexedAs(test, "bash", lines), got); diff == "" {
 		test.Error("the shebang was used although the name matched")
 	}
-}
-
-// TestContentLanguageIsRemembered proves the language found at the top of a
-// file colours the later hunks of the same path, and that a guess that found
-// nothing is not remembered (the new side may gain the shebang).
-func TestContentLanguageIsRemembered(test *testing.T) {
-	highlighter := ChromaHighlighter()
-	later := []string{"/* a", "b */"}
-	if diff := cmp.Diff(allPlain(later), highlighter("bin/run", later, false)); diff != "" {
-		test.Errorf("before the top of the file is seen (-want +got):\n%s", diff)
-	}
-	if got := highlighter("bin/run", []string{"echo old"}, true); !allPlainSpans(got) {
-		test.Errorf("a side without a shebang was coloured: %v", got)
-	}
-	top := []string{"#!/usr/bin/env python3", "import os"}
-	if diff := cmp.Diff(lexedAs(test, "python", top), highlighter("bin/run", top, true)); diff != "" {
-		test.Errorf("a side that gained a shebang (-want +got):\n%s", diff)
-	}
-	lines := []string{`"""doc`, `more"""`}
-	if diff := cmp.Diff(lexedAs(test, "python", lines), highlighter("bin/run", lines, false)); diff != "" {
-		test.Errorf("a later hunk of the same path (-want +got):\n%s", diff)
-	}
-	if got := highlighter("bin/other", lines, false); !allPlainSpans(got) {
-		test.Errorf("another path was coloured: %v", got)
-	}
-}
-
-func allPlainSpans(spans [][]Span) bool {
-	for _, line := range spans {
-		for _, span := range line {
-			if span.Token != chroma.Text {
-				return false
-			}
-		}
-	}
-	return true
 }
 
 // startingAt moves the one hunk of file to start at line start on both sides.
@@ -175,5 +175,152 @@ func TestDeletedFileUsesItsOldPath(test *testing.T) {
 	got := rowSpans(test, file)
 	if diff := cmp.Diff(lexedAs(test, "bash", []string{lines[0].text, lines[1].text}), got); diff != "" {
 		test.Errorf("spans differ (-want +got):\n%s", diff)
+	}
+}
+
+// texts returns the text of each of lines.
+func texts(lines []codeLine) []string {
+	result := make([]string, len(lines))
+	for i, line := range lines {
+		result[i] = line.text
+	}
+	return result
+}
+
+// twoHunkFile builds a file called path with a hunk of first at line 1 and a
+// hunk of second at line start.
+func twoHunkFile(path string, first, second []codeLine, start int) *diff.File {
+	file := hunkFile(path, first)
+	file.Hunks = append(file.Hunks, startingAt(hunkFile(path, second), start).Hunks[0])
+	return file
+}
+
+// hunkSpans returns the spans drawn for the code rows of hunk, in order.
+func hunkSpans(model *Model, hunk int) [][]Span {
+	var spans [][]Span
+	for i, row := range model.rows {
+		if row.hunk == hunk && row.line != nil {
+			spans = append(spans, model.codeSpans(i))
+		}
+	}
+	return spans
+}
+
+// TestSidesHaveTheirOwnLanguage proves the language of each side comes from
+// that side's first line: a hunk at line 1 that swaps a shell shebang for a
+// Python one draws the deleted lines as shell and the added lines as Python.
+func TestSidesHaveTheirOwnLanguage(test *testing.T) {
+	file := hunkFile("bin/release", []codeLine{
+		{diff.Delete, "#!/bin/sh"},
+		{diff.Delete, "echo old"},
+		{diff.Add, "#!/usr/bin/env python3"},
+		{diff.Add, "def main(): return 1"},
+	})
+	model := New(theme.New(true))
+	model.SetFile(file)
+	got := hunkSpans(model, 0)
+	want := append(
+		lexedAs(test, "bash", []string{"#!/bin/sh", "echo old"}),
+		lexedAs(test, "python", []string{"#!/usr/bin/env python3", "def main(): return 1"})...,
+	)
+	if diff := cmp.Diff(want, got); diff != "" {
+		test.Errorf("spans differ (-want +got):\n%s", diff)
+	}
+}
+
+// TestLanguageDoesNotDependOnDrawingOrder proves a hunk below the top of the
+// file is coloured by the file's first line even when it is drawn first, or
+// when the hunk holding that line is hidden and never drawn.
+func TestLanguageDoesNotDependOnDrawingOrder(test *testing.T) {
+	first := []codeLine{{diff.Context, "#!/usr/bin/env python3"}, {diff.Add, "import os"}}
+	second := []codeLine{{diff.Context, `"""doc`}, {diff.Add, `more"""`}}
+	want := lexedAs(test, "python", texts(second))
+	tests := []struct {
+		name string
+		draw func(model *Model) [][]Span // the spans the later hunk is drawn with
+	}{
+		{"drawn before the top hunk", func(model *Model) [][]Span {
+			hunkSpans(model, 1)
+			hunkSpans(model, 0)
+			return hunkSpans(model, 1)
+		}},
+		{"drawn first, read again", func(model *Model) [][]Span {
+			hunkSpans(model, 1)
+			return hunkSpans(model, 1)
+		}},
+		{"top hunk hidden", func(model *Model) [][]Span {
+			model.SetHunkHidden(func(file *diff.File, hunk int) bool { return file == model.file && hunk == 0 })
+			return hunkSpans(model, 1)
+		}},
+	}
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			model := New(theme.New(true))
+			model.SetFile(twoHunkFile("bin/run", first, second, 100))
+			if diff := cmp.Diff(want, testCase.draw(model)); diff != "" {
+				test.Errorf("spans differ (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// TestSetFileForgetsTheLanguage proves a file set again on the same pane (a
+// reload after a force-push) gets the language of its own first line.
+func TestSetFileForgetsTheLanguage(test *testing.T) {
+	model := New(theme.New(true))
+	model.SetFile(hunkFile("bin/run", []codeLine{{diff.Context, "#!/bin/sh"}, {diff.Add, "echo hi"}}))
+	hunkSpans(model, 0)
+	python := []codeLine{{diff.Context, "#!/usr/bin/env python3"}, {diff.Add, "def main(): return 1"}}
+	model.SetFile(hunkFile("bin/run", python))
+	if diff := cmp.Diff(lexedAs(test, "python", texts(python)), hunkSpans(model, 0)); diff != "" {
+		test.Errorf("spans differ (-want +got):\n%s", diff)
+	}
+	model.SetFile(hunkFile("bin/run", []codeLine{{diff.Context, "plain words"}, {diff.Add, "def main(): return 1"}}))
+	if got := hunkSpans(model, 0); !cmp.Equal(allPlain([]string{"plain words", "def main(): return 1"}), got) {
+		test.Errorf("a file without a shebang kept an old language: %v", got)
+	}
+}
+
+// TestFileWithoutShebangStaysPlain proves a file the name does not match is
+// coloured only from a shebang: content that Chroma's analysis would call
+// GDScript is plain.
+func TestFileWithoutShebangStaysPlain(test *testing.T) {
+	lines := []codeLine{{diff.Context, "package main"}, {diff.Context, ""}, {diff.Add, "func main() {}"}}
+	got := rowSpans(test, hunkFile("bin/release", lines))
+	if diff := cmp.Diff(allPlain(texts(lines)), got); diff != "" {
+		test.Errorf("spans differ (-want +got):\n%s", diff)
+	}
+}
+
+// TestFirstLines proves which first lines a file's hunks give.
+func TestFirstLines(test *testing.T) {
+	// hunk builds a one-hunk file whose hunk starts at the given line on each
+	// side (0 on a side the file does not have).
+	hunk := func(oldStart, newStart int, lines ...codeLine) *diff.File {
+		file := hunkFile("run", lines)
+		file.Hunks[0].OldStart, file.Hunks[0].NewStart = oldStart, newStart
+		return file
+	}
+	tests := []struct {
+		name    string
+		file    *diff.File
+		wantOld string
+		wantNew string
+	}{
+		{"context at line 1", hunk(1, 1, codeLine{diff.Context, "#!/bin/sh"}), "#!/bin/sh", "#!/bin/sh"},
+		{"changed first line", hunk(1, 1, codeLine{diff.Delete, "old"}, codeLine{diff.Add, "new"}, codeLine{diff.Context, "rest"}), "old", "new"},
+		{"line added above context", hunk(1, 1, codeLine{diff.Add, "new"}, codeLine{diff.Context, "kept"}), "kept", "new"},
+		{"added file", hunk(0, 1, codeLine{diff.Add, "new"}), "", "new"},
+		{"deleted file", hunk(1, 0, codeLine{diff.Delete, "old"}), "old", ""},
+		{"hunk lower down", hunk(40, 40, codeLine{diff.Context, "#!/bin/sh"}), "", ""},
+		{"no hunks", &diff.File{}, "", ""},
+	}
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			oldFirst, newFirst := firstLines(testCase.file)
+			if oldFirst != testCase.wantOld || newFirst != testCase.wantNew {
+				test.Errorf("firstLines = %q, %q; want %q, %q", oldFirst, newFirst, testCase.wantOld, testCase.wantNew)
+			}
+		})
 	}
 }
