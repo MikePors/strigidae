@@ -1,8 +1,8 @@
-Help: config  ? / esc to close  8–12 of 12                                                        
+Help: config  ? / esc to close  9–13 of 13                                                        
                                                                                                   
-  hideresolved    nohideresolved    nohideresolved    hide resolved threads from the diff pane    
   skipresolved    noskipresolved    noskipresolved    make ) and ( pass over resolved threads     
   relativenumber  norelativenumber  norelativenumber  number diff rows by distance from the cursor
                                                                                                   
-  :set name / :set noname to change    * changed from the default                                 
+  :set name / noname to change; name! / invname to toggle; name& to reset to built-in default     
+  * changed from the default                                                                      
  v  ? help  zq test sequence                                                                        

@@ -184,8 +184,9 @@ func helpConfigLines(activeTheme theme.Theme, values options.Values, width int) 
 		}
 	}
 	lines = append(lines, "")
-	for _, footerLine := range wrapWords(":set name / :set noname to change    * changed from the default", width) {
+	for _, footerLine := range wrapWords(":set name / noname to change; name! / invname to toggle; name& to reset to built-in default", width) {
 		lines = append(lines, activeTheme.Muted.Render(footerLine))
 	}
+	lines = append(lines, activeTheme.Muted.Render("* changed from the default"))
 	return lines
 }

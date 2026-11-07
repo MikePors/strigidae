@@ -30,17 +30,18 @@ func TestApplySet(test *testing.T) {
 		{name: "turn on", start: options.Values{"hlsearch": false}, arguments: "hlsearch", want: options.Values{"hlsearch": true}, wantText: "hlsearch"},
 		{name: "several", arguments: "nowrapscan nohlsearch", want: options.Values{"wrapscan": false, "hlsearch": false}, wantText: "nowrapscan nohlsearch"},
 		{name: "extra spaces", arguments: " nowrapscan   hlsearch ", want: options.Values{"wrapscan": false, "hlsearch": true}, wantText: "nowrapscan hlsearch"},
+		{name: "invalid form cleans terminal escapes", arguments: "inv\x1b[31m?", wantError: "invalid :set form: inv [31m?"},
 		{name: "query on", arguments: "wrapscan?", wantText: "wrapscan"},
 		{name: "query off", start: options.Values{"wrapscan": false}, arguments: "wrapscan?", want: options.Values{"wrapscan": false}, wantText: "nowrapscan"},
 		{name: "query changes nothing", arguments: "hlsearch?", wantText: "hlsearch"},
 		{name: "unknown", arguments: "foo", wantError: "unknown option: foo"},
 		{name: "unknown with no", arguments: "nofoo", wantError: "unknown option: nofoo"},
-		{name: "unknown query", arguments: "foo?", wantError: "unknown option: foo"},
+		{name: "unknown query", arguments: "foo?", wantError: "unknown option: foo?"},
 		{name: "value form", arguments: "wrapscan=false", wantError: "wrapscan is on or off: use :set wrapscan or :set nowrapscan"},
 		{name: "value form with no", arguments: "nowrapscan=1", wantError: "wrapscan is on or off: use :set wrapscan or :set nowrapscan"},
 		{name: "query with no name", arguments: "?", wantError: "missing option name"},
 		{name: "query mixed with a change", arguments: "wrapscan? nowrapscan", wantError: "can't mix name? with changes in one :set line"},
-		{name: "unknown value form", arguments: "foo=1", wantError: "unknown option: foo"},
+		{name: "unknown value form", arguments: "foo=1", wantError: "unknown option: foo=1"},
 		{name: "a bad word changes nothing, even after a good one", arguments: "nowrapscan foo", wantError: "unknown option: foo"},
 		{name: "escapes in the name are cleaned", arguments: "foo\x1b[31m", wantError: "unknown option: foo [31m"},
 	}
@@ -189,5 +190,70 @@ func TestSetIsAStaticCommandInEveryView(test *testing.T) {
 	drive(model, parseCommand("set hlsearch?", model.top(), model.viewCommands))
 	if model.status.text != "hlsearch" {
 		test.Errorf("status = %q", model.status.text)
+	}
+}
+
+func TestSetToggleAndResetThroughModel(test *testing.T) {
+	for _, testCase := range []struct {
+		arguments string
+		want      options.Values
+		wantError string
+		wantText  string
+	}{
+		{arguments: "wrap!", want: options.Values{"wrap": false, "wrapscan": false}, wantText: "nowrap"},
+		{arguments: "invwrapscan", want: options.Values{"wrap": true, "wrapscan": true}, wantText: "wrapscan"},
+		{arguments: "wrap& wrapscan&", want: options.Values{"wrap": false, "wrapscan": true}, wantText: "nowrap wrapscan"},
+		{arguments: "nowrap wrap! invwrap wrapscan& nowrapscan", want: options.Values{"wrap": false, "wrapscan": false}, wantText: "nowrap nowrap nowrap nowrapscan nowrapscan"},
+		{arguments: "wrap! wrap!", want: options.Values{"wrap": true, "wrapscan": false}, wantText: "wrap wrap"},
+		{arguments: "wrap& wrap&", want: options.Values{"wrap": false, "wrapscan": false}, wantText: "nowrap nowrap"},
+		{arguments: "wrapscan& wrapscan&", want: options.Values{"wrap": true, "wrapscan": true}, wantText: "wrapscan wrapscan"},
+		{arguments: "wrap! invwrap!", wantError: "invalid :set form: invwrap!"},
+		{arguments: "wrap! invinvwrap", wantError: "invalid :set form: invinvwrap"},
+		{arguments: "wrap! inv\x1b[31m?", wantError: "invalid :set form: inv [31m?"},
+		{arguments: "wrap! invisible", wantError: "unknown option: invisible"},
+		{arguments: "wrap! wrap&?", wantError: "unknown option: wrap&?"},
+		{arguments: "wrap! wrap!?", wantError: "unknown option: wrap!?"},
+		{arguments: "wrap! wrap!=1", wantError: "unknown option: wrap!=1"},
+		{arguments: "wrap! noinvwrap", wantError: "unknown option: noinvwrap"},
+		{arguments: "!", wantError: "missing option name"},
+		{arguments: "&", wantError: "missing option name"},
+		{arguments: "inv", wantError: "missing option name"},
+		{arguments: "wrap! nowrap!", wantError: "invalid :set form: nowrap!"},
+		{arguments: "wrap! invnowrap", wantError: "invalid :set form: invnowrap"},
+		{arguments: "wrap! invwrap?", wantError: "invalid :set form: invwrap?"},
+		{arguments: "wrap! invwrap=1", wantError: "invalid :set form: invwrap=1"},
+		{arguments: "wrap! unknown!", wantError: "unknown option: unknown!"},
+		{arguments: "wrap& invunknown", wantError: "unknown option: invunknown"},
+		{arguments: "invwrap unknown&", wantError: "unknown option: unknown&"},
+		{arguments: "wrap! wrapscan?", wantError: "can't mix name? with changes in one :set line"},
+	} {
+		test.Run(testCase.arguments, func(test *testing.T) {
+			start := options.Values{"wrap": true, "wrapscan": false}
+			root := newFake("root")
+			model := setModel(root, start)
+			root.got = nil
+			drive(model, parseCommand("set "+testCase.arguments, model.top(), model.viewCommands))
+			want := testCase.want
+			if testCase.wantError != "" {
+				want = start
+				if model.status.kind != statusError || model.status.text != testCase.wantError {
+					test.Errorf("status = %+v, want %q", model.status, testCase.wantError)
+				}
+				if len(optionsSeen(root)) != 0 {
+					test.Error("failed line broadcast options")
+				}
+			} else if diff := cmp.Diff([]options.Values{want}, optionsSeen(root)); diff != "" {
+				test.Errorf("broadcast (-want +got):\n%s", diff)
+			}
+			if testCase.wantError == "" && (model.status.kind != statusInfo || model.status.text != testCase.wantText) {
+				test.Errorf("status = %+v, want %q", model.status, testCase.wantText)
+			}
+			if diff := cmp.Diff(want, model.options); diff != "" {
+				test.Errorf("options (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(options.Values{"wrap": true, "wrapscan": false}, start); diff != "" {
+				test.Errorf("starting config mutated: %s", diff)
+			}
+		})
 	}
 }
