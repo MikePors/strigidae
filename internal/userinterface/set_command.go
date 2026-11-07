@@ -21,8 +21,9 @@ func setCommand(arguments string) tea.Cmd {
 }
 
 // applySet applies the words of a `:set` line to current. `name` turns an
-// option on, `noname` turns it off, `name?` shows it, no words show the
-// options that differ from their defaults, and `all` alone shows every option.
+// option on, `noname` turns it off, `name?` shows it.
+// `name!` and `invname` toggle, and `name&` restores the built-in default.
+// Bare :set shows the options that differ from their defaults, and `all` alone shows every option.
 // A line either changes options or asks about them, not both. It returns the
 // new values, the text to show, and whether anything was applied. On any error
 // nothing changes: the returned values are current.
@@ -43,7 +44,7 @@ func applySet(arguments string, current options.Values) (updated options.Values,
 	var shown []string
 	queries := 0
 	for _, word := range words {
-		name, query, value, wordErr := parseSetWord(word)
+		name, query, value, wordErr := parseSetWord(word, updated)
 		if wordErr != nil {
 			return current, "", false, wordErr
 		}
@@ -65,7 +66,30 @@ func applySet(arguments string, current options.Values) (updated options.Values,
 }
 
 // parseSetWord splits one word into an option name and what to do with it.
-func parseSetWord(word string) (name string, query, value bool, err error) {
+func parseSetWord(word string, current options.Values) (name string, query, value bool, err error) {
+	name = word
+	toggle, reset := false, false
+	switch {
+	case strings.HasSuffix(word, "!"):
+		name, toggle = strings.TrimSuffix(word, "!"), true
+	case strings.HasSuffix(word, "&"):
+		name, reset = strings.TrimSuffix(word, "&"), true
+	case strings.HasPrefix(word, "inv"):
+		name, toggle = strings.TrimPrefix(word, "inv"), true
+	}
+	if toggle || reset {
+		if name == "" {
+			return "", false, false, errors.New("missing option name")
+		}
+		option, ok := options.Lookup(name)
+		if !ok {
+			return "", false, false, unknownOption(name)
+		}
+		if reset {
+			return name, false, option.Default, nil
+		}
+		return name, false, !current.Get(name), nil
+	}
 	if name, found := strings.CutSuffix(word, "?"); found {
 		if name == "" {
 			return "", false, false, errors.New("missing option name")

@@ -11,8 +11,8 @@ Help: config  ? / esc to close
   skipresolved    noskipresolved    noskipresolved    make ) and ( pass over resolved threads      
   relativenumber  norelativenumber  norelativenumber  number diff rows by distance from the cursor 
                                                                                                    
-  :set name / :set noname to change    * changed from the default                                  
-
+  :set name / noname to change; name! / invname to toggle; name& to reset to built-in default      
+  * changed from the default                                                                       
 
 
 
