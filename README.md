@@ -63,7 +63,8 @@ inside a comment or string opened above it is coloured right. The file is read
 by the blob ids on the diff's `index` line; if the checkout lacks them, strig
 fetches the pull request's head once (`refs/pull/<number>/head`, writing no ref
 and never prompting). Files over 1 MiB a side, binary files, and anything that
-can't be read keep the per-hunk colours; the reason goes to the log.
+can't be read or takes more than 5 seconds to colour keep the per-hunk colours;
+the reason goes to the log.
 
 ## Comments across a pull request
 
