@@ -270,6 +270,12 @@ func TestServiceWriteToAnEndedProcessReportsExited(test *testing.T) {
 			if !errors.Is(result.err, ErrExited) || result.err.Error() != `plugin "ask": exited` {
 				test.Errorf("run on an ended process: %v", result.err)
 			}
+			serving.mutex.Lock()
+			retired := serving.process != process
+			serving.mutex.Unlock()
+			if !retired {
+				test.Error("the failed write left the process for the next run")
+			}
 		})
 	}
 }
