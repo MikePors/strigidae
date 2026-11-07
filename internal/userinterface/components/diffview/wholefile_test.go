@@ -2,8 +2,10 @@ package diffview
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alecthomas/chroma/v2"
 
@@ -137,6 +139,9 @@ func TestHighlightFile(test *testing.T) {
 		{name: "tabs and carriage returns as the rows show them", path: "x.go", contents: "a\tb\r\n\x1b[31m\n", lines: []string{"a   b", "·[31m", ""}},
 		{name: "shebang picks the language", path: "run", contents: "#!/bin/sh\necho hi\n", lines: []string{"#!/bin/sh", "echo hi", ""}},
 		{name: "no language", path: "notes", contents: "plain\n", wantErr: ErrNoLanguage},
+		// These lexers hang or panic on this text; they are never picked.
+		{name: "lexer that hangs", path: "q.jsonata", contents: "/* a /* b\nc\n", wantErr: ErrNoLanguage},
+		{name: "lexer that panics", path: "m.yang", contents: "/* a /* b */\nc\n", wantErr: ErrNoLanguage},
 		{name: "binary", path: "x.go", contents: "a\x00b", wantErr: ErrFileBinary},
 		{name: "too large", path: "x.go", contents: strings.Repeat("x", MaximumFileSize+1), wantErr: ErrFileTooLarge},
 	}
@@ -205,5 +210,28 @@ func TestFileSpansFollowEachSidesLineNumbers(test *testing.T) {
 	}
 	if !allIn(rows[2], chroma.Comment) {
 		test.Errorf("added row = %v, want the comment's end on new line 5", rows[2])
+	}
+}
+
+// TestHighlightFileStopsWhenTheBudgetRunsOut lexes text that is quadratic for
+// the Go lexer, by a clock that moves a second each reading, so the budget
+// runs out after a few readings rather than after minutes of lexing.
+func TestHighlightFileStopsWhenTheBudgetRunsOut(test *testing.T) {
+	test.Parallel()
+	var builder strings.Builder
+	for i := range 2000 {
+		fmt.Fprintf(&builder, "value%d := %d /* note\n", i, i)
+	}
+	clock := time.Unix(0, 0)
+	now := func() time.Time {
+		clock = clock.Add(time.Second)
+		return clock
+	}
+	spans, err := highlightFile("x.go", []byte(builder.String()), now)
+	if !errors.Is(err, ErrLexTimeout) {
+		test.Fatalf("err = %v, want ErrLexTimeout", err)
+	}
+	if spans != nil {
+		test.Error("spans of part of the file were returned")
 	}
 }
