@@ -9,6 +9,12 @@ Checks only the maintainer can do, such as live verification against real GitHub
   2. Open a hunk where a comment opens on a deleted line and closes on a context line: the deleted line is a comment, the context line is not. Scroll a file of several thousand lines: drawing its first screen should not pause noticeably.
   3. Report the language, the colours you saw and any pause.
 
+- [ ] **Fetching a pull request's head never prompts, over HTTPS and SSH** (#267). Only local repositories stand in for the remote in the tests. Reachable from strig once #262 lands; until then, check what strig will run: `git fetch --no-write-fetch-head --refmap= --no-tags --no-auto-maintenance --no-recurse-submodules --quiet -- <remote> refs/pull/<number>/head` with stdin closed, `GIT_TERMINAL_PROMPT=0` and `GIT_SSH_COMMAND='ssh -o BatchMode=yes'`.
+  1. Once #262 is merged: in a checkout of a repository you can reach over HTTPS with no stored credentials (`git credential reject`, or a private repository), open a pull request whose blobs are not local and open a modified file. strig must not stop, ask for a username, or draw anything over the TUI; the file just keeps its per-hunk colours.
+  2. Repeat with an SSH remote, a passphrase-protected key and no agent (`env -u SSH_AUTH_SOCK strig`). It must not ask for the passphrase or a host key, and must not hang.
+  3. With a working login (HTTPS credential helper, or SSH key in an agent), open the same file: the whole-file colours should appear. Afterwards `git status`, `git branch -a`, `git for-each-ref` and `.git/FETCH_HEAD` must look exactly as before.
+  4. Report the transport, whether anything prompted or hung, and any ref or `FETCH_HEAD` change.
+
 - [ ] **`o` opens the browser without the token variables, in a real terminal** (#145). Only a fake command runner is tested.
   1. With no `GH_BROWSER`, no `BROWSER` and no gh config `browser` set, open a pull request in strig and press `o`. The default browser should open the pull request and nothing should be printed over the TUI. Do this on Linux, on macOS and on Windows (Windows now runs `rundll32 url.dll,FileProtocolHandler` as a child process instead of an in-process call).
   2. Run `GH_BROWSER='sh -c "env > /tmp/env.txt" --' GH_TOKEN=x strig`, press `o` on a pull request, then check `/tmp/env.txt`: it must contain no `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN` or `GITHUB_ENTERPRISE_TOKEN`, and should still have `PATH` and `HOME`.
