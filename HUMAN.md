@@ -101,3 +101,21 @@ Checks only the maintainer can do, such as live verification against real GitHub
   2. Read a binary file (for example a PNG) and a text file over about 1 MB. Each should fail with `ErrNoFileText`, not `ErrNotFound`. Report the size at which a text file starts to come back as truncated, if it does.
   3. Read a path that does not exist at that commit, a path that was added by a later commit, and a directory path. Each should fail with `ErrNotFound`.
   4. Report any case where the text came back wrong or the error was not the one above.
+
+## #36 — image rendering prototype
+
+- Run `go run ./cmd/imageprobe -protocol kitty` in Ghostty and
+  `go run ./cmd/imageprobe -protocol iterm2` in WezTerm. Press `r` once the
+  screen appears. Report terminal version and whether the gradient appears.
+- Scroll with `j`/`k` until the image is partially and fully outside the pane.
+  Toggle the covering overlay with `h`, resize, and press `r` again. Report
+  missing images, stale pixels, overlap with text, or literal placeholder glyphs.
+- Quit with `q`; check that the shell has no remaining image or altered cursor.
+  This checks visible artifacts only: the queued Kitty delete may flush after
+  the alternate screen has been left, so it does not prove image-store cleanup.
+  The iTerm2 path is a diagnostic for repaint ordering, not a completed fallback.
+  See `docs/design/36-inline-images.md` for the implementation gate.
+- Attach screenshots or recordings and terminal versions. Record TERM,
+  COLORTERM and any multiplexer. Run directly in each terminal first: truecolor
+  is needed for the Kitty identifier, and the probe does not wrap tmux APC
+  passthrough. Also run the Kitty probe in WezTerm to check its installed version.
