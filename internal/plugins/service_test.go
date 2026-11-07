@@ -242,10 +242,21 @@ func TestServiceWriteToAnEndedProcessReportsExited(test *testing.T) {
 			process.input = writer
 		}},
 		{"closed file", func(test *testing.T, process *serviceProcess) {
-			// As when the process ended between a run joining it and writing.
-			if err := process.input.Close(); err != nil {
+			reader, writer, err := os.Pipe()
+			if err != nil {
 				test.Fatal(err)
 			}
+			if err := reader.Close(); err != nil {
+				test.Fatal(err)
+			}
+			if err := writer.Close(); err != nil {
+				test.Fatal(err)
+			}
+			// Keep the real input open: closing it can let the service exit
+			// and restart before the next run reaches the closed-file write.
+			realInput := process.input
+			test.Cleanup(func() { _ = realInput.Close() })
+			process.input = writer
 		}},
 	} {
 		test.Run(testCase.name, func(test *testing.T) {
