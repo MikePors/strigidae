@@ -1,7 +1,9 @@
 package diffview
 
 import (
+	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -40,23 +42,37 @@ func TestNoRegisteredLexerIsBroken(test *testing.T) {
 		runs = append(runs, current)
 		go func() {
 			defer func() { current.finished <- recover() }()
-			coalesced := chroma.Coalesce(lexer)
 			for _, line := range hostileLines {
-				lexLine(coalesced, line)
-				lexBlock(coalesced, []string{line, line}, time.Now)
+				lexLine(lexer, line)
+				lexBlock(lexer, []string{line, line}, time.Now)
 			}
 		}()
 	}
-	timeout := time.After(sweepTimeout)
+	// A context's Done stays closed, so every lexer still running at the
+	// deadline is named, not just the first.
+	ctx, cancel := context.WithTimeout(context.Background(), sweepTimeout)
+	defer cancel()
 	for _, current := range runs {
 		select {
 		case recovered := <-current.finished:
-			if recovered != nil {
-				test.Errorf("lexer %q panicked on the hostile lines: %v; add it to broken and report it to Chroma", current.name, recovered)
+			reportPanic(test, current.name, recovered)
+		case <-ctx.Done():
+			// Done and finished may both be ready; select picks either.
+			select {
+			case recovered := <-current.finished:
+				reportPanic(test, current.name, recovered)
+			default:
+				test.Errorf("lexer %q did not finish the hostile lines within %v; add it to broken and report it to Chroma", current.name, sweepTimeout)
 			}
-		case <-timeout:
-			test.Errorf("lexer %q did not finish the hostile lines within %v; add it to broken and report it to Chroma", current.name, sweepTimeout)
 		}
+	}
+}
+
+// reportPanic fails the test if the lexer called name panicked with recovered.
+func reportPanic(test *testing.T, name string, recovered any) {
+	test.Helper()
+	if recovered != nil {
+		test.Errorf("lexer %q panicked on the hostile lines: %v; add it to broken and report it to Chroma", name, recovered)
 	}
 }
 
@@ -109,14 +125,19 @@ func unclosedCommentLines(count int) []string {
 	return lines
 }
 
+// budgetReads is how often lexBlock reads a steppingClock that moves a tenth
+// of the budget per read: once to start the budget, then every
+// tokensPerClockRead tokens until the eleventh tenth has passed.
+const budgetReads = 12
+
 // TestLexBlockStopsAtTheBudget: with a clock that moves a tenth of the budget
-// per read, block lexing stops once the budget has passed. The lines before the
-// stop keep the block's spans; every line from there on is lexed on its own,
-// with its text intact. The lines are pairs whose comment spans both, so the
-// two ways of lexing differ: in the block the second line opens with a
+// per read, block lexing stops once the budget has passed. The lines before
+// the stop keep the block's spans; every line from there on is lexed on its
+// own, with its text intact. The lines are pairs whose comment spans both,
+// so the two ways of lexing differ: in the block the second line opens with a
 // comment, on its own it has none.
 func TestLexBlockStopsAtTheBudget(test *testing.T) {
-	lexer := chroma.Coalesce(lexers.Get("go"))
+	lexer := lexers.Get("go")
 	var lines []string
 	for i := range 100 {
 		lines = append(lines, fmt.Sprintf("value%d := %d /* note", i, i), fmt.Sprintf("end */ next%d := %d", i, i))
@@ -124,10 +145,8 @@ func TestLexBlockStopsAtTheBudget(test *testing.T) {
 	now, reads := steppingClock(blockBudget / 10)
 	got := lexBlock(lexer, lines, now)
 
-	// One read starts the budget, then one per tokensPerClockRead tokens
-	// until it has passed.
-	if limit := 12; reads() > limit {
-		test.Errorf("clock read %d times, want lexing to stop by %d", reads(), limit)
+	if reads() != budgetReads {
+		test.Errorf("clock read %d times, want %d: lexing should stop when the budget has passed", reads(), budgetReads)
 	}
 	unbounded := lexBlock(lexer, lines, func() time.Time { return time.Time{} })
 	stopped := 0
@@ -152,12 +171,33 @@ func TestLexBlockStopsAtTheBudget(test *testing.T) {
 	}
 }
 
+// TestLexBlockBudgetCountsTokensBeforeCoalescing: lines of "/*+" are all
+// operators, which Coalesce merges into tokens of up to 8 KiB, each holding
+// thousands of slow scans. The budget still stops lexing, because it counts
+// the tokens before they are merged, and every line keeps its text.
+func TestLexBlockBudgetCountsTokensBeforeCoalescing(test *testing.T) {
+	lines := make([]string, 50)
+	for i := range lines {
+		lines[i] = strings.Repeat("/*+", 30)
+	}
+	now, reads := steppingClock(blockBudget / 10)
+	got := lexBlock(lexers.Get("go"), lines, now)
+	if reads() != budgetReads {
+		test.Errorf("clock read %d times, want %d: lexing should stop when the budget has passed", reads(), budgetReads)
+	}
+	for i, line := range lines {
+		if joined(got[i]) != line {
+			test.Errorf("line %d reads %q, want %q", i, joined(got[i]), line)
+		}
+	}
+}
+
 // TestLexBlockWithinBudgetIsUnchanged: a block that finishes in time is
 // lexed as one piece, so a comment spanning lines is a comment on each.
 func TestLexBlockWithinBudgetIsUnchanged(test *testing.T) {
 	lines := []string{"/* start", "middle", "end */"}
 	now, _ := steppingClock(time.Microsecond)
-	for i, spans := range lexBlock(chroma.Coalesce(lexers.Get("go")), lines, now) {
+	for i, spans := range lexBlock(lexers.Get("go"), lines, now) {
 		if !allIn(spans, chroma.Comment) {
 			test.Errorf("line %d = %+v, want a comment", i, spans)
 		}
@@ -167,7 +207,7 @@ func TestLexBlockWithinBudgetIsUnchanged(test *testing.T) {
 // BenchmarkHighlightHostileBlock lexes a block-sized side of lines that each
 // open a block comment, with the real clock: the budget bounds it.
 func BenchmarkHighlightHostileBlock(benchmark *testing.B) {
-	lexer := chroma.Coalesce(lexers.Match("x.go"))
+	lexer := lexers.Match("x.go")
 	lines := unclosedCommentLines(maximumBlockSize / len("value0000 := 0000 /* note\n"))
 	if !fitsBlock(lines) {
 		benchmark.Fatal("the hostile block does not fit one block")

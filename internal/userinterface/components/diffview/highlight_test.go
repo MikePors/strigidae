@@ -275,7 +275,7 @@ func TestHunkNoNewlineMarkerTakesNoPart(test *testing.T) {
 // BenchmarkHighlightHunkSide compares lexing a side as one block with lexing
 // its lines one at a time, without the size cap, to pick maximumBlockSize.
 func BenchmarkHighlightHunkSide(benchmark *testing.B) {
-	lexer := chroma.Coalesce(lexers.Match("x.go"))
+	lexer := lexers.Match("x.go")
 	for _, count := range []int{1000, 2500, 5000} {
 		lines := make([]string, count)
 		for i := range lines {
