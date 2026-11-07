@@ -13,10 +13,7 @@ import (
 // interpreter it names: "#!/bin/sh", "#!/usr/bin/env python3",
 // "#!/usr/bin/env -S node --flag". Nothing else about the content is
 // consulted.
-//
-// Chroma's JSONata and Jungle lexers can run forever on some input (#265).
-// A shebang naming them would select one, so they are never chosen from
-// content.
+// A lexer known to be broken (see broken) is never chosen.
 func languageFromShebang(firstLine string) chroma.Lexer {
 	if !strings.HasPrefix(firstLine, "#!") {
 		return nil
@@ -30,7 +27,7 @@ func languageFromShebang(firstLine string) chroma.Lexer {
 		// A version suffix ("python3.11") is dropped when the full name has no lexer.
 		lexer = lexerNamed(strings.TrimRight(program, "0123456789."))
 	}
-	if lexer == nil || neverFromContent(lexer) {
+	if lexer == nil || broken(lexer) {
 		return nil
 	}
 	return lexer
@@ -79,13 +76,4 @@ func lexerNamed(name string) chroma.Lexer {
 		}
 	}
 	return nil
-}
-
-// neverFromContent reports whether lexer is one that content must not pick.
-func neverFromContent(lexer chroma.Lexer) bool {
-	switch lexer.Config().Name {
-	case "JSONata", "Jungle":
-		return true
-	}
-	return false
 }

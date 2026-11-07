@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/lexers"
@@ -274,7 +275,7 @@ func TestHunkNoNewlineMarkerTakesNoPart(test *testing.T) {
 // BenchmarkHighlightHunkSide compares lexing a side as one block with lexing
 // its lines one at a time, without the size cap, to pick maximumBlockSize.
 func BenchmarkHighlightHunkSide(benchmark *testing.B) {
-	lexer := chroma.Coalesce(lexers.Match("x.go"))
+	lexer := lexers.Match("x.go")
 	for _, count := range []int{1000, 2500, 5000} {
 		lines := make([]string, count)
 		for i := range lines {
@@ -282,7 +283,7 @@ func BenchmarkHighlightHunkSide(benchmark *testing.B) {
 		}
 		benchmark.Run(fmt.Sprintf("block/%d", count), func(benchmark *testing.B) {
 			for range benchmark.N {
-				lexBlock(lexer, lines)
+				lexBlock(lexer, lines, time.Now)
 			}
 		})
 		benchmark.Run(fmt.Sprintf("perline/%d", count), func(benchmark *testing.B) {
@@ -361,7 +362,7 @@ func (lexer alteringLexer) Tokenise(options *chroma.TokeniseOptions, text string
 // their colours.
 func TestLexBlockShowsAlteredLinesPlain(test *testing.T) {
 	lines := []string{"var x = 1", "var z = 2"}
-	result := lexBlock(alteringLexer{lexers.Get("go")}, lines)
+	result := lexBlock(alteringLexer{lexers.Get("go")}, lines, time.Now)
 	if diff := cmp.Diff(plain(lines[0]), result[0]); diff != "" {
 		test.Errorf("altered line (-want +got):\n%s", diff)
 	}
