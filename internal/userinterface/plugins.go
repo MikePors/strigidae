@@ -255,13 +255,7 @@ func (model *Model) pluginResult(message pluginResultMessage) tea.Cmd {
 		}
 		return nil
 	}
-	host, ok := model.top().(PluginHost)
-	if ok {
-		var shown PullRequestIdentity
-		if shown, ok = host.PullRequestIdentity(); ok {
-			ok = shown.SamePullRequest(finished.identity)
-		}
-	}
+	host, ok := model.hostShowing(finished.identity)
 	if !ok {
 		model.log.Info("plugin result dropped: its pull request is not on screen", "plugin", finished.name, "number", finished.identity.Number)
 		return filled
@@ -273,15 +267,42 @@ func (model *Model) pluginResult(message pluginResultMessage) tea.Cmd {
 		}
 		return model.setStatus(terminaltext.Clean(message.err.Error()), statusError)
 	}
-	return tea.Batch(filled, model.pluginEffects(host, finished.name, message.effects, finished.thread != ""))
+	return tea.Batch(filled, model.pluginEffects(host, finished, message.effects))
+}
+
+// hostShowing returns the top view if it is a plugin host showing the pull
+// request of identity.
+func (model *Model) hostShowing(identity PullRequestIdentity) (PluginHost, bool) {
+	host, ok := model.top().(PluginHost)
+	if !ok {
+		return nil, false
+	}
+	shown, ok := host.PullRequestIdentity()
+	if !ok || !shown.SamePullRequest(identity) {
+		return nil, false
+	}
+	return host, true
 }
 
 // pluginStatusMessage shows a plugin's notice or error in its turn among the
-// commands of the same result. The text is already cleaned, and it is never
-// logged.
+// commands of the same result. It arrives later than the result, so it is
+// shown only if the result's pull request is still on screen (identity) and
+// strig is not quitting. The text is already cleaned, and it is never logged.
 type pluginStatusMessage struct {
-	text string
-	kind statusKind
+	plugin   string
+	identity PullRequestIdentity
+	text     string
+	kind     statusKind
+}
+
+// pluginStatus shows a deferred notice or error of a plugin, if its pull
+// request is still on screen.
+func (model *Model) pluginStatus(message pluginStatusMessage) tea.Cmd {
+	if _, ok := model.hostShowing(message.identity); !ok || model.quitting {
+		model.log.Info("plugin notice dropped: its pull request is not on screen", "plugin", message.plugin, "number", message.identity.Number)
+		return nil
+	}
+	return model.setStatus(message.text, message.kind)
 }
 
 // pluginEffects applies the effects in the order the plugin printed them.
@@ -291,7 +312,8 @@ type pluginStatusMessage struct {
 // effects. A command's own notice arrives as a message, so in a result with
 // commands the notices and errors are messages too, run in sequence with the
 // commands; a reload sets no status and runs beside them.
-func (model *Model) pluginEffects(host PluginHost, name string, effects []plugins.Effect, inThread bool) tea.Cmd {
+func (model *Model) pluginEffects(host PluginHost, finished pluginRun, effects []plugins.Effect) tea.Cmd {
+	name, inThread := finished.name, finished.thread != ""
 	for _, effect := range effects {
 		if effect.Name != plugins.EffectCommand {
 			continue
@@ -305,7 +327,7 @@ func (model *Model) pluginEffects(host PluginHost, name string, effects []plugin
 	var commands, sequence []tea.Cmd
 	status := func(text string, kind statusKind) {
 		if inOrder {
-			sequence = append(sequence, messageCommand(pluginStatusMessage{text: text, kind: kind}))
+			sequence = append(sequence, messageCommand(pluginStatusMessage{plugin: name, identity: finished.identity, text: text, kind: kind}))
 			return
 		}
 		commands = append(commands, model.setStatus(text, kind))

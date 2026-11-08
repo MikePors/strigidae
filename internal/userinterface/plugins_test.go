@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -233,6 +234,21 @@ func TestPluginCommandEffectKeepsTheOrder(test *testing.T) {
 	}
 	if model.status.text != "lint failed" {
 		test.Errorf("status = %q, want the error printed last", model.status.text)
+	}
+}
+
+// A notice queued behind a command is dropped if its pull request is no
+// longer on screen when it arrives.
+func TestPluginQueuedNoticeNeedsItsPullRequest(test *testing.T) {
+	root := newPullRequestView(pullRequestSeven)
+	model, _ := pluginModel(test, &fakeRunner{effects: []plugins.Effect{
+		{Name: plugins.EffectCommand, Line: allowed},
+		{Name: plugins.EffectError, Text: "lint failed"},
+	}}, root)
+	queued := step(model, startRun(model, pullRequestSeven)())
+	root.identity = PullRequestIdentity{Repository: pullRequestSeven.Repository, Number: 8}
+	if shown := statusesShown(model, queued); slices.Contains(shown, "lint failed") {
+		test.Errorf("statuses %q show the error on another pull request", shown)
 	}
 }
 
