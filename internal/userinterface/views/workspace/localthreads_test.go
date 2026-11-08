@@ -615,6 +615,25 @@ func TestLocalThreadErrorBesideAnAnswerReachesTheStatusBar(test *testing.T) {
 	}
 }
 
+// A refused command drops the status-bar effects of a thread plugin's result,
+// but the thread still gets its answer and the refusal still shows.
+func TestLocalThreadWithARefusedCommand(test *testing.T) {
+	session := newThreadSession(test, &recordingRunner{effects: []plugins.Effect{
+		{Name: plugins.EffectAnswer, Text: "Fine."},
+		{Name: plugins.EffectCommand, Line: "approve"},
+	}})
+	session.ask()
+	if got := session.status(); !strings.HasSuffix(got, "plugin ask can't run :approve") {
+		test.Errorf("status = %q, want the refusal", got)
+	}
+	if got := session.localThreads(); len(got) != 1 || got[0].Local != github.LocalAnswered {
+		test.Errorf("threads = %+v, want the answered thread", got)
+	}
+	if _, asked := session.inliner.lastConfirm(); asked {
+		test.Error("a question was asked")
+	}
+}
+
 // The waiting line is muted and the failure is in the error style.
 func TestLocalThreadStyles(test *testing.T) {
 	for _, testCase := range []struct {

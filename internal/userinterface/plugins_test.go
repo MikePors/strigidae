@@ -3,6 +3,7 @@ package userinterface
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -62,7 +63,7 @@ func (view *pullRequestView) PluginsMayRun(name string) bool { return name == al
 
 func (view *pullRequestView) Command(name, arguments string) (tea.Cmd, bool) {
 	view.ran = append(view.ran, name+"|"+arguments)
-	return nil, true
+	return Info("ran " + name), true
 }
 
 // fakeRunner answers every run at once with its canned result.
@@ -214,6 +215,52 @@ func TestPluginCommandRefusalDropsTheResult(test *testing.T) {
 	if want := "plugin ask can't run :approve"; model.status.text != want {
 		test.Errorf("status = %q, want %q", model.status.text, want)
 	}
+}
+
+// A command's own notice comes back as a message, so the notices and errors
+// around it are shown in the order the plugin printed them, and the last one
+// stays on screen.
+func TestPluginCommandEffectKeepsTheOrder(test *testing.T) {
+	root := newPullRequestView(pullRequestSeven)
+	model, _ := pluginModel(test, &fakeRunner{effects: []plugins.Effect{
+		{Name: plugins.EffectNotice, Text: "first"},
+		{Name: plugins.EffectCommand, Line: allowed},
+		{Name: plugins.EffectError, Text: "lint failed"},
+	}}, root)
+	shown := statusesShown(model, step(model, startRun(model, pullRequestSeven)()))
+	if diff := cmp.Diff([]string{"first", "ran copy-filename", "lint failed"}, shown); diff != "" {
+		test.Errorf("statuses in order (-want +got):\n%s", diff)
+	}
+	if model.status.text != "lint failed" {
+		test.Errorf("status = %q, want the error printed last", model.status.text)
+	}
+}
+
+// statusesShown runs command as the program would, a batch's members and then
+// a sequence's in order, and lists the status after each message that changed
+// it. The status timer is not run, so nothing is cleared. tea.Sequence's
+// message type is unexported, so it is told by its shape, a list of commands.
+func statusesShown(model *Model, command tea.Cmd) []string {
+	if command == nil {
+		return nil
+	}
+	message := command()
+	if members := reflect.ValueOf(message); members.Kind() == reflect.Slice && members.Type().Elem() == reflect.TypeFor[tea.Cmd]() {
+		var shown []string
+		for i := range members.Len() {
+			shown = append(shown, statusesShown(model, members.Index(i).Interface().(tea.Cmd))...)
+		}
+		return shown
+	}
+	if _, clears := message.(clearStatusMessage); clears || message == nil {
+		return nil
+	}
+	before := model.status.identifier
+	step(model, message)
+	if model.status.identifier == before {
+		return nil
+	}
+	return []string{model.status.text}
 }
 
 // A command effect for a pull request that is no longer on screen is dropped

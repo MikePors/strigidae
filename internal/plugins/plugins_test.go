@@ -124,6 +124,8 @@ func TestRunEffects(test *testing.T) {
 		{name: "command", output: `{"name":"command","data":{"line":"checks"}}` + "\n", want: []Effect{{Name: EffectCommand, Line: "checks"}}},
 		{name: "command without a line", output: `{"name":"command","data":{}}` + "\n", wantIs: ErrInvalidOutput, wantError: `plugin "p": line 1: printed a line that is not an effect`},
 		{name: "command with a blank line", output: `{"name":"command","data":{"line":"  "}}` + "\n", wantIs: ErrInvalidOutput, wantError: `plugin "p": line 1: printed a line that is not an effect`},
+		{name: "command with only a colon", output: `{"name":"command","data":{"line":" : "}}` + "\n", wantIs: ErrInvalidOutput, wantError: `plugin "p": line 1: printed a line that is not an effect`},
+		{name: "command with a leading colon", output: `{"name":"command","data":{"line":":checks"}}` + "\n", want: []Effect{{Name: EffectCommand, Line: ":checks"}}},
 		{name: "command with a number as its line", output: `{"name":"command","data":{"line":5}}` + "\n", wantIs: ErrInvalidOutput, wantError: `plugin "p": line 1: printed a line that is not an effect`},
 		{name: "error with empty text is no error effect", output: `{"name":"error","data":{}}` + "\n", exit: 1, wantIs: ErrFailed, wantError: `plugin "p": failed`},
 		{name: "error effect after a bad line is not used", output: "hello\n" + `{"name":"error","data":{"text":"late"}}` + "\n", exit: 1, wantIs: ErrFailed, wantError: `plugin "p": failed`},

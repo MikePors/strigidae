@@ -3,6 +3,7 @@ package workspace
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -97,12 +98,17 @@ func (session *pluginSession) pump(command tea.Cmd) {
 	if command == nil {
 		return
 	}
-	switch message := command().(type) {
-	case nil:
-	case tea.BatchMsg:
-		for _, member := range message {
-			session.pump(member)
+	message := command()
+	// A batch, or a sequence (whose type is unexported, so it is told by its
+	// shape): run the members in order.
+	if members := reflect.ValueOf(message); members.Kind() == reflect.Slice && members.Type().Elem() == reflect.TypeFor[tea.Cmd]() {
+		for i := range members.Len() {
+			session.pump(members.Index(i).Interface().(tea.Cmd))
 		}
+		return
+	}
+	switch message := message.(type) {
+	case nil:
 	case tea.QuitMsg:
 		session.quit = true
 	case spinner.TickMsg:
@@ -895,5 +901,32 @@ func TestPluginCommandEffectDuringASelection(test *testing.T) {
 	}
 	if session.inliner.view.picker != nil {
 		test.Error("the checks picker opened under the selection")
+	}
+}
+
+// The commands plugins may run work end to end, and an error printed after
+// one is what stays on screen, not the command's notice.
+func TestPluginCommandEffectCopies(test *testing.T) {
+	for _, testCase := range []struct {
+		name       string
+		line       string
+		wantPrefix string
+	}{
+		{"copy-filename", "copy-filename", "Copied "},
+		{"copy-url", ":copy-url", "Copied https://"},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			session := newPluginSession(test, &recordingRunner{effects: []plugins.Effect{
+				{Name: plugins.EffectCommand, Line: testCase.line},
+				{Name: plugins.EffectError, Text: "lint failed"},
+			}})
+			session.line("summarize")
+			if len(session.infos) != 1 || !strings.HasPrefix(session.infos[0], testCase.wantPrefix) {
+				test.Errorf("notices = %q, want one starting %q", session.infos, testCase.wantPrefix)
+			}
+			if got := session.status(); !strings.HasSuffix(got, "lint failed") {
+				test.Errorf("status = %q, want the error printed last", got)
+			}
+		})
 	}
 }

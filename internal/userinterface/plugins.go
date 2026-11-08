@@ -276,11 +276,21 @@ func (model *Model) pluginResult(message pluginResultMessage) tea.Cmd {
 	return tea.Batch(filled, model.pluginEffects(host, finished.name, message.effects, finished.thread != ""))
 }
 
+// pluginStatusMessage shows a plugin's notice or error in its turn among the
+// commands of the same result. The text is already cleaned, and it is never
+// logged.
+type pluginStatusMessage struct {
+	text string
+	kind statusKind
+}
+
 // pluginEffects applies the effects in the order the plugin printed them.
 // Their text is the plugin's, so it is cleaned before the status bar. A
 // command effect that is refused drops the whole result, so a plugin that
 // tries to write can't hide the refusal behind the notices of its other
-// effects.
+// effects. A command's own notice arrives as a message, so in a result with
+// commands the notices and errors are messages too, run in sequence with the
+// commands; a reload sets no status and runs beside them.
 func (model *Model) pluginEffects(host PluginHost, name string, effects []plugins.Effect, inThread bool) tea.Cmd {
 	for _, effect := range effects {
 		if effect.Name != plugins.EffectCommand {
@@ -291,7 +301,15 @@ func (model *Model) pluginEffects(host PluginHost, name string, effects []plugin
 			return model.setStatus(refusal, statusError)
 		}
 	}
-	var commands []tea.Cmd
+	inOrder := slices.ContainsFunc(effects, func(effect plugins.Effect) bool { return effect.Name == plugins.EffectCommand })
+	var commands, sequence []tea.Cmd
+	status := func(text string, kind statusKind) {
+		if inOrder {
+			sequence = append(sequence, messageCommand(pluginStatusMessage{text: text, kind: kind}))
+			return
+		}
+		commands = append(commands, model.setStatus(text, kind))
+	}
 	answered := slices.ContainsFunc(effects, func(effect plugins.Effect) bool { return effect.Name == plugins.EffectAnswer })
 	for _, effect := range effects {
 		// The thread shows the answers, and the error when there is no answer;
@@ -302,20 +320,20 @@ func (model *Model) pluginEffects(host PluginHost, name string, effects []plugin
 		}
 		switch effect.Name {
 		case plugins.EffectNotice, plugins.EffectAnswer: // answers show as notices until they have a place of their own
-			commands = append(commands, model.setStatus(terminaltext.Clean(effect.Text), statusInfo))
+			status(terminaltext.Clean(effect.Text), statusInfo)
 		case plugins.EffectError:
-			commands = append(commands, model.setStatus(terminaltext.Clean(effect.Text), statusError))
+			status(terminaltext.Clean(effect.Text), statusError)
 		case plugins.EffectReload:
 			commands = append(commands, host.Reload())
 		case plugins.EffectCommand:
 			commandName, arguments := splitPluginCommand(effect.Line)
 			command, _ := host.Command(commandName, arguments)
-			commands = append(commands, command)
+			sequence = append(sequence, command)
 		default:
 			model.log.Warn("plugin effect not handled", slog.String("plugin", name), slog.String("effect", effect.Name))
 		}
 	}
-	return tea.Batch(commands...)
+	return tea.Batch(append(commands, tea.Sequence(sequence...))...)
 }
 
 // pluginCommandRefusal is what the status bar says when a plugin may not run

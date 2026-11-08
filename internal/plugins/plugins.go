@@ -473,7 +473,8 @@ func decodeEffect(line []byte) (effect Effect, known bool, err error) {
 		if err := decodeData(decoded.Data, &data); err != nil {
 			return Effect{}, false, err
 		}
-		if strings.TrimSpace(data.Line) == "" {
+		// A ":" alone names no command, as when it is typed.
+		if strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(data.Line), ":")) == "" {
 			return Effect{}, false, errors.New("effect has no line")
 		}
 		effect.Line = data.Line

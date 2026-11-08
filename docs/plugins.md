@@ -249,20 +249,23 @@ plugins are allowed to run: `:checks`, `:copy-filename` and `:copy-url`. Each
 is allowed on purpose because it writes nothing to GitHub. Every other
 command, including ones added later, is refused unless it is explicitly
 allowed. The line is the command and its arguments, as typed after `:` (a
-leading `:` is allowed):
+leading `:` is allowed, but a `:` alone is bad data):
 
 ```json
 {"name": "command", "data": {"line": "checks"}}
 ```
 
-It runs in the pull request the plugin was run from, in the order the effects
-were printed, and only while that pull request is on screen, like every
-effect. It keeps the rules of a typed command: during a line selection it is
+It runs in the pull request the plugin was run from, and only while that pull
+request is on screen, like every effect. The command's own notice (`Copied
+...`, `No checks.`) takes its place among the run's other notices and errors
+in the order they were printed, so the last one printed is what stays on
+screen. It keeps the rules of a typed command: during a line selection it is
 refused with `end the selection to run :<name>`.
 
 A plugin can show and navigate, never write. Any other command, such as one
 that writes (`:approve`, `:resolve`, `:merge`, ...), a plugin command or
-strig's own commands (`:q`, `:qa`, `:set`, `:theme`), is refused with
+any of strig's own commands (`:q`, `:quit`, `:qa`, `:qall`, `:quitall`,
+`:set`, `:theme`, `:help`), is refused with
 `plugin <plugin> can't run :<name>` in the status bar; a word that is no
 command says `not a command: <name>`. A refused or unknown command drops the
 whole result: none of the run's other effects are applied, so the refusal is
