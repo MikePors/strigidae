@@ -52,7 +52,7 @@ Reserved globally:
 | Key | Meaning |
 |---|---|
 | `j` / `k` | down / up |
-| `h` / `l` | focus the pane to the left / right (tiled views such as the PR workspace) |
+| `h` / `l` | focus the pane to the left / right (tiled views such as the PR workspace); previous / next tab in the repository pull request list |
 | `g g` / `G` | top / bottom |
 | `ctrl+d` / `ctrl+u` | half page down / up |
 | `ctrl+f` / `ctrl+b` | full page down / up |
