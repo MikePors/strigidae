@@ -105,7 +105,7 @@ func TestAutoViewedAcrossWorkspaces(test *testing.T) {
 	WithHunkMarks(first.view.hunkMarks)(reopened.view)
 	reopened.run(reopened.view.Init())
 	reopened.send(userinterface.OptionsMessage{Values: options.Values{}.With(options.AutoViewed, true)})
-	reopened.press("j", "j", "l")
+	reopened.press("h", "j", "j", "l")
 	if reopened.clientFile() != github.FileViewed {
 		test.Fatal("setup: the reopened pull request does not show the file viewed")
 	}

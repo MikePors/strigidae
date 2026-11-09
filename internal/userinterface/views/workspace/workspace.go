@@ -193,6 +193,7 @@ func New(client github.Client, repository github.Repository, number int, options
 		client:         client,
 		repository:     repository,
 		number:         number,
+		focus:          paneRight,
 		now:            time.Now,
 		tick:           tea.Tick,
 		rows:           []int{0, commentsEntry},

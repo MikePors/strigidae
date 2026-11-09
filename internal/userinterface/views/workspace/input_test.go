@@ -8,8 +8,9 @@ import (
 )
 
 func TestFocusAndFileNavigation(test *testing.T) {
-	harness := loaded(test, 100, 30)
-	if harness.view.focus != paneFiles || harness.view.selection() != 0 {
+	harness := newHarness(test, 100, 30)
+	harness.run(harness.view.Init())
+	if harness.view.focus != paneRight || harness.view.selection() != 0 {
 		test.Fatalf("initial focus=%v sel=%d", harness.view.focus, harness.view.selection())
 	}
 	harness.press("l")
@@ -72,6 +73,20 @@ func TestFocusAndFileNavigation(test *testing.T) {
 	harness.press("l", "}", "}", "}", "}", "}")
 	if harness.view.selection() != 5 {
 		test.Errorf("} clamps at the last file: sel = %d", harness.view.selection())
+	}
+}
+
+func TestInitialOverviewScrolling(test *testing.T) {
+	for _, width := range []int{40, 100} {
+		harness := newHarness(test, width, 14)
+		harness.run(harness.view.Init())
+		harness.press("ctrl+d")
+		if harness.view.overview.viewport.YOffset() == 0 {
+			test.Errorf("width %d: ctrl+d should scroll the overview immediately", width)
+		}
+		if harness.view.selection() != 0 || harness.view.mode != contentOverview {
+			test.Errorf("width %d: ctrl+d changed the sidebar selection", width)
+		}
 	}
 }
 

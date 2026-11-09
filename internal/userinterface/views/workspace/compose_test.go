@@ -426,6 +426,7 @@ func TestCommentKeyRefusesOnTheOverview(test *testing.T) {
 func TestCommentKeysInANarrowTerminal(test *testing.T) {
 	narrow := func(test *testing.T) *composer {
 		testComposer := &composer{harness: threadHarness(test, 60, 20), body: "top comment"}
+		testComposer.press("h")
 		testComposer.view.edit = func(initial string, done func(string, error) tea.Msg) tea.Cmd {
 			testComposer.openedOn = append(testComposer.openedOn, initial)
 			return func() tea.Msg { return done(testComposer.body, testComposer.err) }
