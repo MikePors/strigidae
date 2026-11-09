@@ -822,12 +822,12 @@ func TestPluginEntriesHaveTheRegistryShape(test *testing.T) {
 // allowed, so it is refused: no write guard is not enough.
 func TestPluginCommandEffectRunsOnlyAllowedCommands(test *testing.T) {
 	for _, testCase := range []struct {
-		name      string
-		effects   []plugins.Effect
-		wantInfos []string
-		wantError string
+		name       string
+		effects    []plugins.Effect
+		wantInfos  []string
+		wantStatus string
 	}{
-		{"checks", []plugins.Effect{{Name: plugins.EffectCommand, Line: "checks"}}, []string{"No checks."}, ""}, // the test pull request has none
+		{"checks", []plugins.Effect{{Name: plugins.EffectCommand, Line: "checks"}}, nil, "No checks."}, // the test pull request has none
 		{"approve", []plugins.Effect{{Name: plugins.EffectCommand, Line: "approve"}}, nil, "plugin summarize can't run :approve"},
 		{"resolve", []plugins.Effect{{Name: plugins.EffectCommand, Line: "resolve"}}, nil, "plugin summarize can't run :resolve"},
 		{"comments", []plugins.Effect{{Name: plugins.EffectCommand, Line: "comments"}}, nil, "plugin summarize can't run :comments"},
@@ -851,11 +851,11 @@ func TestPluginCommandEffectRunsOnlyAllowedCommands(test *testing.T) {
 			if _, asked := session.inliner.lastConfirm(); asked {
 				test.Error("a question was asked")
 			}
-			if session.inliner.view.picker != nil && testCase.wantError != "" {
+			if session.inliner.view.picker != nil && testCase.name != "checks" {
 				test.Error("a picker opened for a refused result")
 			}
-			if testCase.wantError != "" && !strings.HasSuffix(session.status(), testCase.wantError) {
-				test.Errorf("status = %q, want %q", session.status(), testCase.wantError)
+			if testCase.wantStatus != "" && !strings.HasSuffix(session.status(), testCase.wantStatus) {
+				test.Errorf("status = %q, want %q", session.status(), testCase.wantStatus)
 			}
 		})
 	}
@@ -912,17 +912,19 @@ func TestPluginCommandEffectCopies(test *testing.T) {
 		line       string
 		wantPrefix string
 	}{
-		{"copy-filename", "copy-filename", "Copied "},
-		{"copy-url", ":copy-url", "Copied https://"},
+		{"copy-filename", "copy-filename", ""},
+		{"copy-url", ":copy-url", "https://"},
 	} {
 		test.Run(testCase.name, func(test *testing.T) {
 			session := newPluginSession(test, &recordingRunner{effects: []plugins.Effect{
 				{Name: plugins.EffectCommand, Line: testCase.line},
 				{Name: plugins.EffectError, Text: "lint failed"},
 			}})
+			copier := &fakeCopier{}
+			WithClipboard(copier)(session.inliner.view)
 			session.line("summarize")
-			if len(session.infos) != 1 || !strings.HasPrefix(session.infos[0], testCase.wantPrefix) {
-				test.Errorf("notices = %q, want one starting %q", session.infos, testCase.wantPrefix)
+			if len(copier.texts) != 1 || copier.texts[0] == "" || !strings.HasPrefix(copier.texts[0], testCase.wantPrefix) {
+				test.Errorf("copied %q, want one text starting %q", copier.texts, testCase.wantPrefix)
 			}
 			if got := session.status(); !strings.HasSuffix(got, "lint failed") {
 				test.Errorf("status = %q, want the error printed last", got)

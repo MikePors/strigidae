@@ -228,7 +228,9 @@ func TestPluginCommandEffectKeepsTheOrder(test *testing.T) {
 		{Name: plugins.EffectCommand, Line: allowed},
 		{Name: plugins.EffectError, Text: "lint failed"},
 	}}, root)
-	shown := statusesShown(model, step(model, startRun(model, pullRequestSeven)()))
+	queued := step(model, startRun(model, pullRequestSeven)())
+	shown := []string{model.status.text} // the first step is applied with the result
+	shown = append(shown, statusesShown(model, queued)...)
 	if diff := cmp.Diff([]string{"first", "ran copy-filename", "lint failed"}, shown); diff != "" {
 		test.Errorf("statuses in order (-want +got):\n%s", diff)
 	}
@@ -252,10 +254,30 @@ func TestPluginQueuedNoticeNeedsItsPullRequest(test *testing.T) {
 	}
 }
 
-// statusesShown runs command as the program would, a batch's members and then
-// a sequence's in order, and lists the status after each message that changed
-// it. The status timer is not run, so nothing is cleared. tea.Sequence's
-// message type is unexported, so it is told by its shape, a list of commands.
+// A command queued behind another runs only if its pull request is still on
+// screen, and the notice of the one that ran is not shown on another.
+func TestPluginQueuedCommandNeedsItsPullRequest(test *testing.T) {
+	root := newPullRequestView(pullRequestSeven)
+	model, _ := pluginModel(test, &fakeRunner{effects: []plugins.Effect{
+		{Name: plugins.EffectCommand, Line: allowed},
+		{Name: plugins.EffectCommand, Line: allowed + " again"},
+	}}, root)
+	queued := step(model, startRun(model, pullRequestSeven)())
+	root.identity = PullRequestIdentity{Repository: pullRequestSeven.Repository, Number: 8}
+	shown := statusesShown(model, queued)
+	if diff := cmp.Diff([]string{"copy-filename|"}, root.ran); diff != "" {
+		test.Errorf("commands run (-want +got):\n%s", diff)
+	}
+	if len(shown) != 0 {
+		test.Errorf("statuses %q shown on another pull request", shown)
+	}
+}
+
+// statusesShown runs command as the program would, a batch's or a sequence's
+// members in order, and what each message's Update returns after it, and lists
+// the status after each message that changed it. The status timer clears
+// nothing. tea.Sequence's message type is unexported, so it is told by its
+// shape, a list of commands.
 func statusesShown(model *Model, command tea.Cmd) []string {
 	if command == nil {
 		return nil
@@ -272,11 +294,12 @@ func statusesShown(model *Model, command tea.Cmd) []string {
 		return nil
 	}
 	before := model.status.identifier
-	step(model, message)
-	if model.status.identifier == before {
-		return nil
+	returned := step(model, message)
+	var shown []string
+	if model.status.identifier != before {
+		shown = append(shown, model.status.text)
 	}
-	return []string{model.status.text}
+	return append(shown, statusesShown(model, returned)...)
 }
 
 // A command effect for a pull request that is no longer on screen is dropped
