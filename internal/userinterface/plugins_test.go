@@ -281,23 +281,44 @@ func TestPluginQueuedCommandNeedsItsPullRequest(test *testing.T) {
 // a real sequence keeps an order. tea.Sequence's message type is unexported,
 // so it is told by its shape, a list of commands that is no tea.BatchMsg.
 func statusesShown(model *Model, command tea.Cmd) []string {
+	shown, _ := statusesUntilHeld(model, command)
+	return shown
+}
+
+// heldTimerMessage is what a timer that never fires gives in heldTimerModel.
+type heldTimerMessage struct{}
+
+// statusesUntilHeld is statusesShown, and also says whether command waited on
+// a timer that never fires. A sequence waits for each member, and a batch in a
+// sequence for all of its members, so a held member holds the rest of its
+// sequence, as in the program.
+func statusesUntilHeld(model *Model, command tea.Cmd) ([]string, bool) {
 	if command == nil {
-		return nil
+		return nil, false
 	}
 	message := command()
 	if members := reflect.ValueOf(message); members.Kind() == reflect.Slice && members.Type().Elem() == reflect.TypeFor[tea.Cmd]() {
 		_, batch := message.(tea.BatchMsg)
 		var shown []string
+		held := false
 		for i := range members.Len() {
 			if batch {
 				i = members.Len() - 1 - i
 			}
-			shown = append(shown, statusesShown(model, members.Index(i).Interface().(tea.Cmd))...)
+			memberShown, memberHeld := statusesUntilHeld(model, members.Index(i).Interface().(tea.Cmd))
+			shown = append(shown, memberShown...)
+			held = held || memberHeld
+			if held && !batch {
+				break
+			}
 		}
-		return shown
+		return shown, held
+	}
+	if _, waits := message.(heldTimerMessage); waits {
+		return nil, true
 	}
 	if _, clears := message.(clearStatusMessage); clears || message == nil {
-		return nil
+		return nil, false
 	}
 	before := model.status.identifier
 	returned := step(model, message)
@@ -305,7 +326,70 @@ func statusesShown(model *Model, command tea.Cmd) []string {
 	if model.status.identifier != before {
 		shown = append(shown, model.status.text)
 	}
-	return append(shown, statusesShown(model, returned)...)
+	// What Update returns runs beside the rest: nothing waits for it.
+	returnedShown, _ := statusesUntilHeld(model, returned)
+	return append(shown, returnedShown...), false
+}
+
+// heldTimerModel is pluginModel with timers that never fire.
+func heldTimerModel(test *testing.T, runner PluginRunner, root View) *Model {
+	test.Helper()
+	model := New(root, theme.Default(), Options{
+		Tick: func(time.Duration, func(time.Time) tea.Msg) tea.Cmd {
+			return func() tea.Msg { return heldTimerMessage{} }
+		},
+		ViewCommands:   testViewCommands,
+		PluginRunner:   runner,
+		PluginCommands: []PluginCommand{{Name: "ask", Target: config.TargetLines}},
+	})
+	model.Update(tea.WindowSizeMsg{Width: 60, Height: 12})
+	return model
+}
+
+// A notice's timer runs beside the effects after it: the next one does not
+// wait for the notice to be cleared, and so it is not dropped when you move
+// on to another pull request meanwhile.
+func TestPluginNoticeDoesNotHoldUpTheNextEffect(test *testing.T) {
+	root := newPullRequestView(pullRequestSeven)
+	model := heldTimerModel(test, &fakeRunner{effects: []plugins.Effect{
+		{Name: plugins.EffectNotice, Text: "first"},
+		{Name: plugins.EffectCommand, Line: allowed},
+		{Name: plugins.EffectError, Text: "lint failed"},
+	}}, root)
+	queued := step(model, startRun(model, pullRequestSeven)())
+	shown := []string{model.status.text}
+	queuedShown, _ := statusesUntilHeld(model, queued)
+	shown = append(shown, queuedShown...)
+	if diff := cmp.Diff([]string{"first", "ran copy-filename", "lint failed"}, shown); diff != "" {
+		test.Errorf("statuses with timers that never fire (-want +got):\n%s", diff)
+	}
+}
+
+// Once quit began, a queued command does not run and a command's notice that
+// arrives is not shown.
+func TestPluginQueuedEffectsStopWhenQuitBegins(test *testing.T) {
+	root := newPullRequestView(pullRequestSeven)
+	model, _ := pluginModel(test, &fakeRunner{effects: []plugins.Effect{
+		{Name: plugins.EffectCommand, Line: allowed},
+		{Name: plugins.EffectCommand, Line: allowed + " again"},
+	}}, root)
+	finished := startRun(model, pullRequestSeven)
+	startRun(model, pullRequestSeven) // still under way, so quitting waits for it
+	queued := step(model, finished())
+	step(model, QuitMessage{})
+	if !model.quitting {
+		test.Fatal("quit did not begin")
+	}
+	before := model.status.text
+	if shown := statusesShown(model, queued); len(shown) != 0 {
+		test.Errorf("statuses %q shown after quit began", shown)
+	}
+	if model.status.text != before {
+		test.Errorf("status = %q after quit began, want %q", model.status.text, before)
+	}
+	if diff := cmp.Diff([]string{"copy-filename|"}, root.ran); diff != "" {
+		test.Errorf("commands run (-want +got):\n%s", diff)
+	}
 }
 
 // A command effect for a pull request that is no longer on screen is dropped

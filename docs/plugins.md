@@ -272,8 +272,9 @@ any of strig's own commands (`:q`, `:quit`, `:qa`, `:qall`, `:quitall`,
 `:set`, `:theme`, `:help`), is refused with
 `plugin <plugin> can't run :<name>` in the status bar; a word that is no
 command says `not a command: <name>`. A refused or unknown command drops the
-whole result: none of the run's other effects are applied, so the refusal is
-what stays on screen.
+whole result: none of its other effects reach the status bar or run, so the
+refusal is what stays on screen. A `show: thread` plugin's answer still fills
+its thread.
 
 ## Exit status
 
