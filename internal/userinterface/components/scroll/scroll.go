@@ -21,7 +21,9 @@
 // is the first visible one: the scrolling methods (ScrollDown, HalfPageDown,
 // PageDown, ScrollCursorTop, ScrollCursorMiddle) go that far. Cursor moves
 // only scroll as far as keeping the cursor visible needs, while JumpTo,
-// Restore and a drop in the row count stop at the last full page.
+// Restore and a drop in the row count stop at the last full page. A view
+// that was not past the end stays within the last full page when the view
+// grows or the rows get shorter.
 //
 // A row is one screen row unless SetRowHeight says otherwise (wrapped text).
 // The cursor still moves by rows; the view, its height and the screen
@@ -44,15 +46,26 @@ type Window struct {
 func (window *Window) SetRows(count int) {
 	count = max(count, 0)
 	fewer := count < window.rows
-	window.rows = count
-	if fewer {
+	window.resize(func() { window.rows = count }, fewer)
+}
+
+// SetSize sets the number of visible rows and re-clamps.
+func (window *Window) SetSize(height int) {
+	window.resize(func() { window.height = max(height, 0) }, false)
+}
+
+// resize applies a change to the rows or their screen heights and re-clamps.
+// A view that was not scrolled past the end (or any view, with pullBack)
+// stays no further down than the new last full page, so a taller view or
+// shorter rows show the rows above rather than empty space.
+func (window *Window) resize(change func(), pullBack bool) {
+	filled := window.top <= window.lastPageTop()
+	change()
+	if filled || pullBack {
 		window.top = min(window.top, window.lastPageTop())
 	}
 	window.clamp()
 }
-
-// SetSize sets the number of visible rows and re-clamps.
-func (window *Window) SetSize(height int) { window.height = max(height, 0); window.clamp() }
 
 // SetRowHeight sets how many screen rows each row takes, and re-clamps.
 // height(row) is asked only for rows from 0 to the row count minus one, and
@@ -60,8 +73,7 @@ func (window *Window) SetSize(height int) { window.height = max(height, 0); wind
 // counts as 1. nil (the default) makes every row one screen
 // row.
 func (window *Window) SetRowHeight(height func(row int) int) {
-	window.rowHeight = height
-	window.clamp()
+	window.resize(func() { window.rowHeight = height }, false)
 }
 
 // heightOf returns the screen rows row takes. The callback is never asked

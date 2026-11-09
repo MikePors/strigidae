@@ -221,6 +221,7 @@ func TestPastTheEnd(test *testing.T) {
 		{"new row heights", func(window *Window) { window.SetRowHeight(func(int) int { return 1 }) }, 19, 19},
 		{"fewer rows", func(window *Window) { window.SetRows(18) }, 17, 12},
 		{"restore", func(window *Window) { window.Restore(19, 19, 0) }, 19, 14},
+		{"a taller view", func(window *Window) { window.SetSize(40) }, 19, 19},
 		{"scroll up", func(window *Window) { window.ScrollUp(2) }, 19, 17},
 	}
 	for _, testCase := range tests {
@@ -229,6 +230,36 @@ func TestPastTheEnd(test *testing.T) {
 			testCase.do(window)
 			if window.Cursor() != testCase.wantCursor || window.Top() != testCase.wantTop {
 				test.Errorf("cursor/top = %d/%d, want %d/%d", window.Cursor(), window.Top(), testCase.wantCursor, testCase.wantTop)
+			}
+		})
+	}
+}
+
+// TestLastPageFollowsResize: a view on the last full page, not past it,
+// stays on the last full page when the view grows or the rows get shorter,
+// so the rows above come into view instead of empty space.
+func TestLastPageFollowsResize(test *testing.T) {
+	tests := []struct {
+		name    string
+		rows    int
+		height  int
+		heights func(row int) int
+		do      func(window *Window)
+		wantTop int
+	}{
+		{"a taller view", 30, 10, nil, func(window *Window) { window.SetSize(40) }, 0},
+		{"a little taller", 30, 10, nil, func(window *Window) { window.SetSize(12) }, 18},
+		{"shorter rows", 20, 10, func(int) int { return 2 }, func(window *Window) { window.SetRowHeight(nil) }, 10},
+		{"more rows keep the top", 30, 10, nil, func(window *Window) { window.SetRows(40) }, 20},
+	}
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			window := newWindow(testCase.rows, testCase.height, 0, 0)
+			window.SetRowHeight(testCase.heights)
+			window.GotoBottom()
+			testCase.do(window)
+			if window.Top() != testCase.wantTop {
+				test.Errorf("top = %d, want %d", window.Top(), testCase.wantTop)
 			}
 		})
 	}

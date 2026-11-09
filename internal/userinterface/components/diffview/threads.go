@@ -386,8 +386,7 @@ func (model *Model) JumpThread(identifier string) bool {
 	model.SetThreadExpanded(identifier, true)
 	for i, row := range model.rows {
 		if row.threadRow != nil && row.threadRow.threadIndex == index {
-			model.window.GotoRow(i)
-			model.window.ScrollCursorTop()
+			model.window.JumpTo(i)
 			return true
 		}
 	}
