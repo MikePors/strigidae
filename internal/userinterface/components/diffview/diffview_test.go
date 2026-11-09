@@ -80,6 +80,9 @@ func TestMovementDelegates(test *testing.T) {
 		{"PageUp", func(model *Model) { model.PageDown(); model.PageUp() }, 0, 0},
 		{"ScrollDown pulls the cursor", func(model *Model) { model.ScrollDown(4) }, 4, 4},
 		{"ScrollUp", func(model *Model) { model.GotoBottom(); model.ScrollUp(3) }, totalRows - 4, totalRows - 9},
+		{"HalfPageDown scrolls past the end", func(model *Model) { model.GotoBottom(); model.HalfPageDown() }, totalRows - 1, totalRows - 3},
+		{"ScrollCursorTop on the last row", func(model *Model) { model.GotoBottom(); model.ScrollCursorTop() }, totalRows - 1, totalRows - 1},
+		{"ScrollCursorMiddle on the last row", func(model *Model) { model.GotoBottom(); model.ScrollCursorMiddle() }, totalRows - 1, totalRows - 3},
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {

@@ -14,8 +14,14 @@
 //	for i := window.Top(); i < min(window.Top()+height, len(items)); i++ { /* draw; cursor row is window.Cursor() */ }
 //
 // Every method leaves the window clamped: the cursor is a valid row, the cursor
-// is inside the view, the top row is no further than the last full page, and
-// the horizontal offset never scrolls past the end of the widest content.
+// is inside the view, the top row is no further than the last row, and the
+// horizontal offset never scrolls past the end of the widest content.
+//
+// As in vim, the view may scroll past the end of the rows, until the last row
+// is the first visible one: the scrolling methods (ScrollDown, HalfPageDown,
+// PageDown, ScrollCursorTop, ScrollCursorMiddle) go that far. Cursor moves
+// only scroll as far as keeping the cursor visible needs, while JumpTo,
+// Restore and a drop in the row count stop at the last full page.
 //
 // A row is one screen row unless SetRowHeight says otherwise (wrapped text).
 // The cursor still moves by rows; the view, its height and the screen
@@ -33,8 +39,17 @@ type Window struct {
 	cursor, top, column int
 }
 
-// SetRows sets the number of rows and re-clamps.
-func (window *Window) SetRows(count int) { window.rows = max(count, 0); window.clamp() }
+// SetRows sets the number of rows and re-clamps. Fewer rows than before pull
+// the view back so it is no further down than the last full page.
+func (window *Window) SetRows(count int) {
+	count = max(count, 0)
+	fewer := count < window.rows
+	window.rows = count
+	if fewer {
+		window.top = min(window.top, window.lastPageTop())
+	}
+	window.clamp()
+}
 
 // SetSize sets the number of visible rows and re-clamps.
 func (window *Window) SetSize(height int) { window.height = max(height, 0); window.clamp() }
@@ -68,9 +83,10 @@ func (window *Window) SetWidths(content, view int) {
 // Reset puts the cursor, top and horizontal offset back at zero.
 func (window *Window) Reset() { window.cursor, window.top, window.column = 0, 0, 0 }
 
-// Restore sets a saved position and clamps it to the current bounds.
+// Restore sets a saved position and clamps it to the current bounds, with the
+// top no further down than the last full page.
 func (window *Window) Restore(cursor, top, column int) {
-	window.cursor, window.top, window.column = cursor, top, column
+	window.cursor, window.top, window.column = cursor, min(top, window.lastPageTop()), column
 	window.clamp()
 }
 
@@ -86,9 +102,12 @@ func (window *Window) HorizontalOffset() int { return window.column }
 // Height returns the number of visible rows.
 func (window *Window) Height() int { return window.height }
 
-// MaximumTop returns the largest valid top row: the last rows fill the view
-// from there.
-func (window *Window) MaximumTop() int {
+// MaximumTop returns the largest valid top row: the last row, which the view
+// may scroll up to the top of the view.
+func (window *Window) MaximumTop() int { return max(window.rows-1, 0) }
+
+// lastPageTop returns the top row from which the last rows fill the view.
+func (window *Window) lastPageTop() int {
 	if window.rowHeight == nil {
 		return max(window.rows-window.height, 0)
 	}
@@ -167,8 +186,11 @@ func (window *Window) GotoBottom() { window.cursor = window.rows - 1; window.cla
 func (window *Window) GotoRow(row int) { window.cursor = row; window.clamp() }
 
 // JumpTo puts the cursor on row r and r at the top of the view (as far as the
-// last page allows).
-func (window *Window) JumpTo(row int) { window.cursor, window.top = row, row; window.clamp() }
+// last full page allows).
+func (window *Window) JumpTo(row int) {
+	window.cursor, window.top = row, min(row, window.lastPageTop())
+	window.clamp()
+}
 
 // --- viewport movement ---
 
@@ -215,12 +237,12 @@ func (window *Window) rowsFor(top, count int) int {
 	return row - top
 }
 
-// ScrollCursorTop scrolls the view so the cursor row is its first row, as far
-// as the end of the list allows. The cursor does not move.
+// ScrollCursorTop scrolls the view so the cursor row is its first row, even
+// past the end of the list. The cursor does not move.
 func (window *Window) ScrollCursorTop() { window.placeCursor(0) }
 
 // ScrollCursorMiddle scrolls the view so the cursor row is in the middle of
-// it, as far as the ends of the list allow. The cursor does not move.
+// it, as far as the start of the list allows. The cursor does not move.
 func (window *Window) ScrollCursorMiddle() {
 	window.placeCursor((window.height - window.heightOf(window.cursor)) / 2)
 }
@@ -242,13 +264,16 @@ func (window *Window) placeCursor(offset int) {
 	window.clamp()
 }
 
-// HalfPageDown moves the view and the cursor down half a screen, as in vim.
+// HalfPageDown moves the view and the cursor down half a screen, as in vim:
+// past the end of the list until the last row is at the top, with the cursor
+// stopping on the last row.
 func (window *Window) HalfPageDown() { window.shift(max(window.height/2, 1)) }
 
 // HalfPageUp moves the view and the cursor up half a screen.
 func (window *Window) HalfPageUp() { window.shift(-max(window.height/2, 1)) }
 
-// PageDown moves the view and the cursor down a full screen.
+// PageDown moves the view and the cursor down a full screen, past the end of
+// the list as HalfPageDown does.
 func (window *Window) PageDown() { window.shift(max(window.height, 1)) }
 
 // PageUp moves the view and the cursor up a full screen.
