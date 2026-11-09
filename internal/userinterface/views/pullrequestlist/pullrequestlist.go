@@ -195,8 +195,8 @@ func New(client github.Client, repository github.Repository, configured []config
 		theme:      activeTheme,
 		globalKeys: keys.DefaultGlobal(),
 		bindings: bindings{
-			nextTab:     key.NewBinding(key.WithKeys("g t"), key.WithHelp("gt", "next tab")),
-			previousTab: key.NewBinding(key.WithKeys("g T"), key.WithHelp("gT", "previous tab")),
+			nextTab:     key.NewBinding(key.WithKeys("l", "g t"), key.WithHelp("l/gt", "next tab")),
+			previousTab: key.NewBinding(key.WithKeys("h", "g T"), key.WithHelp("h/gT", "previous tab")),
 		},
 		now:           options.Now,
 		open:          options.Open,

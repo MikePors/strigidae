@@ -218,7 +218,7 @@ func TestHelpListsTheSearchKeys(test *testing.T) {
 			got = append(got, binding.Help().Key)
 		}
 	}
-	if strings.Join(got, " ") != "gt gT / n N" {
+	if strings.Join(got, " ") != "l/gt h/gT / n N" {
 		test.Errorf("help keys = %q", got)
 	}
 }

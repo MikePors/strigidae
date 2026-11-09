@@ -100,7 +100,7 @@ func TestSwitchingTabsWraps(test *testing.T) {
 	for _, step := range []struct {
 		key  string
 		want int
-	}{{"g t", 1}, {"g t", 2}, {"g t", 0}, {"g T", 2}, {"g T", 1}} {
+	}{{"g t", 1}, {"g t", 2}, {"g t", 0}, {"g T", 2}, {"g T", 1}, {"h", 0}, {"h", 2}, {"l", 0}, {"l", 1}} {
 		press(view, step.key)
 		if view.active != step.want {
 			test.Fatalf("after %q: active = %d, want %d", step.key, view.active, step.want)
