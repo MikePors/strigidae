@@ -57,14 +57,15 @@ func (view *pullRequestView) Reload() tea.Cmd {
 }
 
 // allowed is the one command plugins may run; approve is a view command
-// they may not. Command records what it ran.
+// they may not. Command records what it ran, and returns its notice in a
+// batch beside another command, the shape the workspace's copy commands have.
 const allowed = "copy-filename"
 
 func (view *pullRequestView) PluginsMayRun(name string) bool { return name == allowed }
 
 func (view *pullRequestView) Command(name, arguments string) (tea.Cmd, bool) {
 	view.ran = append(view.ran, name+"|"+arguments)
-	return Info("ran " + name), true
+	return tea.Batch(Info("ran "+name), func() tea.Msg { return nil }), true
 }
 
 // fakeRunner answers every run at once with its canned result.
@@ -273,19 +274,24 @@ func TestPluginQueuedCommandNeedsItsPullRequest(test *testing.T) {
 	}
 }
 
-// statusesShown runs command as the program would, a batch's or a sequence's
-// members in order, and what each message's Update returns after it, and lists
-// the status after each message that changed it. The status timer clears
-// nothing. tea.Sequence's message type is unexported, so it is told by its
-// shape, a list of commands.
+// statusesShown runs command, and what each message's Update returns after
+// it, and lists the status after each message that changed it. The status
+// timer clears nothing. A sequence's members run in order; a batch's run in
+// reverse, since the program runs them at once and promises no order, so only
+// a real sequence keeps an order. tea.Sequence's message type is unexported,
+// so it is told by its shape, a list of commands that is no tea.BatchMsg.
 func statusesShown(model *Model, command tea.Cmd) []string {
 	if command == nil {
 		return nil
 	}
 	message := command()
 	if members := reflect.ValueOf(message); members.Kind() == reflect.Slice && members.Type().Elem() == reflect.TypeFor[tea.Cmd]() {
+		_, batch := message.(tea.BatchMsg)
 		var shown []string
 		for i := range members.Len() {
+			if batch {
+				i = members.Len() - 1 - i
+			}
 			shown = append(shown, statusesShown(model, members.Index(i).Interface().(tea.Cmd))...)
 		}
 		return shown

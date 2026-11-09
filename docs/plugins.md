@@ -260,7 +260,10 @@ request is on screen, like every effect. The command's own notice (`Copied
 ...`, `No checks.`) takes its place among the run's other notices and errors
 in the order they were printed, so the last one printed is what stays on
 screen. Each command runs in its turn, and only if that pull request is still
-on screen then; if it is not, it and the effects after it are dropped. It keeps the rules of a typed command: during a line selection it is
+on screen then; if it is not, it and the effects after it are dropped. A
+`reload` is the exception: it starts at once, beside the commands.
+
+A command keeps the rules of a typed command: during a line selection it is
 refused with `end the selection to run :<name>`.
 
 A plugin can show and navigate, never write. Any other command, such as one

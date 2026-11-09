@@ -99,10 +99,15 @@ func (session *pluginSession) pump(command tea.Cmd) {
 		return
 	}
 	message := command()
-	// A batch, or a sequence (whose type is unexported, so it is told by its
-	// shape): run the members in order.
+	// A sequence (whose type is unexported, so it is told by its shape) runs
+	// its members in order; a batch's run in reverse, since the program runs
+	// them at once and promises no order.
 	if members := reflect.ValueOf(message); members.Kind() == reflect.Slice && members.Type().Elem() == reflect.TypeFor[tea.Cmd]() {
+		_, batch := message.(tea.BatchMsg)
 		for i := range members.Len() {
+			if batch {
+				i = members.Len() - 1 - i
+			}
 			session.pump(members.Index(i).Interface().(tea.Cmd))
 		}
 		return
@@ -930,5 +935,16 @@ func TestPluginCommandEffectCopies(test *testing.T) {
 				test.Errorf("status = %q, want the error printed last", got)
 			}
 		})
+	}
+}
+
+// :checks run by a plugin opens the checks picker on a pull request that has
+// checks.
+func TestPluginCommandEffectOpensTheChecks(test *testing.T) {
+	session := newPluginSession(test, &recordingRunner{effects: []plugins.Effect{{Name: plugins.EffectCommand, Line: "checks"}}})
+	session.inliner.view.detail.CheckList = testChecks()
+	session.line("summarize")
+	if session.inliner.view.picker == nil || len(session.inliner.view.pickerChecks) != len(testChecks()) {
+		test.Fatalf("picker = %v with %d checks, want the checks picker", session.inliner.view.picker != nil, len(session.inliner.view.pickerChecks))
 	}
 }

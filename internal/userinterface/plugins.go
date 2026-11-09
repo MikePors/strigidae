@@ -298,7 +298,11 @@ type pluginStatusMessage struct {
 // pluginStatus shows a deferred notice or error, if its pull request is still
 // on screen.
 func (model *Model) pluginStatus(message pluginStatusMessage) tea.Cmd {
-	if _, ok := model.hostShowing(message.identity); !ok || model.quitting {
+	if model.quitting {
+		model.log.Info("plugin notice dropped: strig is quitting", "plugin", message.plugin, "number", message.identity.Number)
+		return nil
+	}
+	if _, ok := model.hostShowing(message.identity); !ok {
 		model.log.Info("plugin notice dropped: its pull request is not on screen", "plugin", message.plugin, "number", message.identity.Number)
 		return nil
 	}
@@ -327,8 +331,12 @@ type pluginStepsMessage struct {
 // pull request too. The rest waits for the command (tea.Sequence), so a
 // command's notice keeps its place in the order the plugin printed.
 func (model *Model) pluginSteps(message pluginStepsMessage) tea.Cmd {
+	if model.quitting {
+		model.log.Info("plugin effects dropped: strig is quitting", "plugin", message.plugin, "number", message.identity.Number)
+		return nil
+	}
 	host, ok := model.hostShowing(message.identity)
-	if !ok || model.quitting {
+	if !ok {
 		model.log.Info("plugin effects dropped: their pull request is not on screen", "plugin", message.plugin, "number", message.identity.Number)
 		return nil
 	}

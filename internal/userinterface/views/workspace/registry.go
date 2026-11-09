@@ -56,6 +56,8 @@ type actionEntry struct {
 	// directly or through anything it opens: a plugin may show and navigate,
 	// never write. It is off unless set on purpose; no write guard is not
 	// enough, since some actions without one write (`v` marks a file viewed).
+	// The command must return its notices directly or in a tea.Batch: the
+	// root ties those to the plugin's pull request and sees nothing deeper.
 	pluginsMayRun bool
 	// applies, if set, says whether a key reaches the entry in the view's
 	// current state; otherwise the key falls through to what is behind it.
