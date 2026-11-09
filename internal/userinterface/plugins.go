@@ -78,6 +78,11 @@ type PluginHost interface {
 	PullRequestIdentity() (identity PullRequestIdentity, ok bool)
 	// Reload reloads what the view shows, as its refresh key does.
 	Reload() tea.Cmd
+	// PluginsMayRun reports whether a plugin's command effect may run the
+	// view's command name, which Command then runs. Only commands that write
+	// nothing to GitHub may be allowed.
+	PluginsMayRun(name string) bool
+	Commander
 }
 
 // CommandLineKeeper is implemented by a KeyCapturer that lets ":" open the
@@ -250,13 +255,7 @@ func (model *Model) pluginResult(message pluginResultMessage) tea.Cmd {
 		}
 		return nil
 	}
-	host, ok := model.top().(PluginHost)
-	if ok {
-		var shown PullRequestIdentity
-		if shown, ok = host.PullRequestIdentity(); ok {
-			ok = shown.SamePullRequest(finished.identity)
-		}
-	}
+	host, ok := model.hostShowing(finished.identity)
 	if !ok {
 		model.log.Info("plugin result dropped: its pull request is not on screen", "plugin", finished.name, "number", finished.identity.Number)
 		return filled
@@ -268,13 +267,152 @@ func (model *Model) pluginResult(message pluginResultMessage) tea.Cmd {
 		}
 		return model.setStatus(terminaltext.Clean(message.err.Error()), statusError)
 	}
-	return tea.Batch(filled, model.pluginEffects(host, finished.name, message.effects, finished.thread != ""))
+	return tea.Batch(filled, model.pluginEffects(host, finished, message.effects))
+}
+
+// hostShowing returns the top view if it is a plugin host showing the pull
+// request of identity.
+func (model *Model) hostShowing(identity PullRequestIdentity) (PluginHost, bool) {
+	host, ok := model.top().(PluginHost)
+	if !ok {
+		return nil, false
+	}
+	shown, ok := host.PullRequestIdentity()
+	if !ok || !shown.SamePullRequest(identity) {
+		return nil, false
+	}
+	return host, true
+}
+
+// pluginStatusMessage is a notice or error of a plugin, or of a command a
+// plugin ran, that arrives after the result. It is shown only if the result's
+// pull request is still on screen (identity) and strig is not quitting. It is
+// never logged: the text may be the plugin's, already cleaned.
+type pluginStatusMessage struct {
+	plugin   string
+	identity PullRequestIdentity
+	text     string
+	kind     statusKind
+}
+
+// pluginStatus shows a deferred notice or error, if its pull request is still
+// on screen.
+func (model *Model) pluginStatus(message pluginStatusMessage) tea.Cmd {
+	if model.quitting {
+		model.log.Info("plugin notice dropped: strig is quitting", "plugin", message.plugin, "number", message.identity.Number)
+		return nil
+	}
+	if _, ok := model.hostShowing(message.identity); !ok {
+		model.log.Info("plugin notice dropped: its pull request is not on screen", "plugin", message.plugin, "number", message.identity.Number)
+		return nil
+	}
+	return model.setStatus(message.text, message.kind)
+}
+
+// pluginStep is one effect of a result with commands, applied in its turn: a
+// command line, or a notice or error when command is "".
+type pluginStep struct {
+	command, arguments string
+	text               string
+	kind               statusKind
+}
+
+// pluginStepsMessage carries the effects of a result with commands that are
+// still to be applied, one step per message.
+type pluginStepsMessage struct {
+	plugin   string
+	identity PullRequestIdentity
+	steps    []pluginStep
+}
+
+// pluginSteps applies the first step, if the result's pull request is still
+// on screen, then asks for the rest. A command runs only now, so it acts on
+// the pull request it was asked for, and its own notices are tied to that
+// pull request too. The rest waits for the command (tea.Sequence), so a
+// command's notice keeps its place in the order the plugin printed.
+func (model *Model) pluginSteps(message pluginStepsMessage) tea.Cmd {
+	if model.quitting {
+		model.log.Info("plugin effects dropped: strig is quitting", "plugin", message.plugin, "number", message.identity.Number)
+		return nil
+	}
+	host, ok := model.hostShowing(message.identity)
+	if !ok {
+		model.log.Info("plugin effects dropped: their pull request is not on screen", "plugin", message.plugin, "number", message.identity.Number)
+		return nil
+	}
+	if len(message.steps) == 0 {
+		return nil
+	}
+	step, rest := message.steps[0], message
+	rest.steps = message.steps[1:]
+	var next tea.Cmd
+	if len(rest.steps) > 0 {
+		next = messageCommand(rest)
+	}
+	if step.command == "" {
+		// The status is set now; its timer must not hold up the rest.
+		return tea.Batch(model.setStatus(step.text, step.kind), next)
+	}
+	command, _ := host.Command(step.command, step.arguments)
+	return tea.Sequence(pluginScoped(command, message.plugin, message.identity), next)
+}
+
+// pluginScoped turns the notices and errors that command produces, directly or
+// in a batch, into messages tied to the pull request of identity. Its other
+// messages (the clipboard) pass unchanged.
+func pluginScoped(command tea.Cmd, plugin string, identity PullRequestIdentity) tea.Cmd {
+	if command == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		switch message := command().(type) {
+		case InfoMessage:
+			return pluginStatusMessage{plugin: plugin, identity: identity, text: message.Text, kind: statusInfo}
+		case ErrorMessage:
+			text := "error"
+			if message.Err != nil {
+				text = message.Err.Error()
+			}
+			return pluginStatusMessage{plugin: plugin, identity: identity, text: text, kind: statusError}
+		case tea.BatchMsg:
+			scoped := make(tea.BatchMsg, len(message))
+			for i, member := range message {
+				scoped[i] = pluginScoped(member, plugin, identity)
+			}
+			return scoped
+		default:
+			return message
+		}
+	}
 }
 
 // pluginEffects applies the effects in the order the plugin printed them.
-// Their text is the plugin's, so it is cleaned before the status bar.
-func (model *Model) pluginEffects(host PluginHost, name string, effects []plugins.Effect, inThread bool) tea.Cmd {
+// Their text is the plugin's, so it is cleaned before the status bar. A
+// command effect that is refused drops the whole result, so a plugin that
+// tries to write can't hide the refusal behind the notices of its other
+// effects. A result with commands is applied step by step (pluginSteps); a
+// reload sets no status and runs beside the steps.
+func (model *Model) pluginEffects(host PluginHost, finished pluginRun, effects []plugins.Effect) tea.Cmd {
+	name, inThread := finished.name, finished.thread != ""
+	for _, effect := range effects {
+		if effect.Name != plugins.EffectCommand {
+			continue
+		}
+		if refusal := model.pluginCommandRefusal(host, name, effect.Line); refusal != "" {
+			model.log.Info("plugin result dropped: a command was refused", slog.String("plugin", name))
+			return model.setStatus(refusal, statusError)
+		}
+	}
+	inOrder := slices.ContainsFunc(effects, func(effect plugins.Effect) bool { return effect.Name == plugins.EffectCommand })
 	var commands []tea.Cmd
+	var steps []pluginStep
+	status := func(text string, kind statusKind) {
+		if inOrder {
+			steps = append(steps, pluginStep{text: text, kind: kind})
+			return
+		}
+		commands = append(commands, model.setStatus(text, kind))
+	}
 	answered := slices.ContainsFunc(effects, func(effect plugins.Effect) bool { return effect.Name == plugins.EffectAnswer })
 	for _, effect := range effects {
 		// The thread shows the answers, and the error when there is no answer;
@@ -285,16 +423,46 @@ func (model *Model) pluginEffects(host PluginHost, name string, effects []plugin
 		}
 		switch effect.Name {
 		case plugins.EffectNotice, plugins.EffectAnswer: // answers show as notices until they have a place of their own
-			commands = append(commands, model.setStatus(terminaltext.Clean(effect.Text), statusInfo))
+			status(terminaltext.Clean(effect.Text), statusInfo)
 		case plugins.EffectError:
-			commands = append(commands, model.setStatus(terminaltext.Clean(effect.Text), statusError))
+			status(terminaltext.Clean(effect.Text), statusError)
 		case plugins.EffectReload:
 			commands = append(commands, host.Reload())
+		case plugins.EffectCommand:
+			commandName, arguments := splitPluginCommand(effect.Line)
+			steps = append(steps, pluginStep{command: commandName, arguments: arguments})
 		default:
 			model.log.Warn("plugin effect not handled", slog.String("plugin", name), slog.String("effect", effect.Name))
 		}
 	}
+	if len(steps) > 0 {
+		commands = append(commands, model.pluginSteps(pluginStepsMessage{plugin: name, identity: finished.identity, steps: steps}))
+	}
 	return tea.Batch(commands...)
+}
+
+// pluginCommandRefusal is what the status bar says when a plugin may not run
+// the command line of a command effect, or "" when it may. A plugin may show
+// and navigate, never write, so only the commands the host allows run. The
+// shell's own commands never run, so a plugin can't quit or change the
+// options. The line is the plugin's, so what is shown of it is cleaned.
+func (model *Model) pluginCommandRefusal(host PluginHost, plugin, line string) string {
+	name, _ := splitPluginCommand(line)
+	shell := slices.Contains(CommandNames(), name)
+	if !shell && host.PluginsMayRun(name) {
+		return ""
+	}
+	if !shell && !slices.Contains(model.viewCommands, name) {
+		return "not a command: " + terminaltext.Clean(name)
+	}
+	return "plugin " + plugin + " can't run :" + terminaltext.Clean(name)
+}
+
+// splitPluginCommand splits the line of a command effect as the command line
+// does; a leading ":" is allowed.
+func splitPluginCommand(line string) (name, arguments string) {
+	_, name, _, arguments, _ = splitCommandLine(strings.TrimPrefix(strings.TrimSpace(line), ":"))
+	return strings.TrimSpace(name), strings.TrimSpace(arguments)
 }
 
 // quit ends the program. With plugin runs under way they are cancelled and

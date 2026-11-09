@@ -263,6 +263,10 @@ func (model *Model) update(message tea.Msg) tea.Cmd {
 		return nil
 	case InfoMessage:
 		return model.setStatus(message.Text, statusInfo)
+	case pluginStatusMessage:
+		return model.pluginStatus(message)
+	case pluginStepsMessage:
+		return model.pluginSteps(message)
 	case ErrorMessage:
 		model.log.Warn("error shown to user", "err", message.Err)
 		text := "error"

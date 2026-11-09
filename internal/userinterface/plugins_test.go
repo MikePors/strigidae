@@ -3,6 +3,8 @@ package userinterface
 import (
 	"context"
 	"errors"
+	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -33,6 +35,7 @@ type pullRequestView struct {
 	identity PullRequestIdentity
 	loaded   bool
 	reloads  int
+	ran      []string // the commands run, as "name|arguments"
 }
 
 func newPullRequestView(identity PullRequestIdentity) *pullRequestView {
@@ -51,6 +54,18 @@ func (view *pullRequestView) PullRequestIdentity() (PullRequestIdentity, bool) {
 func (view *pullRequestView) Reload() tea.Cmd {
 	view.reloads++
 	return nil
+}
+
+// allowed is the one command plugins may run; approve is a view command
+// they may not. Command records what it ran, and returns its notice in a
+// batch beside another command, the shape the workspace's copy commands have.
+const allowed = "copy-filename"
+
+func (view *pullRequestView) PluginsMayRun(name string) bool { return name == allowed }
+
+func (view *pullRequestView) Command(name, arguments string) (tea.Cmd, bool) {
+	view.ran = append(view.ran, name+"|"+arguments)
+	return tea.Batch(Info("ran "+name), func() tea.Msg { return nil }), true
 }
 
 // fakeRunner answers every run at once with its canned result.
@@ -149,6 +164,244 @@ func TestPluginEffects(test *testing.T) {
 				test.Errorf("reloads = %d, want %d", root.reloads, testCase.reloads)
 			}
 		})
+	}
+}
+
+// A command effect runs a command of the view on screen that plugins may run,
+// and nothing else.
+func TestPluginCommandEffect(test *testing.T) {
+	for _, testCase := range []struct {
+		line     string
+		wantRan  []string
+		wantText string
+	}{
+		{"copy-filename", []string{"copy-filename|"}, ""},
+		{"  :copy-filename   a  b ", []string{"copy-filename|a  b"}, ""},
+		{"approve", nil, "plugin ask can't run :approve"},
+		{"qa", nil, "plugin ask can't run :qa"},
+		{"set nowrap", nil, "plugin ask can't run :set"},
+		{"nope", nil, "not a command: nope"},
+		{"no\x1b]0;pe", nil, "not a command: no ]0;pe"},
+	} {
+		test.Run(testCase.line, func(test *testing.T) {
+			root := newPullRequestView(pullRequestSeven)
+			model, _ := pluginModel(test, &fakeRunner{effects: []plugins.Effect{{Name: plugins.EffectCommand, Line: testCase.line}}}, root)
+			step(model, startRun(model, pullRequestSeven)())
+			if diff := cmp.Diff(testCase.wantRan, root.ran); diff != "" {
+				test.Errorf("commands run (-want +got):\n%s", diff)
+			}
+			if model.status.text != testCase.wantText {
+				test.Errorf("status = %q, want %q", model.status.text, testCase.wantText)
+			}
+			if model.quitting {
+				test.Error("a plugin quit strig")
+			}
+		})
+	}
+}
+
+// One refused command drops the whole result: nothing runs and only the
+// refusal shows, so it can't be hidden behind the effects around it.
+func TestPluginCommandRefusalDropsTheResult(test *testing.T) {
+	root := newPullRequestView(pullRequestSeven)
+	model, _ := pluginModel(test, &fakeRunner{effects: []plugins.Effect{
+		{Name: plugins.EffectCommand, Line: allowed},
+		{Name: plugins.EffectReload},
+		{Name: plugins.EffectCommand, Line: "approve"},
+		{Name: plugins.EffectNotice, Text: "all done"},
+	}}, root)
+	step(model, startRun(model, pullRequestSeven)())
+	if len(root.ran) != 0 || root.reloads != 0 {
+		test.Errorf("ran %v and reloaded %d times, want nothing", root.ran, root.reloads)
+	}
+	if want := "plugin ask can't run :approve"; model.status.text != want {
+		test.Errorf("status = %q, want %q", model.status.text, want)
+	}
+}
+
+// A command's own notice comes back as a message, so the notices and errors
+// around it are shown in the order the plugin printed them, and the last one
+// stays on screen.
+func TestPluginCommandEffectKeepsTheOrder(test *testing.T) {
+	root := newPullRequestView(pullRequestSeven)
+	model, _ := pluginModel(test, &fakeRunner{effects: []plugins.Effect{
+		{Name: plugins.EffectNotice, Text: "first"},
+		{Name: plugins.EffectCommand, Line: allowed},
+		{Name: plugins.EffectError, Text: "lint failed"},
+	}}, root)
+	queued := step(model, startRun(model, pullRequestSeven)())
+	shown := []string{model.status.text} // the first step is applied with the result
+	shown = append(shown, statusesShown(model, queued)...)
+	if diff := cmp.Diff([]string{"first", "ran copy-filename", "lint failed"}, shown); diff != "" {
+		test.Errorf("statuses in order (-want +got):\n%s", diff)
+	}
+	if model.status.text != "lint failed" {
+		test.Errorf("status = %q, want the error printed last", model.status.text)
+	}
+}
+
+// A notice queued behind a command is dropped if its pull request is no
+// longer on screen when it arrives.
+func TestPluginQueuedNoticeNeedsItsPullRequest(test *testing.T) {
+	root := newPullRequestView(pullRequestSeven)
+	model, _ := pluginModel(test, &fakeRunner{effects: []plugins.Effect{
+		{Name: plugins.EffectCommand, Line: allowed},
+		{Name: plugins.EffectError, Text: "lint failed"},
+	}}, root)
+	queued := step(model, startRun(model, pullRequestSeven)())
+	root.identity = PullRequestIdentity{Repository: pullRequestSeven.Repository, Number: 8}
+	if shown := statusesShown(model, queued); slices.Contains(shown, "lint failed") {
+		test.Errorf("statuses %q show the error on another pull request", shown)
+	}
+}
+
+// A command queued behind another runs only if its pull request is still on
+// screen, and the notice of the one that ran is not shown on another.
+func TestPluginQueuedCommandNeedsItsPullRequest(test *testing.T) {
+	root := newPullRequestView(pullRequestSeven)
+	model, _ := pluginModel(test, &fakeRunner{effects: []plugins.Effect{
+		{Name: plugins.EffectCommand, Line: allowed},
+		{Name: plugins.EffectCommand, Line: allowed + " again"},
+	}}, root)
+	queued := step(model, startRun(model, pullRequestSeven)())
+	root.identity = PullRequestIdentity{Repository: pullRequestSeven.Repository, Number: 8}
+	shown := statusesShown(model, queued)
+	if diff := cmp.Diff([]string{"copy-filename|"}, root.ran); diff != "" {
+		test.Errorf("commands run (-want +got):\n%s", diff)
+	}
+	if len(shown) != 0 {
+		test.Errorf("statuses %q shown on another pull request", shown)
+	}
+}
+
+// statusesShown runs command, and what each message's Update returns after
+// it, and lists the status after each message that changed it. The status
+// timer clears nothing. A sequence's members run in order; a batch's run in
+// reverse, since the program runs them at once and promises no order, so only
+// a real sequence keeps an order. tea.Sequence's message type is unexported,
+// so it is told by its shape, a list of commands that is no tea.BatchMsg.
+func statusesShown(model *Model, command tea.Cmd) []string {
+	shown, _ := statusesUntilHeld(model, command)
+	return shown
+}
+
+// heldTimerMessage is what a timer that never fires gives in heldTimerModel.
+type heldTimerMessage struct{}
+
+// statusesUntilHeld is statusesShown, and also says whether command waited on
+// a timer that never fires. A sequence waits for each member, and a batch in a
+// sequence for all of its members, so a held member holds the rest of its
+// sequence, as in the program.
+func statusesUntilHeld(model *Model, command tea.Cmd) ([]string, bool) {
+	if command == nil {
+		return nil, false
+	}
+	message := command()
+	if members := reflect.ValueOf(message); members.Kind() == reflect.Slice && members.Type().Elem() == reflect.TypeFor[tea.Cmd]() {
+		_, batch := message.(tea.BatchMsg)
+		var shown []string
+		held := false
+		for i := range members.Len() {
+			if batch {
+				i = members.Len() - 1 - i
+			}
+			memberShown, memberHeld := statusesUntilHeld(model, members.Index(i).Interface().(tea.Cmd))
+			shown = append(shown, memberShown...)
+			held = held || memberHeld
+			if held && !batch {
+				break
+			}
+		}
+		return shown, held
+	}
+	if _, waits := message.(heldTimerMessage); waits {
+		return nil, true
+	}
+	if _, clears := message.(clearStatusMessage); clears || message == nil {
+		return nil, false
+	}
+	before := model.status.identifier
+	returned := step(model, message)
+	var shown []string
+	if model.status.identifier != before {
+		shown = append(shown, model.status.text)
+	}
+	// What Update returns runs beside the rest: nothing waits for it.
+	returnedShown, _ := statusesUntilHeld(model, returned)
+	return append(shown, returnedShown...), false
+}
+
+// heldTimerModel is pluginModel with timers that never fire.
+func heldTimerModel(test *testing.T, runner PluginRunner, root View) *Model {
+	test.Helper()
+	model := New(root, theme.Default(), Options{
+		Tick: func(time.Duration, func(time.Time) tea.Msg) tea.Cmd {
+			return func() tea.Msg { return heldTimerMessage{} }
+		},
+		ViewCommands:   testViewCommands,
+		PluginRunner:   runner,
+		PluginCommands: []PluginCommand{{Name: "ask", Target: config.TargetLines}},
+	})
+	model.Update(tea.WindowSizeMsg{Width: 60, Height: 12})
+	return model
+}
+
+// A notice's timer runs beside the effects after it: the next one does not
+// wait for the notice to be cleared, and so it is not dropped when you move
+// on to another pull request meanwhile.
+func TestPluginNoticeDoesNotHoldUpTheNextEffect(test *testing.T) {
+	root := newPullRequestView(pullRequestSeven)
+	model := heldTimerModel(test, &fakeRunner{effects: []plugins.Effect{
+		{Name: plugins.EffectNotice, Text: "first"},
+		{Name: plugins.EffectCommand, Line: allowed},
+		{Name: plugins.EffectError, Text: "lint failed"},
+	}}, root)
+	queued := step(model, startRun(model, pullRequestSeven)())
+	shown := []string{model.status.text}
+	queuedShown, _ := statusesUntilHeld(model, queued)
+	shown = append(shown, queuedShown...)
+	if diff := cmp.Diff([]string{"first", "ran copy-filename", "lint failed"}, shown); diff != "" {
+		test.Errorf("statuses with timers that never fire (-want +got):\n%s", diff)
+	}
+}
+
+// Once quit began, a queued command does not run and a command's notice that
+// arrives is not shown.
+func TestPluginQueuedEffectsStopWhenQuitBegins(test *testing.T) {
+	root := newPullRequestView(pullRequestSeven)
+	model, _ := pluginModel(test, &fakeRunner{effects: []plugins.Effect{
+		{Name: plugins.EffectCommand, Line: allowed},
+		{Name: plugins.EffectCommand, Line: allowed + " again"},
+	}}, root)
+	finished := startRun(model, pullRequestSeven)
+	startRun(model, pullRequestSeven) // still under way, so quitting waits for it
+	queued := step(model, finished())
+	step(model, QuitMessage{})
+	if !model.quitting {
+		test.Fatal("quit did not begin")
+	}
+	before := model.status.text
+	if shown := statusesShown(model, queued); len(shown) != 0 {
+		test.Errorf("statuses %q shown after quit began", shown)
+	}
+	if model.status.text != before {
+		test.Errorf("status = %q after quit began, want %q", model.status.text, before)
+	}
+	if diff := cmp.Diff([]string{"copy-filename|"}, root.ran); diff != "" {
+		test.Errorf("commands run (-want +got):\n%s", diff)
+	}
+}
+
+// A command effect for a pull request that is no longer on screen is dropped
+// with the other effects.
+func TestPluginCommandEffectNeedsItsPullRequest(test *testing.T) {
+	root := newPullRequestView(pullRequestSeven)
+	model, _ := pluginModel(test, &fakeRunner{effects: []plugins.Effect{{Name: plugins.EffectCommand, Line: allowed}}}, root)
+	result := startRun(model, pullRequestSeven)()
+	root.identity = PullRequestIdentity{Repository: pullRequestSeven.Repository, Number: 8}
+	step(model, result)
+	if len(root.ran) != 0 {
+		test.Errorf("ran %v on another pull request", root.ran)
 	}
 }
 

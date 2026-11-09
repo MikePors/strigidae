@@ -3,6 +3,7 @@ package workspace
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -97,12 +98,22 @@ func (session *pluginSession) pump(command tea.Cmd) {
 	if command == nil {
 		return
 	}
-	switch message := command().(type) {
-	case nil:
-	case tea.BatchMsg:
-		for _, member := range message {
-			session.pump(member)
+	message := command()
+	// A sequence (whose type is unexported, so it is told by its shape) runs
+	// its members in order; a batch's run in reverse, since the program runs
+	// them at once and promises no order.
+	if members := reflect.ValueOf(message); members.Kind() == reflect.Slice && members.Type().Elem() == reflect.TypeFor[tea.Cmd]() {
+		_, batch := message.(tea.BatchMsg)
+		for i := range members.Len() {
+			if batch {
+				i = members.Len() - 1 - i
+			}
+			session.pump(members.Index(i).Interface().(tea.Cmd))
 		}
+		return
+	}
+	switch message := message.(type) {
+	case nil:
 	case tea.QuitMsg:
 		session.quit = true
 	case spinner.TickMsg:
@@ -808,5 +819,132 @@ func TestPluginEntriesHaveTheRegistryShape(test *testing.T) {
 	view.pluginCommands = []userinterface.PluginCommand{{Name: "approve", Target: config.TargetPullRequest}}
 	if entry, _ := view.commandEntry("approve"); entry.guard != writeReview {
 		test.Errorf("a plugin named like a built-in took over :approve")
+	}
+}
+
+// A command effect runs only the commands that allow plugins, and none that
+// write or start another plugin. :comments writes nothing but is not
+// allowed, so it is refused: no write guard is not enough.
+func TestPluginCommandEffectRunsOnlyAllowedCommands(test *testing.T) {
+	for _, testCase := range []struct {
+		name       string
+		effects    []plugins.Effect
+		wantInfos  []string
+		wantStatus string
+	}{
+		{"checks", []plugins.Effect{{Name: plugins.EffectCommand, Line: "checks"}}, nil, "No checks."}, // the test pull request has none
+		{"approve", []plugins.Effect{{Name: plugins.EffectCommand, Line: "approve"}}, nil, "plugin summarize can't run :approve"},
+		{"resolve", []plugins.Effect{{Name: plugins.EffectCommand, Line: "resolve"}}, nil, "plugin summarize can't run :resolve"},
+		{"comments", []plugins.Effect{{Name: plugins.EffectCommand, Line: "comments"}}, nil, "plugin summarize can't run :comments"},
+		{"summarize", []plugins.Effect{{Name: plugins.EffectCommand, Line: "summarize"}}, nil, "plugin summarize can't run :summarize"},
+		// The refusal is not hidden behind the notice of a command run before it.
+		{"checks then approve", []plugins.Effect{
+			{Name: plugins.EffectCommand, Line: "checks"},
+			{Name: plugins.EffectNotice, Text: "done"},
+			{Name: plugins.EffectCommand, Line: "approve"},
+		}, nil, "plugin summarize can't run :approve"},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			session := newPluginSession(test, &recordingRunner{effects: testCase.effects})
+			session.line("summarize")
+			if diff := cmp.Diff(testCase.wantInfos, session.infos); diff != "" {
+				test.Errorf("notices (-want +got):\n%s", diff)
+			}
+			if session.runs() != 1 {
+				test.Errorf("%d runs, want the one typed", session.runs())
+			}
+			if _, asked := session.inliner.lastConfirm(); asked {
+				test.Error("a question was asked")
+			}
+			if session.inliner.view.picker != nil && testCase.name != "checks" {
+				test.Error("a picker opened for a refused result")
+			}
+			if testCase.wantStatus != "" && !strings.HasSuffix(session.status(), testCase.wantStatus) {
+				test.Errorf("status = %q, want %q", session.status(), testCase.wantStatus)
+			}
+		})
+	}
+}
+
+// pluginsMayRun is a promise that the command writes nothing, so it is only
+// on entries that have a command, no write guard and are not plugins.
+func TestPluginsMayRunOnlyOnCommandsThatWriteNothing(test *testing.T) {
+	view := newInliner(test).view
+	view.pluginCommands = pluginCommands
+	plugin := map[string]bool{}
+	for _, command := range pluginCommands {
+		plugin[command.Name] = true
+	}
+	var allowed []string
+	for _, entry := range view.entries() {
+		if !entry.pluginsMayRun {
+			continue
+		}
+		allowed = append(allowed, entry.Command)
+		if entry.Command == "" || entry.guard != writeNone || plugin[entry.Command] {
+			test.Errorf("%s allows plugins but has a write guard, is a plugin or has no command: %+v", entry.Name, entry)
+		}
+	}
+	if diff := cmp.Diff([]string{"checks", "copy-filename", "copy-url"}, allowed); diff != "" {
+		test.Errorf("commands plugins may run (-want +got):\n%s", diff)
+	}
+}
+
+// A command a plugin runs keeps the rules of a typed one: a line selection
+// that is still open refuses it. The root runs it through Command.
+func TestPluginCommandEffectDuringASelection(test *testing.T) {
+	session := newPluginSession(test, &recordingRunner{})
+	session.inliner.moveTo(github.SideRight, 17)
+	session.press("V")
+	command, handled := session.inliner.view.Command("checks", "")
+	if !handled {
+		test.Fatal(":checks not taken")
+	}
+	session.pump(command)
+	if diff := cmp.Diff([]string{"end the selection to run :checks"}, session.infos); diff != "" {
+		test.Errorf("notices (-want +got):\n%s", diff)
+	}
+	if session.inliner.view.picker != nil {
+		test.Error("the checks picker opened under the selection")
+	}
+}
+
+// The commands plugins may run work end to end, and an error printed after
+// one is what stays on screen, not the command's notice.
+func TestPluginCommandEffectCopies(test *testing.T) {
+	for _, testCase := range []struct {
+		name       string
+		line       string
+		wantPrefix string
+	}{
+		{"copy-filename", "copy-filename", ""},
+		{"copy-url", ":copy-url", "https://"},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			session := newPluginSession(test, &recordingRunner{effects: []plugins.Effect{
+				{Name: plugins.EffectCommand, Line: testCase.line},
+				{Name: plugins.EffectError, Text: "lint failed"},
+			}})
+			copier := &fakeCopier{}
+			WithClipboard(copier)(session.inliner.view)
+			session.line("summarize")
+			if len(copier.texts) != 1 || copier.texts[0] == "" || !strings.HasPrefix(copier.texts[0], testCase.wantPrefix) {
+				test.Errorf("copied %q, want one text starting %q", copier.texts, testCase.wantPrefix)
+			}
+			if got := session.status(); !strings.HasSuffix(got, "lint failed") {
+				test.Errorf("status = %q, want the error printed last", got)
+			}
+		})
+	}
+}
+
+// :checks run by a plugin opens the checks picker on a pull request that has
+// checks.
+func TestPluginCommandEffectOpensTheChecks(test *testing.T) {
+	session := newPluginSession(test, &recordingRunner{effects: []plugins.Effect{{Name: plugins.EffectCommand, Line: "checks"}}})
+	session.inliner.view.detail.CheckList = testChecks()
+	session.line("summarize")
+	if session.inliner.view.picker == nil || len(session.inliner.view.pickerChecks) != len(testChecks()) {
+		test.Fatalf("picker = %v with %d checks, want the checks picker", session.inliner.view.picker != nil, len(session.inliner.view.pickerChecks))
 	}
 }

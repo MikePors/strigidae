@@ -175,6 +175,13 @@ func (view *View) PullRequestIdentity() (userinterface.PullRequestIdentity, bool
 // Reload implements userinterface.PluginHost: the same reload as refresh.
 func (view *View) Reload() tea.Cmd { return view.load() }
 
+// PluginsMayRun implements userinterface.PluginHost: only the commands whose
+// entry sets pluginsMayRun.
+func (view *View) PluginsMayRun(name string) bool {
+	chosen, ok := view.commandEntry(name)
+	return ok && chosen.pluginsMayRun
+}
+
 // KeepsCommandLine implements userinterface.CommandLineKeeper: ":" opens the
 // command line during a line selection, so a `lines` plugin can use it. With
 // no such plugin configured the selection ignores ":" as it always did.
