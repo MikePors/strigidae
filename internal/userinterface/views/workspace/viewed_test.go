@@ -14,7 +14,7 @@ import (
 )
 
 // viewedHarness loads the test pull request with the given viewed states
-// applied to its files in order.
+// applied to its files in order, and focuses Files for sidebar navigation.
 func viewedHarness(test *testing.T, width, height int, states ...github.ViewedState) *harness {
 	test.Helper()
 	otherHarness := newHarness(test, width, height)
@@ -24,6 +24,7 @@ func viewedHarness(test *testing.T, width, height int, states ...github.ViewedSt
 	}
 	otherHarness.client.SetPullRequest(detail)
 	otherHarness.run(otherHarness.view.Init())
+	otherHarness.press("h")
 	return otherHarness
 }
 

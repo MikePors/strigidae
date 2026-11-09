@@ -114,10 +114,12 @@ func newHarness(test *testing.T, width, height int) *harness {
 	return otherHarness
 }
 
-// loaded returns a harness whose Init results have been delivered.
+// loaded returns a harness whose Init results have been delivered, with Files
+// focused for tests that navigate the sidebar. Use newHarness to test startup.
 func loaded(test *testing.T, width, height int) *harness {
 	otherHarness := newHarness(test, width, height)
 	otherHarness.run(otherHarness.view.Init())
+	otherHarness.press("h")
 	return otherHarness
 }
 
