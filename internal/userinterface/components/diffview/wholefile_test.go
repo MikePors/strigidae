@@ -229,11 +229,35 @@ func TestHighlightFileStopsWhenTheBudgetRunsOut(test *testing.T) {
 		clock = clock.Add(time.Second)
 		return clock
 	}
-	spans, err := highlightFile("x.go", []byte(builder.String()), now)
+	spans, err := highlightFile("x.go", []byte(builder.String()), now, lexerForFile)
 	if !errors.Is(err, ErrLexTimeout) {
 		test.Fatalf("err = %v, want ErrLexTimeout", err)
 	}
 	if spans != nil {
 		test.Error("spans of part of the file were returned")
+	}
+}
+
+// panickingLexer is a lexer whose tokens panic as they are read, as the YANG
+// lexer's did on a "/*" inside a block comment. Only Tokenise is used.
+type panickingLexer struct{ chroma.Lexer }
+
+// Tokenise returns an iterator that panics on its first token.
+func (panickingLexer) Tokenise(*chroma.TokeniseOptions, string) (chroma.Iterator, error) {
+	return func() chroma.Token { panic("unknown state comment") }, nil
+}
+
+// TestHighlightFileRecoversALexerPanic: a lexer that panics fails the file
+// with ErrLexPanic rather than ending strig. lexerguard keeps the known ones
+// out of the registry, so a test lexer stands in for them.
+func TestHighlightFileRecoversALexerPanic(test *testing.T) {
+	test.Parallel()
+	pickPanicking := func(string, string) chroma.Lexer { return panickingLexer{} }
+	spans, err := highlightFile("m.yang", []byte("/* a /* b */\n"), time.Now, pickPanicking)
+	if !errors.Is(err, ErrLexPanic) {
+		test.Fatalf("err = %v, want ErrLexPanic", err)
+	}
+	if spans != nil {
+		test.Error("spans were returned after a panic")
 	}
 }
