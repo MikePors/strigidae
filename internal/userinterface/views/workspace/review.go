@@ -86,6 +86,18 @@ type (
 		body       string
 		status     github.ReviewStatus
 	}
+	// reviewRecheckedMessage is the status read after the yes: asked is what
+	// the user confirmed, fresh is what GitHub has now.
+	reviewRecheckedMessage struct {
+		flow       *reviewFlow
+		repository github.Repository
+		number     int
+		event      github.ReviewEvent
+		body       string
+		asked      github.ReviewStatus
+		fresh      github.ReviewStatus
+		err        error
+	}
 	reviewSubmittedMessage struct {
 		flow       *reviewFlow
 		repository github.Repository
@@ -161,7 +173,12 @@ func (currentFlow *reviewFlow) update(message tea.Msg, environment reviewEnviron
 			return busy, true
 		}
 		currentFlow.submitting = true
-		return tea.Batch(userinterface.Info("Submitting review…"), currentFlow.submit(environment, message.event, message.body, message.status)), true
+		return tea.Batch(userinterface.Info("Submitting review…"), currentFlow.recheck(environment, message)), true
+	case reviewRecheckedMessage:
+		if !currentFlow.same(environment, message.flow, message.repository, message.number) {
+			return nil, true
+		}
+		return currentFlow.rechecked(message, environment), true
 	case reviewSubmittedMessage:
 		if !currentFlow.same(environment, message.flow, message.repository, message.number) {
 			return nil, true
@@ -296,7 +313,46 @@ func (currentFlow *reviewFlow) confirm(message reviewFreshMessage, environment r
 	return userinterface.Confirm(reviewQuestion(message.event, environment.repository, environment.number, status.Pending), send)
 }
 
-// submit is the command that runs when the user confirms. The commit is the
+// recheck re-reads the review state after the yes, so a review that changed
+// while the question was open is not submitted on the old answer.
+func (currentFlow *reviewFlow) recheck(environment reviewEnvironment, message reviewSendMessage) tea.Cmd {
+	flow := currentFlow
+	return func() tea.Msg {
+		ctx, cancel := environment.timeouts.RequestContext()
+		defer cancel()
+		fresh, err := environment.client.GetReviewStatus(ctx, environment.repository, environment.number)
+		return reviewRecheckedMessage{flow: flow, repository: environment.repository, number: environment.number, event: message.event, body: message.body, asked: message.status, fresh: fresh, err: err}
+	}
+}
+
+// rechecked submits if the state is the one that was confirmed. Otherwise it
+// asks again about the state as it is now, keeping the summary.
+func (currentFlow *reviewFlow) rechecked(message reviewRecheckedMessage, environment reviewEnvironment) tea.Cmd {
+	if message.err != nil {
+		currentFlow.submitting = false
+		return userinterface.Error(terminaltext.SafeError(fmt.Errorf("check review state: %w", message.err)))
+	}
+	if !sameReviewState(message.asked, message.fresh) {
+		currentFlow.submitting = false
+		return currentFlow.confirm(reviewFreshMessage{flow: currentFlow, repository: message.repository, number: message.number, event: message.event, body: message.body, status: message.fresh}, environment)
+	}
+	return currentFlow.submit(environment, message.event, message.body, message.fresh)
+}
+
+// sameReviewState reports whether the review state a question was asked
+// about still holds: the same head, and the same pending review with the same
+// number of comments.
+func sameReviewState(asked, fresh github.ReviewStatus) bool {
+	if asked.PullRequestIdentifier != fresh.PullRequestIdentifier || asked.HeadSHA != fresh.HeadSHA {
+		return false
+	}
+	if asked.Pending == nil || fresh.Pending == nil {
+		return asked.Pending == nil && fresh.Pending == nil
+	}
+	return asked.Pending.Identifier == fresh.Pending.Identifier && asked.Pending.CommentCount == fresh.Pending.CommentCount
+}
+
+// submit is the command that runs once the yes has been rechecked. The commit is the
 // head the diff on screen was loaded for, which confirm has just checked is
 // still the head. On failure it also returns the error itself, so it shows
 // even if the view was left meanwhile.
