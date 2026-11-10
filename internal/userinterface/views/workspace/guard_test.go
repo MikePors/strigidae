@@ -450,8 +450,7 @@ func TestGuardAtReactionPickerChoice(test *testing.T) {
 	}
 }
 
-// noDiff is a diff state as load.go leaves it: a load in flight (nothing parsed
-// yet), or one that failed (too large, nothing parsed).
+// noDiff is a diff state without usable cursor data: loading, failed or unparsed.
 type noDiff struct {
 	name  string
 	apply func(inliner *inliner)
@@ -465,6 +464,10 @@ func noDiffStates() []noDiff {
 		}},
 		{"diff failed", func(inliner *inliner) {
 			inliner.view.diff = DiffState{Err: github.ErrDiffTooLarge}
+			inliner.view.diffPending = false
+		}},
+		{"diff unparsed", func(inliner *inliner) {
+			inliner.view.diff = DiffState{}
 			inliner.view.diffPending = false
 		}},
 	}

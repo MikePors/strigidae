@@ -623,48 +623,50 @@ func TestReactPickerTitleCleansTheAuthor(test *testing.T) {
 }
 
 func TestOverviewReactionUpdatesBeforeReloadAndUsesFreshState(test *testing.T) {
-	for _, commentIndex := range []int{-1, 0} {
-		test.Run(map[bool]string{true: "description", false: "comment"}[commentIndex < 0], func(test *testing.T) {
-			inliner := newInliner(test)
-			detail := testDetail()
-			detail.Comments[0].Identifier = "issue-comment-1"
-			inliner.client.SetPullRequest(detail)
-			inliner.view.detail = &detail
-			inliner.press("h", "g g", "l")
-			inliner.view.diff = DiffState{Err: context.DeadlineExceeded}
-			for _, wantMethod := range []string{fake.MethodAddReaction, fake.MethodRemoveReaction} {
-				inliner.react("")
-				if commentIndex >= 0 {
-					inliner.keyPress(tea.KeyDown)
+	for _, state := range noDiffStates() {
+		for _, commentIndex := range []int{-1, 0} {
+			test.Run(state.name+"/"+map[bool]string{true: "description", false: "comment"}[commentIndex < 0], func(test *testing.T) {
+				inliner := newInliner(test)
+				detail := testDetail()
+				detail.Comments[0].Identifier = "issue-comment-1"
+				inliner.client.SetPullRequest(detail)
+				inliner.view.detail = &detail
+				inliner.press("h", "g g", "l")
+				state.removeDiff(inliner)
+				for _, wantMethod := range []string{fake.MethodAddReaction, fake.MethodRemoveReaction} {
+					inliner.react("")
+					if commentIndex >= 0 {
+						inliner.keyPress(tea.KeyDown)
+					}
+					inliner.keyPress(tea.KeyEnter)
+					if inliner.view.pickerReaction == nil {
+						test.Fatal("no reaction picker")
+					}
+					// Run the write and deliver its result, leaving reload commands unexecuted.
+					command := inliner.view.pickerKey(tea.KeyPressMsg{Code: tea.KeyEnter})
+					result, ok := command().(reactionToggledMessage)
+					if !ok {
+						test.Fatal("write failed")
+					}
+					inliner.view.Update(result)
+					identifier := detail.Identifier
+					if commentIndex >= 0 {
+						identifier = "issue-comment-1"
+					}
+					target, found := inliner.view.resolveCommentTarget(identifier)
+					if !found || (len(target.reactions) > 0) != (wantMethod == fake.MethodAddReaction) {
+						test.Fatalf("immediate reactions = %+v", target.reactions)
+					}
+					calls := inliner.reactionCalls()
+					if calls[len(calls)-1].Method != wantMethod {
+						test.Fatalf("calls = %+v", calls)
+					}
 				}
-				inliner.keyPress(tea.KeyEnter)
-				if inliner.view.pickerReaction == nil {
-					test.Fatal("no reaction picker")
+				if len(detail.Reactions) != 0 || len(detail.Comments[0].Reactions) != 0 {
+					test.Fatal("original snapshot mutated")
 				}
-				// Run the write and deliver its result, leaving reload commands unexecuted.
-				command := inliner.view.pickerKey(tea.KeyPressMsg{Code: tea.KeyEnter})
-				result, ok := command().(reactionToggledMessage)
-				if !ok {
-					test.Fatal("write failed")
-				}
-				inliner.view.Update(result)
-				identifier := detail.Identifier
-				if commentIndex >= 0 {
-					identifier = "issue-comment-1"
-				}
-				target, found := inliner.view.resolveCommentTarget(identifier)
-				if !found || (len(target.reactions) > 0) != (wantMethod == fake.MethodAddReaction) {
-					test.Fatalf("immediate reactions = %+v", target.reactions)
-				}
-				calls := inliner.reactionCalls()
-				if calls[len(calls)-1].Method != wantMethod {
-					test.Fatalf("calls = %+v", calls)
-				}
-			}
-			if len(detail.Reactions) != 0 || len(detail.Comments[0].Reactions) != 0 {
-				test.Fatal("original snapshot mutated")
-			}
-		})
+			})
+		}
 	}
 }
 
