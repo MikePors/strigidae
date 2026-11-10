@@ -123,3 +123,15 @@ func TestJumpRevealEndsOnHidingReconfiguration(test *testing.T) {
 		test.Fatal("hidereviewed reconfiguration did not clear the reveal")
 	}
 }
+
+// TestJumpThreadNearTheEndStopsAtTheLastPage: like the other thread jumps,
+// a thread near the end of the file is not scrolled past the end.
+func TestJumpThreadNearTheEndStopsAtTheLastPage(test *testing.T) {
+	model := threadModel(test, 80, 30)
+	if !model.JumpThread("left") {
+		test.Fatal("JumpThread(left) found nothing")
+	}
+	if want := len(model.rows) - 30; model.CursorRow() <= want || model.Top() != want {
+		test.Errorf("cursor/top = %d/%d, want the cursor below the last full page at top %d", model.CursorRow(), model.Top(), want)
+	}
+}

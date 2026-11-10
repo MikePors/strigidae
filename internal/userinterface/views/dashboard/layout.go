@@ -69,13 +69,31 @@ func (current *tab) follow(lines []line, selectedIndex, selectedLine, height int
 
 // scrollCursor moves the tab's view with place (one of scroll.Window's
 // ScrollCursor methods) so the selected line sits at the top, middle or bottom.
-// The window's cursor is only updated when the tab is drawn, so it is put on
-// the selected line first.
 func (current *tab) scrollCursor(place func(*scroll.Window), height int) {
+	current.placeCursor(height)
+	place(&current.window)
+}
+
+// page scrolls the view count lines and moves the selection count rows
+// (negative: up), as ctrl+d and ctrl+f do, so the view can scroll past the
+// end of the tab. The selection is followed when the tab is drawn.
+func (current *tab) page(count, height int) {
+	current.placeCursor(height)
+	if count < 0 {
+		current.window.ScrollUp(-count)
+	} else {
+		current.window.ScrollDown(count)
+	}
+	current.move(count)
+}
+
+// placeCursor sizes the tab's window to its lines and puts the window's
+// cursor on the selected line, which is otherwise only done when the tab is
+// drawn.
+func (current *tab) placeCursor(height int) {
 	selectedIndex := current.selectedIndex()
 	lines, selectedLine := current.lines(selectedIndex)
 	current.window.SetRows(len(lines))
 	current.window.SetSize(height)
 	current.window.Restore(selectedLine, current.window.Top(), current.window.HorizontalOffset())
-	place(&current.window)
 }

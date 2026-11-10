@@ -257,3 +257,17 @@ func TestWrapNoNewlineMarker(test *testing.T) {
 		test.Errorf("screen (-want +got):\n%s", diff)
 	}
 }
+
+// TestNoWrapAtTheBottomFillsTheView: turning wrapping off at the last full
+// page of a wrapped file shows the rows above, not empty space.
+func TestNoWrapAtTheBottomFillsTheView(test *testing.T) {
+	model := wrapModel(test, 4)
+	model.GotoBottom()
+	if model.Top() != 3 {
+		test.Fatalf("setup: top = %d, want 3", model.Top())
+	}
+	model.SetWrap(false)
+	if model.Top() != 0 {
+		test.Errorf("top = %d after nowrap, want 0 (all four rows fit)", model.Top())
+	}
+}

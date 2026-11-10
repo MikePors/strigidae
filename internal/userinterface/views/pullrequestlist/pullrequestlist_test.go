@@ -498,8 +498,8 @@ func TestPagingKeysAtTheEnds(test *testing.T) {
 	}{
 		{"ctrl+u at top", []string{"g g"}, "ctrl+u", 0, 0},
 		{"ctrl+b at top", []string{"g g"}, "ctrl+b", 0, 0},
-		{"ctrl+d at bottom", []string{"G"}, "ctrl+d", 24, 14},
-		{"ctrl+f at bottom", []string{"G"}, "ctrl+f", 24, 14},
+		{"ctrl+d at bottom scrolls past the end", []string{"G"}, "ctrl+d", 24, 19},
+		{"ctrl+f at bottom puts the last row at the top", []string{"G"}, "ctrl+f", 24, 24},
 		{"ctrl+d from top", []string{"g g"}, "ctrl+d", 5, 5},
 		{"ctrl+b from bottom", []string{"G"}, "ctrl+b", 13, 3},
 		{"ctrl+u from bottom", []string{"G"}, "ctrl+u", 19, 9},

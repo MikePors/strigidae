@@ -28,11 +28,26 @@ func TestVertical(test *testing.T) {
 		{"half page up clamps", 20, 6, func(window *Window) { window.HalfPageUp() }, 0, 0},
 		{"page down", 20, 6, func(window *Window) { window.PageDown() }, 6, 6},
 		{"page down then up", 20, 6, func(window *Window) { window.PageDown(); window.PageUp() }, 0, 0},
-		{"page down past end", 20, 6, func(window *Window) { window.PageDown(); window.PageDown(); window.PageDown(); window.PageDown() }, 19, 14},
+		{"page down past end puts the last row at the top", 20, 6, func(window *Window) { window.PageDown(); window.PageDown(); window.PageDown(); window.PageDown() }, 19, 19},
+		{"half page down past end stops with the last row at the top", 20, 6, func(window *Window) {
+			for range 10 {
+				window.HalfPageDown()
+			}
+		}, 19, 19},
+		{"half page down from the bottom", 20, 6, func(window *Window) { window.GotoBottom(); window.HalfPageDown() }, 19, 17},
+		{"half page up from past the end", 20, 6, func(window *Window) {
+			window.PageDown()
+			window.PageDown()
+			window.PageDown()
+			window.PageDown()
+			window.HalfPageUp()
+		}, 16, 16},
 		{"scroll pulls cursor along", 20, 6, func(window *Window) { window.ScrollDown(4) }, 4, 4},
 		{"scroll keeps visible cursor", 20, 6, func(window *Window) { window.Down(5); window.ScrollDown(2) }, 5, 2},
 		{"scroll up pulls cursor along", 20, 6, func(window *Window) { window.GotoBottom(); window.ScrollUp(3) }, 16, 11},
-		{"scroll down clamps", 20, 6, func(window *Window) { window.ScrollDown(1000) }, 14, 14},
+		{"scroll down stops with the last row at the top", 20, 6, func(window *Window) { window.ScrollDown(1000) }, 19, 19},
+		{"down does not scroll past the end", 20, 6, func(window *Window) { window.Down(1000); window.Down(1) }, 19, 14},
+		{"goto bottom keeps a view scrolled past the end", 20, 6, func(window *Window) { window.ScrollDown(17); window.GotoBottom() }, 19, 17},
 		{"scroll up clamps", 20, 6, func(window *Window) { window.Down(8); window.ScrollUp(1000) }, 5, 0},
 		{"jump", 20, 6, func(window *Window) { window.JumpTo(10) }, 10, 10},
 		{"jump near end clamps top", 20, 6, func(window *Window) { window.JumpTo(18) }, 18, 14},
@@ -48,8 +63,9 @@ func TestVertical(test *testing.T) {
 		{"height zero", 10, 0, func(window *Window) { window.Down(4) }, 4, 0},
 		{"height zero half page", 10, 0, func(window *Window) { window.HalfPageDown() }, 1, 1},
 		{"height zero scroll", 10, 0, func(window *Window) { window.ScrollDown(3) }, 3, 3},
-		{"height bigger than rows", 4, 10, func(window *Window) { window.Down(2); window.PageDown() }, 3, 0},
-		{"height bigger than rows scroll", 4, 10, func(window *Window) { window.Down(2); window.ScrollDown(5) }, 2, 0},
+		{"height bigger than rows", 4, 10, func(window *Window) { window.Down(2); window.PageDown() }, 3, 3},
+		{"height bigger than rows scroll", 4, 10, func(window *Window) { window.Down(2); window.ScrollDown(5) }, 3, 3},
+		{"height bigger than rows down", 4, 10, func(window *Window) { window.GotoBottom() }, 3, 0},
 		{"one row", 1, 3, func(window *Window) { window.Down(5); window.Up(9); window.GotoBottom() }, 0, 0},
 	}
 	for _, testCase := range tests {
@@ -152,7 +168,7 @@ func TestResetAndRestore(test *testing.T) {
 
 func TestAccessors(test *testing.T) {
 	window := newWindow(20, 6, 100, 40)
-	if window.Height() != 6 || window.MaximumTop() != 14 || window.MaximumHorizontalOffset() != 60 {
+	if window.Height() != 6 || window.MaximumTop() != 19 || window.MaximumHorizontalOffset() != 60 {
 		test.Errorf("Height/MaximumTop/MaximumHorizontalOffset = %d/%d/%d", window.Height(), window.MaximumTop(), window.MaximumHorizontalOffset())
 	}
 	var zero Window
@@ -179,5 +195,99 @@ func TestGotoRow(test *testing.T) {
 	window.GotoRow(99)
 	if window.Cursor() != 49 {
 		test.Errorf("cursor = %d, want 49 (clamped)", window.Cursor())
+	}
+}
+
+// TestPastTheEnd: a view scrolled past the end stays there through setters
+// that keep the rows, and comes back to the last full page when the rows
+// drop or a position is restored.
+func TestPastTheEnd(test *testing.T) {
+	pastTheEnd := func() *Window {
+		window := newWindow(20, 6, 100, 40)
+		window.GotoBottom()
+		window.ScrollCursorTop()
+		return window
+	}
+	tests := []struct {
+		name                string
+		do                  func(window *Window)
+		wantCursor, wantTop int
+	}{
+		{"scrolled", func(*Window) {}, 19, 19},
+		{"same rows again", func(window *Window) { window.SetRows(20) }, 19, 19},
+		{"more rows", func(window *Window) { window.SetRows(30) }, 19, 19},
+		{"a new height", func(window *Window) { window.SetSize(8) }, 19, 19},
+		{"new widths", func(window *Window) { window.SetWidths(80, 40) }, 19, 19},
+		{"new row heights", func(window *Window) { window.SetRowHeight(func(int) int { return 1 }) }, 19, 19},
+		{"fewer rows", func(window *Window) { window.SetRows(18) }, 17, 12},
+		{"restore keeps it past the end", func(window *Window) { window.Restore(19, 19, 0) }, 19, 19},
+		{"restore after a reset", func(window *Window) { window.Reset(); window.Restore(19, 19, 0) }, 19, 14},
+		{"jump", func(window *Window) { window.JumpTo(19) }, 19, 14},
+		{"a taller view", func(window *Window) { window.SetSize(40) }, 19, 19},
+		{"a height of 0 and back", func(window *Window) { window.SetSize(0); window.SetSize(6) }, 19, 19},
+		{"cursor up keeps it past the end", func(window *Window) { window.Up(2); window.SetSize(8) }, 17, 17},
+		{"scroll up", func(window *Window) { window.ScrollUp(2) }, 19, 17},
+		{"scroll back within the last page, then a taller view", func(window *Window) { window.ScrollUp(5); window.SetSize(10) }, 19, 10},
+	}
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			window := pastTheEnd()
+			testCase.do(window)
+			if window.Cursor() != testCase.wantCursor || window.Top() != testCase.wantTop {
+				test.Errorf("cursor/top = %d/%d, want %d/%d", window.Cursor(), window.Top(), testCase.wantCursor, testCase.wantTop)
+			}
+		})
+	}
+}
+
+// TestLastPageFollowsResize: a view on the last full page, not past it,
+// stays on the last full page when the view grows or the rows get shorter,
+// so the rows above come into view instead of empty space.
+func TestLastPageFollowsResize(test *testing.T) {
+	tests := []struct {
+		name    string
+		rows    int
+		height  int
+		heights func(row int) int
+		do      func(window *Window)
+		wantTop int
+	}{
+		{"a taller view", 30, 10, nil, func(window *Window) { window.SetSize(40) }, 0},
+		{"a little taller", 30, 10, nil, func(window *Window) { window.SetSize(12) }, 18},
+		{"shorter rows", 20, 10, func(int) int { return 2 }, func(window *Window) { window.SetRowHeight(nil) }, 10},
+		{"more rows keep the top", 30, 10, nil, func(window *Window) { window.SetRows(40) }, 20},
+		{"restore below the last page", 30, 10, nil, func(window *Window) { window.Restore(29, 29, 0) }, 20},
+	}
+	for _, testCase := range tests {
+		test.Run(testCase.name, func(test *testing.T) {
+			window := newWindow(testCase.rows, testCase.height, 0, 0)
+			window.SetRowHeight(testCase.heights)
+			window.GotoBottom()
+			testCase.do(window)
+			if window.Top() != testCase.wantTop {
+				test.Errorf("top = %d, want %d", window.Top(), testCase.wantTop)
+			}
+		})
+	}
+}
+
+// TestLastPageFollowsLiveRowHeights: a host passes a row-height callback that
+// reads its own state, so the heights change before SetRowHeight is called
+// (the diff pane's :set nowrap). A view on the last full page still follows.
+func TestLastPageFollowsLiveRowHeights(test *testing.T) {
+	rowHeight := 2
+	window := newWindow(20, 10, 0, 0)
+	heights := func(int) int { return rowHeight }
+	window.SetRowHeight(heights)
+	window.GotoBottom()
+	if window.Top() != 15 {
+		test.Fatalf("setup: top = %d, want 15", window.Top())
+	}
+	rowHeight = 1
+	window.SetRows(20)
+	window.SetSize(10)
+	window.SetRowHeight(heights)
+	if window.Top() != 10 {
+		test.Errorf("top = %d, want 10 (the new last full page)", window.Top())
 	}
 }

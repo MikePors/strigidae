@@ -24,7 +24,14 @@ func TestRowHeights(test *testing.T) {
 		{"page down moves a screen of rows", 6, []int{2, 2, 2, 2, 2, 2, 2, 2, 2, 2}, func(window *Window) { window.PageDown() }, 3, 3},
 		{"scrolling one screen row passes a tall top row", 4, []int{3, 1, 1, 1, 1, 1}, func(window *Window) { window.ScrollDown(1) }, 1, 1},
 		{"scrolling pulls the cursor to the first visible row", 4, []int{1, 3, 1, 1, 1, 1}, func(window *Window) { window.ScrollDown(1) }, 1, 1},
-		{"z t is limited by the last page", 4, []int{1, 1, 1, 2, 1}, func(window *Window) { window.Down(3); window.ScrollCursorTop() }, 3, 2},
+		{"z t scrolls past the end", 4, []int{1, 1, 1, 2, 1}, func(window *Window) { window.Down(3); window.ScrollCursorTop() }, 3, 3},
+		{"z t on the last row puts it at the top", 4, []int{1, 1, 1, 2, 1}, func(window *Window) { window.GotoBottom(); window.ScrollCursorTop() }, 4, 4},
+		{"page down stops with the last row at the top", 4, []int{1, 3, 1, 1, 2, 1, 1, 1}, func(window *Window) {
+			for range 10 {
+				window.PageDown()
+			}
+		}, 7, 7},
+		{"jumping near the end stops at the last page", 4, []int{1, 3, 1, 1, 2, 1, 1, 1}, func(window *Window) { window.JumpTo(6) }, 6, 5},
 		{"z b puts the whole cursor row at the bottom", 4, []int{1, 1, 1, 2, 1}, func(window *Window) { window.Down(3); window.ScrollCursorBottom() }, 3, 1},
 		{"z z centres the cursor row", 4, []int{1, 1, 1, 2, 1}, func(window *Window) { window.Down(3); window.ScrollCursorMiddle() }, 3, 2},
 		{"z z centres a tall cursor row by its height", 7, []int{1, 1, 1, 1, 3, 1, 1, 1, 1}, func(window *Window) { window.Down(4); window.ScrollCursorMiddle() }, 4, 2},
@@ -42,8 +49,11 @@ func TestRowHeights(test *testing.T) {
 
 func TestRowHeightBounds(test *testing.T) {
 	window := heightWindow(4, 1, 3, 1, 1, 2, 1, 1, 1)
-	if got := window.MaximumTop(); got != 5 {
-		test.Errorf("MaximumTop = %d, want 5", got)
+	if got := window.MaximumTop(); got != 7 {
+		test.Errorf("MaximumTop = %d, want 7 (the last row)", got)
+	}
+	if got := window.lastPageTop(); got != 5 {
+		test.Errorf("lastPageTop = %d, want 5", got)
 	}
 	if got := window.lastVisible(window.Top()); got != 1 {
 		test.Errorf("lastVisible = %d, want 1 (rows 0 and 1 fill 4 screen rows)", got)
@@ -54,8 +64,8 @@ func TestRowHeightBounds(test *testing.T) {
 		test.Errorf("lastVisible on a row taller than the view = %d, want the row itself", got)
 	}
 	tall.SetRowHeight(nil)
-	if got := tall.MaximumTop(); got != 0 {
-		test.Errorf("after SetRowHeight(nil), MaximumTop = %d, want 0 (three rows fit)", got)
+	if got := tall.lastPageTop(); got != 0 {
+		test.Errorf("after SetRowHeight(nil), lastPageTop = %d, want 0 (three rows fit)", got)
 	}
 }
 
