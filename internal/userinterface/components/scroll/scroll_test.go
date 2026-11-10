@@ -220,9 +220,14 @@ func TestPastTheEnd(test *testing.T) {
 		{"new widths", func(window *Window) { window.SetWidths(80, 40) }, 19, 19},
 		{"new row heights", func(window *Window) { window.SetRowHeight(func(int) int { return 1 }) }, 19, 19},
 		{"fewer rows", func(window *Window) { window.SetRows(18) }, 17, 12},
-		{"restore", func(window *Window) { window.Restore(19, 19, 0) }, 19, 14},
+		{"restore keeps it past the end", func(window *Window) { window.Restore(19, 19, 0) }, 19, 19},
+		{"restore after a reset", func(window *Window) { window.Reset(); window.Restore(19, 19, 0) }, 19, 14},
+		{"jump", func(window *Window) { window.JumpTo(19) }, 19, 14},
 		{"a taller view", func(window *Window) { window.SetSize(40) }, 19, 19},
+		{"a height of 0 and back", func(window *Window) { window.SetSize(0); window.SetSize(6) }, 19, 19},
+		{"cursor up keeps it past the end", func(window *Window) { window.Up(2); window.SetSize(8) }, 17, 17},
 		{"scroll up", func(window *Window) { window.ScrollUp(2) }, 19, 17},
+		{"scroll back within the last page, then a taller view", func(window *Window) { window.ScrollUp(5); window.SetSize(10) }, 19, 10},
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
@@ -251,6 +256,7 @@ func TestLastPageFollowsResize(test *testing.T) {
 		{"a little taller", 30, 10, nil, func(window *Window) { window.SetSize(12) }, 18},
 		{"shorter rows", 20, 10, func(int) int { return 2 }, func(window *Window) { window.SetRowHeight(nil) }, 10},
 		{"more rows keep the top", 30, 10, nil, func(window *Window) { window.SetRows(40) }, 20},
+		{"restore below the last page", 30, 10, nil, func(window *Window) { window.Restore(29, 29, 0) }, 20},
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
@@ -262,5 +268,26 @@ func TestLastPageFollowsResize(test *testing.T) {
 				test.Errorf("top = %d, want %d", window.Top(), testCase.wantTop)
 			}
 		})
+	}
+}
+
+// TestLastPageFollowsLiveRowHeights: a host passes a row-height callback that
+// reads its own state, so the heights change before SetRowHeight is called
+// (the diff pane's :set nowrap). A view on the last full page still follows.
+func TestLastPageFollowsLiveRowHeights(test *testing.T) {
+	rowHeight := 2
+	window := newWindow(20, 10, 0, 0)
+	heights := func(int) int { return rowHeight }
+	window.SetRowHeight(heights)
+	window.GotoBottom()
+	if window.Top() != 15 {
+		test.Fatalf("setup: top = %d, want 15", window.Top())
+	}
+	rowHeight = 1
+	window.SetRows(20)
+	window.SetSize(10)
+	window.SetRowHeight(heights)
+	if window.Top() != 10 {
+		test.Errorf("top = %d, want 10 (the new last full page)", window.Top())
 	}
 }

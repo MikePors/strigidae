@@ -362,13 +362,13 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 			current.selectIndex(current.total() - 1)
 		}
 	case key.Matches(message, view.globalKeys.HalfDown):
-		current.move(message.Repeat() * max(view.listHeight()/2, 1))
+		current.page(message.Repeat()*max(view.listHeight()/2, 1), view.listHeight())
 	case key.Matches(message, view.globalKeys.HalfUp):
-		current.move(-message.Repeat() * max(view.listHeight()/2, 1))
+		current.page(-message.Repeat()*max(view.listHeight()/2, 1), view.listHeight())
 	case key.Matches(message, view.globalKeys.PageDown):
-		current.move(message.Repeat() * max(view.listHeight(), 1))
+		current.page(message.Repeat()*max(view.listHeight(), 1), view.listHeight())
 	case key.Matches(message, view.globalKeys.PageUp):
-		current.move(-message.Repeat() * max(view.listHeight(), 1))
+		current.page(-message.Repeat()*max(view.listHeight(), 1), view.listHeight())
 	case key.Matches(message, view.globalKeys.ScrollCursorTop):
 		current.scrollCursor((*scroll.Window).ScrollCursorTop, view.listHeight())
 	case key.Matches(message, view.globalKeys.ScrollCursorMiddle):
