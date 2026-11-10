@@ -14,9 +14,9 @@ import (
 // hostileText is what makes the real lexers hang or panic.
 var hostileText = []string{"/* a", "/* a /* b */", "/* a /* b"}
 
-// replacements maps each listed lexer to a file name its original filename
+// exampleFileNames maps each listed lexer to a file name its original filename
 // globs matched.
-var replacements = map[string]string{
+var exampleFileNames = map[string]string{
 	"JSONata": "x.jsonata",
 	"Jungle":  "x.jungle",
 	"YANG":    "x.yang",
@@ -29,7 +29,7 @@ func TestListedLexersWereRegistered(test *testing.T) {
 	if difference := cmp.Diff(slices.Sorted(slices.Values(Names())), names); difference != "" {
 		test.Errorf("replaced names (-listed +replaced):\n%s", difference)
 	}
-	if len(Names()) != len(replacements) {
+	if len(Names()) != len(exampleFileNames) {
 		test.Fatalf("Names() = %v, want the entries of the test's table", Names())
 	}
 	for _, name := range Names() {
@@ -41,7 +41,7 @@ func TestListedLexersWereRegistered(test *testing.T) {
 
 func TestListedLexersArePlainText(test *testing.T) {
 	for _, name := range Names() {
-		fileName, ok := replacements[name]
+		fileName, ok := exampleFileNames[name]
 		if !ok {
 			test.Fatalf("no example file name for %q", name)
 		}

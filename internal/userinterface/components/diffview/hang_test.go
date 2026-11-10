@@ -89,20 +89,40 @@ func TestBrokenLexersAreCountedBroken(test *testing.T) {
 }
 
 // TestMarkdownFenceWithBrokenLexerRenders: a Markdown file whose fence names
-// a lexer that used to hang or panic is drawn, with its text intact.
+// a lexer that used to hang or panic is drawn, with its text intact. Drawing
+// runs on its own goroutine, so a lexer that hangs fails the test rather than
+// blocking it; the first hang ends the test, as every later case would hang
+// too.
 func TestMarkdownFenceWithBrokenLexerRenders(test *testing.T) {
+	type outcome struct {
+		spans     [][]Span
+		recovered any
+	}
 	for _, tag := range []string{"yang", "YANG", "jsonata", "jungle"} {
 		for _, text := range []string{"/* a /* b", "/* a /* b */", "/* a"} {
-			test.Run(tag+" "+text, func(test *testing.T) {
-				lines := []codeLine{{diff.Add, "```" + tag}, {diff.Add, text}, {diff.Add, "```"}}
-				got := rowSpans(test, hunkFile("README.md", lines))
-				if len(got) != len(lines) {
-					test.Fatalf("%d rows, want %d", len(got), len(lines))
+			lines := []codeLine{{diff.Add, "```" + tag}, {diff.Add, text}, {diff.Add, "```"}}
+			drawn := make(chan outcome, 1)
+			go func() {
+				var result outcome
+				defer func() {
+					result.recovered = recover()
+					drawn <- result
+				}()
+				result.spans = rowSpans(test, hunkFile("README.md", lines))
+			}()
+			select {
+			case result := <-drawn:
+				switch {
+				case result.recovered != nil:
+					test.Errorf("%s fence holding %q: drawing panicked: %v", tag, text, result.recovered)
+				case len(result.spans) != len(lines):
+					test.Errorf("%s fence holding %q: %d rows, want %d", tag, text, len(result.spans), len(lines))
+				case joined(result.spans[1]) != text:
+					test.Errorf("%s fence holding %q: fence line reads %q", tag, text, joined(result.spans[1]))
 				}
-				if joined(got[1]) != text {
-					test.Errorf("fence line reads %q, want %q", joined(got[1]), text)
-				}
-			})
+			case <-time.After(sweepTimeout):
+				test.Fatalf("%s fence holding %q: drawing did not finish within %v", tag, text, sweepTimeout)
+			}
 		}
 	}
 }
