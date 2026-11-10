@@ -41,8 +41,8 @@ var (
 // The language is picked as the Highlighter picks it: by path, else by the
 // shebang on the text's first line, never a broken lexer. Lexing that takes
 // longer than fileBudget fails with ErrLexTimeout rather than give part of the
-// file, so the rows keep their per-hunk colours. A lexer that panics (a broken
-// one reached through a Markdown code fence, #277) fails with ErrLexPanic
+// file, so the rows keep their per-hunk colours. A lexer that panics
+// (none should: lexerguard replaces the known ones) fails with ErrLexPanic
 // rather than end strig, which a panic in a tea.Cmd would. It shares nothing with a
 // Highlighter and touches neither the Chroma style registry nor Glamour, so it
 // may run in a tea.Cmd.

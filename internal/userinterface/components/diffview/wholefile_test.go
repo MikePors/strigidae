@@ -142,8 +142,8 @@ func TestHighlightFile(test *testing.T) {
 		// These lexers hang or panic on this text; they are never picked.
 		{name: "lexer that hangs", path: "q.jsonata", contents: "/* a /* b\nc\n", wantErr: ErrNoLanguage},
 		{name: "lexer that panics", path: "m.yang", contents: "/* a /* b */\nc\n", wantErr: ErrNoLanguage},
-		// A Markdown fence reaches a broken lexer by name.
-		{name: "lexer that panics inside a fence", path: "notes.md", contents: "# t\n\n```yang\n/* a /* b */\n```\n", wantErr: ErrLexPanic},
+		// A Markdown fence names a broken lexer; lexerguard made it plain text.
+		{name: "broken lexer named by a fence", path: "notes.md", contents: "# t\n\n```yang\n/* a /* b */\n```\n", lines: []string{"# t", "", "```yang", "/* a /* b */", "```", ""}},
 		{name: "binary", path: "x.go", contents: "a\x00b", wantErr: ErrFileBinary},
 		{name: "too large", path: "x.go", contents: strings.Repeat("x", MaximumFileSize+1), wantErr: ErrFileTooLarge},
 	}

@@ -12,11 +12,12 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/MikePors/strigidae/internal/diff"
+	"github.com/MikePors/strigidae/internal/userinterface/lexerguard"
 )
 
 // hostileLines are one-liners that leave a construct open: a comment, a
 // string, a heredoc, an escape.
-var hostileLines = []string{"/* a", `"a`, "<<EOF", `\`}
+var hostileLines = []string{"/* a", `"a`, "<<EOF", `\`, "/* a /* b */", "/* a /* b"}
 
 // sweepTimeout is how long all lexers together may take on hostileLines
 // before the ones still running count as hanging. Every finite lexer takes
@@ -25,8 +26,8 @@ var hostileLines = []string{"/* a", `"a`, "<<EOF", `\`}
 const sweepTimeout = 10 * time.Second
 
 // TestNoRegisteredLexerIsBroken lexes the hostile one-liners, alone and as a
-// block of two, with every lexer Chroma registers except those broken lists,
-// and fails if one panics or does not finish. A lexer that hangs is left
+// block of two, with every lexer Chroma registers (the broken
+// ones are plain text by then, see lexerguard), and fails if one panics or does not finish. A lexer that hangs is left
 // spinning until the test binary exits: Go cannot stop it.
 func TestNoRegisteredLexerIsBroken(test *testing.T) {
 	type run struct {
@@ -35,9 +36,6 @@ func TestNoRegisteredLexerIsBroken(test *testing.T) {
 	}
 	var runs []run
 	for _, lexer := range lexers.GlobalLexerRegistry.Lexers {
-		if broken(lexer) {
-			continue
-		}
 		current := run{name: lexer.Config().Name, finished: make(chan any, 1)}
 		runs = append(runs, current)
 		go func() {
@@ -62,7 +60,7 @@ func TestNoRegisteredLexerIsBroken(test *testing.T) {
 			case recovered := <-current.finished:
 				reportPanic(test, current.name, recovered)
 			default:
-				test.Errorf("lexer %q did not finish the hostile lines within %v; add it to broken and report it to Chroma", current.name, sweepTimeout)
+				test.Errorf("lexer %q did not finish the hostile lines within %v; add it to lexerguard and report it to Chroma", current.name, sweepTimeout)
 			}
 		}
 	}
@@ -72,17 +70,43 @@ func TestNoRegisteredLexerIsBroken(test *testing.T) {
 func reportPanic(test *testing.T, name string, recovered any) {
 	test.Helper()
 	if recovered != nil {
-		test.Errorf("lexer %q panicked on the hostile lines: %v; add it to broken and report it to Chroma", name, recovered)
+		test.Errorf("lexer %q panicked on the hostile lines: %v; add it to lexerguard and report it to Chroma", name, recovered)
 	}
 }
 
-// TestBrokenLexersAreRegistered keeps the broken list honest: each name is
-// still a registered lexer, so a rename in Chroma cannot silently let it run.
-func TestBrokenLexersAreRegistered(test *testing.T) {
-	for _, name := range []string{"JSONata", "Jungle", "YANG"} {
+// TestBrokenLexersAreReplaced: each name lexerguard lists resolves to a
+// lexer that diffview counts as broken, and lexing the hostile lines with it
+// returns the text intact.
+func TestBrokenLexersAreReplaced(test *testing.T) {
+	for _, name := range lexerguard.Names() {
 		lexer := lexers.Get(name)
 		if lexer == nil || lexer.Config().Name != name || !broken(lexer) {
-			test.Errorf("lexer %q is not registered under that name or not listed in broken", name)
+			test.Errorf("lexer %q is not registered under that name or not listed as broken", name)
+			continue
+		}
+		for _, line := range hostileLines {
+			if got := joined(lexLine(lexer, line)); got != line {
+				test.Errorf("%s: line %q lexes to %q", name, line, got)
+			}
+		}
+	}
+}
+
+// TestMarkdownFenceWithBrokenLexerRenders: a Markdown file whose fence names
+// a lexer that used to hang or panic is drawn, with its text intact.
+func TestMarkdownFenceWithBrokenLexerRenders(test *testing.T) {
+	for _, tag := range []string{"yang", "YANG", "jsonata", "jungle"} {
+		for _, text := range []string{"/* a /* b", "/* a /* b */", "/* a"} {
+			test.Run(tag+" "+text, func(test *testing.T) {
+				lines := []codeLine{{diff.Add, "```" + tag}, {diff.Add, text}, {diff.Add, "```"}}
+				got := rowSpans(test, hunkFile("README.md", lines))
+				if len(got) != len(lines) {
+					test.Fatalf("%d rows, want %d", len(got), len(lines))
+				}
+				if joined(got[1]) != text {
+					test.Errorf("fence line reads %q, want %q", joined(got[1]), text)
+				}
+			})
 		}
 	}
 }

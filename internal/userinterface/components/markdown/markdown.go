@@ -7,6 +7,9 @@ import (
 
 	"charm.land/glamour/v2"
 
+	// Imported for its init: Glamour looks fence languages up in Chroma's
+	// registry, and the broken lexers must be replaced before that.
+	_ "github.com/MikePors/strigidae/internal/userinterface/lexerguard"
 	"github.com/MikePors/strigidae/internal/userinterface/terminaltext"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
