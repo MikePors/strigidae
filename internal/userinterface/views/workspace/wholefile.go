@@ -34,7 +34,7 @@ const spanOverhead = 32
 // WholeFiles colours a modified, renamed or copied file from its whole text
 // on each side rather than hunk by hunk, so a hunk that starts inside a
 // comment or string is coloured right. It holds the reader and the spans of
-// every side read so far, by path and blob, so they last as long as the
+// every side read so far, by repository, path and blob, so they last as long as the
 // value: a view that opens workspaces keeps one for the session. It is used
 // on the UI goroutine only; the reading and lexing happen in a tea.Cmd.
 type WholeFiles struct {
@@ -220,7 +220,10 @@ func readAPIBlobs(timeouts userinterface.Timeouts, client github.Client, reposit
 // read's fetch); a second one is a failure of this view only, so a timeout
 // that always expires, or a disk always slower than it, cannot start reads
 // without end. A failure that may pass (anything but lastingFailure) is kept
-// in the view, not in the cache shared by the session.
+// in the view, not in the cache shared by the session, until the user
+// refreshes (retryWholeFiles) or reopens the pull request. A failure of the
+// whole request is kept for the view only, even one that looks lasting such
+// as a whole-call ErrNotFound: it says nothing about the blob.
 func (view *View) wholeFileRead(message wholeFileMessage) {
 	for _, result := range message.results {
 		delete(view.wholeFilePending, result.key)
@@ -238,7 +241,7 @@ func (view *View) wholeFileRead(message wholeFileMessage) {
 				continue
 			}
 			if result.requestFailed || !lastingFailure(result.err) {
-				// Kept for this view only: reopening the pull request tries again.
+				// Kept for this view only: refreshing or reopening the pull request tries again.
 				if view.wholeFileFailed == nil {
 					view.wholeFileFailed = map[wholeFileKey]bool{}
 				}
@@ -248,6 +251,14 @@ func (view *View) wholeFileRead(message wholeFileMessage) {
 		}
 		view.wholeFiles.keep(result.key, result.lines)
 	}
+}
+
+// retryWholeFiles forgets the failures this view kept for the user's refresh,
+// so the shown file's sides are asked for again. Reads in flight stay pending,
+// and the lasting failures in the shared cache stay.
+func (view *View) retryWholeFiles() {
+	clear(view.wholeFileFailed)
+	clear(view.wholeFileRetried)
 }
 
 // lastingFailure reports whether err will happen again for the same blob, so

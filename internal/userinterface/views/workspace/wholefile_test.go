@@ -473,7 +473,10 @@ type shortClient struct{ *fake.Client }
 
 func (client shortClient) BlobTexts(ctx context.Context, repository github.Repository, identifiers []string) ([]github.BlobText, error) {
 	texts, err := client.Client.BlobTexts(ctx, repository, identifiers)
-	return texts[:len(texts)-1], err
+	if err != nil || len(texts) == 0 {
+		return texts, err
+	}
+	return texts[:len(texts)-1], nil
 }
 
 func TestWholeFileWrongNumberOfAnswersKeepsPerHunkColours(test *testing.T) {
@@ -542,5 +545,25 @@ func TestWholeFileLastingFailureIsKeptPerRepository(test *testing.T) {
 	forkHarness.press("}")
 	if diff := cmp.Diff([]string{"LEFT:1111111", "RIGHT:2222222"}, pane.order); diff != "" {
 		test.Errorf("sides given in the other repository (-want +got):\n%s", diff)
+	}
+}
+
+func TestWholeFileRefreshAsksAgainAfterATransientFailure(test *testing.T) {
+	testHarness, pane := newWholeFileHarnessFor(test, nil, nil, nil)
+	testHarness.client.SetBlobText(testRepository, "1111111", "package x\n\n/* opened above\nstill comment\nclosed */\nvar a = 1\n")
+	testHarness.client.SetBlobText(testRepository, "2222222", "package x\n\n/* opened above\nstill comment\nclosed */\nvar b = 2\n")
+	testHarness.client.SetError(fake.MethodBlobTexts, errors.New("bad gateway"))
+	testHarness.press("}")
+	if len(blobTextCalls(testHarness.client)) != 1 || len(pane.order) != 0 {
+		test.Fatalf("calls = %v, sides given = %v; want one failed call", blobTextCalls(testHarness.client), pane.order)
+	}
+
+	testHarness.client.SetError(fake.MethodBlobTexts, nil)
+	testHarness.press("R")
+	if len(blobTextCalls(testHarness.client)) != 2 {
+		test.Errorf("calls = %v, want the refresh to ask again", blobTextCalls(testHarness.client))
+	}
+	if diff := cmp.Diff([]string{"LEFT:1111111", "RIGHT:2222222"}, pane.order); diff != "" {
+		test.Errorf("sides given after the refresh (-want +got):\n%s", diff)
 	}
 }
