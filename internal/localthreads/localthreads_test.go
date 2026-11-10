@@ -3,6 +3,7 @@ package localthreads
 import (
 	"bytes"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -211,6 +212,40 @@ func TestSetAsideKeepsEarlierCopies(test *testing.T) {
 		if err != nil || string(got) != want {
 			test.Errorf("%s = %q, %v; want %q", suffix, got, err, want)
 		}
+	}
+}
+
+func TestSetAsideReturnsPermissionErrors(test *testing.T) {
+	if os.Geteuid() == 0 {
+		test.Skip("root ignores directory permissions")
+	}
+	directory := test.TempDir()
+	path := filepath.Join(directory, "7.json")
+	if err := os.WriteFile(path, []byte("{nope"), 0o600); err != nil {
+		test.Fatal(err)
+	}
+	if err := os.Chmod(directory, 0); err != nil {
+		test.Fatal(err)
+	}
+	test.Cleanup(func() { _ = os.Chmod(directory, 0o700) })
+
+	finished := make(chan error, 1)
+	go func() { finished <- SetAside(path) }()
+	select {
+	case err := <-finished:
+		if !errors.Is(err, fs.ErrPermission) {
+			test.Errorf("SetAside error = %v; want a permission error", err)
+		}
+	case <-time.After(5 * time.Second):
+		test.Fatal("SetAside did not return")
+	}
+
+	if err := os.Chmod(directory, 0o700); err != nil {
+		test.Fatal(err)
+	}
+	kept, err := os.ReadFile(path)
+	if err != nil || string(kept) != "{nope" {
+		test.Errorf("existing file = %q, %v; want it left intact", kept, err)
 	}
 }
 

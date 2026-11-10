@@ -235,11 +235,19 @@ func syncDirectory(directory string) {
 func SetAside(path string) error {
 	if _, err := os.Lstat(path); errors.Is(err, fs.ErrNotExist) {
 		return nil
+	} else if err != nil {
+		return fmt.Errorf("set aside unreadable local threads: %w", err)
 	}
 	target := path + UnreadableSuffix
 	for attempt := 2; ; attempt++ {
-		if _, err := os.Lstat(target); errors.Is(err, fs.ErrNotExist) {
+		_, err := os.Lstat(target)
+		if errors.Is(err, fs.ErrNotExist) {
 			break
+		}
+		// Any other error (such as permission denied) would repeat for every
+		// suffix, so stop instead of probing forever.
+		if err != nil {
+			return fmt.Errorf("set aside unreadable local threads: %w", err)
 		}
 		target = path + UnreadableSuffix + "." + strconv.Itoa(attempt)
 	}
