@@ -168,10 +168,10 @@ type View struct {
 	// pickerChecks is non-nil while the picker lists checks (:checks) rather
 	// than files; it is the sorted list the picker's rows came from.
 	pickerChecks []github.Check
-	// pickerReaction is non-nil while the picker lists the 8 reactions (:react).
-	pickerReaction        *reactionTarget
-	pickerReactionTargets []commentTarget
-	pickerReactionName    github.ReactionContent
+	// pickerComment supplies a comment context to an action awaiting selection.
+	pickerComment *commentSelection
+	// pickerReaction is non-nil while the shared eight-reaction picker is open.
+	pickerReaction *commentTarget
 
 	paneFile   github.ChangedFile // last value given to filePane.SetFile
 	paneWidth  int                // size last given to filePane.SetSize

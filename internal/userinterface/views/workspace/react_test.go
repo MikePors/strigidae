@@ -396,13 +396,13 @@ func TestReactOnOverviewOpensTargetPicker(test *testing.T) {
 	inliner.view.detail = &detail
 	inliner.press("h", "g g", "l")
 	inliner.react("")
-	if inliner.view.picker == nil || len(inliner.view.pickerReactionTargets) != 3 {
+	if inliner.view.picker == nil || len(inliner.view.pickerComment.targets) != 3 {
 		test.Fatal("overview target picker did not open")
 	}
-	if got := []commentKind{inliner.view.pickerReactionTargets[0].kind, inliner.view.pickerReactionTargets[1].kind, inliner.view.pickerReactionTargets[2].kind}; !cmp.Equal(got, []commentKind{commentDescription, commentTopLevel, commentTopLevel}) {
+	if got := []commentKind{inliner.view.pickerComment.targets[0].kind, inliner.view.pickerComment.targets[1].kind, inliner.view.pickerComment.targets[2].kind}; !cmp.Equal(got, []commentKind{commentDescription, commentTopLevel, commentTopLevel}) {
 		test.Fatalf("target order = %v", got)
 	}
-	if got := reactionTargetLabel(inliner.view.pickerReactionTargets[1], pickerLabelWidth(inliner.view.width)); !strings.Contains(got, "bob") || !strings.Contains(got, "Thanks!") {
+	if got := commentTargetLabel(inliner.view.pickerComment.targets[1], pickerLabelWidth(inliner.view.width)); !strings.Contains(got, "bob") || !strings.Contains(got, "Thanks!") {
 		test.Errorf("target label lacks author/body distinction: %q", got)
 	}
 }
@@ -415,7 +415,7 @@ func TestNamedOverviewReactionValidatesThenOpensTargetPicker(test *testing.T) {
 	inliner.view.diff = DiffState{Err: context.DeadlineExceeded}
 	inliner.press("h", "g g", "l")
 	inliner.react("rocket")
-	if inliner.view.picker == nil || inliner.view.pickerReactionName != github.ReactionRocket || len(inliner.reactionCalls()) != 0 {
+	if inliner.view.picker == nil || inliner.view.pickerComment.call.arguments != "rocket" || len(inliner.reactionCalls()) != 0 {
 		test.Fatal("named reaction did not wait for a target choice")
 	}
 	inliner.keyPress(tea.KeyEscape)
@@ -496,9 +496,43 @@ func TestOverviewReactionPickerStagesCancelAndToggle(test *testing.T) {
 	})
 }
 
+func TestOverviewReactionUsesSelectedCommentAfterDiffCursorMoves(test *testing.T) {
+	inliner := newInliner(test)
+	detail := testDetail()
+	detail.Comments[0].Identifier = "issue-comment-1"
+	inliner.client.SetPullRequest(detail)
+	inliner.view.detail = &detail
+	inliner.press("h", "g g", "l")
+	inliner.react("")
+	inliner.keyPress(tea.KeyDown) // select the top-level comment
+	inliner.keyPress(tea.KeyEnter)
+	inliner.toComment(1)           // the open picker must keep the selected Overview context
+	inliner.keyPress(tea.KeyEnter) // like
+	calls := inliner.reactionCalls()
+	if len(calls) != 1 || calls[0].SubjectIdentifier != "issue-comment-1" || calls[0].Reaction != github.ReactionThumbsUp {
+		test.Fatalf("calls = %+v", calls)
+	}
+	if inliner.lastErr() != nil {
+		test.Fatalf("reaction failed: %v", inliner.lastErr())
+	}
+}
+
+func TestOverviewReactionPickerShowsCountsAndViewerMark(test *testing.T) {
+	inliner := newInliner(test)
+	detail := testDetail()
+	detail.Reactions = []github.ReactionSummary{{Content: github.ReactionHeart, Count: 4, ViewerReacted: true}}
+	inliner.view.detail = &detail
+	inliner.press("h", "g g", "l")
+	inliner.react("")
+	inliner.keyPress(tea.KeyEnter)
+	if shown := inliner.shown(); !strings.Contains(shown, "❤️ heart") || !strings.Contains(shown, "4  ✓") {
+		test.Fatalf("shared reaction picker omitted count or viewer mark:\n%s", shown)
+	}
+}
+
 func TestOverviewReactionLabelsCleanHostileText(test *testing.T) {
 	target := commentTarget{kind: commentTopLevel, author: "x\x1b[31m", body: "hello\u202e world\x9b"}
-	label := reactionTargetLabel(target, 56)
+	label := commentTargetLabel(target, 56)
 	if strings.ContainsRune(label, '\x1b') || strings.ContainsRune(label, '\u202e') || strings.ContainsRune(label, '\u009b') {
 		test.Errorf("unsafe label %q", label)
 	}
@@ -618,7 +652,7 @@ func TestOverviewReactionUpdatesBeforeReloadAndUsesFreshState(test *testing.T) {
 				if commentIndex >= 0 {
 					identifier = "issue-comment-1"
 				}
-				target, found := inliner.view.resolveReactionTarget(identifier)
+				target, found := inliner.view.resolveCommentTarget(identifier)
 				if !found || (len(target.reactions) > 0) != (wantMethod == fake.MethodAddReaction) {
 					test.Fatalf("immediate reactions = %+v", target.reactions)
 				}
@@ -680,13 +714,13 @@ func BenchmarkOverviewReactionTargets(benchmark *testing.B) {
 	benchmark.Run("open picker", func(benchmark *testing.B) {
 		benchmark.ReportAllocs()
 		for benchmark.Loop() {
-			view.overviewReact("")
+			view.openCommentTargetPicker(view.entryNamed("react"), invocation{})
 		}
 	})
 	benchmark.Run("resolve last target", func(benchmark *testing.B) {
 		benchmark.ReportAllocs()
 		for benchmark.Loop() {
-			if _, found := view.resolveReactionTarget("comment-999"); !found {
+			if _, found := view.resolveCommentTarget("comment-999"); !found {
 				benchmark.Fatal("missing target")
 			}
 		}
@@ -726,5 +760,39 @@ func TestOverviewReactionLabelsFitNarrowPicker(test *testing.T) {
 		if !strings.Contains(rendered, "Description · alice") {
 			test.Fatalf("width %d lost target prefix:\n%s", width, rendered)
 		}
+	}
+}
+
+func TestReactNeedsLoadedDiffForCursorContext(test *testing.T) {
+	for _, name := range []string{"", "heart"} {
+		inliner := newInliner(test)
+		inliner.toComment(0)
+		inliner.view.diffPending = true
+		inliner.react(name)
+		if diff := cmp.Diff([]string{"diff not loaded"}, inliner.infoMessages()); diff != "" {
+			test.Fatal(diff)
+		}
+		if inliner.view.picker != nil || len(inliner.reactionCalls()) != 0 {
+			test.Fatal("used stale diff cursor")
+		}
+	}
+}
+
+func TestReactionMenuRefusesDeletedOverviewComment(test *testing.T) {
+	inliner := newInliner(test)
+	detail := testDetail()
+	detail.Comments[0].Identifier = "issue-comment-1"
+	inliner.view.detail = &detail
+	inliner.press("h", "g g", "l")
+	inliner.react("")
+	inliner.keyPress(tea.KeyDown)
+	inliner.keyPress(tea.KeyEnter)
+	detail.Comments = nil
+	inliner.keyPress(tea.KeyEnter)
+	if len(inliner.reactionCalls()) != 0 || inliner.view.CapturesKeys() {
+		test.Fatal("deleted target was written or retained keys")
+	}
+	if diff := cmp.Diff([]string{"comment no longer exists; refresh and try again"}, inliner.infoMessages()); diff != "" {
+		test.Fatal(diff)
 	}
 }

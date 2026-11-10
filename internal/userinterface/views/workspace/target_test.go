@@ -273,7 +273,7 @@ func TestOverviewReactionIgnoresHiddenDiffCursor(test *testing.T) {
 	inliner.toLineContaining("first mine")
 	inliner.press("h", "g g", "l")
 	inliner.react("heart")
-	if inliner.view.picker == nil || len(inliner.view.pickerReactionTargets) == 0 || len(inliner.reactionCalls()) != 0 {
+	if inliner.view.picker == nil || len(inliner.view.pickerComment.targets) == 0 || len(inliner.reactionCalls()) != 0 {
 		test.Fatal("Overview did not open its target picker independently of the hidden diff cursor")
 	}
 }
@@ -390,5 +390,17 @@ func TestOwnCommentThatCannotBeChanged(test *testing.T) {
 				test.Error("went ahead")
 			}
 		})
+	}
+}
+
+func TestExplicitCommentContextUsesTargetRules(test *testing.T) {
+	inliner := newInliner(test)
+	inliner.toComment(0)
+	rule := &commentRule{mine: func(commentTarget) bool { return false }, notMine: "not your comment"}
+	for _, identifier := range []string{"", firstCommentIdentifier} {
+		_, refusal := inliner.view.resolveTarget(request{level: levelComment, words: "edit it", rule: rule, commentIdentifier: identifier})
+		if refusal == nil || infoText(refusal()) != rule.notMine {
+			test.Fatal("explicit and cursor contexts must apply the same rights rule")
+		}
 	}
 }

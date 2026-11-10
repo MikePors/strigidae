@@ -23,9 +23,10 @@ const (
 // or by a command, which carries its arguments. target is filled in by the
 // dispatcher for the levels the resolver handles.
 type invocation struct {
-	message   keys.Message
-	arguments string
-	target    resolvedTarget
+	message           keys.Message
+	arguments         string
+	target            resolvedTarget
+	commentIdentifier string
 }
 
 // actionEntry is one workspace action: the generic part (name, keys, command) in
@@ -38,11 +39,11 @@ type invocation struct {
 // busy (the guard table), then run.
 type actionEntry struct {
 	keys.Action
-	// configure selects the entry policy for the current pane before dispatch.
-	configure func(*View, *actionEntry)
 	// level is what the action works on. The resolver finds lines, threads and
 	// comments; the others are for the table, and run finds its own.
 	level level
+	// commentPickerTitle lets an action ask for a missing Overview comment context.
+	commentPickerTitle string
 	// words finish the notices (see request.words); rule narrows a comment.
 	words string
 	rule  *commentRule
@@ -195,14 +196,8 @@ func (workspaceBindings *bindings) entries() []actionEntry {
 		},
 		{
 			Action: keys.Action{Name: "react", Command: "react"},
-			level:  levelComment, words: "react to it", diffVisible: true, guard: writeReaction,
+			level:  levelComment, words: "react to it", diffVisible: true, guard: writeReaction, commentPickerTitle: "React to",
 			check: checkReaction,
-			configure: func(view *View, entry *actionEntry) {
-				if onOverview(view) {
-					entry.level, entry.guard, entry.diffVisible = levelPullRequest, writeOverviewReaction, false
-					entry.run = func(view *View, call invocation) tea.Cmd { return view.overviewReact(call.arguments) }
-				}
-			},
 			run: func(view *View, call invocation) tea.Cmd {
 				return view.reactCommand(call.arguments, call.target.comment)
 			},
@@ -288,9 +283,6 @@ func (workspaceBindings *bindings) actions() []keys.Action {
 // invoke runs an entry for a key or a command. The steps and their order are
 // the ones every write used to repeat by hand; see actionEntry.
 func (view *View) invoke(chosen actionEntry, call invocation) tea.Cmd {
-	if chosen.configure != nil {
-		chosen.configure(view, &chosen)
-	}
 	if chosen.check != nil {
 		if refusal := chosen.check(call.arguments); refusal != nil {
 			return refusal
@@ -301,13 +293,22 @@ func (view *View) invoke(chosen actionEntry, call invocation) tea.Cmd {
 			return notice
 		}
 	}
-	if chosen.diffVisible {
+	if chosen.commentPickerTitle != "" && call.commentIdentifier == "" && onOverview(view) {
+		if chosen.guard != writeNone {
+			if notice := view.guardState().busy(chosen.guard); notice != nil {
+				return notice
+			}
+		}
+		view.openCommentTargetPicker(chosen, call)
+		return nil
+	}
+	if chosen.diffVisible && call.commentIdentifier == "" {
 		if hidden := view.diffHidden(chosen.words, chosen.level); hidden != nil {
 			return hidden
 		}
 	}
 	if chosen.level.resolved() {
-		resolved, refusal := view.resolveTarget(request{level: chosen.level, words: chosen.words, rule: chosen.rule})
+		resolved, refusal := view.resolveTarget(request{level: chosen.level, words: chosen.words, rule: chosen.rule, commentIdentifier: call.commentIdentifier})
 		if refusal != nil {
 			return refusal
 		}
