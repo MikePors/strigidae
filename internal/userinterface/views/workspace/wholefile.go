@@ -62,8 +62,11 @@ func WithWholeFiles(files *WholeFiles) Option {
 func (view *View) WholeFiles() *WholeFiles { return view.wholeFiles }
 
 // wholeFileKey is one side of a file. The path is part of it because the
-// path picks the language.
+// path picks the language, and the repository because the dashboard shares
+// one cache across repositories (a fork and its upstream can have the same
+// path and blob, yet one may lack what the other has).
 type wholeFileKey struct {
+	repository       github.Repository
 	path             string
 	objectIdentifier string
 }
@@ -84,6 +87,9 @@ type wholeFileResult struct {
 	err         error
 	source      string
 	checkoutErr error
+	// requestFailed is set when the whole API request failed rather than this
+	// blob: such an error says nothing lasting about the blob.
+	requestFailed bool
 }
 
 // Where a side's text came from.
@@ -116,7 +122,7 @@ func (view *View) wholeFileSides() tea.Cmd {
 		if side.identifier == "" {
 			continue
 		}
-		key := wholeFileKey{path: file.Path(), objectIdentifier: side.identifier}
+		key := wholeFileKey{repository: view.repository, path: file.Path(), objectIdentifier: side.identifier}
 		if lines, ok := view.wholeFiles.spans[key]; ok {
 			if lines != nil {
 				view.filePane.SetFileSpans(side.side, side.identifier, lines)
@@ -196,7 +202,7 @@ func readAPIBlobs(timeouts userinterface.Timeouts, client github.Client, reposit
 		result.source = sourceAPI
 		switch {
 		case err != nil:
-			result.err = err
+			result.err, result.requestFailed = err, true
 		case texts[i].Err != nil:
 			result.err = texts[i].Err
 		default:
@@ -231,7 +237,7 @@ func (view *View) wholeFileRead(message wholeFileMessage) {
 				view.wholeFileRetried[result.key] = true
 				continue
 			}
-			if !lastingFailure(result.err) {
+			if result.requestFailed || !lastingFailure(result.err) {
 				// Kept for this view only: reopening the pull request tries again.
 				if view.wholeFileFailed == nil {
 					view.wholeFileFailed = map[wholeFileKey]bool{}

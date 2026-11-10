@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -199,9 +200,12 @@ func TestWholeFileResultForAFileNoLongerShownIsDropped(test *testing.T) {
 	}
 }
 
-func TestWholeFileFailedReadKeepsPerHunkColours(test *testing.T) {
+// TestWholeFileFailedReadsKeepPerHunkColours has the checkout fail and the
+// API fail in a way that may pass.
+func TestWholeFileFailedReadsKeepPerHunkColours(test *testing.T) {
 	blobs := &fakeBlobs{err: errors.New("fetch failed")}
 	testHarness, pane := newWholeFileHarness(test, blobs)
+	testHarness.client.SetError(fake.MethodBlobTexts, errors.New("bad gateway"))
 	testHarness.press("}")
 	if len(pane.order) != 0 {
 		test.Errorf("sides given after a failed read: %v", pane.order)
@@ -211,13 +215,15 @@ func TestWholeFileFailedReadKeepsPerHunkColours(test *testing.T) {
 			test.Errorf("a failed read showed an error: %v", message)
 		}
 	}
-	// It is not read again.
+	// This view does not ask again.
 	testHarness.press("}", "{")
-	if len(blobs.reads) != 2 {
-		test.Errorf("reads = %v, want one per side", blobs.reads)
+	if len(blobs.reads) != 2 || len(blobTextCalls(testHarness.client)) != 1 {
+		test.Errorf("reads = %v, API calls = %v; want one of each per side", blobs.reads, blobTextCalls(testHarness.client))
 	}
-	if strings.Contains(testHarness.render(), "fetch failed") {
-		test.Error("the failure is on screen")
+	for _, leaked := range []string{"fetch failed", "bad gateway"} {
+		if strings.Contains(testHarness.render(), leaked) {
+			test.Errorf("%q is on screen", leaked)
+		}
 	}
 }
 
@@ -363,7 +369,14 @@ func TestWholeFilesStartAgainEmptyPastTheLimit(test *testing.T) {
 	side := [][]diffview.Span{{{Text: "x"}}}
 	files := NewWholeFiles(nil)
 	files.limit = 2 * spansSize(side)
-	sides := []wholeFileKey{{"a", "1"}, {"b", "2"}, {"c", "3"}, {"d", "4"}, {"e", "5"}, {"f", "6"}}
+	sides := []wholeFileKey{
+		{path: "a", objectIdentifier: "1"},
+		{path: "b", objectIdentifier: "2"},
+		{path: "c", objectIdentifier: "3"},
+		{path: "d", objectIdentifier: "4"},
+		{path: "e", objectIdentifier: "5"},
+		{path: "f", objectIdentifier: "6"},
+	}
 	for _, key := range sides {
 		files.keep(key, side)
 	}
@@ -411,8 +424,11 @@ func reopened(test *testing.T, client *fake.Client, files *WholeFiles, wrap func
 
 func TestWholeFileTransientFailureIsOnlyKeptByTheView(test *testing.T) {
 	for name, failure := range map[string]error{
-		"plain error": errors.New("bad gateway"),
-		"rate limit":  &github.RateLimitError{},
+		"plain error":          errors.New("bad gateway"),
+		"rate limit":           &github.RateLimitError{},
+		"not signed in":        fmt.Errorf("read 2 blobs: %w", github.ErrNotAuthenticated),
+		"forbidden":            fmt.Errorf("read 2 blobs: %w", github.ErrForbidden),
+		"whole call not found": fmt.Errorf("read 2 blobs: %w", github.ErrNotFound),
 	} {
 		test.Run(name, func(test *testing.T) {
 			testHarness, pane := newWholeFileHarnessFor(test, nil, nil, nil)
@@ -473,5 +489,58 @@ func TestWholeFileWrongNumberOfAnswersKeepsPerHunkColours(test *testing.T) {
 		if _, ok := message.(userinterface.ErrorMessage); ok {
 			test.Errorf("a wrong answer showed an error: %v", message)
 		}
+	}
+}
+
+// TestWholeFileNetworkTimeoutIsReadAgainOnce has a timeout inside a network
+// error, as the HTTP client reports one.
+func TestWholeFileNetworkTimeoutIsReadAgainOnce(test *testing.T) {
+	timeout := fmt.Errorf("read 2 blobs: %w", &url.Error{Op: "Post", URL: "https://api.github.com/graphql", Err: context.DeadlineExceeded})
+	testHarness, pane := newWholeFileHarnessFor(test, nil, nil, nil)
+	testHarness.client.SetError(fake.MethodBlobTexts, timeout)
+	testHarness.press("}", "{")
+	if calls := len(blobTextCalls(testHarness.client)); calls != 2 {
+		test.Errorf("API calls = %d, want the first and one more", calls)
+	}
+	if len(pane.order) != 0 {
+		test.Errorf("sides given after timeouts: %v", pane.order)
+	}
+	// A new view tries again: the failure was the view's only.
+	again, _ := reopened(test, testHarness.client, testHarness.view.wholeFiles, nil)
+	again.press("}")
+	if calls := len(blobTextCalls(testHarness.client)); calls != 4 {
+		test.Errorf("API calls = %d, want two more from the new view", calls)
+	}
+}
+
+// otherRepository is a fork of testRepository, with the same paths and blobs.
+var otherRepository = github.Repository{Owner: "fork-owner", Name: testRepository.Name}
+
+func TestWholeFileLastingFailureIsKeptPerRepository(test *testing.T) {
+	testHarness, _ := newWholeFileHarnessFor(test, nil, nil, nil) // blobs missing in testRepository
+	testHarness.press("}")
+	files := testHarness.view.wholeFiles
+
+	other := fake.New()
+	detail := testDetail()
+	detail.Repository = otherRepository
+	detail.Files = []github.ChangedFile{{Path: "x.go", Change: github.FileModified, Additions: 1, Deletions: 1}}
+	other.SetPullRequest(detail)
+	other.SetDiff(otherRepository, 7, wholeFileDiff)
+	other.SetBlobText(otherRepository, "1111111", "package x\n\n/* opened above\nstill comment\nclosed */\nvar a = 1\n")
+	other.SetBlobText(otherRepository, "2222222", "package x\n\n/* opened above\nstill comment\nclosed */\nvar b = 2\n")
+	pane := &spansPane{diffPane: newDiffPane(theme.New(true), func() time.Time { return testNow }, false), given: map[string][][]diffview.Span{}}
+	forkHarness := &harness{test: test, client: other}
+	forkHarness.view = New(other, otherRepository, 7,
+		WithClock(func() time.Time { return testNow }),
+		WithTheme(theme.New(true)),
+		WithFilePane(pane),
+		WithWholeFiles(files),
+	)
+	forkHarness.send(tea.WindowSizeMsg{Width: 100, Height: 30})
+	forkHarness.run(forkHarness.view.Init())
+	forkHarness.press("}")
+	if diff := cmp.Diff([]string{"LEFT:1111111", "RIGHT:2222222"}, pane.order); diff != "" {
+		test.Errorf("sides given in the other repository (-want +got):\n%s", diff)
 	}
 }
