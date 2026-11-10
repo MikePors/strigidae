@@ -234,33 +234,87 @@ func TestReviewWithPendingReview(test *testing.T) {
 	}
 }
 
-func TestReviewPendingGoneAtSubmit(test *testing.T) {
-	composer := newReviewer(test)
-	composer.client.SetPendingReview(testRepository, 7, &github.PendingReview{Identifier: "PRR_1", CommentCount: 1})
-	composer.body = "my summary"
-	composer.command("approve")
-	confirmation, ok := composer.lastConfirm()
-	if !ok {
-		test.Fatal("no confirmation")
+// A pending review that changed while the question was open is not submitted
+// on the old yes: the question is asked again about what GitHub has now.
+func TestReviewAsksAgainWhenPendingReviewChanged(test *testing.T) {
+	for _, testCase := range []struct {
+		name     string
+		changed  *github.PendingReview
+		wantText string
+	}{
+		{"more comments", &github.PendingReview{Identifier: "PRR_1", CommentCount: 3}, "Approve #7 in acme/widgets with 3 pending comments?"},
+		{"another review", &github.PendingReview{Identifier: "PRR_2", CommentCount: 1}, "Approve #7 in acme/widgets with 1 pending comment?"},
+		{"gone", nil, "Approve #7 in acme/widgets?"},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			composer := newReviewer(test)
+			composer.client.SetPendingReview(testRepository, 7, &github.PendingReview{Identifier: "PRR_1", CommentCount: 1})
+			composer.body = "my summary"
+			composer.command("approve")
+			confirmation, ok := composer.lastConfirm()
+			if !ok {
+				test.Fatal("no confirmation")
+			}
+			composer.client.SetPendingReview(testRepository, 7, testCase.changed)
+			composer.run(confirmation.OnYes)
+			if len(composer.client.Submissions()) != 0 {
+				test.Fatal("submitted on the old yes")
+			}
+			if composer.view.review.submitting {
+				test.Error("still submitting after asking again")
+			}
+			if got := composer.infoMessages(); contains(got, "Submitting review…") {
+				test.Errorf("notices = %v, nothing was being submitted", got)
+			}
+			if composer.view.review.draft != "my summary" {
+				test.Errorf("draft = %q", composer.view.review.draft)
+			}
+			again, ok := composer.lastConfirm()
+			if !ok || again.Text != testCase.wantText {
+				test.Fatalf("second confirmation = %+v, want text %q", again, testCase.wantText)
+			}
+			composer.run(again.OnYes)
+			submissions := composer.client.Submissions()
+			if len(submissions) != 1 || submissions[0].Body != "my summary" {
+				test.Errorf("submissions = %+v, want one with the summary", submissions)
+			}
+		})
 	}
-	composer.client.SetPendingReview(testRepository, 7, nil) // submitted elsewhere meanwhile
-	before := len(composer.client.Calls())
+}
+
+func TestReviewHeadMovedAfterYes(test *testing.T) {
+	composer := newReviewer(test)
+	composer.body = "ok"
+	composer.command("approve")
+	confirmation, _ := composer.lastConfirm()
+	composer.client.SetHeadSHA(testRepository, 7, "bbbb2222") // pushed while the question was open
 	composer.run(confirmation.OnYes)
 	if len(composer.client.Submissions()) != 0 {
-		test.Error("submitted")
+		test.Error("submitted although the head moved")
 	}
-	if got := composer.lastError(); !strings.Contains(got, "submitted or deleted elsewhere") {
+	again, ok := composer.lastConfirm()
+	if !ok || !again.Notice || !strings.Contains(again.Text, "Head moved") {
+		test.Errorf("confirmation = %+v, want the head-moved notice", again)
+	}
+	if composer.view.review.submitting {
+		test.Error("still submitting after the head-moved notice")
+	}
+}
+
+func TestReviewStatusErrorAfterYes(test *testing.T) {
+	composer := newReviewer(test)
+	composer.command("approve")
+	confirmation, _ := composer.lastConfirm()
+	composer.client.SetError(fake.MethodGetReviewStatus, errors.New("502 Bad Gateway"))
+	composer.run(confirmation.OnYes)
+	if len(composer.client.Submissions()) != 0 {
+		test.Error("submitted without re-reading")
+	}
+	if composer.view.review.submitting {
+		test.Error("still submitting after the failed re-read")
+	}
+	if got := composer.lastError(); !strings.Contains(got, "check review state") {
 		test.Errorf("error = %q", got)
-	}
-	if composer.view.review.draft != "my summary" {
-		test.Errorf("draft = %q", composer.view.review.draft)
-	}
-	var reloaded bool
-	for _, call := range composer.client.Calls()[before:] {
-		reloaded = reloaded || call.Method == fake.MethodGetPullRequest
-	}
-	if !reloaded {
-		test.Error("workspace did not refresh")
 	}
 }
 
