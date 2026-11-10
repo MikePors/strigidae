@@ -47,7 +47,10 @@ type (
 		origin origin
 		title  string
 		body   string
-		err    error
+		// refusal is why nothing was written after the yes, when GitHub no
+		// longer lets the viewer edit the pull request.
+		refusal string
+		err     error
 	}
 )
 
@@ -101,7 +104,7 @@ func (view *View) pullRequestEdited(message pullRequestTextMessage) tea.Cmd {
 		return busy
 	}
 	question := fmt.Sprintf("Update the title and body of #%d?", message.origin.number)
-	return userinterface.Confirm(question, view.agreed(writePullRequest, view.sendPullRequest(message.detail, title, body)))
+	return userinterface.Confirm(question, view.agreed(writePullRequest, sendPullRequest(view.origin(), view.client, view.timeouts, message.detail, title, body)))
 }
 
 // normalizedPullRequestText is the title and body as the editor round trip
@@ -115,8 +118,7 @@ func normalizedPullRequestText(detail github.PullRequestDetail) (title, body str
 // sendPullRequest is the command that runs on the yes. based is the pull
 // request as the edit started from it; the current one is read first and
 // compared with it.
-func (view *View) sendPullRequest(based github.PullRequestDetail, title, body string) tea.Cmd {
-	origin, client, timeouts := view.origin(), view.client, view.timeouts
+func sendPullRequest(origin origin, client github.Client, timeouts userinterface.Timeouts, based github.PullRequestDetail, title, body string) tea.Cmd {
 	return func() tea.Msg {
 		readContext, cancelRead := timeouts.LoadContext()
 		defer cancelRead()
@@ -125,12 +127,12 @@ func (view *View) sendPullRequest(based github.PullRequestDetail, title, body st
 			return pullRequestNotUpdated(origin, fmt.Errorf("read pull request: %w", err))
 		}
 		if !current.ViewerCanUpdate {
-			return pullRequestNotUpdated(origin, errors.New(noticeCannotEditPullRequest))
+			return pullRequestUpdatedMessage{origin: origin, refusal: noticeCannotEditPullRequest}
 		}
 		basedTitle, basedBody := normalizedPullRequestText(based)
 		currentTitle, currentBody := normalizedPullRequestText(current)
 		if currentTitle != basedTitle || currentBody != basedBody {
-			again := view.sendPullRequest(current, title, body)
+			again := sendPullRequest(origin, client, timeouts, current, title, body)
 			return commentCheckedMessage{origin: origin, question: conflictQuestion(origin.number), onYes: agreed(origin, writePullRequest, again)}
 		}
 		ctx, cancel := timeouts.RequestContext()
@@ -159,6 +161,9 @@ func pullRequestNotUpdated(origin origin, err error) tea.Msg {
 // pullRequestUpdated shows the new text at once and refreshes from GitHub.
 func (view *View) pullRequestUpdated(message pullRequestUpdatedMessage) tea.Cmd {
 	view.writeDone()
+	if message.refusal != "" {
+		return tea.Batch(userinterface.Info(message.refusal), view.reloadPullRequest()) // what the screen offers may be out of date
+	}
 	if userinterface.IsWriteTimeout(message.err) {
 		return view.reloadPullRequest() // the error is already shown
 	}

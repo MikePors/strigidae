@@ -242,15 +242,41 @@ func TestEditPullRequestNoLongerAllowedAfterTheYes(test *testing.T) {
 	detail.Identifier = pullRequestNodeIdentifier // ViewerCanUpdate false
 	inliner.client.SetPullRequest(detail)
 	inliner.messages = nil
+	before := len(inliner.client.Calls())
 	inliner.run(confirmation.OnYes)
 	if len(inliner.pullRequestUpdates()) != 0 {
 		test.Error("something was sent")
 	}
-	if err := inliner.lastErr(); err == nil || !strings.Contains(err.Error(), noticeCannotEditPullRequest) {
-		test.Errorf("error = %v", err)
+	if got := inliner.infoMessages(); !contains(got, noticeCannotEditPullRequest) {
+		test.Errorf("notices = %v, want %q", got, noticeCannotEditPullRequest)
 	}
 	if inliner.view.writes != 0 {
 		test.Errorf("writes in flight: %d", inliner.view.writes)
+	}
+	var reloaded bool
+	for _, call := range inliner.client.Calls()[before:] {
+		reloaded = reloaded || call.Method == fake.MethodGetPullRequest
+	}
+	if !reloaded {
+		test.Error("the pull request was not reloaded")
+	}
+}
+
+func TestEditPullRequestDecliningTheConflictWritesNothing(test *testing.T) {
+	inliner := newInliner(test)
+	inliner.editPullRequest("My title\n\nMy body")
+	confirmation, _ := inliner.lastConfirm()
+	inliner.changeOnGitHub("Their title", "Their body")
+	inliner.run(confirmation.OnYes)
+	if _, asked := inliner.lastConfirm(); !asked {
+		test.Fatal("no conflict question")
+	}
+	// Declining is the shell dropping OnYes.
+	if len(inliner.pullRequestUpdates()) != 0 || inliner.view.writes != 0 {
+		test.Errorf("updates = %v, writes in flight: %d", inliner.pullRequestUpdates(), inliner.view.writes)
+	}
+	if inliner.view.detail.Title == "My title" {
+		test.Error("the screen shows a title that was not saved")
 	}
 }
 
