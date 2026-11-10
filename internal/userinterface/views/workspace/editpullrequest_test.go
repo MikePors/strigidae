@@ -180,3 +180,94 @@ func TestEditPullRequestNeverBypassesTheGuard(test *testing.T) {
 		test.Error("the command went on")
 	}
 }
+
+// changeOnGitHub replaces the pull request on the server, as a collaborator
+// editing it on github.com would.
+func (inliner *inliner) changeOnGitHub(title, body string) {
+	detail := testDetail()
+	detail.Identifier, detail.ViewerCanUpdate = pullRequestNodeIdentifier, true
+	detail.Title, detail.Body = title, body
+	inliner.client.SetPullRequest(detail)
+}
+
+func TestEditPullRequestAsksAgainAfterAConcurrentChange(test *testing.T) {
+	inliner := newInliner(test)
+	inliner.editPullRequest("My title\n\nMy body")
+	confirmation, _ := inliner.lastConfirm()
+	inliner.changeOnGitHub("Their title", "Their body")
+	inliner.messages = nil
+	inliner.run(confirmation.OnYes)
+	if len(inliner.pullRequestUpdates()) != 0 {
+		test.Fatal("overwrote the collaborator's change")
+	}
+	if inliner.view.writes != 0 {
+		test.Errorf("writes in flight while the question is open: %d", inliner.view.writes)
+	}
+	again, asked := inliner.lastConfirm()
+	if !asked || !strings.Contains(again.Text, "changed on GitHub") {
+		test.Fatalf("second question = %+v", again)
+	}
+
+	// Yes to the conflict writes the user's edit over the newer text.
+	inliner.run(again.OnYes)
+	want := []github.UpdatePullRequestInput{{Repository: testRepository, Number: 7, PullRequestIdentifier: pullRequestNodeIdentifier, Title: "My title", Body: "My body"}}
+	if diff := cmp.Diff(want, inliner.pullRequestUpdates()); diff != "" {
+		test.Errorf("update (-want +got):\n%s", diff)
+	}
+}
+
+func TestEditPullRequestChangedAgainWhileAskingAgain(test *testing.T) {
+	inliner := newInliner(test)
+	inliner.editPullRequest("My title\n\nMy body")
+	confirmation, _ := inliner.lastConfirm()
+	inliner.changeOnGitHub("Their title", "Their body")
+	inliner.run(confirmation.OnYes)
+	again, _ := inliner.lastConfirm()
+	inliner.changeOnGitHub("Their title", "Their body, edited again")
+	inliner.messages = nil
+	inliner.run(again.OnYes)
+	if len(inliner.pullRequestUpdates()) != 0 {
+		test.Fatal("wrote on a yes that was about older text")
+	}
+	if third, asked := inliner.lastConfirm(); !asked || !strings.Contains(third.Text, "changed on GitHub") {
+		test.Errorf("no third question; messages %v", inliner.messages)
+	}
+}
+
+func TestEditPullRequestNoLongerAllowedAfterTheYes(test *testing.T) {
+	inliner := newInliner(test)
+	inliner.editPullRequest("My title\n\nMy body")
+	confirmation, _ := inliner.lastConfirm()
+	detail := testDetail()
+	detail.Identifier = pullRequestNodeIdentifier // ViewerCanUpdate false
+	inliner.client.SetPullRequest(detail)
+	inliner.messages = nil
+	inliner.run(confirmation.OnYes)
+	if len(inliner.pullRequestUpdates()) != 0 {
+		test.Error("something was sent")
+	}
+	if err := inliner.lastErr(); err == nil || !strings.Contains(err.Error(), noticeCannotEditPullRequest) {
+		test.Errorf("error = %v", err)
+	}
+	if inliner.view.writes != 0 {
+		test.Errorf("writes in flight: %d", inliner.view.writes)
+	}
+}
+
+func TestEditPullRequestReadFailsAfterTheYes(test *testing.T) {
+	inliner := newInliner(test)
+	inliner.editPullRequest("My title\n\nMy body")
+	confirmation, _ := inliner.lastConfirm()
+	inliner.client.SetError(fake.MethodGetPullRequest, errors.New("502 Bad Gateway"))
+	inliner.messages = nil
+	inliner.run(confirmation.OnYes)
+	if len(inliner.pullRequestUpdates()) != 0 {
+		test.Error("wrote without re-reading")
+	}
+	if err := inliner.lastErr(); err == nil || !strings.Contains(err.Error(), "read pull request") {
+		test.Errorf("error = %v", err)
+	}
+	if inliner.view.writes != 0 {
+		test.Errorf("writes in flight: %d", inliner.view.writes)
+	}
+}

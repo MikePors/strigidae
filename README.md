@@ -98,7 +98,7 @@ In a pull request, the Overview lists the head commit's checks (failing first) i
 
 ## Editing the title and body
 
-`:edit-pull-request` (in a pull request, whatever pane has focus) opens `$VISUAL` / `$EDITOR` on the pull request's current title and body: the title on the first line, then the body (one blank line after the title is optional). When you close the editor it asks `y/N`, then updates both on GitHub. An empty title is an error, unchanged text says `no changes`, and GitHub must allow you to edit the pull request (`you can't edit this pull request` otherwise).
+`:edit-pull-request` (in a pull request, whatever pane has focus) opens `$VISUAL` / `$EDITOR` on the pull request's current title and body: the title on the first line, then the body (one blank line after the title is optional). When you close the editor it asks `y/N`, then updates both on GitHub. If the title or body changed on GitHub while you were editing, it asks again instead of overwriting. An empty title is an error, unchanged text says `no changes`, and GitHub must allow you to edit the pull request (`you can't edit this pull request` otherwise).
 
 `:ready` and `:draft` (in a pull request, whatever pane has focus) take it out of draft and put it back. Each asks `y/N` (`Mark #N ready for review?`, `Convert #N to a draft?`), then reloads so the header shows the new state. They refuse with a notice when the pull request is already in that state (`this pull request is not a draft`, `this pull request is already a draft`) or is closed or merged, and while a review, merge or comment is being saved. GitHub's refusals (no permission, a plan without drafts) show in the status bar.
 

@@ -15,7 +15,10 @@ import (
 // :edit-pull-request changes the title and body in one editor session. The
 // title and body are re-read from GitHub before the editor opens, so the edit
 // starts from their current text; after the editor it asks y/N, and busy is
-// checked again after the yes.
+// checked again after the yes. The text is read once more after the yes: if it
+// no longer is what the edit started from, nothing is written and the question
+// is asked again, naming the conflict, so a change made on GitHub meanwhile is
+// never overwritten silently.
 
 const (
 	noticeCannotEditPullRequest = "you can't edit this pull request"
@@ -90,9 +93,7 @@ func (view *View) pullRequestEdited(message pullRequestTextMessage) tea.Cmd {
 	case err != nil:
 		return userinterface.Error(err)
 	}
-	// What was read goes through the same parsing, so a body GitHub stores
-	// with CRLF or trailing blanks does not count as changed.
-	oldTitle, oldBody, _ := editor.ParsePullRequestText(editor.FormatPullRequestText(message.detail.Title, message.detail.Body))
+	oldTitle, oldBody := normalizedPullRequestText(message.detail)
 	if title == oldTitle && body == oldBody {
 		return userinterface.Info(noticeNoChanges)
 	}
@@ -100,17 +101,42 @@ func (view *View) pullRequestEdited(message pullRequestTextMessage) tea.Cmd {
 		return busy
 	}
 	question := fmt.Sprintf("Update the title and body of #%d?", message.origin.number)
-	return userinterface.Confirm(question, view.agreed(writePullRequest, view.sendPullRequest(message.detail.Identifier, title, body)))
+	return userinterface.Confirm(question, view.agreed(writePullRequest, view.sendPullRequest(message.detail, title, body)))
 }
 
-// sendPullRequest is the command that runs on the yes.
-func (view *View) sendPullRequest(identifier, title, body string) tea.Cmd {
+// normalizedPullRequestText is the title and body as the editor round trip
+// leaves them, so a body GitHub stores with CRLF or trailing blanks does not
+// count as changed.
+func normalizedPullRequestText(detail github.PullRequestDetail) (title, body string) {
+	title, body, _ = editor.ParsePullRequestText(editor.FormatPullRequestText(detail.Title, detail.Body))
+	return title, body
+}
+
+// sendPullRequest is the command that runs on the yes. based is the pull
+// request as the edit started from it; the current one is read first and
+// compared with it.
+func (view *View) sendPullRequest(based github.PullRequestDetail, title, body string) tea.Cmd {
 	origin, client, timeouts := view.origin(), view.client, view.timeouts
 	return func() tea.Msg {
+		readContext, cancelRead := timeouts.LoadContext()
+		defer cancelRead()
+		current, err := client.GetPullRequest(readContext, origin.repository, origin.number)
+		if err != nil {
+			return pullRequestNotUpdated(origin, fmt.Errorf("read pull request: %w", err))
+		}
+		if !current.ViewerCanUpdate {
+			return pullRequestNotUpdated(origin, errors.New(noticeCannotEditPullRequest))
+		}
+		basedTitle, basedBody := normalizedPullRequestText(based)
+		currentTitle, currentBody := normalizedPullRequestText(current)
+		if currentTitle != basedTitle || currentBody != basedBody {
+			again := view.sendPullRequest(current, title, body)
+			return commentCheckedMessage{origin: origin, question: conflictQuestion(origin.number), onYes: agreed(origin, writePullRequest, again)}
+		}
 		ctx, cancel := timeouts.RequestContext()
 		defer cancel()
-		err := userinterface.WriteError(client.UpdatePullRequest(ctx, github.UpdatePullRequestInput{
-			Repository: origin.repository, Number: origin.number, PullRequestIdentifier: identifier, Title: title, Body: body,
+		err = userinterface.WriteError(client.UpdatePullRequest(ctx, github.UpdatePullRequestInput{
+			Repository: origin.repository, Number: origin.number, PullRequestIdentifier: current.Identifier, Title: title, Body: body,
 		}))
 		result := pullRequestUpdatedMessage{origin: origin, title: title, body: body, err: err}
 		if err == nil {
@@ -118,6 +144,16 @@ func (view *View) sendPullRequest(identifier, title, body string) tea.Cmd {
 		}
 		return withShownError(result, terminaltext.SafeError(fmt.Errorf("update pull request: %w", err)))
 	}
+}
+
+func conflictQuestion(number int) string {
+	return fmt.Sprintf("#%d changed on GitHub while you were editing. Overwrite its title and body with your edit?", number)
+}
+
+// pullRequestNotUpdated is the result of a refusal before the write. The error
+// is also sent to show, so it shows even if the view was left meanwhile.
+func pullRequestNotUpdated(origin origin, err error) tea.Msg {
+	return withShownError(pullRequestUpdatedMessage{origin: origin, err: err}, terminaltext.SafeError(err))
 }
 
 // pullRequestUpdated shows the new text at once and refreshes from GitHub.
