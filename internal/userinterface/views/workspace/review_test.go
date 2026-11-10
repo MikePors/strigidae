@@ -263,6 +263,9 @@ func TestReviewAsksAgainWhenPendingReviewChanged(test *testing.T) {
 			if composer.view.review.submitting {
 				test.Error("still submitting after asking again")
 			}
+			if got := composer.infoMessages(); contains(got, "Submitting review…") {
+				test.Errorf("notices = %v, nothing was being submitted", got)
+			}
 			if composer.view.review.draft != "my summary" {
 				test.Errorf("draft = %q", composer.view.review.draft)
 			}
@@ -292,6 +295,9 @@ func TestReviewHeadMovedAfterYes(test *testing.T) {
 	again, ok := composer.lastConfirm()
 	if !ok || !again.Notice || !strings.Contains(again.Text, "Head moved") {
 		test.Errorf("confirmation = %+v, want the head-moved notice", again)
+	}
+	if composer.view.review.submitting {
+		test.Error("still submitting after the head-moved notice")
 	}
 }
 

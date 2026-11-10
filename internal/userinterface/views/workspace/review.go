@@ -173,7 +173,7 @@ func (currentFlow *reviewFlow) update(message tea.Msg, environment reviewEnviron
 			return busy, true
 		}
 		currentFlow.submitting = true
-		return tea.Batch(userinterface.Info("Submitting review…"), currentFlow.recheck(environment, message)), true
+		return currentFlow.recheck(environment, message), true
 	case reviewRecheckedMessage:
 		if !currentFlow.same(environment, message.flow, message.repository, message.number) {
 			return nil, true
@@ -336,12 +336,13 @@ func (currentFlow *reviewFlow) rechecked(message reviewRecheckedMessage, environ
 		currentFlow.submitting = false
 		return currentFlow.confirm(reviewFreshMessage{flow: currentFlow, repository: message.repository, number: message.number, event: message.event, body: message.body, status: message.fresh}, environment)
 	}
-	return currentFlow.submit(environment, message.event, message.body, message.fresh)
+	return tea.Batch(userinterface.Info("Submitting review…"), currentFlow.submit(environment, message.event, message.body, message.fresh))
 }
 
 // sameReviewState reports whether the review state a question was asked
 // about still holds: the same head, and the same pending review with the same
-// number of comments.
+// number of comments. It goes by the count: a draft deleted and another added
+// meanwhile goes unnoticed, as ReviewStatus does not identify the comments.
 func sameReviewState(asked, fresh github.ReviewStatus) bool {
 	if asked.PullRequestIdentifier != fresh.PullRequestIdentifier || asked.HeadSHA != fresh.HeadSHA {
 		return false
@@ -353,7 +354,7 @@ func sameReviewState(asked, fresh github.ReviewStatus) bool {
 }
 
 // submit is the command that runs once the yes has been rechecked. The commit is the
-// head the diff on screen was loaded for, which confirm has just checked is
+// head the diff on screen was loaded for, which rechecked has just checked is
 // still the head. On failure it also returns the error itself, so it shows
 // even if the view was left meanwhile.
 func (currentFlow *reviewFlow) submit(environment reviewEnvironment, event github.ReviewEvent, body string, status github.ReviewStatus) tea.Cmd {
