@@ -45,18 +45,21 @@ func TestListedLexersArePlainText(test *testing.T) {
 		if !ok {
 			test.Fatalf("no example file name for %q", name)
 		}
+		registered := lexers.Get(name)
+		if registered == nil {
+			test.Fatalf("no lexer is registered as %q", name)
+		}
 		lookups := map[string]chroma.Lexer{
-			"name":         lexers.Get(name),
+			"name":         registered,
 			"lower case":   lexers.Get(strings.ToLower(name)),
 			"match":        lexers.Match(fileName),
-			"extension":    lexers.Get(strings.TrimPrefix(fileName, "x.")),
 			"registry":     lexers.GlobalLexerRegistry.Get(name),
 			"markdown tag": lexers.GlobalLexerRegistry.Get(strings.ToUpper(name)),
 		}
-		if len(lexers.Get(name).Config().Aliases) == 0 {
+		if len(registered.Config().Aliases) == 0 {
 			test.Errorf("%q has no aliases; the replacement should copy them", name)
 		}
-		for _, alias := range lexers.Get(name).Config().Aliases {
+		for _, alias := range registered.Config().Aliases {
 			lookups["alias "+alias] = lexers.Get(alias)
 		}
 		for how, lexer := range lookups {

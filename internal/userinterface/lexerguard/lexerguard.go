@@ -87,7 +87,8 @@ func IsBroken(name string) bool {
 	})
 }
 
-// Names returns the names of the replaced lexers.
+// Names returns the names of the lexers listed as broken, whether or not the
+// registry held them to replace.
 func Names() []string {
 	names := make([]string, len(brokenLexers))
 	for i, entry := range brokenLexers {
