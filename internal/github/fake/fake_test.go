@@ -425,7 +425,28 @@ func TestListFilePatches(test *testing.T) {
 	if _, err := client.ListFilePatches(ctx, repository, 1); !errors.Is(err, github.ErrForbidden) {
 		test.Errorf("want the injected error, got %v", err)
 	}
-	if calls := client.Calls(); len(calls) == 0 || calls[len(calls)-1] != (fake.Call{Method: fake.MethodListFilePatches, Repository: repository, Number: 1}) {
+	if calls := client.Calls(); len(calls) == 0 || cmp.Diff(calls[len(calls)-1], fake.Call{Method: fake.MethodListFilePatches, Repository: repository, Number: 1}) != "" {
 		test.Errorf("call not recorded: %v", calls)
+	}
+}
+
+func TestBlobTexts(test *testing.T) {
+	client := fake.New()
+	client.SetBlobText(repository, "1111111", "one")
+	client.SetBlobTextUnavailable(repository, "2222222")
+	got, err := client.BlobTexts(context.Background(), repository, []string{"1111111", "2222222", "3333333"})
+	if err != nil {
+		test.Fatal(err)
+	}
+	if got[0].Text != "one" || got[0].Err != nil {
+		test.Errorf("first = %+v", got[0])
+	}
+	if !errors.Is(got[1].Err, github.ErrNoFileText) || !errors.Is(got[2].Err, github.ErrNotFound) {
+		test.Errorf("errors = %v, %v", got[1].Err, got[2].Err)
+	}
+	calls := client.Calls()
+	want := []fake.Call{{Method: fake.MethodBlobTexts, Repository: repository, ObjectIdentifiers: []string{"1111111", "2222222", "3333333"}}}
+	if diff := cmp.Diff(want, calls); diff != "" {
+		test.Errorf("calls (-want +got):\n%s", diff)
 	}
 }

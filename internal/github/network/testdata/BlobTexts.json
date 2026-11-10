@@ -1,0 +1,4 @@
+{"data": {"repository": {
+  "blob0": {"__typename": "Blob", "oid": "fe7e06ff70aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "text": "package main\n/* a\n b */\n", "isBinary": false, "isTruncated": false, "byteSize": 24},
+  "blob1": {"__typename": "Blob", "oid": "1234567abcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "text": "", "isBinary": false, "isTruncated": false, "byteSize": 0}
+}}}

@@ -194,6 +194,7 @@ type restFile struct {
 	Additions        int
 	Deletions        int
 	Patch            string
+	SHA              string `json:"sha"`
 }
 
 // fileChanges maps the REST file list's statuses to the change types the
@@ -224,7 +225,7 @@ func (client *Client) ListFilePatches(ctx context.Context, repository github.Rep
 			}
 			patches = append(patches, github.FilePatch{
 				Path: file.Filename, PreviousPath: file.PreviousFilename, Change: change,
-				Additions: file.Additions, Deletions: file.Deletions, Patch: file.Patch,
+				Additions: file.Additions, Deletions: file.Deletions, Patch: file.Patch, ObjectIdentifier: file.SHA,
 			})
 		}
 		if len(response) < filePageSize {

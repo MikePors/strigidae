@@ -113,6 +113,13 @@ type Client interface {
 	// large for GitHub to return in full, yields ErrNoFileText; callers
 	// should fall back quietly.
 	FileText(ctx context.Context, repository Repository, commitObjectIdentifier, path string) (string, error)
+	// BlobTexts returns the text of the file blob named by each object
+	// identifier, which may be abbreviated as on a diff's index line, in
+	// one request. The result has one entry per identifier, in order. An
+	// entry's Err wraps ErrNotFound for an identifier that names no blob in
+	// the repository, and ErrNoFileText for a binary or oversized blob. The
+	// error of the call itself is for a failed request.
+	BlobTexts(ctx context.Context, repository Repository, objectIdentifiers []string) ([]BlobText, error)
 }
 
 // CacheIdentity is the optional locally known identity used to isolate list

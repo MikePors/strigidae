@@ -64,8 +64,8 @@ type Options struct {
 	// real editor.
 	Edit workspace.EditFunction
 	// Blobs reads the files of the repository's pull requests from the local
-	// checkout, so the workspaces colour them from their whole text; nil
-	// colours them hunk by hunk.
+	// checkout; nil reads them from the GitHub API only. Either way the
+	// workspaces colour a file from its whole text.
 	Blobs workspace.BlobReader
 }
 
@@ -112,7 +112,7 @@ type View struct {
 	// from here, so they survive closing and reopening a pull request.
 	hunkMarks *workspace.HunkMarks
 	// wholeFiles keeps the files read whole for every workspace opened from
-	// the list; nil without a checkout to read them from.
+	// the list.
 	wholeFiles *workspace.WholeFiles
 	bindings   bindings
 
@@ -174,10 +174,6 @@ func New(client github.Client, repository github.Repository, configured []config
 	if options.Edit == nil {
 		options.Edit = workspace.ExecEditor
 	}
-	var wholeFiles *workspace.WholeFiles
-	if options.Blobs != nil {
-		wholeFiles = workspace.NewWholeFiles(options.Blobs)
-	}
 	tabs := []tab{{name: "All"}}
 	for _, current := range configured {
 		// The config only allows a GitHub login or @me, so Clean changes nothing
@@ -205,7 +201,7 @@ func New(client github.Client, repository github.Repository, configured []config
 		currentBranch: options.CurrentBranch,
 		edit:          options.Edit,
 		hunkMarks:     workspace.NewHunkMarks(),
-		wholeFiles:    wholeFiles,
+		wholeFiles:    workspace.NewWholeFiles(options.Blobs),
 		tabs:          tabs,
 	}
 }

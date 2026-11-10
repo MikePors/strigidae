@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -82,6 +83,29 @@ func (pane *spansPane) SetFileSpans(side github.DiffSide, identifier string, lin
 
 func newWholeFileHarness(test *testing.T, blobs *fakeBlobs) (*harness, *spansPane) {
 	test.Helper()
+	return newWholeFileHarnessFor(test, blobs, nil, nil)
+}
+
+// flakyBlobClient fails its first failures BlobTexts calls with a timeout; a
+// negative count fails them all.
+type flakyBlobClient struct {
+	*fake.Client
+	failures int
+}
+
+func (client *flakyBlobClient) BlobTexts(ctx context.Context, repository github.Repository, identifiers []string) ([]github.BlobText, error) {
+	if client.failures != 0 {
+		client.failures--
+		return nil, fmt.Errorf("read blobs: %w", context.DeadlineExceeded)
+	}
+	return client.Client.BlobTexts(ctx, repository, identifiers)
+}
+
+// newWholeFileHarnessFor opens the whole-file pull request with a checkout
+// reader (nil: none; the API only) and a client wrapper (nil: the fake as
+// it is). Patches, if any, make the diff load file by file.
+func newWholeFileHarnessFor(test *testing.T, blobs *fakeBlobs, wrap func(*fake.Client) github.Client, patches []github.FilePatch) (*harness, *spansPane) {
+	test.Helper()
 	client := fake.New()
 	detail := testDetail()
 	detail.Files = []github.ChangedFile{
@@ -89,14 +113,27 @@ func newWholeFileHarness(test *testing.T, blobs *fakeBlobs) (*harness, *spansPan
 		{Path: "new.go", Change: github.FileAdded, Additions: 1},
 	}
 	client.SetPullRequest(detail)
-	client.SetDiff(testRepository, 7, wholeFileDiff)
+	if patches != nil {
+		client.SetError(fake.MethodGetDiff, github.ErrDiffTooLarge)
+		client.SetFilePatches(testRepository, 7, patches)
+	} else {
+		client.SetDiff(testRepository, 7, wholeFileDiff)
+	}
+	var used github.Client = client
+	if wrap != nil {
+		used = wrap(client)
+	}
+	var reader BlobReader // a nil *fakeBlobs must not become a non-nil interface
+	if blobs != nil {
+		reader = blobs
+	}
 	pane := &spansPane{diffPane: newDiffPane(theme.New(true), func() time.Time { return testNow }, false), given: map[string][][]diffview.Span{}}
 	testHarness := &harness{test: test, client: client}
-	testHarness.view = New(client, testRepository, 7,
+	testHarness.view = New(used, testRepository, 7,
 		WithClock(func() time.Time { return testNow }),
 		WithTheme(theme.New(true)),
 		WithFilePane(pane),
-		WithWholeFiles(NewWholeFiles(blobs)),
+		WithWholeFiles(NewWholeFiles(reader)),
 	)
 	testHarness.send(tea.WindowSizeMsg{Width: 100, Height: 30})
 	testHarness.run(testHarness.view.Init())
@@ -163,9 +200,12 @@ func TestWholeFileResultForAFileNoLongerShownIsDropped(test *testing.T) {
 	}
 }
 
-func TestWholeFileFailedReadKeepsPerHunkColours(test *testing.T) {
+// TestWholeFileFailedReadsKeepPerHunkColours has the checkout fail and the
+// API fail in a way that may pass.
+func TestWholeFileFailedReadsKeepPerHunkColours(test *testing.T) {
 	blobs := &fakeBlobs{err: errors.New("fetch failed")}
 	testHarness, pane := newWholeFileHarness(test, blobs)
+	testHarness.client.SetError(fake.MethodBlobTexts, errors.New("bad gateway"))
 	testHarness.press("}")
 	if len(pane.order) != 0 {
 		test.Errorf("sides given after a failed read: %v", pane.order)
@@ -175,27 +215,30 @@ func TestWholeFileFailedReadKeepsPerHunkColours(test *testing.T) {
 			test.Errorf("a failed read showed an error: %v", message)
 		}
 	}
-	// It is not read again.
+	// This view does not ask again.
 	testHarness.press("}", "{")
-	if len(blobs.reads) != 2 {
-		test.Errorf("reads = %v, want one per side", blobs.reads)
+	if len(blobs.reads) != 2 || len(blobTextCalls(testHarness.client)) != 1 {
+		test.Errorf("reads = %v, API calls = %v; want one of each per side", blobs.reads, blobTextCalls(testHarness.client))
 	}
-	if strings.Contains(testHarness.render(), "fetch failed") {
-		test.Error("the failure is on screen")
+	for _, leaked := range []string{"fetch failed", "bad gateway"} {
+		if strings.Contains(testHarness.render(), leaked) {
+			test.Errorf("%q is on screen", leaked)
+		}
 	}
 }
 
 func TestWholeFileTimedOutReadIsReadAgain(test *testing.T) {
 	blobs := bothSides()
 	blobs.timeOuts = 1
-	testHarness, pane := newWholeFileHarness(test, blobs)
+	// The API times out too: the side's last error is a timeout.
+	wrap := func(client *fake.Client) github.Client { return &flakyBlobClient{Client: client, failures: 1} }
+	testHarness, pane := newWholeFileHarnessFor(test, blobs, wrap, nil)
 	testHarness.press("}")
-	// The harness delivers each result at once, so the retry comes before
-	// the new side is read.
-	if diff := cmp.Diff([]string{"7:1111111", "7:1111111", "7:2222222"}, blobs.reads); diff != "" {
+	// Both sides are read together, then the one that timed out again.
+	if diff := cmp.Diff([]string{"7:1111111", "7:2222222", "7:1111111"}, blobs.reads); diff != "" {
 		test.Errorf("reads (-want +got):\n%s", diff)
 	}
-	if diff := cmp.Diff([]string{"LEFT:1111111", "RIGHT:2222222"}, pane.order); diff != "" {
+	if diff := cmp.Diff([]string{"RIGHT:2222222", "LEFT:1111111"}, pane.order); diff != "" {
 		test.Errorf("sides given to the pane (-want +got):\n%s", diff)
 	}
 }
@@ -203,9 +246,10 @@ func TestWholeFileTimedOutReadIsReadAgain(test *testing.T) {
 func TestWholeFileSideThatKeepsTimingOutIsReadTwice(test *testing.T) {
 	blobs := bothSides()
 	blobs.timeOuts = 100
-	testHarness, pane := newWholeFileHarness(test, blobs)
+	wrap := func(client *fake.Client) github.Client { return &flakyBlobClient{Client: client, failures: -1} }
+	testHarness, pane := newWholeFileHarnessFor(test, blobs, wrap, nil)
 	testHarness.press("}")
-	if diff := cmp.Diff([]string{"7:1111111", "7:1111111", "7:2222222", "7:2222222"}, blobs.reads); diff != "" {
+	if diff := cmp.Diff([]string{"7:1111111", "7:2222222", "7:1111111", "7:2222222"}, blobs.reads); diff != "" {
 		test.Errorf("reads (-want +got):\n%s", diff)
 	}
 	// The failure is kept: another file and back reads nothing.
@@ -218,13 +262,121 @@ func TestWholeFileSideThatKeepsTimingOutIsReadTwice(test *testing.T) {
 	}
 }
 
+// blobTextCalls returns the identifiers of each BlobTexts call made.
+func blobTextCalls(client *fake.Client) [][]string {
+	var asked [][]string
+	for _, recorded := range client.Calls() {
+		if recorded.Method == fake.MethodBlobTexts {
+			asked = append(asked, recorded.ObjectIdentifiers)
+		}
+	}
+	return asked
+}
+
+func TestWholeFileWithoutACheckoutReadsBothSidesInOneAPICall(test *testing.T) {
+	testHarness, pane := newWholeFileHarnessFor(test, nil, nil, nil)
+	testHarness.client.SetBlobText(testRepository, "1111111", "package x\n\n/* opened above\nstill comment\nclosed */\nvar a = 1\n")
+	testHarness.client.SetBlobText(testRepository, "2222222", "package x\n\n/* opened above\nstill comment\nclosed */\nvar b = 2\n")
+	testHarness.press("}")
+	if diff := cmp.Diff([][]string{{"1111111", "2222222"}}, blobTextCalls(testHarness.client)); diff != "" {
+		test.Errorf("BlobTexts calls (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff([]string{"LEFT:1111111", "RIGHT:2222222"}, pane.order); diff != "" {
+		test.Fatalf("sides given to the pane (-want +got):\n%s", diff)
+	}
+	for _, identifier := range []string{"1111111", "2222222"} {
+		lines := pane.given[identifier]
+		if !allComment(lines[3]) || !allComment(lines[4]) {
+			test.Errorf("%s: lines 4 and 5 = %v, %v; want comments", identifier, lines[3], lines[4])
+		}
+	}
+	// Reopening asks nothing more.
+	testHarness.press("}", "{")
+	if len(blobTextCalls(testHarness.client)) != 1 {
+		test.Errorf("BlobTexts calls after reopening = %v", blobTextCalls(testHarness.client))
+	}
+}
+
+func TestWholeFileOnlyTheSideTheCheckoutLacksGoesToTheAPI(test *testing.T) {
+	blobs := bothSides()
+	delete(blobs.texts, "1111111")
+	testHarness, pane := newWholeFileHarnessFor(test, blobs, nil, nil)
+	testHarness.client.SetBlobText(testRepository, "1111111", "package x\n\n/* opened above\nstill comment\nclosed */\nvar a = 1\n")
+	testHarness.press("}")
+	if diff := cmp.Diff([][]string{{"1111111"}}, blobTextCalls(testHarness.client)); diff != "" {
+		test.Errorf("BlobTexts calls (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff([]string{"LEFT:1111111", "RIGHT:2222222"}, pane.order); diff != "" {
+		test.Errorf("sides given to the pane (-want +got):\n%s", diff)
+	}
+}
+
+func TestWholeFileFromTheCheckoutAsksTheAPINothing(test *testing.T) {
+	testHarness, pane := newWholeFileHarnessFor(test, bothSides(), nil, nil)
+	testHarness.press("}")
+	if calls := blobTextCalls(testHarness.client); len(calls) != 0 {
+		test.Errorf("BlobTexts calls = %v, want none", calls)
+	}
+	if len(pane.order) != 2 {
+		test.Errorf("sides given to the pane: %v", pane.order)
+	}
+}
+
+func TestWholeFileAPIFailureKeepsPerHunkColours(test *testing.T) {
+	testHarness, pane := newWholeFileHarnessFor(test, nil, nil, nil)
+	testHarness.client.SetError(fake.MethodBlobTexts, errors.New("api down"))
+	testHarness.press("}")
+	if len(pane.order) != 0 {
+		test.Errorf("sides given after a failed API call: %v", pane.order)
+	}
+	for _, message := range testHarness.messages {
+		if _, ok := message.(userinterface.ErrorMessage); ok {
+			test.Errorf("a failed read showed an error: %v", message)
+		}
+	}
+	if strings.Contains(testHarness.render(), "api down") {
+		test.Error("the failure is on screen")
+	}
+	// It is not asked again.
+	testHarness.press("}", "{")
+	if len(blobTextCalls(testHarness.client)) != 1 {
+		test.Errorf("BlobTexts calls = %v, want one", blobTextCalls(testHarness.client))
+	}
+}
+
+func TestWholeFileOfAFileByFileDiffColoursTheNewSide(test *testing.T) {
+	patches := []github.FilePatch{
+		{Path: "x.go", Change: github.FileModified, Patch: "@@ -4,3 +4,3 @@\n still comment\n closed */\n-var a = 1\n+var b = 2", ObjectIdentifier: "2222222"},
+		{Path: "new.go", Change: github.FileAdded, Patch: "@@ -0,0 +1 @@\n+package x", ObjectIdentifier: "3333333"},
+	}
+	testHarness, pane := newWholeFileHarnessFor(test, nil, nil, patches)
+	testHarness.client.SetBlobText(testRepository, "2222222", "package x\n\n/* opened above\nstill comment\nclosed */\nvar b = 2\n")
+	testHarness.press("}")
+	if diff := cmp.Diff([][]string{{"2222222"}}, blobTextCalls(testHarness.client)); diff != "" {
+		test.Errorf("BlobTexts calls (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff([]string{"RIGHT:2222222"}, pane.order); diff != "" {
+		test.Fatalf("sides given to the pane (-want +got):\n%s", diff)
+	}
+	if lines := pane.given["2222222"]; !allComment(lines[3]) {
+		test.Errorf("line 4 = %v, want a comment", lines[3])
+	}
+}
+
 // TestWholeFilesStartAgainEmptyPastTheLimit crosses the limit twice, so a
 // reset that forgot the byte count would keep one side at most afterwards.
 func TestWholeFilesStartAgainEmptyPastTheLimit(test *testing.T) {
 	side := [][]diffview.Span{{{Text: "x"}}}
 	files := NewWholeFiles(nil)
 	files.limit = 2 * spansSize(side)
-	sides := []wholeFileKey{{"a", "1"}, {"b", "2"}, {"c", "3"}, {"d", "4"}, {"e", "5"}, {"f", "6"}}
+	sides := []wholeFileKey{
+		{path: "a", objectIdentifier: "1"},
+		{path: "b", objectIdentifier: "2"},
+		{path: "c", objectIdentifier: "3"},
+		{path: "d", objectIdentifier: "4"},
+		{path: "e", objectIdentifier: "5"},
+		{path: "f", objectIdentifier: "6"},
+	}
 	for _, key := range sides {
 		files.keep(key, side)
 	}
@@ -246,5 +398,172 @@ func TestWholeFileAddedFileTriggersNoRead(test *testing.T) {
 	}
 	if len(blobs.reads) != 0 {
 		test.Errorf("reads for an added file: %v", blobs.reads)
+	}
+}
+
+// reopened opens the whole-file pull request again in a new view sharing
+// files, as reopening the pull request from the list does.
+func reopened(test *testing.T, client *fake.Client, files *WholeFiles, wrap func(*fake.Client) github.Client) (*harness, *spansPane) {
+	test.Helper()
+	pane := &spansPane{diffPane: newDiffPane(theme.New(true), func() time.Time { return testNow }, false), given: map[string][][]diffview.Span{}}
+	var used github.Client = client
+	if wrap != nil {
+		used = wrap(client)
+	}
+	testHarness := &harness{test: test, client: client}
+	testHarness.view = New(used, testRepository, 7,
+		WithClock(func() time.Time { return testNow }),
+		WithTheme(theme.New(true)),
+		WithFilePane(pane),
+		WithWholeFiles(files),
+	)
+	testHarness.send(tea.WindowSizeMsg{Width: 100, Height: 30})
+	testHarness.run(testHarness.view.Init())
+	return testHarness, pane
+}
+
+func TestWholeFileTransientFailureIsOnlyKeptByTheView(test *testing.T) {
+	for name, failure := range map[string]error{
+		"plain error":          errors.New("bad gateway"),
+		"rate limit":           &github.RateLimitError{},
+		"not signed in":        fmt.Errorf("read 2 blobs: %w", github.ErrNotAuthenticated),
+		"forbidden":            fmt.Errorf("read 2 blobs: %w", github.ErrForbidden),
+		"whole call not found": fmt.Errorf("read 2 blobs: %w", github.ErrNotFound),
+	} {
+		test.Run(name, func(test *testing.T) {
+			testHarness, pane := newWholeFileHarnessFor(test, nil, nil, nil)
+			testHarness.client.SetBlobText(testRepository, "1111111", "package x\n\n/* opened above\nstill comment\nclosed */\nvar a = 1\n")
+			testHarness.client.SetBlobText(testRepository, "2222222", "package x\n\n/* opened above\nstill comment\nclosed */\nvar b = 2\n")
+			testHarness.client.SetError(fake.MethodBlobTexts, failure)
+			testHarness.press("}", "{")
+			if len(blobTextCalls(testHarness.client)) != 1 || len(pane.order) != 0 {
+				test.Fatalf("calls = %v, sides given = %v; want one failed call", blobTextCalls(testHarness.client), pane.order)
+			}
+			files := testHarness.view.wholeFiles
+
+			// A new view on the same cache asks again, and now gets colours.
+			testHarness.client.SetError(fake.MethodBlobTexts, nil)
+			again, againPane := reopened(test, testHarness.client, files, nil)
+			again.press("}")
+			if len(blobTextCalls(testHarness.client)) != 2 {
+				test.Errorf("calls = %v, want a second one from the new view", blobTextCalls(testHarness.client))
+			}
+			if diff := cmp.Diff([]string{"LEFT:1111111", "RIGHT:2222222"}, againPane.order); diff != "" {
+				test.Errorf("sides given by the new view (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestWholeFileNotFoundIsKeptForTheSession(test *testing.T) {
+	testHarness, _ := newWholeFileHarnessFor(test, nil, nil, nil) // the fake has no such blobs: ErrNotFound
+	testHarness.press("}")
+	if len(blobTextCalls(testHarness.client)) != 1 {
+		test.Fatalf("calls = %v, want one", blobTextCalls(testHarness.client))
+	}
+	again, _ := reopened(test, testHarness.client, testHarness.view.wholeFiles, nil)
+	again.press("}")
+	if len(blobTextCalls(testHarness.client)) != 1 {
+		test.Errorf("calls = %v, a new view asked again for blobs known to be missing", blobTextCalls(testHarness.client))
+	}
+}
+
+// shortClient answers BlobTexts with one entry too few.
+type shortClient struct{ *fake.Client }
+
+func (client shortClient) BlobTexts(ctx context.Context, repository github.Repository, identifiers []string) ([]github.BlobText, error) {
+	texts, err := client.Client.BlobTexts(ctx, repository, identifiers)
+	if err != nil || len(texts) == 0 {
+		return texts, err
+	}
+	return texts[:len(texts)-1], nil
+}
+
+func TestWholeFileWrongNumberOfAnswersKeepsPerHunkColours(test *testing.T) {
+	wrap := func(client *fake.Client) github.Client { return shortClient{client} }
+	testHarness, pane := newWholeFileHarnessFor(test, nil, wrap, nil)
+	testHarness.client.SetBlobText(testRepository, "1111111", "package x\n")
+	testHarness.client.SetBlobText(testRepository, "2222222", "package x\n")
+	testHarness.press("}")
+	if len(pane.order) != 0 {
+		test.Errorf("sides given after a wrong answer: %v", pane.order)
+	}
+	for _, message := range testHarness.messages {
+		if _, ok := message.(userinterface.ErrorMessage); ok {
+			test.Errorf("a wrong answer showed an error: %v", message)
+		}
+	}
+}
+
+// TestWholeFileNetworkTimeoutIsReadAgainOnce has a timeout inside a network
+// error, as the HTTP client reports one.
+func TestWholeFileNetworkTimeoutIsReadAgainOnce(test *testing.T) {
+	timeout := fmt.Errorf("read 2 blobs: %w", &url.Error{Op: "Post", URL: "https://api.github.com/graphql", Err: context.DeadlineExceeded})
+	testHarness, pane := newWholeFileHarnessFor(test, nil, nil, nil)
+	testHarness.client.SetError(fake.MethodBlobTexts, timeout)
+	testHarness.press("}", "{")
+	if calls := len(blobTextCalls(testHarness.client)); calls != 2 {
+		test.Errorf("API calls = %d, want the first and one more", calls)
+	}
+	if len(pane.order) != 0 {
+		test.Errorf("sides given after timeouts: %v", pane.order)
+	}
+	// A new view tries again: the failure was the view's only.
+	again, _ := reopened(test, testHarness.client, testHarness.view.wholeFiles, nil)
+	again.press("}")
+	if calls := len(blobTextCalls(testHarness.client)); calls != 4 {
+		test.Errorf("API calls = %d, want two more from the new view", calls)
+	}
+}
+
+// otherRepository is a fork of testRepository, with the same paths and blobs.
+var otherRepository = github.Repository{Owner: "fork-owner", Name: testRepository.Name}
+
+func TestWholeFileLastingFailureIsKeptPerRepository(test *testing.T) {
+	testHarness, _ := newWholeFileHarnessFor(test, nil, nil, nil) // blobs missing in testRepository
+	testHarness.press("}")
+	files := testHarness.view.wholeFiles
+
+	other := fake.New()
+	detail := testDetail()
+	detail.Repository = otherRepository
+	detail.Files = []github.ChangedFile{{Path: "x.go", Change: github.FileModified, Additions: 1, Deletions: 1}}
+	other.SetPullRequest(detail)
+	other.SetDiff(otherRepository, 7, wholeFileDiff)
+	other.SetBlobText(otherRepository, "1111111", "package x\n\n/* opened above\nstill comment\nclosed */\nvar a = 1\n")
+	other.SetBlobText(otherRepository, "2222222", "package x\n\n/* opened above\nstill comment\nclosed */\nvar b = 2\n")
+	pane := &spansPane{diffPane: newDiffPane(theme.New(true), func() time.Time { return testNow }, false), given: map[string][][]diffview.Span{}}
+	forkHarness := &harness{test: test, client: other}
+	forkHarness.view = New(other, otherRepository, 7,
+		WithClock(func() time.Time { return testNow }),
+		WithTheme(theme.New(true)),
+		WithFilePane(pane),
+		WithWholeFiles(files),
+	)
+	forkHarness.send(tea.WindowSizeMsg{Width: 100, Height: 30})
+	forkHarness.run(forkHarness.view.Init())
+	forkHarness.press("}")
+	if diff := cmp.Diff([]string{"LEFT:1111111", "RIGHT:2222222"}, pane.order); diff != "" {
+		test.Errorf("sides given in the other repository (-want +got):\n%s", diff)
+	}
+}
+
+func TestWholeFileRefreshAsksAgainAfterATransientFailure(test *testing.T) {
+	testHarness, pane := newWholeFileHarnessFor(test, nil, nil, nil)
+	testHarness.client.SetBlobText(testRepository, "1111111", "package x\n\n/* opened above\nstill comment\nclosed */\nvar a = 1\n")
+	testHarness.client.SetBlobText(testRepository, "2222222", "package x\n\n/* opened above\nstill comment\nclosed */\nvar b = 2\n")
+	testHarness.client.SetError(fake.MethodBlobTexts, errors.New("bad gateway"))
+	testHarness.press("}")
+	if len(blobTextCalls(testHarness.client)) != 1 || len(pane.order) != 0 {
+		test.Fatalf("calls = %v, sides given = %v; want one failed call", blobTextCalls(testHarness.client), pane.order)
+	}
+
+	testHarness.client.SetError(fake.MethodBlobTexts, nil)
+	testHarness.press("R")
+	if len(blobTextCalls(testHarness.client)) != 2 {
+		test.Errorf("calls = %v, want the refresh to ask again", blobTextCalls(testHarness.client))
+	}
+	if diff := cmp.Diff([]string{"LEFT:1111111", "RIGHT:2222222"}, pane.order); diff != "" {
+		test.Errorf("sides given after the refresh (-want +got):\n%s", diff)
 	}
 }

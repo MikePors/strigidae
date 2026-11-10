@@ -46,6 +46,7 @@ const (
 	MethodListBranches       = "ListBranches"
 	MethodCreatePullRequest  = "CreatePullRequest"
 	MethodFileText           = "FileText"
+	MethodBlobTexts          = "BlobTexts"
 )
 
 // Call is one recorded call with the arguments that apply to its method.
@@ -72,6 +73,8 @@ type Call struct {
 	Viewed                bool
 	// CommitObjectIdentifier is set by FileText.
 	CommitObjectIdentifier string
+	// ObjectIdentifiers is set by BlobTexts.
+	ObjectIdentifiers []string
 	// SubjectIdentifier and Reaction are set by AddReaction and RemoveReaction.
 	SubjectIdentifier string
 	Reaction          github.ReactionContent
@@ -124,6 +127,7 @@ type Client struct {
 	branches       map[github.Repository][]github.Branch
 	created        []github.CreatePullRequestInput
 	fileTexts      map[fileTextKey]fileTextEntry
+	blobTexts      map[blobTextKey]fileTextEntry
 	added          []github.AddThreadInput
 	started        []StartedReview
 	deleted        []string
@@ -148,6 +152,7 @@ func New() *Client {
 		merge:          map[github.Repository]MergeSettings{},
 		branches:       map[github.Repository][]github.Branch{},
 		fileTexts:      map[fileTextKey]fileTextEntry{},
+		blobTexts:      map[blobTextKey]fileTextEntry{},
 	}
 }
 

@@ -632,3 +632,21 @@ func TestWrapPassedToWorkspaces(test *testing.T) {
 		}
 	}
 }
+
+// TestWorkspacesShareWholeFiles proves the dashboard hands every workspace it
+// opens the same whole-file cache, which reads from the API when there is no
+// checkout.
+func TestWorkspacesShareWholeFiles(test *testing.T) {
+	view, _ := loadedView(test)
+	opened := func() *workspace.WholeFiles {
+		push, ok := press(view, "enter")().(userinterface.PushMessage)
+		if !ok {
+			test.Fatal("enter should push a view")
+		}
+		return push.View.(*workspace.View).WholeFiles()
+	}
+	first, second := opened(), opened()
+	if first == nil || first != second || first != view.wholeFiles {
+		test.Error("two workspaces opened from the dashboard do not share its whole-file cache")
+	}
+}

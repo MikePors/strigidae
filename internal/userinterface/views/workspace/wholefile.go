@@ -3,12 +3,14 @@ package workspace
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/MikePors/strigidae/internal/diff"
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/components/diffview"
 )
 
@@ -32,9 +34,9 @@ const spanOverhead = 32
 // WholeFiles colours a modified, renamed or copied file from its whole text
 // on each side rather than hunk by hunk, so a hunk that starts inside a
 // comment or string is coloured right. It holds the reader and the spans of
-// every side read so far, by path and blob, so they last as long as the
-// value: a view that opens workspaces keeps one for the session. It is used
-// on the UI goroutine only; the reading and lexing happen in a tea.Cmd.
+// every side read so far, by repository, path and blob, so they last as long
+// as the value: a view that opens workspaces keeps one for the session. It is
+// used on the UI goroutine only; the reading and lexing happen in a tea.Cmd.
 type WholeFiles struct {
 	reader BlobReader
 	spans  map[wholeFileKey][][]diffview.Span // nil: the side could not be used
@@ -42,7 +44,9 @@ type WholeFiles struct {
 	limit  int                                // bound on bytes; maximumWholeFileBytes
 }
 
-// NewWholeFiles returns an empty cache reading with reader.
+// NewWholeFiles returns an empty cache. Sides are read with reader, the local
+// checkout, where it can supply them, and with the GitHub API otherwise; a nil
+// reader means the API only.
 func NewWholeFiles(reader BlobReader) *WholeFiles {
 	return &WholeFiles{reader: reader, spans: map[wholeFileKey][][]diffview.Span{}, limit: maximumWholeFileBytes}
 }
@@ -53,22 +57,48 @@ func WithWholeFiles(files *WholeFiles) Option {
 	return func(view *View) { view.wholeFiles = files }
 }
 
+// WholeFiles returns the cache this workspace reads files whole with, nil
+// when it colours files hunk by hunk.
+func (view *View) WholeFiles() *WholeFiles { return view.wholeFiles }
+
 // wholeFileKey is one side of a file. The path is part of it because the
-// path picks the language.
+// path picks the language, and the repository because the dashboard shares
+// one cache across repositories (a fork and its upstream can have the same
+// path and blob, yet one may lack what the other has).
 type wholeFileKey struct {
+	repository       github.Repository
 	path             string
 	objectIdentifier string
 }
 
-// wholeFileMessage is the result of reading and lexing one side.
+// wholeFileMessage is the result of reading and lexing the sides of one
+// file.
 type wholeFileMessage struct {
-	owner *View
-	key   wholeFileKey
-	lines [][]diffview.Span
-	err   error
+	owner   *View
+	results []wholeFileResult
 }
 
-// wholeFileSides returns the commands that read the sides of the shown file
+// wholeFileResult is one side. checkoutErr is why the checkout could not
+// supply it, when it was asked and the API was asked next; source is where
+// lines came from.
+type wholeFileResult struct {
+	key         wholeFileKey
+	lines       [][]diffview.Span
+	err         error
+	source      string
+	checkoutErr error
+	// requestFailed is set when the whole API request failed rather than this
+	// blob: such an error says nothing lasting about the blob.
+	requestFailed bool
+}
+
+// Where a side's text came from.
+const (
+	sourceCheckout = "checkout"
+	sourceAPI      = "api"
+)
+
+// wholeFileSides returns the command that reads the sides of the shown file
 // not read yet, and gives the pane the sides already read. It runs after
 // every update, so it is cheap when there is nothing to do.
 func (view *View) wholeFileSides() tea.Cmd {
@@ -87,69 +117,165 @@ func (view *View) wholeFileSides() tea.Cmd {
 		side       github.DiffSide
 		identifier string
 	}{{github.SideLeft, file.OldObjectIdentifier}, {github.SideRight, file.NewObjectIdentifier}}
-	var commands []tea.Cmd
+	var unread []wholeFileKey
 	for _, side := range sides {
 		if side.identifier == "" {
 			continue
 		}
-		key := wholeFileKey{path: file.Path(), objectIdentifier: side.identifier}
+		key := wholeFileKey{repository: view.repository, path: file.Path(), objectIdentifier: side.identifier}
 		if lines, ok := view.wholeFiles.spans[key]; ok {
 			if lines != nil {
 				view.filePane.SetFileSpans(side.side, side.identifier, lines)
 			}
 			continue
 		}
-		if view.wholeFilePending[key] {
+		if view.wholeFilePending[key] || view.wholeFileFailed[key] {
 			continue
 		}
 		if view.wholeFilePending == nil {
 			view.wholeFilePending = map[wholeFileKey]bool{}
 		}
 		view.wholeFilePending[key] = true
-		commands = append(commands, view.readWholeFile(key))
+		unread = append(unread, key)
 	}
-	return tea.Batch(commands...)
+	if len(unread) == 0 {
+		return nil
+	}
+	return view.readWholeFile(unread)
 }
 
-// readWholeFile reads one side and lexes it, off the UI goroutine.
-func (view *View) readWholeFile(key wholeFileKey) tea.Cmd {
+// readWholeFile reads the given sides of one file and lexes them, off the UI
+// goroutine. The checkout is asked first, when there is one; every side it
+// could not supply is asked of the API in one request.
+func (view *View) readWholeFile(keys []wholeFileKey) tea.Cmd {
 	reader, number, timeouts, owner := view.wholeFiles.reader, view.number, view.timeouts, view
+	client, repository := view.client, view.repository
 	return func() tea.Msg {
-		// The deadline covers fetching the pull request's head too.
-		ctx, cancel := timeouts.LoadContext()
-		defer cancel()
-		contents, err := reader.ReadBlob(ctx, number, key.objectIdentifier)
-		if err != nil {
-			return wholeFileMessage{owner: owner, key: key, err: err}
+		results := make([]wholeFileResult, len(keys))
+		var missing []int
+		for i, key := range keys {
+			results[i].key = key
+			if reader == nil {
+				missing = append(missing, i)
+				continue
+			}
+			contents, err := readCheckoutBlob(timeouts, reader, number, key.objectIdentifier)
+			if err != nil {
+				results[i].checkoutErr = err
+				missing = append(missing, i)
+				continue
+			}
+			results[i].source = sourceCheckout
+			results[i].lines, results[i].err = diffview.HighlightFile(key.path, contents)
 		}
-		lines, err := diffview.HighlightFile(key.path, contents)
-		return wholeFileMessage{owner: owner, key: key, lines: lines, err: err}
+		if len(missing) > 0 {
+			readAPIBlobs(timeouts, client, repository, results, missing)
+		}
+		return wholeFileMessage{owner: owner, results: results}
 	}
 }
 
-// wholeFileRead keeps the result of reading one side. The pane is given it
-// after the update if the file is still shown (wholeFileSides); otherwise it
-// waits in the cache.
+// readCheckoutBlob reads one blob from the checkout under its own deadline,
+// which covers fetching the pull request's head too.
+func readCheckoutBlob(timeouts userinterface.Timeouts, reader BlobReader, number int, identifier string) ([]byte, error) {
+	ctx, cancel := timeouts.LoadContext()
+	defer cancel()
+	return reader.ReadBlob(ctx, number, identifier)
+}
+
+// readAPIBlobs fills in the results at the indexes in missing from one
+// BlobTexts request. It uses a fresh deadline: the checkout may have used up
+// the first.
+func readAPIBlobs(timeouts userinterface.Timeouts, client github.Client, repository github.Repository, results []wholeFileResult, missing []int) {
+	ctx, cancel := timeouts.LoadContext()
+	defer cancel()
+	identifiers := make([]string, len(missing))
+	for i, index := range missing {
+		identifiers[i] = results[index].key.objectIdentifier
+	}
+	texts, err := client.BlobTexts(ctx, repository, identifiers)
+	if err == nil && len(texts) != len(identifiers) {
+		err = fmt.Errorf("asked for %d blobs, got %d", len(identifiers), len(texts))
+	}
+	for i, index := range missing {
+		result := &results[index]
+		result.source = sourceAPI
+		switch {
+		case err != nil:
+			result.err, result.requestFailed = err, true
+		case texts[i].Err != nil:
+			result.err = texts[i].Err
+		default:
+			result.lines, result.err = diffview.HighlightFile(result.key.path, []byte(texts[i].Text))
+		}
+	}
+}
+
+// wholeFileRead keeps the result of reading the sides of a file. The pane is
+// given them after the update if the file is still shown (wholeFileSides);
+// otherwise they wait in the cache.
 //
 // A read that only ran out of time is not kept the first time, so the side
 // is read once more while the file is shown (it may have waited for another
-// read's fetch); a second one is kept as a failure, so a timeout that always
-// expires, or a disk always slower than it, cannot start reads without end.
+// read's fetch); a second one is a failure of this view only, so a timeout
+// that always expires, or a disk always slower than it, cannot start reads
+// without end. A failure that may pass (anything but lastingFailure) is kept
+// in the view, not in the cache shared by the session, until the user
+// refreshes (retryWholeFiles) or reopens the pull request. A failure of the
+// whole request is kept for the view only, even one that looks lasting such
+// as a whole-call ErrNotFound: it says nothing about the blob.
 func (view *View) wholeFileRead(message wholeFileMessage) {
-	delete(view.wholeFilePending, message.key)
-	if message.err != nil {
-		// The path is left out: it is the pull request author's text.
-		slog.Info("colour a file hunk by hunk: whole file unavailable", "blob", message.key.objectIdentifier, "err", message.err)
-		timedOut := errors.Is(message.err, context.DeadlineExceeded) || errors.Is(message.err, context.Canceled)
-		if timedOut && !view.wholeFileRetried[message.key] {
-			if view.wholeFileRetried == nil {
-				view.wholeFileRetried = map[wholeFileKey]bool{}
+	for _, result := range message.results {
+		delete(view.wholeFilePending, result.key)
+		if result.err == nil {
+			slog.Debug("whole file read", "blob", result.key.objectIdentifier, "source", result.source)
+		} else {
+			// The path is left out: it is the pull request author's text.
+			slog.Info("colour a file hunk by hunk: whole file unavailable", "blob", result.key.objectIdentifier, "source", result.source, "checkout_err", result.checkoutErr, "err", result.err)
+			timedOut := errors.Is(result.err, context.DeadlineExceeded) || errors.Is(result.err, context.Canceled)
+			if timedOut && !view.wholeFileRetried[result.key] {
+				if view.wholeFileRetried == nil {
+					view.wholeFileRetried = map[wholeFileKey]bool{}
+				}
+				view.wholeFileRetried[result.key] = true
+				continue
 			}
-			view.wholeFileRetried[message.key] = true
-			return
+			if result.requestFailed || !lastingFailure(result.err) {
+				// Kept for this view only: refreshing or reopening the pull
+				// request tries again.
+				if view.wholeFileFailed == nil {
+					view.wholeFileFailed = map[wholeFileKey]bool{}
+				}
+				view.wholeFileFailed[result.key] = true
+				continue
+			}
+		}
+		view.wholeFiles.keep(result.key, result.lines)
+	}
+}
+
+// retryWholeFiles forgets the failures this view kept for the user's refresh,
+// so the shown file's sides are asked for again. Reads in flight stay pending,
+// and the lasting failures in the shared cache stay.
+func (view *View) retryWholeFiles() {
+	clear(view.wholeFileFailed)
+	clear(view.wholeFileRetried)
+}
+
+// lastingFailure reports whether err will happen again for the same blob, so
+// the shared cache may remember it: the blob is missing, has no text, or
+// can't be coloured. Anything else (a rate limit, a server error, being
+// offline, running out of time) may pass.
+func lastingFailure(err error) bool {
+	for _, lasting := range []error{
+		github.ErrNotFound, github.ErrNoFileText,
+		diffview.ErrFileTooLarge, diffview.ErrFileBinary, diffview.ErrNoLanguage, diffview.ErrLexTimeout, diffview.ErrLexPanic,
+	} {
+		if errors.Is(err, lasting) {
+			return true
 		}
 	}
-	view.wholeFiles.keep(message.key, message.lines)
+	return false
 }
 
 // keep stores one side, starting again empty when it would pass the memory
