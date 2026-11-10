@@ -229,15 +229,8 @@ func TestSetAsideReturnsPermissionErrors(test *testing.T) {
 	}
 	test.Cleanup(func() { _ = os.Chmod(directory, 0o700) })
 
-	finished := make(chan error, 1)
-	go func() { finished <- SetAside(path) }()
-	select {
-	case err := <-finished:
-		if !errors.Is(err, fs.ErrPermission) {
-			test.Errorf("SetAside error = %v; want a permission error", err)
-		}
-	case <-time.After(5 * time.Second):
-		test.Fatal("SetAside did not return")
+	if err := setAsideWithin(test, path); !errors.Is(err, fs.ErrPermission) {
+		test.Errorf("SetAside error = %v; want a permission error", err)
 	}
 
 	if err := os.Chmod(directory, 0o700); err != nil {
@@ -246,6 +239,38 @@ func TestSetAsideReturnsPermissionErrors(test *testing.T) {
 	kept, err := os.ReadFile(path)
 	if err != nil || string(kept) != "{nope" {
 		test.Errorf("existing file = %q, %v; want it left intact", kept, err)
+	}
+}
+
+// A name that exists but whose set-aside name is too long for the file
+// system: the check on the destination fails for every suffix, and SetAside
+// must stop at the first error rather than count suffixes forever.
+func TestSetAsideReturnsErrorsFromTheDestinationCheck(test *testing.T) {
+	path := filepath.Join(test.TempDir(), strings.Repeat("a", 250))
+	if err := os.WriteFile(path, []byte("{nope"), 0o600); err != nil {
+		test.Skipf("file system does not take a 250-byte name: %v", err)
+	}
+	err := setAsideWithin(test, path)
+	if err == nil || errors.Is(err, fs.ErrNotExist) {
+		test.Fatalf("SetAside error = %v; want the file system's error", err)
+	}
+	if kept, readErr := os.ReadFile(path); readErr != nil || string(kept) != "{nope" {
+		test.Errorf("existing file = %q, %v; want it left intact", kept, readErr)
+	}
+}
+
+// setAsideWithin runs SetAside and fails the test if it does not return, so a
+// regression to the endless loop fails instead of hanging the run.
+func setAsideWithin(test *testing.T, path string) error {
+	test.Helper()
+	finished := make(chan error, 1)
+	go func() { finished <- SetAside(path) }()
+	select {
+	case err := <-finished:
+		return err
+	case <-time.After(5 * time.Second):
+		test.Fatal("SetAside did not return")
+		return nil
 	}
 }
 
