@@ -19,14 +19,8 @@ import (
 // the command, so :react never asks y/N. Choosing toggles: a reaction the
 // viewer has is removed, otherwise it is added.
 
-// reactionTarget is the comment :react was started on, as the screen showed it.
-type reactionTarget struct {
-	commentIdentifier string
-	reactions         []github.ReactionSummary
-}
-
 // summary returns the comment's summary for one kind of reaction (zero if none).
-func (target reactionTarget) summary(content github.ReactionContent) github.ReactionSummary {
+func (target commentTarget) summary(content github.ReactionContent) github.ReactionSummary {
 	for _, summary := range target.reactions {
 		if summary.Content == content {
 			return summary
@@ -41,6 +35,7 @@ type reactionToggledMessage struct {
 	commentIdentifier string
 	content           github.ReactionContent
 	removed           bool
+	kind              commentKind
 	err               error
 }
 
@@ -70,14 +65,13 @@ func (view *View) reactCommand(name string, comment commentTarget) tea.Cmd {
 	if name != "" {
 		content, _ = reactionNamed(name) // checked by checkReaction
 	}
-	target := reactionTarget{commentIdentifier: comment.identifier, reactions: comment.reactions}
 	if content != "" {
-		return view.toggleReaction(target, content)
+		return view.toggleReaction(comment, content)
 	}
 	if view.picker != nil || view.review.chooser != nil {
 		return nil
 	}
-	view.openReactionPicker(target, comment.author)
+	view.openReactionPicker(comment, comment.author)
 	return nil
 }
 
@@ -89,7 +83,7 @@ func reactionNames() string {
 	return strings.Join(names, ", ")
 }
 
-func (view *View) openReactionPicker(target reactionTarget, author string) {
+func (view *View) openReactionPicker(target commentTarget, author string) {
 	items := make([]string, len(github.ReactionContents))
 	for i, content := range github.ReactionContents {
 		items[i] = reactionLabel(content, target.summary(content))
@@ -112,7 +106,7 @@ func reactionLabel(content github.ReactionContent, summary github.ReactionSummar
 }
 
 // toggleReaction removes the viewer's reaction of the given kind, or adds it.
-func (view *View) toggleReaction(target reactionTarget, content github.ReactionContent) tea.Cmd {
+func (view *View) toggleReaction(target commentTarget, content github.ReactionContent) tea.Cmd {
 	removed := target.summary(content).ViewerReacted
 	origin, client, timeouts := view.origin(), view.client, view.timeouts
 	view.writeStarted()
@@ -121,12 +115,12 @@ func (view *View) toggleReaction(target reactionTarget, content github.ReactionC
 		defer cancel()
 		var err error
 		if removed {
-			err = client.RemoveReaction(ctx, target.commentIdentifier, content)
+			err = client.RemoveReaction(ctx, target.identifier, content)
 		} else {
-			err = client.AddReaction(ctx, target.commentIdentifier, content)
+			err = client.AddReaction(ctx, target.identifier, content)
 		}
 		err = userinterface.WriteError(err)
-		result := reactionToggledMessage{origin: origin, commentIdentifier: target.commentIdentifier, content: content, removed: removed, err: err}
+		result := reactionToggledMessage{origin: origin, commentIdentifier: target.identifier, content: content, removed: removed, kind: target.kind, err: err}
 		if err == nil {
 			return result
 		}
@@ -139,7 +133,7 @@ func (view *View) toggleReaction(target reactionTarget, content github.ReactionC
 func (view *View) reactionToggled(message reactionToggledMessage) tea.Cmd {
 	view.writeDone()
 	if userinterface.IsWriteTimeout(message.err) {
-		return view.reloadThreads() // the error is already shown
+		return view.reactionReload(message.kind) // the error is already shown
 	}
 	if message.err != nil {
 		return nil // the error is already shown
@@ -151,11 +145,38 @@ func (view *View) reactionToggled(message reactionToggledMessage) tea.Cmd {
 	if message.removed {
 		text = "removed " + message.content.Emoji()
 	}
-	return tea.Batch(userinterface.Info(text), view.reloadThreads())
+	reload := view.reactionReload(message.kind)
+	return tea.Batch(userinterface.Info(text), reload)
+}
+
+func (view *View) reactionReload(kind commentKind) tea.Cmd {
+	if kind == commentReview {
+		return view.reloadThreads()
+	}
+	return view.reloadPullRequest()
 }
 
 // applyReaction records a successful write in the comment on screen.
 func (view *View) applyReaction(message reactionToggledMessage) {
+	if view.detail != nil && view.detail.Identifier == message.commentIdentifier {
+		cloned := *view.detail
+		cloned.Reactions = github.WithViewerReaction(cloned.Reactions, message.content, !message.removed)
+		view.detail = &cloned
+		view.overview.invalidate()
+		return
+	}
+	if view.detail != nil {
+		cloned := *view.detail
+		for i := range cloned.Comments {
+			if cloned.Comments[i].Identifier == message.commentIdentifier {
+				cloned.Comments = slices.Clone(cloned.Comments)
+				cloned.Comments[i].Reactions = github.WithViewerReaction(cloned.Comments[i].Reactions, message.content, !message.removed)
+				view.detail = &cloned
+				view.overview.invalidate()
+				return
+			}
+		}
+	}
 	// Fresh slices, so the ones handed to the file pane earlier are never written to.
 	threads := slices.Clone(view.threads)
 	for i := range threads {

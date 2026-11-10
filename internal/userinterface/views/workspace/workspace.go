@@ -109,6 +109,8 @@ type View struct {
 	pullRequestPending bool
 	diffPending        bool
 	threadPending      bool
+	detailStartsDiff   bool                  // pending detail must start the full refresh
+	detailGeneration   int                   // latest detail load; older detail loads are stale
 	threadGeneration   int                   // latest thread load or in-place change; older thread loads are stale
 	threadLoaded       bool                  // a thread load has succeeded
 	threadErr          error                 // why the last thread load failed; cleared when a load starts
@@ -167,8 +169,10 @@ type View struct {
 	// pickerChecks is non-nil while the picker lists checks (:checks) rather
 	// than files; it is the sorted list the picker's rows came from.
 	pickerChecks []github.Check
-	// pickerReaction is non-nil while the picker lists the 8 reactions (:react).
-	pickerReaction *reactionTarget
+	// pickerComment supplies a comment context to an action awaiting selection.
+	pickerComment *commentSelection
+	// pickerReaction is non-nil while the shared eight-reaction picker is open.
+	pickerReaction *commentTarget
 
 	paneFile   github.ChangedFile // last value given to filePane.SetFile
 	paneWidth  int                // size last given to filePane.SetSize
@@ -327,7 +331,7 @@ func (view *View) update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		view.filePane.SetTheme(view.theme)
 		view.layout()
 	case pullRequestLoadedMessage:
-		if !view.mine(message.owner, message.repository, message.number, message.sequence) {
+		if !view.mine(message.owner, message.repository, message.number, message.sequence) || message.generation != view.detailGeneration {
 			return view, nil
 		}
 		command := view.pullRequestLoaded(message)

@@ -21,7 +21,8 @@ const (
 
 // invocation is how an entry was reached: by a key, which carries its count,
 // or by a command, which carries its arguments. target is filled in by the
-// dispatcher for the levels the resolver handles.
+// dispatcher for the levels the resolver handles. A picker can supply a comment
+// context; the dispatcher refreshes it by identifier before running the action.
 type invocation struct {
 	message   keys.Message
 	arguments string
@@ -34,13 +35,16 @@ type invocation struct {
 // do the same thing.
 //
 // The dispatcher (invoke) runs the steps in a fixed order: check the
-// arguments, ready (the guard table), the diff pane on screen, the target, then
-// busy (the guard table), then run.
+// arguments, ready (the guard table), optionally ask for a missing comment
+// context, the diff pane on screen for cursor contexts, the target, busy, then
+// run. A context picker checks busy before opening and resumes this same pipeline.
 type actionEntry struct {
 	keys.Action
 	// level is what the action works on. The resolver finds lines, threads and
 	// comments; the others are for the table, and run finds its own.
 	level level
+	// commentPickerTitle lets an action ask for a missing Overview comment context.
+	commentPickerTitle string
 	// words finish the notices (see request.words); rule narrows a comment.
 	words string
 	rule  *commentRule
@@ -49,6 +53,8 @@ type actionEntry struct {
 	diffVisible bool
 	// guard is the kind of write, checked by the one guard table, or writeNone.
 	guard writeKind
+	// overviewGuard is the readiness policy for description and top-level contexts.
+	overviewGuard writeKind
 	// fresh is the re-read policy; see freshCheck.
 	fresh freshCheck
 	// pluginsMayRun lets a plugin's command effect run the entry's command.
@@ -193,7 +199,7 @@ func (workspaceBindings *bindings) entries() []actionEntry {
 		},
 		{
 			Action: keys.Action{Name: "react", Command: "react"},
-			level:  levelComment, words: "react to it", diffVisible: true, guard: writeReaction,
+			level:  levelComment, words: "react to it", diffVisible: true, guard: writeReaction, overviewGuard: writeOverviewReaction, commentPickerTitle: "React to",
 			check: checkReaction,
 			run: func(view *View, call invocation) tea.Cmd {
 				return view.reactCommand(call.arguments, call.target.comment)
@@ -285,25 +291,39 @@ func (view *View) invoke(chosen actionEntry, call invocation) tea.Cmd {
 			return refusal
 		}
 	}
-	if chosen.guard != writeNone {
-		if notice := view.guardState().ready(chosen.guard); notice != nil {
+	commentIdentifier := call.target.comment.identifier
+	guard := chosen.guard
+	if chosen.overviewGuard != writeNone && ((commentIdentifier == "" && onOverview(view)) || (commentIdentifier != "" && call.target.comment.kind != commentReview)) {
+		guard = chosen.overviewGuard
+	}
+	if guard != writeNone {
+		if notice := view.guardState().ready(guard); notice != nil {
 			return notice
 		}
 	}
-	if chosen.diffVisible {
+	if chosen.commentPickerTitle != "" && commentIdentifier == "" && onOverview(view) {
+		if guard != writeNone {
+			if notice := view.guardState().busy(guard); notice != nil {
+				return notice
+			}
+		}
+		view.openCommentTargetPicker(chosen, call)
+		return nil
+	}
+	if chosen.diffVisible && commentIdentifier == "" {
 		if hidden := view.diffHidden(chosen.words, chosen.level); hidden != nil {
 			return hidden
 		}
 	}
 	if chosen.level.resolved() {
-		resolved, refusal := view.resolveTarget(request{level: chosen.level, words: chosen.words, rule: chosen.rule})
+		resolved, refusal := view.resolveTarget(request{level: chosen.level, words: chosen.words, rule: chosen.rule, commentIdentifier: commentIdentifier})
 		if refusal != nil {
 			return refusal
 		}
 		call.target = resolved
 	}
-	if chosen.guard != writeNone {
-		if busy := view.guardState().busy(chosen.guard); busy != nil {
+	if guard != writeNone {
+		if busy := view.guardState().busy(guard); busy != nil {
 			return busy
 		}
 	}

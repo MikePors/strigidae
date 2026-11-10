@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -11,6 +12,7 @@ import (
 
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/github/fake"
+	"github.com/MikePors/strigidae/internal/golden"
 	"github.com/MikePors/strigidae/internal/userinterface/components/diffview"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
@@ -367,7 +369,6 @@ func TestReactOffACommentSaysSoAndWritesNothing(test *testing.T) {
 			inliner.diffView().CursorDown(1)
 		}},
 		{"folded thread", func(inliner *inliner) { inliner.toThread("t-resolved") }},
-		{"overview", func(inliner *inliner) { inliner.press("h", "g g", "l") }},
 	}
 	for _, testCase := range tests {
 		for _, argument := range []string{"", "heart"} {
@@ -384,6 +385,168 @@ func TestReactOffACommentSaysSoAndWritesNothing(test *testing.T) {
 			})
 		}
 	}
+}
+
+func TestReactOnOverviewOpensTargetPicker(test *testing.T) {
+	inliner := newInliner(test)
+	detail := testDetail()
+	detail.Comments[0].Identifier = "issue-comment-1"
+	detail.Comments[1].Identifier = "issue-comment-2"
+	inliner.client.SetPullRequest(detail)
+	inliner.view.detail = &detail
+	inliner.press("h", "g g", "l")
+	inliner.react("")
+	if inliner.view.picker == nil || len(inliner.view.pickerComment.targets) != 3 {
+		test.Fatal("overview target picker did not open")
+	}
+	if got := []commentKind{inliner.view.pickerComment.targets[0].kind, inliner.view.pickerComment.targets[1].kind, inliner.view.pickerComment.targets[2].kind}; !cmp.Equal(got, []commentKind{commentDescription, commentTopLevel, commentTopLevel}) {
+		test.Fatalf("target order = %v", got)
+	}
+	if got := commentTargetLabel(inliner.view.pickerComment.targets[1], pickerLabelWidth(inliner.view.width)); !strings.Contains(got, "bob") || !strings.Contains(got, "Thanks!") {
+		test.Errorf("target label lacks author/body distinction: %q", got)
+	}
+}
+
+func TestNamedOverviewReactionValidatesThenOpensTargetPicker(test *testing.T) {
+	inliner := newInliner(test)
+	detail := testDetail()
+	detail.Comments[0].Identifier = "issue-comment-1"
+	inliner.view.detail = &detail
+	inliner.view.diff = DiffState{Err: context.DeadlineExceeded}
+	inliner.press("h", "g g", "l")
+	inliner.react("rocket")
+	if inliner.view.picker == nil || inliner.view.pickerComment.call.arguments != "rocket" || len(inliner.reactionCalls()) != 0 {
+		test.Fatal("named reaction did not wait for a target choice")
+	}
+	inliner.keyPress(tea.KeyEscape)
+	if inliner.view.picker != nil || len(inliner.reactionCalls()) != 0 {
+		test.Fatal("cancel wrote a reaction")
+	}
+}
+
+func TestOverviewReactionRequiresLoadedDetail(test *testing.T) {
+	inliner := newInliner(test)
+	inliner.view.detail = nil
+	inliner.press("h", "g g", "l")
+	inliner.react("")
+	if inliner.view.picker != nil || len(inliner.reactionCalls()) != 0 {
+		test.Fatal("opened or wrote before the pull request loaded")
+	}
+	if !strings.Contains(strings.Join(inliner.infoMessages(), " "), "pull request not loaded") {
+		test.Errorf("infos = %v", inliner.infoMessages())
+	}
+}
+
+func TestOverviewReactionRefusesRemovedTargetAtAdmission(test *testing.T) {
+	inliner := newInliner(test)
+	detail := testDetail()
+	detail.Comments[0].Identifier = "issue-comment-1"
+	inliner.view.detail = &detail
+	inliner.press("h", "g g", "l")
+	inliner.react("rocket")
+	refreshed := *inliner.view.detail
+	refreshed.Comments = nil
+	inliner.view.detail = &refreshed
+	inliner.keyPress(tea.KeyDown)
+	inliner.keyPress(tea.KeyEnter)
+	if len(inliner.reactionCalls()) != 0 {
+		test.Fatalf("stale target was written: %+v", inliner.reactionCalls())
+	}
+	if !strings.Contains(strings.Join(inliner.infoMessages(), " "), "no longer exists") {
+		test.Errorf("infos = %v", inliner.infoMessages())
+	}
+}
+
+func TestOverviewReactionPickerStagesCancelAndToggle(test *testing.T) {
+	newOverviewInliner := func(test *testing.T) *inliner {
+		inliner := newInliner(test)
+		detail := testDetail()
+		detail.Comments[0].Identifier = "issue-comment-1"
+		inliner.client.SetPullRequest(detail)
+		inliner.view.detail = &detail
+		inliner.press("h", "g g", "l")
+		return inliner
+	}
+	test.Run("cancel target picker", func(test *testing.T) {
+		inliner := newOverviewInliner(test)
+		inliner.react("")
+		inliner.keyPress(tea.KeyEscape)
+		if len(inliner.reactionCalls()) != 0 || inliner.view.picker != nil {
+			test.Fatal("target cancellation wrote or left picker open")
+		}
+	})
+	test.Run("cancel reaction picker", func(test *testing.T) {
+		inliner := newOverviewInliner(test)
+		inliner.react("")
+		inliner.keyPress(tea.KeyEnter)
+		inliner.keyPress(tea.KeyEscape)
+		if len(inliner.reactionCalls()) != 0 || inliner.view.picker != nil {
+			test.Fatal("reaction cancellation wrote or left picker open")
+		}
+	})
+	test.Run("named picker toggles selected issue comment", func(test *testing.T) {
+		inliner := newOverviewInliner(test)
+		inliner.react("rocket")
+		inliner.keyPress(tea.KeyDown) // top-level comment, after description
+		inliner.keyPress(tea.KeyEnter)
+		calls := inliner.reactionCalls()
+		if len(calls) != 1 || calls[0].SubjectIdentifier != "issue-comment-1" || calls[0].Reaction != github.ReactionRocket {
+			test.Fatalf("calls = %+v", calls)
+		}
+	})
+}
+
+func TestOverviewReactionUsesSelectedCommentAfterDiffCursorMoves(test *testing.T) {
+	inliner := newInliner(test)
+	detail := testDetail()
+	detail.Comments[0].Identifier = "issue-comment-1"
+	inliner.client.SetPullRequest(detail)
+	inliner.view.detail = &detail
+	inliner.press("h", "g g", "l")
+	inliner.react("")
+	inliner.keyPress(tea.KeyDown) // select the top-level comment
+	inliner.keyPress(tea.KeyEnter)
+	inliner.toComment(1)           // the open picker must keep the selected Overview context
+	inliner.keyPress(tea.KeyEnter) // like
+	calls := inliner.reactionCalls()
+	if len(calls) != 1 || calls[0].SubjectIdentifier != "issue-comment-1" || calls[0].Reaction != github.ReactionThumbsUp {
+		test.Fatalf("calls = %+v", calls)
+	}
+	if inliner.lastErr() != nil {
+		test.Fatalf("reaction failed: %v", inliner.lastErr())
+	}
+}
+
+func TestOverviewReactionPickerShowsCountsAndViewerMark(test *testing.T) {
+	inliner := newInliner(test)
+	detail := testDetail()
+	detail.Reactions = []github.ReactionSummary{{Content: github.ReactionHeart, Count: 4, ViewerReacted: true}}
+	inliner.view.detail = &detail
+	inliner.press("h", "g g", "l")
+	inliner.react("")
+	inliner.keyPress(tea.KeyEnter)
+	if shown := inliner.shown(); !strings.Contains(shown, "❤️ heart") || !strings.Contains(shown, "4  ✓") {
+		test.Fatalf("shared reaction picker omitted count or viewer mark:\n%s", shown)
+	}
+}
+
+func TestOverviewReactionLabelsCleanHostileText(test *testing.T) {
+	target := commentTarget{kind: commentTopLevel, author: "x\x1b[31m", body: "hello\u202e world\x9b"}
+	label := commentTargetLabel(target, 56)
+	if strings.ContainsRune(label, '\x1b') || strings.ContainsRune(label, '\u202e') || strings.ContainsRune(label, '\u009b') {
+		test.Errorf("unsafe label %q", label)
+	}
+}
+
+func TestOverviewReactionTargetPickerGolden(test *testing.T) {
+	inliner := newInliner(test)
+	detail := testDetail()
+	detail.Comments[0].Identifier = "issue-comment-1"
+	detail.Comments[1].Identifier = "issue-comment-2"
+	inliner.view.detail = &detail
+	inliner.press("h", "g g", "l")
+	inliner.react("")
+	golden.Assert(test, "overview_react_targets", inliner.render(), false)
 }
 
 func TestReactRefusedWhileBusy(test *testing.T) {
@@ -456,5 +619,184 @@ func TestReactPickerTitleCleansTheAuthor(test *testing.T) {
 	}
 	if shown := inliner.render(); strings.Contains(shown, "\x1b[31mb") {
 		test.Errorf("author escape reached the screen: %q", shown)
+	}
+}
+
+func TestOverviewReactionUpdatesBeforeReloadAndUsesFreshState(test *testing.T) {
+	for _, state := range noDiffStates() {
+		for _, commentIndex := range []int{-1, 0} {
+			test.Run(state.name+"/"+map[bool]string{true: "description", false: "comment"}[commentIndex < 0], func(test *testing.T) {
+				inliner := newInliner(test)
+				detail := testDetail()
+				detail.Comments[0].Identifier = "issue-comment-1"
+				inliner.client.SetPullRequest(detail)
+				inliner.view.detail = &detail
+				inliner.press("h", "g g", "l")
+				state.removeDiff(inliner)
+				for _, wantMethod := range []string{fake.MethodAddReaction, fake.MethodRemoveReaction} {
+					inliner.react("")
+					if commentIndex >= 0 {
+						inliner.keyPress(tea.KeyDown)
+					}
+					inliner.keyPress(tea.KeyEnter)
+					if inliner.view.pickerReaction == nil {
+						test.Fatal("no reaction picker")
+					}
+					// Run the write and deliver its result, leaving reload commands unexecuted.
+					command := inliner.view.pickerKey(tea.KeyPressMsg{Code: tea.KeyEnter})
+					result, ok := command().(reactionToggledMessage)
+					if !ok {
+						test.Fatal("write failed")
+					}
+					inliner.view.Update(result)
+					identifier := detail.Identifier
+					if commentIndex >= 0 {
+						identifier = "issue-comment-1"
+					}
+					target, found := inliner.view.resolveCommentTarget(identifier)
+					if !found || (len(target.reactions) > 0) != (wantMethod == fake.MethodAddReaction) {
+						test.Fatalf("immediate reactions = %+v", target.reactions)
+					}
+					calls := inliner.reactionCalls()
+					if calls[len(calls)-1].Method != wantMethod {
+						test.Fatalf("calls = %+v", calls)
+					}
+				}
+				if len(detail.Reactions) != 0 || len(detail.Comments[0].Reactions) != 0 {
+					test.Fatal("original snapshot mutated")
+				}
+			})
+		}
+	}
+}
+
+func TestOverviewReactionPickerRechecksState(test *testing.T) {
+	for _, stage := range []string{"target", "reaction"} {
+		for _, busy := range busyCases() {
+			test.Run(stage+"/"+busy.name, func(test *testing.T) {
+				inliner := newInliner(test)
+				inliner.press("h", "g g", "l")
+				inliner.react("")
+				if stage == "reaction" {
+					inliner.keyPress(tea.KeyEnter)
+				}
+				busy.apply(inliner)
+				inliner.keyPress(tea.KeyEnter)
+				if len(inliner.reactionCalls()) != 0 || inliner.view.picker != nil {
+					test.Fatal("busy choice wrote or retained picker")
+				}
+			})
+		}
+	}
+}
+
+func TestOverviewReactionChoiceUsesLatestReactions(test *testing.T) {
+	inliner := newInliner(test)
+	inliner.press("h", "g g", "l")
+	inliner.react("")
+	inliner.keyPress(tea.KeyEnter)
+	detail := *inliner.view.detail
+	detail.Reactions = []github.ReactionSummary{{Content: github.ReactionThumbsUp, Count: 1, ViewerReacted: true}}
+	inliner.client.SetPullRequest(detail)
+	inliner.view.detail = &detail
+	inliner.keyPress(tea.KeyEnter)
+	calls := inliner.reactionCalls()
+	if len(calls) != 1 || calls[0].Method != fake.MethodRemoveReaction {
+		test.Fatalf("calls = %+v", calls)
+	}
+}
+
+func BenchmarkOverviewReactionTargets(benchmark *testing.B) {
+	detail := testDetail()
+	detail.Comments = make([]github.IssueComment, 1000)
+	for i := range detail.Comments {
+		detail.Comments[i] = github.IssueComment{Identifier: fmt.Sprintf("comment-%d", i), Author: "reviewer", Body: strings.Repeat("discussion ", 100)}
+	}
+	view := &View{detail: &detail, theme: theme.New(true), width: 100}
+	benchmark.Run("open picker", func(benchmark *testing.B) {
+		benchmark.ReportAllocs()
+		for benchmark.Loop() {
+			view.openCommentTargetPicker(view.entryNamed("react"), invocation{})
+		}
+	})
+	benchmark.Run("resolve last target", func(benchmark *testing.B) {
+		benchmark.ReportAllocs()
+		for benchmark.Loop() {
+			if _, found := view.resolveCommentTarget("comment-999"); !found {
+				benchmark.Fatal("missing target")
+			}
+		}
+	})
+}
+
+func TestOverviewReactionReloadsIgnoreOlderResults(test *testing.T) {
+	inliner := newInliner(test)
+	inliner.press("h", "g g", "l")
+	detail := *inliner.view.detail
+	detail.Reactions = []github.ReactionSummary{{Content: github.ReactionHeart, Count: 1, ViewerReacted: true}}
+	inliner.client.SetPullRequest(detail)
+	older := inliner.view.reloadPullRequest()()
+	detail.Reactions = nil
+	inliner.client.SetPullRequest(detail)
+	newer := inliner.view.reloadPullRequest()()
+	inliner.send(newer)
+	inliner.send(older)
+	if len(inliner.view.detail.Reactions) != 0 {
+		test.Fatal("older add refresh overwrote newer removal")
+	}
+	inliner.react("heart")
+	inliner.keyPress(tea.KeyEnter)
+	calls := inliner.reactionCalls()
+	if len(calls) != 1 || calls[0].Method != fake.MethodAddReaction {
+		test.Fatalf("toggle used stale state: %+v", calls)
+	}
+}
+
+func TestOverviewReactionLabelsFitNarrowPicker(test *testing.T) {
+	for _, width := range []int{32, 48, 80} {
+		inliner := newInliner(test)
+		inliner.view.width = width
+		inliner.press("h", "g g", "l")
+		inliner.react("")
+		rendered := ansi.Strip(inliner.view.picker.Render(width, 20))
+		if !strings.Contains(rendered, "Description · alice") {
+			test.Fatalf("width %d lost target prefix:\n%s", width, rendered)
+		}
+	}
+}
+
+func TestReactReportsUnloadedDiffBeforeHiddenCursor(test *testing.T) {
+	for _, name := range []string{"", "heart"} {
+		inliner := newInliner(test)
+		inliner.toComment(0)
+		inliner.press("h")
+		inliner.view.width = 20
+		inliner.view.diffPending = true
+		inliner.react(name)
+		if diff := cmp.Diff([]string{"diff not loaded"}, inliner.infoMessages()); diff != "" {
+			test.Fatal(diff)
+		}
+		if inliner.view.picker != nil || len(inliner.reactionCalls()) != 0 {
+			test.Fatal("used stale diff cursor")
+		}
+	}
+}
+
+func TestReactionMenuRefusesDeletedOverviewComment(test *testing.T) {
+	inliner := newInliner(test)
+	detail := testDetail()
+	detail.Comments[0].Identifier = "issue-comment-1"
+	inliner.view.detail = &detail
+	inliner.press("h", "g g", "l")
+	inliner.react("")
+	inliner.keyPress(tea.KeyDown)
+	inliner.keyPress(tea.KeyEnter)
+	detail.Comments = nil
+	inliner.keyPress(tea.KeyEnter)
+	if len(inliner.reactionCalls()) != 0 || inliner.view.CapturesKeys() {
+		test.Fatal("deleted target was written or retained keys")
+	}
+	if diff := cmp.Diff([]string{"comment no longer exists; refresh and try again"}, inliner.infoMessages()); diff != "" {
+		test.Fatal(diff)
 	}
 }

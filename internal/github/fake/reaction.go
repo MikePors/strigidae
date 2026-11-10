@@ -34,6 +34,21 @@ func (client *Client) react(ctx context.Context, method, subjectIdentifier strin
 	if err := client.begin(ctx, Call{Method: method, SubjectIdentifier: subjectIdentifier, Reaction: content}); err != nil {
 		return err
 	}
+	for key, detail := range client.details {
+		if detail.Identifier == subjectIdentifier {
+			detail.Reactions = github.WithViewerReaction(detail.Reactions, content, add)
+			client.details[key] = detail
+			return nil
+		}
+		for index := range detail.Comments {
+			if detail.Comments[index].Identifier == subjectIdentifier {
+				detail.Comments = slices.Clone(detail.Comments)
+				detail.Comments[index].Reactions = github.WithViewerReaction(detail.Comments[index].Reactions, content, add)
+				client.details[key] = detail
+				return nil
+			}
+		}
+	}
 	key, threadIndex, commentIndex, err := client.findAllowed(subjectIdentifier, func(github.ReviewComment) bool { return true })
 	if err != nil {
 		return fmt.Errorf("%s: %w", method, err)

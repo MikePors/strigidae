@@ -1,0 +1,40 @@
+open #7 Add retry policy to sync client
+alice · changes requested · main ← feat/retry · [enhancement] [sync] · reviewers: bob ?, team core ?, carol ✗…
+╭─ Files 0/5 viewed ────────────╮╭─ Overview ────────────────────────────────────────────────────────────────╮
+│> Overview            ╭─ React to ───────────────────────────────────────────────────╮                      │
+│  Comments (9)        │> ▏                                                           │                      │
+│    M …ernal/sync/clie│> Description · alice · ## Summary This change adds a **ret…  │                      │
+│    A …ernal/sync/retr│  Comment · bob · Thanks! Could you add a test for the **ji…  │ so transient         │
+│    D …ernal/sync/lega│  Comment · alice · Done in the latest push.                  │eplaces the ad-       │
+│    R …cy-and-backoff.╰──────────────────────────────────────────────────────────────╯lper.                 │
+│    M README.md           +2 -1││                                                                           │
+│                               ││   ### What changed                                                        │
+│                               ││                                                                           │
+│                               ││   • Added  Retry  with exponential backoff and jitter                     │
+│                               ││   • Moved the timeout handling into the helper                            │
+│                               ││   • Deleted the legacy  retryForever  function                            │
+│                               ││                                                                           │
+│                               ││   ### Example                                                             │
+│                               ││                                                                           │
+│                               ││     err := Retry(ctx, 5, func() error {                                   │
+│                               ││         return client.Sync(ctx)                                           │
+│                               ││     })                                                                    │
+│                               ││                                                                           │
+│                               ││   ### Notes                                                               │
+│                               ││                                                                           │
+│                               ││   The backoff starts at 100ms and doubles up to a cap of 10s. See         │
+│                               ││   the design doc for why jitter matters when many clients restart         │
+│                               ││   at once, and the follow-up issue for making the policy                  │
+│                               ││   configurable.                                                           │
+│                               ││                                                                           │
+│                               ││   1. Review the helper first                                              │
+│                               ││   2. Then the call sites                                                  │
+│                               ││   3. Finally the removed code                                             │
+│                               ││                                                                           │
+│                               ││ Checks (0)                                                                │
+│                               ││ No checks.                                                                │
+│                               ││                                                                           │
+│                               ││ Conversation (5)                                                          │
+│                               ││ bob commented · 2d ago                                                    │
+│                               ││   Thanks! Could you add a test for the jitter bounds?                     │
+╰───────────────────────────────╯╰───────────────────────────────────────────────────────────────────────────╯

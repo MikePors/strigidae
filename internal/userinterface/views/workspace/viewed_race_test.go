@@ -53,7 +53,7 @@ func sentStates(client *fake.Client) []bool {
 
 func (harness *harness) reload(detail github.PullRequestDetail) {
 	harness.test.Helper()
-	harness.send(pullRequestLoadedMessage{owner: harness.view, repository: testRepository, number: 7, sequence: harness.view.sequence, detail: detail})
+	harness.send(pullRequestLoadedMessage{owner: harness.view, repository: testRepository, number: 7, generation: harness.view.detailGeneration, sequence: harness.view.sequence, detail: detail})
 }
 
 func TestRapidTogglesAreSerialised(test *testing.T) {

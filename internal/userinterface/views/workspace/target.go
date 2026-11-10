@@ -29,6 +29,8 @@ func (level level) resolved() bool { return level >= levelLines }
 // request is what an action asks the resolver for.
 type request struct {
 	level level
+	// commentIdentifier supplies an explicit context instead of the diff cursor.
+	commentIdentifier string
 	// words finish the notices: "reply", "resolve it", "react to it". The
 	// focus notice is "focus the diff to " + words; the several-threads one
 	// ends in " to " + words; the lines one is "move onto a diff line to " +
@@ -63,9 +65,9 @@ type resolvedTarget struct {
 	comment commentTarget
 }
 
-// resolveTarget turns the diff cursor into the target the request names, or
+// resolveTarget refreshes an explicit comment context or resolves the diff cursor, and
 // returns the command that tells why there is none. The caller has checked
-// that the diff pane is on screen (diffHidden) where the action needs it.
+// readiness and, for cursor contexts, that the diff pane is on screen.
 func (view *View) resolveTarget(request request) (resolvedTarget, tea.Cmd) {
 	if view.mode == contentComments && request.level == levelThread {
 		if item := view.selectedConversation(); item != nil && item.thread != nil {
@@ -75,6 +77,13 @@ func (view *View) resolveTarget(request request) (resolvedTarget, tea.Cmd) {
 			return resolvedTarget{thread: *item.thread}, nil
 		}
 		return resolvedTarget{}, userinterface.Info("select a review thread to " + request.words)
+	}
+	if request.level == levelComment && request.commentIdentifier != "" {
+		comment, found := view.resolveCommentTarget(request.commentIdentifier)
+		if !found {
+			return resolvedTarget{}, userinterface.Info("comment no longer exists; refresh and try again")
+		}
+		return checkCommentTarget(comment, request)
 	}
 	var context diffview.Context
 	if view.selection() > 0 { // the Overview has no diff cursor
@@ -98,28 +107,31 @@ func (view *View) resolveTarget(request request) (resolvedTarget, tea.Cmd) {
 		}
 		return resolvedTarget{}, userinterface.Info("several threads on this line: move onto one to " + request.words)
 	}
-	rule := request.rule
-	var comment commentTarget
-	if context.OnComment {
-		comment = reviewCommentTarget(context.Comment, context.CommentThread)
-	}
-	if context.OnComment && context.CommentThread.Local.IsLocal() {
-		return resolvedTarget{}, userinterface.Info(localRefusal(request.words))
-	}
-	switch {
-	case !context.OnComment:
-		if rule != nil {
-			return resolvedTarget{}, userinterface.Info(rule.notMine)
+	if !context.OnComment {
+		if request.rule != nil {
+			return resolvedTarget{}, userinterface.Info(request.rule.notMine)
 		}
 		return resolvedTarget{}, userinterface.Info("move onto a comment to " + request.words)
-	case rule != nil && !rule.mine(comment):
-		return resolvedTarget{}, userinterface.Info(rule.notMine)
-	case rule != nil && !rule.allowed(comment):
-		return resolvedTarget{}, userinterface.Info(rule.cannot)
 	}
-	if rule != nil && rule.unsupported != nil {
-		if refusal := rule.unsupported(comment); refusal != nil {
-			return resolvedTarget{}, refusal
+	return checkCommentTarget(reviewCommentTarget(context.Comment, context.CommentThread), request)
+}
+
+func checkCommentTarget(comment commentTarget, request request) (resolvedTarget, tea.Cmd) {
+	if comment.thread != nil && comment.thread.Local.IsLocal() {
+		return resolvedTarget{}, userinterface.Info(localRefusal(request.words))
+	}
+	rule := request.rule
+	if rule != nil {
+		if !rule.mine(comment) {
+			return resolvedTarget{}, userinterface.Info(rule.notMine)
+		}
+		if !rule.allowed(comment) {
+			return resolvedTarget{}, userinterface.Info(rule.cannot)
+		}
+		if rule.unsupported != nil {
+			if refusal := rule.unsupported(comment); refusal != nil {
+				return resolvedTarget{}, refusal
+			}
 		}
 	}
 	return resolvedTarget{comment: comment}, nil

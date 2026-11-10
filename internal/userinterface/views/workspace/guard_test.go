@@ -15,7 +15,7 @@ import (
 
 // writeKinds is every kind of write, so a kind added without a row in the
 // tables below fails TestGuardTableCoversEveryKind.
-var writeKinds = []writeKind{writeComment, writeOverviewComment, writeThread, writeReaction, writeReview, writeMerge, writeDiscard, writePullRequest, writeDraftState}
+var writeKinds = []writeKind{writeComment, writeOverviewComment, writeThread, writeReaction, writeOverviewReaction, writeReview, writeMerge, writeDiscard, writePullRequest, writeDraftState}
 
 // pluginKinds are the guard kinds of the plugin commands: they write nothing,
 // so busy states do not block them.
@@ -112,6 +112,7 @@ func guardActions() []guardAction {
 		{"x", writeThread, (*inliner).onOwnComment, press("x")},
 		{":resolve", writeThread, (*inliner).onOwnComment, command("resolve", "")},
 		{":unresolve", writeThread, (*inliner).onOwnComment, command("unresolve", "")},
+		{":react on Overview", writeOverviewReaction, func(inliner *inliner) { inliner.press("h", "g g", "l") }, command("react", "")},
 		{":react", writeReaction, (*inliner).onOwnComment, command("react", "")},
 		{":react heart", writeReaction, (*inliner).onOwnComment, command("react", "heart")},
 		{":approve", writeReview, func(*inliner) {}, command("approve", "")},
@@ -449,8 +450,7 @@ func TestGuardAtReactionPickerChoice(test *testing.T) {
 	}
 }
 
-// noDiff is a diff state as load.go leaves it: a load in flight (nothing parsed
-// yet), or one that failed (too large, nothing parsed).
+// noDiff is a diff state without usable cursor data: loading, failed or unparsed.
 type noDiff struct {
 	name  string
 	apply func(inliner *inliner)
@@ -464,6 +464,10 @@ func noDiffStates() []noDiff {
 		}},
 		{"diff failed", func(inliner *inliner) {
 			inliner.view.diff = DiffState{Err: github.ErrDiffTooLarge}
+			inliner.view.diffPending = false
+		}},
+		{"diff unparsed", func(inliner *inliner) {
+			inliner.view.diff = DiffState{}
 			inliner.view.diffPending = false
 		}},
 	}

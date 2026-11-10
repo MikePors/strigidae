@@ -22,6 +22,7 @@ type (
 		repository github.Repository
 		number     int
 		sequence   int
+		generation int // latest detail load; older reloads are stale
 		detail     github.PullRequestDetail
 		err        error
 		// thenDiff makes the result start the diff load. The diff is fetched
@@ -131,13 +132,18 @@ func (view *View) reloadPullRequest() tea.Cmd { return view.fetchPullRequest(fal
 
 func (view *View) fetchPullRequest(thenDiff bool) tea.Cmd {
 	view.pullRequestPending = true
+	view.detailGeneration++
+	generation := view.detailGeneration
+	// A newer detail load must still start the diff if it supersedes a full refresh.
+	view.detailStartsDiff = thenDiff || view.detailStartsDiff
+	thenDiff = view.detailStartsDiff
 	view.overview.invalidate()
 	client, repository, number, sequence, owner, timeouts := view.client, view.repository, view.number, view.sequence, view, view.timeouts
 	return func() tea.Msg {
 		ctx, cancel := timeouts.LoadContext()
 		defer cancel()
 		detail, err := client.GetPullRequest(ctx, repository, number)
-		return pullRequestLoadedMessage{owner: owner, repository: repository, number: number, sequence: sequence, detail: detail, err: err, thenDiff: thenDiff}
+		return pullRequestLoadedMessage{owner: owner, repository: repository, number: number, sequence: sequence, generation: generation, detail: detail, err: err, thenDiff: thenDiff}
 	}
 }
 
@@ -164,6 +170,7 @@ func (view *View) mine(owner *View, repository github.Repository, number, sequen
 }
 
 func (view *View) pullRequestLoaded(message pullRequestLoadedMessage) tea.Cmd {
+	view.detailStartsDiff = false
 	view.pullRequestPending = false
 	view.detailErr = message.err
 	if message.err != nil {

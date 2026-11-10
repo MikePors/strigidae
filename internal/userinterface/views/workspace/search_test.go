@@ -45,7 +45,7 @@ func TestRestoreFollowsTheFileWhenFilesChange(test *testing.T) {
 	harness.searchFor("zzz", userinterface.PromptChanged)
 	detail := testDetail()
 	detail.Files = append(detail.Files[:0:0], detail.Files[1:]...) // client.go is gone
-	harness.send(pullRequestLoadedMessage{owner: harness.view, repository: testRepository, number: 7, sequence: harness.view.sequence, detail: detail})
+	harness.send(pullRequestLoadedMessage{owner: harness.view, repository: testRepository, number: 7, generation: harness.view.detailGeneration, sequence: harness.view.sequence, detail: detail})
 	harness.searchFor("zzz", userinterface.PromptCancelled)
 	if got := harness.view.selectedPath(); got != "internal/sync/retry.go" {
 		test.Errorf("esc restored %q", got)
@@ -171,7 +171,7 @@ func TestRefreshRecomputesTheFilesMarks(test *testing.T) {
 	harness.searchFor("retry", userinterface.PromptSubmitted)
 	detail := testDetail()
 	detail.Files = detail.Files[:2] // client.go, retry.go
-	harness.send(pullRequestLoadedMessage{owner: harness.view, repository: testRepository, number: 7, sequence: harness.view.sequence, detail: detail})
+	harness.send(pullRequestLoadedMessage{owner: harness.view, repository: testRepository, number: 7, generation: harness.view.detailGeneration, sequence: harness.view.sequence, detail: detail})
 	if !harness.view.search.Marked(3) || harness.view.search.Marked(5) {
 		test.Error("marks were not recomputed")
 	}

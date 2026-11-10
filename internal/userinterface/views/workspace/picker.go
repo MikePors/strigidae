@@ -29,17 +29,16 @@ func (view *View) pickerKey(message tea.KeyPressMsg) tea.Cmd {
 	result := view.picker.Update(message)
 	switch result.Outcome {
 	case picker.Cancelled:
-		view.picker, view.pickerChecks, view.pickerReaction = nil, nil, nil
+		view.picker, view.pickerChecks, view.pickerReaction, view.pickerComment = nil, nil, nil, nil
 	case picker.Chosen:
-		checks, target := view.pickerChecks, view.pickerReaction
-		view.picker, view.pickerChecks, view.pickerReaction = nil, nil, nil
+		checks, target, selection := view.pickerChecks, view.pickerReaction, view.pickerComment
+		view.picker, view.pickerChecks, view.pickerReaction, view.pickerComment = nil, nil, nil, nil
+		if selection != nil {
+			selection.call.target.comment = selection.targets[result.Index]
+			return view.invoke(selection.action, selection.call)
+		}
 		if target != nil {
-			// Choosing is the re-admission point: a review or merge may
-			// have started while the picker was open.
-			if busy := view.guardState().busy(writeReaction); busy != nil {
-				return busy
-			}
-			return view.toggleReaction(*target, github.ReactionContents[result.Index])
+			return view.invoke(view.entryNamed("react"), invocation{arguments: github.ReactionContents[result.Index].Shortcode(), target: resolvedTarget{comment: *target}})
 		}
 		if checks != nil {
 			return view.openCheck(checks[result.Index])

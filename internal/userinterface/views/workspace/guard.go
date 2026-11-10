@@ -24,8 +24,10 @@ const (
 	// writeOverviewComment: `C` (a top-level comment) from anywhere in the
 	// workspace. It needs no diff.
 	writeOverviewComment
-	// writeReaction: `:react`.
+	// writeReaction: `:react` on a review comment.
 	writeReaction
+	// writeOverviewReaction: the same action on a description or top-level comment.
+	writeOverviewReaction
 	// writeReview: `:approve`, `:request-changes`, `:review`.
 	writeReview
 	// writeMerge: `:merge`.
@@ -65,15 +67,16 @@ var allBusy = busyStates{submittingReview: true, mergeInProgress: true, commentS
 // loaded and what blocks it. Keying busy by target (reacting to a published
 // comment during a submit, say) is future work.
 var guardTable = map[writeKind]guardRule{
-	writeComment:         {needsDiff: true, busy: allBusy},
-	writeOverviewComment: {busy: allBusy},
-	writeThread:          {needsDiff: true, busy: allBusy},
-	writeReaction:        {needsDiff: true, busy: allBusy},
-	writeReview:          {needsDiff: true, busy: allBusy},
-	writeMerge:           {needsDiff: true, busy: allBusy},
-	writeDiscard:         {busy: allBusy},
-	writePullRequest:     {busy: allBusy},
-	writeDraftState:      {busy: allBusy},
+	writeComment:          {needsDiff: true, busy: allBusy},
+	writeOverviewComment:  {busy: allBusy},
+	writeThread:           {needsDiff: true, busy: allBusy},
+	writeReaction:         {needsDiff: true, busy: allBusy},
+	writeOverviewReaction: {busy: allBusy},
+	writeReview:           {needsDiff: true, busy: allBusy},
+	writeMerge:            {needsDiff: true, busy: allBusy},
+	writeDiscard:          {busy: allBusy},
+	writePullRequest:      {busy: allBusy},
+	writeDraftState:       {busy: allBusy},
 
 	usePluginLines:       {needsDiff: true},
 	usePluginPullRequest: {},

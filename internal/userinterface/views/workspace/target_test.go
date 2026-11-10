@@ -79,7 +79,7 @@ var targetActions = []struct {
 	},
 	{
 		":react", func(inliner *inliner) { inliner.react("heart") },
-		commentNotices("move onto a comment to react to it", false),
+		withNotice(commentNotices("move onto a comment to react to it", false), "overview", ""),
 	},
 	{
 		"e", func(inliner *inliner) { inliner.press("e") },
@@ -145,7 +145,7 @@ func commentNotices(notice string, own bool) map[string]string {
 // question, or wrote a reaction.
 func effect(inliner *inliner) bool {
 	_, asked := inliner.lastConfirm()
-	return len(inliner.openedOn) > 0 || asked || len(inliner.reactionCalls()) > 0
+	return len(inliner.openedOn) > 0 || asked || len(inliner.reactionCalls()) > 0 || inliner.view.picker != nil
 }
 
 func TestEachActionResolvesItsTargetFromTheCursor(test *testing.T) {
@@ -245,7 +245,6 @@ func TestOverviewNeverTargetsTheHiddenDiffCursor(test *testing.T) {
 		{"r", func(inliner *inliner) { inliner.press("r") }, "no comment thread here"},
 		{"e", func(inliner *inliner) { inliner.press("e") }, noticeEdit},
 		{"D", func(inliner *inliner) { inliner.press("D") }, noticeDelete},
-		{":react", func(inliner *inliner) { inliner.react("heart") }, "move onto a comment to react to it"},
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.name, func(test *testing.T) {
@@ -265,6 +264,17 @@ func TestOverviewNeverTargetsTheHiddenDiffCursor(test *testing.T) {
 				test.Error("went ahead on the hidden cursor")
 			}
 		})
+	}
+}
+
+func TestOverviewReactionIgnoresHiddenDiffCursor(test *testing.T) {
+	inliner := newInliner(test)
+	inliner.seedTargets()
+	inliner.toLineContaining("first mine")
+	inliner.press("h", "g g", "l")
+	inliner.react("heart")
+	if inliner.view.picker == nil || len(inliner.view.pickerComment.targets) == 0 || len(inliner.reactionCalls()) != 0 {
+		test.Fatal("Overview did not open its target picker independently of the hidden diff cursor")
 	}
 }
 
@@ -380,5 +390,17 @@ func TestOwnCommentThatCannotBeChanged(test *testing.T) {
 				test.Error("went ahead")
 			}
 		})
+	}
+}
+
+func TestExplicitCommentContextUsesTargetRules(test *testing.T) {
+	inliner := newInliner(test)
+	inliner.toComment(0)
+	rule := &commentRule{mine: func(commentTarget) bool { return false }, notMine: "not your comment"}
+	for _, identifier := range []string{"", firstCommentIdentifier} {
+		_, refusal := inliner.view.resolveTarget(request{level: levelComment, words: "edit it", rule: rule, commentIdentifier: identifier})
+		if refusal == nil || infoText(refusal()) != rule.notMine {
+			test.Fatal("explicit and cursor contexts must apply the same rights rule")
+		}
 	}
 }

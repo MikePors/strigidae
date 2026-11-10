@@ -91,11 +91,11 @@ func TestSetFileOnChangedMetadata(test *testing.T) {
 	}
 	detail := testDetail()
 	detail.Files[0].Additions = 99
-	harness.send(pullRequestLoadedMessage{owner: harness.view, repository: testRepository, number: 7, sequence: harness.view.sequence, detail: detail})
+	harness.send(pullRequestLoadedMessage{owner: harness.view, repository: testRepository, number: 7, generation: harness.view.detailGeneration, sequence: harness.view.sequence, detail: detail})
 	if len(pane.files) != 2 || pane.files[1].Additions != 99 || pane.files[1].Path != pane.files[0].Path {
 		test.Errorf("pane did not get the new metadata: %+v", pane.files)
 	}
-	harness.send(pullRequestLoadedMessage{owner: harness.view, repository: testRepository, number: 7, sequence: harness.view.sequence, detail: detail})
+	harness.send(pullRequestLoadedMessage{owner: harness.view, repository: testRepository, number: 7, generation: harness.view.detailGeneration, sequence: harness.view.sequence, detail: detail})
 	if len(pane.files) != 2 {
 		test.Errorf("unchanged file repeated: %+v", pane.files)
 	}

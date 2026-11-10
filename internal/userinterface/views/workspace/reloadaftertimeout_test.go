@@ -60,6 +60,12 @@ func TestWriteTimeoutReloadsWhatTheWriteAffects(test *testing.T) {
 		{name: "resolve", threads: 1, build: func(_ *View, origin origin, err error) any {
 			return threadResolvedMessage{origin: origin, threadIdentifier: "T1", resolve: true, err: err}
 		}},
+		{name: "react description", pullRequests: 1, build: func(_ *View, origin origin, err error) any {
+			return reactionToggledMessage{origin: origin, commentIdentifier: "P1", kind: commentDescription, content: github.ReactionHeart, err: err}
+		}},
+		{name: "react top-level comment", pullRequests: 1, build: func(_ *View, origin origin, err error) any {
+			return reactionToggledMessage{origin: origin, commentIdentifier: "C1", kind: commentTopLevel, content: github.ReactionHeart, err: err}
+		}},
 		{name: "react", threads: 1, build: func(_ *View, origin origin, err error) any {
 			return reactionToggledMessage{origin: origin, commentIdentifier: "C1", content: github.ReactionContents[0], err: err}
 		}},
