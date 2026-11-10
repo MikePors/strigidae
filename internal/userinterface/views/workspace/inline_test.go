@@ -916,7 +916,7 @@ func TestVisualModeEndsWhenTheFileGoes(test *testing.T) {
 	detail.Identifier = pullRequestNodeIdentifier
 	detail.Files = detail.Files[:0]
 	detail.Files = append(detail.Files, github.ChangedFile{Path: "README.md", Additions: 2, Change: github.FileModified})
-	inliner.send(pullRequestLoadedMessage{owner: inliner.view, repository: testRepository, number: 7, sequence: inliner.view.sequence, detail: detail})
+	inliner.send(pullRequestLoadedMessage{owner: inliner.view, repository: testRepository, number: 7, generation: inliner.view.detailGeneration, sequence: inliner.view.sequence, detail: detail})
 	if inliner.view.selection() != 0 {
 		test.Fatalf("the selection did not move to the Overview: sel = %d", inliner.view.selection())
 	}

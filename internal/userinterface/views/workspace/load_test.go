@@ -117,7 +117,7 @@ func TestStaleResultsIgnored(test *testing.T) {
 	}
 	harness.press("R")
 	previous := harness.view.sequence - 1
-	harness.send(pullRequestLoadedMessage{owner: harness.view, repository: testRepository, number: 7, sequence: previous, detail: other})
+	harness.send(pullRequestLoadedMessage{owner: harness.view, repository: testRepository, number: 7, generation: harness.view.detailGeneration, sequence: previous, detail: other})
 	if harness.view.detail.Title == "stale" {
 		test.Error("result of a superseded request applied")
 	}
@@ -223,5 +223,20 @@ func TestPartialDiffStillShowsParsedFiles(test *testing.T) {
 	}
 	if count := strings.Count(errorTexts[0], "parse diff"); count != 1 || !strings.HasPrefix(errorTexts[0], "acme/widgets#7: ") {
 		test.Errorf("status bar text = %q", errorTexts[0])
+	}
+}
+
+func TestDetailReloadSupersedingFullRefreshStillLoadsDiff(test *testing.T) {
+	harness := loaded(test, 100, 30)
+	harness.view.diffPending = true
+	older := harness.view.fetchPullRequest(true)()
+	newer := harness.view.reloadPullRequest()()
+	harness.send(older)
+	if !harness.view.diffPending {
+		test.Fatal("stale detail changed pending diff")
+	}
+	harness.send(newer)
+	if harness.view.diffPending {
+		test.Fatal("newest detail did not complete the full refresh")
 	}
 }

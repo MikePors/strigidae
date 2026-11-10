@@ -285,6 +285,12 @@ func (view *View) invoke(chosen actionEntry, call invocation) tea.Cmd {
 			return refusal
 		}
 	}
+	if chosen.Name == "react" && onOverview(view) {
+		if notice := view.guardState().admit(writeOverviewReaction); notice != nil {
+			return notice
+		}
+		return view.overviewReact(call.arguments)
+	}
 	if chosen.guard != writeNone {
 		if notice := view.guardState().ready(chosen.guard); notice != nil {
 			return notice

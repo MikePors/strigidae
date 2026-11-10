@@ -109,7 +109,7 @@ func TestPickerChoosesByPathAcrossRefresh(test *testing.T) {
 	// A refresh lands while the picker is open, with a new file sorted first.
 	detail := testDetail()
 	detail.Files = append([]github.ChangedFile{{Path: "aaa/new.go", Additions: 1, Change: github.FileAdded}}, detail.Files...)
-	harness.send(pullRequestLoadedMessage{owner: harness.view, repository: testRepository, number: 7, sequence: harness.view.sequence, detail: detail})
+	harness.send(pullRequestLoadedMessage{owner: harness.view, repository: testRepository, number: 7, generation: harness.view.detailGeneration, sequence: harness.view.sequence, detail: detail})
 	harness.send(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if got := harness.view.selectedPath(); got != "internal/sync/legacy.go" {
 		test.Errorf("picker selected %q, want legacy.go", got)

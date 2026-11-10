@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/userinterface"
@@ -23,6 +24,7 @@ import (
 type reactionTarget struct {
 	commentIdentifier string
 	reactions         []github.ReactionSummary
+	kind              commentKind
 }
 
 // summary returns the comment's summary for one kind of reaction (zero if none).
@@ -41,6 +43,7 @@ type reactionToggledMessage struct {
 	commentIdentifier string
 	content           github.ReactionContent
 	removed           bool
+	kind              commentKind
 	err               error
 }
 
@@ -70,7 +73,7 @@ func (view *View) reactCommand(name string, comment commentTarget) tea.Cmd {
 	if name != "" {
 		content, _ = reactionNamed(name) // checked by checkReaction
 	}
-	target := reactionTarget{commentIdentifier: comment.identifier, reactions: comment.reactions}
+	target := reactionTarget{commentIdentifier: comment.identifier, reactions: comment.reactions, kind: comment.kind}
 	if content != "" {
 		return view.toggleReaction(target, content)
 	}
@@ -79,6 +82,70 @@ func (view *View) reactCommand(name string, comment commentTarget) tea.Cmd {
 	}
 	view.openReactionPicker(target, comment.author)
 	return nil
+}
+
+// overviewReact opens a target picker for the description and top-level comments.
+func (view *View) overviewReact(name string) tea.Cmd {
+	var content github.ReactionContent
+	if name != "" {
+		content, _ = reactionNamed(name)
+	}
+	targets := view.overviewReactionTargets()
+	if len(targets) == 0 {
+		return userinterface.Info("no comments to react to")
+	}
+	items := make([]string, len(targets))
+	for i, target := range targets {
+		items[i] = reactionTargetLabel(target)
+	}
+	view.pickerReactionTargets, view.pickerReactionName = targets, content
+	view.pickerReaction, view.pickerChecks = nil, nil
+	view.picker = picker.New(view.theme, "React to", items)
+	return nil
+}
+
+func (view *View) overviewReactionTargets() []commentTarget {
+	if view.detail == nil {
+		return nil
+	}
+	detail := view.detail
+	out := make([]commentTarget, 0, len(detail.Comments)+1)
+	out = append(out, commentTarget{kind: commentDescription, identifier: detail.Identifier, author: detail.Author, body: detail.Body, reactions: detail.Reactions})
+	for _, issueComment := range detail.Comments {
+		out = append(out, commentTarget{kind: commentTopLevel, identifier: issueComment.Identifier, author: issueComment.Author, body: issueComment.Body, reactions: issueComment.Reactions})
+	}
+	return out
+}
+
+func reactionTargetLabel(target commentTarget) string {
+	kind := "Comment"
+	if target.kind == commentDescription {
+		kind = "Description"
+	}
+	body := strings.Join(strings.Fields(terminaltext.Clean(target.body)), " ")
+	prefix := kind + " · " + comment.Author(target.author) + " · "
+	return ansi.Truncate(prefix+body, 56, "…")
+}
+
+func (view *View) resolveReactionTarget(identifier string) (commentTarget, bool) {
+	if detail := view.detail; detail != nil {
+		if detail.Identifier == identifier {
+			return commentTarget{kind: commentDescription, identifier: identifier, author: detail.Author, reactions: detail.Reactions}, true
+		}
+		for _, issueComment := range detail.Comments {
+			if issueComment.Identifier == identifier {
+				return commentTarget{kind: commentTopLevel, identifier: identifier, author: issueComment.Author, reactions: issueComment.Reactions}, true
+			}
+		}
+	}
+	for _, reviewThread := range view.threads {
+		for _, reviewComment := range reviewThread.Comments {
+			if reviewComment.Identifier == identifier {
+				return reviewCommentTarget(reviewComment, reviewThread), true
+			}
+		}
+	}
+	return commentTarget{}, false
 }
 
 func reactionNames() string {
@@ -126,7 +193,7 @@ func (view *View) toggleReaction(target reactionTarget, content github.ReactionC
 			err = client.AddReaction(ctx, target.commentIdentifier, content)
 		}
 		err = userinterface.WriteError(err)
-		result := reactionToggledMessage{origin: origin, commentIdentifier: target.commentIdentifier, content: content, removed: removed, err: err}
+		result := reactionToggledMessage{origin: origin, commentIdentifier: target.commentIdentifier, content: content, removed: removed, kind: target.kind, err: err}
 		if err == nil {
 			return result
 		}
@@ -139,7 +206,7 @@ func (view *View) toggleReaction(target reactionTarget, content github.ReactionC
 func (view *View) reactionToggled(message reactionToggledMessage) tea.Cmd {
 	view.writeDone()
 	if userinterface.IsWriteTimeout(message.err) {
-		return view.reloadThreads() // the error is already shown
+		return view.reactionReload(message.kind) // the error is already shown
 	}
 	if message.err != nil {
 		return nil // the error is already shown
@@ -151,11 +218,38 @@ func (view *View) reactionToggled(message reactionToggledMessage) tea.Cmd {
 	if message.removed {
 		text = "removed " + message.content.Emoji()
 	}
-	return tea.Batch(userinterface.Info(text), view.reloadThreads())
+	reload := view.reactionReload(message.kind)
+	return tea.Batch(userinterface.Info(text), reload)
+}
+
+func (view *View) reactionReload(kind commentKind) tea.Cmd {
+	if kind == commentReview {
+		return view.reloadThreads()
+	}
+	return view.reloadPullRequest()
 }
 
 // applyReaction records a successful write in the comment on screen.
 func (view *View) applyReaction(message reactionToggledMessage) {
+	if view.detail != nil && view.detail.Identifier == message.commentIdentifier {
+		cloned := *view.detail
+		cloned.Reactions = github.WithViewerReaction(cloned.Reactions, message.content, !message.removed)
+		view.detail = &cloned
+		view.overview.invalidate()
+		return
+	}
+	if view.detail != nil {
+		cloned := *view.detail
+		for i := range cloned.Comments {
+			if cloned.Comments[i].Identifier == message.commentIdentifier {
+				cloned.Comments = slices.Clone(cloned.Comments)
+				cloned.Comments[i].Reactions = github.WithViewerReaction(cloned.Comments[i].Reactions, message.content, !message.removed)
+				view.detail = &cloned
+				view.overview.invalidate()
+				return
+			}
+		}
+	}
 	// Fresh slices, so the ones handed to the file pane earlier are never written to.
 	threads := slices.Clone(view.threads)
 	for i := range threads {

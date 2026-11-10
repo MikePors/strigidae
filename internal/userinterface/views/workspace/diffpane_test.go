@@ -153,7 +153,7 @@ func TestDiffPaneStates(test *testing.T) {
 	test.Run("loading", func(test *testing.T) {
 		harness := newHarness(test, 100, 24)
 		harness.view.Init()
-		harness.send(pullRequestLoadedMessage{owner: harness.view, repository: testRepository, number: 7, sequence: harness.view.sequence, detail: testDetail()})
+		harness.send(pullRequestLoadedMessage{owner: harness.view, repository: testRepository, number: 7, generation: harness.view.detailGeneration, sequence: harness.view.sequence, detail: testDetail()})
 		harness.press("}")
 		golden.Assert(test, "diff_loading", harness.render(), false)
 	})

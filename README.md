@@ -32,6 +32,11 @@ Opening a pull request focuses the right pane with its Overview selected, so
 `ctrl+d` immediately scrolls the description. Press `h` to focus the Files pane
 and `l` to return to the overview or diff.
 
+On Overview, `:react` opens a target picker for the description and top-level
+comments, followed by the reaction picker. `:react <name>` opens the same target
+picker and toggles the named reaction. Escape cancels either stage without
+writing; review summaries and inline review threads are not Overview targets.
+
 ## List cache
 
 Dashboard sections and repository PR lists start with their last successful

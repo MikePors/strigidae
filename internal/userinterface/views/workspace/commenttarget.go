@@ -9,10 +9,9 @@ const (
 	// commentReview is a comment in a review thread; the diff pane produces it.
 	commentReview commentKind = iota
 	// commentTopLevel is a comment on the pull request itself, outside any
-	// review. Nothing produces it yet.
+	// review; the Overview target picker produces it.
 	commentTopLevel
-	// commentDescription is the pull request's description. Nothing produces
-	// it yet.
+	// commentDescription is the pull request's description.
 	commentDescription
 )
 
@@ -23,6 +22,7 @@ type commentTarget struct {
 	kind       commentKind
 	identifier string
 	author     string
+	body       string
 	reactions  []github.ReactionSummary
 	// The viewer's rights over the comment, as GitHub reported them.
 	viewerDidAuthor bool

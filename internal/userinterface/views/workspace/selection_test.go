@@ -40,7 +40,7 @@ func TestRefreshWithShorterListStaysInBounds(test *testing.T) {
 	harness.press("G")
 	detail := testDetail()
 	detail.Files = detail.Files[:2]
-	harness.send(pullRequestLoadedMessage{owner: harness.view, repository: testRepository, number: 7, sequence: harness.view.sequence, detail: detail})
+	harness.send(pullRequestLoadedMessage{owner: harness.view, repository: testRepository, number: 7, generation: harness.view.detailGeneration, sequence: harness.view.sequence, detail: detail})
 	if harness.view.selection() < 0 || harness.view.selection() > 2 {
 		test.Errorf("selection = %d after the list shrank", harness.view.selection())
 	}
