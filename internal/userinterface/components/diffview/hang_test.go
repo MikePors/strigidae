@@ -12,11 +12,12 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/MikePors/strigidae/internal/diff"
+	"github.com/MikePors/strigidae/internal/userinterface/lexerguard"
 )
 
 // hostileLines are one-liners that leave a construct open: a comment, a
 // string, a heredoc, an escape.
-var hostileLines = []string{"/* a", `"a`, "<<EOF", `\`}
+var hostileLines = []string{"/* a", `"a`, "<<EOF", `\`, "/* a /* b */", "/* a /* b"}
 
 // sweepTimeout is how long all lexers together may take on hostileLines
 // before the ones still running count as hanging. Every finite lexer takes
@@ -25,9 +26,10 @@ var hostileLines = []string{"/* a", `"a`, "<<EOF", `\`}
 const sweepTimeout = 10 * time.Second
 
 // TestNoRegisteredLexerIsBroken lexes the hostile one-liners, alone and as a
-// block of two, with every lexer Chroma registers except those broken lists,
-// and fails if one panics or does not finish. A lexer that hangs is left
-// spinning until the test binary exits: Go cannot stop it.
+// block of two, with every lexer Chroma registers (the broken ones are plain
+// text by then, see lexerguard), and fails if one panics or does not finish.
+// A lexer that hangs is left spinning until the test binary exits: Go cannot
+// stop it.
 func TestNoRegisteredLexerIsBroken(test *testing.T) {
 	type run struct {
 		name     string
@@ -35,9 +37,6 @@ func TestNoRegisteredLexerIsBroken(test *testing.T) {
 	}
 	var runs []run
 	for _, lexer := range lexers.GlobalLexerRegistry.Lexers {
-		if broken(lexer) {
-			continue
-		}
 		current := run{name: lexer.Config().Name, finished: make(chan any, 1)}
 		runs = append(runs, current)
 		go func() {
@@ -62,7 +61,7 @@ func TestNoRegisteredLexerIsBroken(test *testing.T) {
 			case recovered := <-current.finished:
 				reportPanic(test, current.name, recovered)
 			default:
-				test.Errorf("lexer %q did not finish the hostile lines within %v; add it to broken and report it to Chroma", current.name, sweepTimeout)
+				test.Errorf("lexer %q did not finish the hostile lines within %v; add it to lexerguard and report it to Chroma", current.name, sweepTimeout)
 			}
 		}
 	}
@@ -72,17 +71,58 @@ func TestNoRegisteredLexerIsBroken(test *testing.T) {
 func reportPanic(test *testing.T, name string, recovered any) {
 	test.Helper()
 	if recovered != nil {
-		test.Errorf("lexer %q panicked on the hostile lines: %v; add it to broken and report it to Chroma", name, recovered)
+		test.Errorf("lexer %q panicked on the hostile lines: %v; add it to lexerguard and report it to Chroma", name, recovered)
 	}
 }
 
-// TestBrokenLexersAreRegistered keeps the broken list honest: each name is
-// still a registered lexer, so a rename in Chroma cannot silently let it run.
-func TestBrokenLexersAreRegistered(test *testing.T) {
-	for _, name := range []string{"JSONata", "Jungle", "YANG"} {
+// TestBrokenLexersAreCountedBroken: each name lexerguard lists resolves to a
+// lexer that diffview counts as broken, so its files stay plain. That the
+// lexer is the plain replacement is lexerguard's test; the sweep above lexes
+// the hostile lines with it.
+func TestBrokenLexersAreCountedBroken(test *testing.T) {
+	for _, name := range lexerguard.Names() {
 		lexer := lexers.Get(name)
 		if lexer == nil || lexer.Config().Name != name || !broken(lexer) {
-			test.Errorf("lexer %q is not registered under that name or not listed in broken", name)
+			test.Errorf("lexer %q is not registered under that name or not counted as broken", name)
+		}
+	}
+}
+
+// TestMarkdownFenceWithBrokenLexerRenders: a Markdown file whose fence names
+// a lexer that used to hang or panic is drawn, with its text intact. Drawing
+// runs on its own goroutine, so a lexer that hangs fails the test rather than
+// blocking it; the first hang ends the test, as every later case would hang
+// too.
+func TestMarkdownFenceWithBrokenLexerRenders(test *testing.T) {
+	type outcome struct {
+		spans     [][]Span
+		recovered any
+	}
+	for _, tag := range []string{"yang", "YANG", "jsonata", "jungle"} {
+		for _, text := range []string{"/* a /* b", "/* a /* b */", "/* a"} {
+			lines := []codeLine{{diff.Add, "```" + tag}, {diff.Add, text}, {diff.Add, "```"}}
+			drawn := make(chan outcome, 1)
+			go func() {
+				var result outcome
+				defer func() {
+					result.recovered = recover()
+					drawn <- result
+				}()
+				result.spans = rowSpans(test, hunkFile("README.md", lines))
+			}()
+			select {
+			case result := <-drawn:
+				switch {
+				case result.recovered != nil:
+					test.Errorf("%s fence holding %q: drawing panicked: %v", tag, text, result.recovered)
+				case len(result.spans) != len(lines):
+					test.Errorf("%s fence holding %q: %d rows, want %d", tag, text, len(result.spans), len(lines))
+				case joined(result.spans[1]) != text:
+					test.Errorf("%s fence holding %q: fence line reads %q", tag, text, joined(result.spans[1]))
+				}
+			case <-time.After(sweepTimeout):
+				test.Fatalf("%s fence holding %q: drawing did not finish within %v", tag, text, sweepTimeout)
+			}
 		}
 	}
 }

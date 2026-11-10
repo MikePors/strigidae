@@ -6,6 +6,8 @@ import (
 
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/lexers"
+
+	"github.com/MikePors/strigidae/internal/userinterface/lexerguard"
 )
 
 // Span is a run of text with one Chroma token type. Highlighters report
@@ -112,22 +114,11 @@ func lexerForPath(path string) chroma.Lexer {
 	return nil
 }
 
-// broken reports whether lexer is one known to hang or panic on some input,
-// and so is never chosen by file name or shebang. A lexer that spins without
-// returning a token cannot be stopped from Go, and a panic on the UI goroutine
-// ends strig. Lexers that pick a sub-lexer by name from Chroma's registry (a
-// Markdown code fence) still reach these, as does Glamour's rendering of
-// Markdown (#277).
-// TestNoRegisteredLexerIsBroken finds them; drop an entry once a Chroma
-// version that fixes it is pinned.
+// broken reports whether lexer is one known to hang or panic on some input
+// (see lexerguard). The registry holds a plain text lexer under those names, so
+// this is a backstop that keeps their files plain whatever the registry holds.
 func broken(lexer chroma.Lexer) bool {
-	switch lexer.Config().Name {
-	case "JSONata", "Jungle": // loop forever on "/* a"
-		return true
-	case "YANG": // panics on a "/*" inside a block comment: its rules push a state that does not exist
-		return true
-	}
-	return false
+	return lexerguard.IsBroken(lexer.Config().Name)
 }
 
 // fitsBlock reports whether lines may be lexed as one text.

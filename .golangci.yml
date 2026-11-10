@@ -33,6 +33,7 @@ linters:
             - "**/internal/userinterface/theme/**"
             - "**/internal/userinterface/terminaltext/**"
             - "**/internal/userinterface/matching/**"
+            - "**/internal/userinterface/lexerguard/**"
             - "**/internal/userinterface/components/**"
           deny:
             - pkg: github.com/MikePors/strigidae/internal/userinterface/views

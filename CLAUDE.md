@@ -55,6 +55,7 @@ internal/userinterface/keys/            keymap registry and multi-key sequence h
 internal/userinterface/theme/           Lip Gloss styles; every colour lives here
 internal/userinterface/terminaltext/    sanitising of untrusted text (Clean, CleanBlock); imports no other userinterface package
 internal/userinterface/matching/        match rule shared by list and help search; imports no other userinterface package
+internal/userinterface/lexerguard/      replaces Chroma lexers that hang or panic with plain text at startup; imports no other userinterface package
 internal/userinterface/components/      reusable widgets (picker, markdown pane, diff pane, …)
 internal/userinterface/views/<view>/    one package per screen: pullrequestlist, workspace, dashboard, …
 ```
@@ -74,7 +75,7 @@ cmd/strig ──► userinterface/views/* ──► userinterface/components ─
 ## Process-wide rules
 
 - **Never write to stdout or stderr while the TUI is running**; it corrupts the screen. Log with `log/slog` to the file under `$XDG_STATE_HOME/strig/` (fallback `~/.local/state/strig/`; `strig --log-path` prints it). Never log tokens, auth headers, or full API response bodies.
-- **No global mutable state** apart from build-time values such as `version.Version` and one startup redirection: `internal/logging` points the standard `log`/`slog` default loggers at the log file (so a dependency that logs can't corrupt the screen). The one runtime exception is the Chroma style registry: `theme.Theme.ChromaStyleName` registers one generated style per theme (Glamour looks code-block styles up by name there). The registry is a plain map that Glamour reads without a lock, so **registry writes and all Glamour rendering must stay on the UI goroutine** (never in a `tea.Cmd`); a mutex does not make it safe.
+- **No global mutable state** apart from build-time values such as `version.Version` and one startup redirection: `internal/logging` points the standard `log`/`slog` default loggers at the log file (so a dependency that logs can't corrupt the screen), and one startup replacement of Chroma lexers that hang or panic (`internal/userinterface/lexerguard`), made in an `init` before any lookup; nothing writes that registry afterwards. The one runtime exception is the Chroma style registry: `theme.Theme.ChromaStyleName` registers one generated style per theme (Glamour looks code-block styles up by name there). The registry is a plain map that Glamour reads without a lock, so **registry writes and all Glamour rendering must stay on the UI goroutine** (never in a `tea.Cmd`); a mutex does not make it safe.
 - **Never hardcode `github.com` as the host.** Take it from the git remote, `-R`, or the auth/config, so GitHub Enterprise can work later.
 - **Untrusted text.** Everything from GitHub or git (titles, names, labels, paths, branches, markdown, diff content, error messages) is attacker-controlled and can carry terminal escapes. It goes through `internal/userinterface/terminaltext` before reaching the screen; details in `internal/userinterface/CLAUDE.md`.
 
