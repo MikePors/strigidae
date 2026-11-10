@@ -34,9 +34,9 @@ const spanOverhead = 32
 // WholeFiles colours a modified, renamed or copied file from its whole text
 // on each side rather than hunk by hunk, so a hunk that starts inside a
 // comment or string is coloured right. It holds the reader and the spans of
-// every side read so far, by repository, path and blob, so they last as long as the
-// value: a view that opens workspaces keeps one for the session. It is used
-// on the UI goroutine only; the reading and lexing happen in a tea.Cmd.
+// every side read so far, by repository, path and blob, so they last as long
+// as the value: a view that opens workspaces keeps one for the session. It is
+// used on the UI goroutine only; the reading and lexing happen in a tea.Cmd.
 type WholeFiles struct {
 	reader BlobReader
 	spans  map[wholeFileKey][][]diffview.Span // nil: the side could not be used
@@ -241,7 +241,8 @@ func (view *View) wholeFileRead(message wholeFileMessage) {
 				continue
 			}
 			if result.requestFailed || !lastingFailure(result.err) {
-				// Kept for this view only: refreshing or reopening the pull request tries again.
+				// Kept for this view only: refreshing or reopening the pull
+				// request tries again.
 				if view.wholeFileFailed == nil {
 					view.wholeFileFailed = map[wholeFileKey]bool{}
 				}
