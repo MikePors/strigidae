@@ -183,10 +183,10 @@ func TestEditPullRequestNeverBypassesTheGuard(test *testing.T) {
 
 // changeOnGitHub replaces the pull request on the server, as a collaborator
 // editing it on github.com would.
-func (inliner *inliner) changeOnGitHub(title, body string) {
+func (inliner *inliner) changeOnGitHub(body string) {
 	detail := testDetail()
 	detail.Identifier, detail.ViewerCanUpdate = pullRequestNodeIdentifier, true
-	detail.Title, detail.Body = title, body
+	detail.Title, detail.Body = "Their title", body
 	inliner.client.SetPullRequest(detail)
 }
 
@@ -194,7 +194,7 @@ func TestEditPullRequestAsksAgainAfterAConcurrentChange(test *testing.T) {
 	inliner := newInliner(test)
 	inliner.editPullRequest("My title\n\nMy body")
 	confirmation, _ := inliner.lastConfirm()
-	inliner.changeOnGitHub("Their title", "Their body")
+	inliner.changeOnGitHub("Their body")
 	inliner.messages = nil
 	inliner.run(confirmation.OnYes)
 	if len(inliner.pullRequestUpdates()) != 0 {
@@ -220,10 +220,10 @@ func TestEditPullRequestChangedAgainWhileAskingAgain(test *testing.T) {
 	inliner := newInliner(test)
 	inliner.editPullRequest("My title\n\nMy body")
 	confirmation, _ := inliner.lastConfirm()
-	inliner.changeOnGitHub("Their title", "Their body")
+	inliner.changeOnGitHub("Their body")
 	inliner.run(confirmation.OnYes)
 	again, _ := inliner.lastConfirm()
-	inliner.changeOnGitHub("Their title", "Their body, edited again")
+	inliner.changeOnGitHub("Their body, edited again")
 	inliner.messages = nil
 	inliner.run(again.OnYes)
 	if len(inliner.pullRequestUpdates()) != 0 {
@@ -266,7 +266,7 @@ func TestEditPullRequestDecliningTheConflictWritesNothing(test *testing.T) {
 	inliner := newInliner(test)
 	inliner.editPullRequest("My title\n\nMy body")
 	confirmation, _ := inliner.lastConfirm()
-	inliner.changeOnGitHub("Their title", "Their body")
+	inliner.changeOnGitHub("Their body")
 	inliner.run(confirmation.OnYes)
 	if _, asked := inliner.lastConfirm(); !asked {
 		test.Fatal("no conflict question")
