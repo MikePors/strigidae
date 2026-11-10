@@ -123,7 +123,7 @@ func (view *View) wholeFileSides() tea.Cmd {
 			}
 			continue
 		}
-		if view.wholeFilePending[key] {
+		if view.wholeFilePending[key] || view.wholeFileFailed[key] {
 			continue
 		}
 		if view.wholeFilePending == nil {
@@ -211,8 +211,10 @@ func readAPIBlobs(timeouts userinterface.Timeouts, client github.Client, reposit
 //
 // A read that only ran out of time is not kept the first time, so the side
 // is read once more while the file is shown (it may have waited for another
-// read's fetch); a second one is kept as a failure, so a timeout that always
-// expires, or a disk always slower than it, cannot start reads without end.
+// read's fetch); a second one is a failure of this view only, so a timeout
+// that always expires, or a disk always slower than it, cannot start reads
+// without end. A failure that may pass (anything but lastingFailure) is kept
+// in the view, not in the cache shared by the session.
 func (view *View) wholeFileRead(message wholeFileMessage) {
 	for _, result := range message.results {
 		delete(view.wholeFilePending, result.key)
@@ -229,9 +231,33 @@ func (view *View) wholeFileRead(message wholeFileMessage) {
 				view.wholeFileRetried[result.key] = true
 				continue
 			}
+			if !lastingFailure(result.err) {
+				// Kept for this view only: reopening the pull request tries again.
+				if view.wholeFileFailed == nil {
+					view.wholeFileFailed = map[wholeFileKey]bool{}
+				}
+				view.wholeFileFailed[result.key] = true
+				continue
+			}
 		}
 		view.wholeFiles.keep(result.key, result.lines)
 	}
+}
+
+// lastingFailure reports whether err will happen again for the same blob, so
+// the shared cache may remember it: the blob is missing, has no text, or
+// can't be coloured. Anything else (a rate limit, a server error, being
+// offline, running out of time) may pass.
+func lastingFailure(err error) bool {
+	for _, lasting := range []error{
+		github.ErrNotFound, github.ErrNoFileText,
+		diffview.ErrFileTooLarge, diffview.ErrFileBinary, diffview.ErrNoLanguage, diffview.ErrLexTimeout, diffview.ErrLexPanic,
+	} {
+		if errors.Is(err, lasting) {
+			return true
+		}
+	}
+	return false
 }
 
 // keep stores one side, starting again empty when it would pass the memory

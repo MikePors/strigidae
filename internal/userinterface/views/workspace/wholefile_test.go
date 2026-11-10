@@ -387,3 +387,91 @@ func TestWholeFileAddedFileTriggersNoRead(test *testing.T) {
 		test.Errorf("reads for an added file: %v", blobs.reads)
 	}
 }
+
+// reopened opens the whole-file pull request again in a new view sharing
+// files, as reopening the pull request from the list does.
+func reopened(test *testing.T, client *fake.Client, files *WholeFiles, wrap func(*fake.Client) github.Client) (*harness, *spansPane) {
+	test.Helper()
+	pane := &spansPane{diffPane: newDiffPane(theme.New(true), func() time.Time { return testNow }, false), given: map[string][][]diffview.Span{}}
+	var used github.Client = client
+	if wrap != nil {
+		used = wrap(client)
+	}
+	testHarness := &harness{test: test, client: client}
+	testHarness.view = New(used, testRepository, 7,
+		WithClock(func() time.Time { return testNow }),
+		WithTheme(theme.New(true)),
+		WithFilePane(pane),
+		WithWholeFiles(files),
+	)
+	testHarness.send(tea.WindowSizeMsg{Width: 100, Height: 30})
+	testHarness.run(testHarness.view.Init())
+	return testHarness, pane
+}
+
+func TestWholeFileTransientFailureIsOnlyKeptByTheView(test *testing.T) {
+	for name, failure := range map[string]error{
+		"plain error": errors.New("bad gateway"),
+		"rate limit":  &github.RateLimitError{},
+	} {
+		test.Run(name, func(test *testing.T) {
+			testHarness, pane := newWholeFileHarnessFor(test, nil, nil, nil)
+			testHarness.client.SetBlobText(testRepository, "1111111", "package x\n\n/* opened above\nstill comment\nclosed */\nvar a = 1\n")
+			testHarness.client.SetBlobText(testRepository, "2222222", "package x\n\n/* opened above\nstill comment\nclosed */\nvar b = 2\n")
+			testHarness.client.SetError(fake.MethodBlobTexts, failure)
+			testHarness.press("}", "{")
+			if len(blobTextCalls(testHarness.client)) != 1 || len(pane.order) != 0 {
+				test.Fatalf("calls = %v, sides given = %v; want one failed call", blobTextCalls(testHarness.client), pane.order)
+			}
+			files := testHarness.view.wholeFiles
+
+			// A new view on the same cache asks again, and now gets colours.
+			testHarness.client.SetError(fake.MethodBlobTexts, nil)
+			again, againPane := reopened(test, testHarness.client, files, nil)
+			again.press("}")
+			if len(blobTextCalls(testHarness.client)) != 2 {
+				test.Errorf("calls = %v, want a second one from the new view", blobTextCalls(testHarness.client))
+			}
+			if diff := cmp.Diff([]string{"LEFT:1111111", "RIGHT:2222222"}, againPane.order); diff != "" {
+				test.Errorf("sides given by the new view (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestWholeFileNotFoundIsKeptForTheSession(test *testing.T) {
+	testHarness, _ := newWholeFileHarnessFor(test, nil, nil, nil) // the fake has no such blobs: ErrNotFound
+	testHarness.press("}")
+	if len(blobTextCalls(testHarness.client)) != 1 {
+		test.Fatalf("calls = %v, want one", blobTextCalls(testHarness.client))
+	}
+	again, _ := reopened(test, testHarness.client, testHarness.view.wholeFiles, nil)
+	again.press("}")
+	if len(blobTextCalls(testHarness.client)) != 1 {
+		test.Errorf("calls = %v, a new view asked again for blobs known to be missing", blobTextCalls(testHarness.client))
+	}
+}
+
+// shortClient answers BlobTexts with one entry too few.
+type shortClient struct{ *fake.Client }
+
+func (client shortClient) BlobTexts(ctx context.Context, repository github.Repository, identifiers []string) ([]github.BlobText, error) {
+	texts, err := client.Client.BlobTexts(ctx, repository, identifiers)
+	return texts[:len(texts)-1], err
+}
+
+func TestWholeFileWrongNumberOfAnswersKeepsPerHunkColours(test *testing.T) {
+	wrap := func(client *fake.Client) github.Client { return shortClient{client} }
+	testHarness, pane := newWholeFileHarnessFor(test, nil, wrap, nil)
+	testHarness.client.SetBlobText(testRepository, "1111111", "package x\n")
+	testHarness.client.SetBlobText(testRepository, "2222222", "package x\n")
+	testHarness.press("}")
+	if len(pane.order) != 0 {
+		test.Errorf("sides given after a wrong answer: %v", pane.order)
+	}
+	for _, message := range testHarness.messages {
+		if _, ok := message.(userinterface.ErrorMessage); ok {
+			test.Errorf("a wrong answer showed an error: %v", message)
+		}
+	}
+}

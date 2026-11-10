@@ -5,7 +5,7 @@ Checks only the maintainer can do, such as live verification against real GitHub
 ## Live checks
 
 - [ ] **A hunk that starts inside a comment is coloured from the whole file, in a real terminal** (#262). The tests use an in-memory blob reader and check token types, not the colours on screen or a real checkout.
-  1. In a checkout of a repository (no `-R`), run `strig` and open a pull request that modifies a file inside a long block comment or docstring, so the hunk starts below the line that opens it. Open the file: the hunk's comment lines may flash code colours, then turn the comment colour without a pause or a message. Take a before/after screenshot (the "before" is the same file opened offline, or in a build of `main` before #268, which keeps per-hunk colours with `-R`).
+  1. In a checkout of a repository (no `-R`), run `strig` and open a pull request that modifies a file inside a long block comment or docstring, so the hunk starts below the line that opens it. Open the file: the hunk's comment lines may flash code colours, then turn the comment colour without a pause or a message. Take a before/after screenshot (the "before" is a build of `main` from before #268, with `-R`, which keeps per-hunk colours).
   2. Use a pull request from a fork, or whose head you have never fetched: the colours should still change after a moment (strig fetches `refs/pull/<number>/head` once). Afterwards `git status`, `git branch -a` and `.git/FETCH_HEAD` look as before.
   3. Open a modified file over 1 MiB, and one in a pull request while offline: both keep per-hunk colours, and `strig --log-path`'s file says why.
   4. Report the language, whether the colours changed, how long it took, and any pause or message.

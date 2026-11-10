@@ -33,7 +33,7 @@ func blobTextsQuery(count int) string {
 
 type graphqlBlob struct {
 	Typename    string `json:"__typename"`
-	OID         string `json:"oid"`
+	Oid         string
 	Text        *string
 	IsBinary    bool
 	IsTruncated bool
@@ -79,7 +79,7 @@ func blobText(object *graphqlBlob, identifier string) (string, error) {
 		return "", github.ErrNotFound
 	case object.Typename != "Blob":
 		return "", fmt.Errorf("not a file: %w", github.ErrNotFound)
-	case identifier == "" || !strings.HasPrefix(strings.ToLower(object.OID), strings.ToLower(identifier)):
+	case identifier == "" || !strings.HasPrefix(strings.ToLower(object.Oid), strings.ToLower(identifier)):
 		return "", fmt.Errorf("found another object: %w", github.ErrNotFound)
 	case object.IsBinary:
 		return "", fmt.Errorf("binary file: %w", github.ErrNoFileText)
