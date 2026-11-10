@@ -5,10 +5,17 @@ Checks only the maintainer can do, such as live verification against real GitHub
 ## Live checks
 
 - [ ] **A hunk that starts inside a comment is coloured from the whole file, in a real terminal** (#262). The tests use an in-memory blob reader and check token types, not the colours on screen or a real checkout.
-  1. In a checkout of a repository (no `-R`), run `strig` and open a pull request that modifies a file inside a long block comment or docstring, so the hunk starts below the line that opens it. Open the file: the hunk's comment lines may flash code colours, then turn the comment colour without a pause or a message. Take a before/after screenshot (the "before" is the same file opened with `strig -R owner/repo`, which keeps per-hunk colours).
+  1. In a checkout of a repository (no `-R`), run `strig` and open a pull request that modifies a file inside a long block comment or docstring, so the hunk starts below the line that opens it. Open the file: the hunk's comment lines may flash code colours, then turn the comment colour without a pause or a message. Take a before/after screenshot (the "before" is the same file opened offline, or in a build of `main` before #268, which keeps per-hunk colours with `-R`).
   2. Use a pull request from a fork, or whose head you have never fetched: the colours should still change after a moment (strig fetches `refs/pull/<number>/head` once). Afterwards `git status`, `git branch -a` and `.git/FETCH_HEAD` look as before.
   3. Open a modified file over 1 MiB, and one in a pull request while offline: both keep per-hunk colours, and `strig --log-path`'s file says why.
   4. Report the language, whether the colours changed, how long it took, and any pause or message.
+
+- [ ] **Whole-file colours come from the GitHub API when the checkout can't supply them, against real GitHub** (#268). The tests use the in-memory client and fixtures, not real GitHub's `object(expression:)` aliases or REST `sha`.
+  1. Run `strig -R owner/repo` and open a pull request that modifies a file inside a long block comment or docstring, so the hunk starts below the line that opens it. Open the file: the hunk's comment lines turn the comment colour after a moment, with no message. Repeat from the dashboard (`strig` outside a checkout).
+  2. Open a pull request with more than 300 files (diffed file by file, "large pull request" in the status bar) and a modified file in it: the new side gets whole-file colours (deleted lines, on the old side, stay per-hunk).
+  3. Use a pull request from a fork: the colours still change.
+  4. Go offline (or revoke the token) and open another file: it keeps per-hunk colours, no message appears, and `strig --log-path`'s file says why (blob id, source `api`, error; no path or text).
+  5. Report the repository, which cases worked, how long the colours took, and any pause or message.
 
 - [ ] **An extensionless script is coloured by its shebang, in a real terminal** (#261). The tests check token types, not the colours on screen.
   1. Run `strig -R owner/repo` and open a pull request that changes (or adds) an extensionless script with a `#!/usr/bin/env python3` or `#!/bin/sh` first line, such as `bin/release`. Open the file: the diff should be coloured as Python (or shell), the shebang line included.
@@ -114,7 +121,7 @@ Checks only the maintainer can do, such as live verification against real GitHub
 - Stop strig, delete its cache directory (see README), and restart: normal live
   loading should work. Report OS, terminal size, and any unexpected behavior.
 
-- [ ] **`FileText` reads a file's text at a commit from real GitHub** (#260). The GraphQL `object(expression: "<commit>:<path>")` query has only been tested against hand-written fixtures. Nothing on screen uses it yet, so this can be done once #262 lands and highlights from the whole file; until then it needs a throwaway `main` that calls `network.New(...).FileText`.
+- [ ] **`FileText` reads a file's text at a commit from real GitHub** (#260). The GraphQL `object(expression: "<commit>:<path>")` query has only been tested against hand-written fixtures. Nothing calls it now (the whole-file colours use `BlobTexts`, #268), so this needs a throwaway `main` that calls `network.New(...).FileText`; keep the entry until `FileText` is used or removed.
   1. Against a real pull request's head commit (the full 40-character SHA), read a small text file the pull request touches. The returned text should match `git show <sha>:<path>` exactly, including line endings and a missing final newline.
   2. Read a binary file (for example a PNG) and a text file over about 1 MB. Each should fail with `ErrNoFileText`, not `ErrNotFound`. Report the size at which a text file starts to come back as truncated, if it does.
   3. Read a path that does not exist at that commit, a path that was added by a later commit, and a directory path. Each should fail with `ErrNotFound`.
