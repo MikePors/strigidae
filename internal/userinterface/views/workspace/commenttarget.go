@@ -58,16 +58,26 @@ func reviewCommentTarget(reviewComment github.ReviewComment, thread github.Revie
 	}
 }
 
+// Overview targets intentionally omit viewer rights: edit/delete support must
+// populate those rights before enabling actions with ownership rules.
+func descriptionTarget(detail github.PullRequestDetail) commentTarget {
+	return commentTarget{kind: commentDescription, identifier: detail.Identifier, author: detail.Author, body: detail.Body, reactions: detail.Reactions}
+}
+
+func topLevelCommentTarget(comment github.IssueComment) commentTarget {
+	return commentTarget{kind: commentTopLevel, identifier: comment.Identifier, author: comment.Author, body: comment.Body, reactions: comment.Reactions}
+}
+
 // resolveCommentTarget refreshes an explicit comment context from the loaded
 // pull request and review threads.
 func (view *View) resolveCommentTarget(identifier string) (commentTarget, bool) {
 	if detail := view.detail; detail != nil {
 		if detail.Identifier == identifier {
-			return commentTarget{kind: commentDescription, identifier: identifier, author: detail.Author, body: detail.Body, reactions: detail.Reactions}, true
+			return descriptionTarget(*detail), true
 		}
 		for _, issueComment := range detail.Comments {
 			if issueComment.Identifier == identifier {
-				return commentTarget{kind: commentTopLevel, identifier: identifier, author: issueComment.Author, body: issueComment.Body, reactions: issueComment.Reactions}, true
+				return topLevelCommentTarget(issueComment), true
 			}
 		}
 	}
@@ -104,12 +114,12 @@ func (view *View) overviewCommentTargets() []commentTarget {
 		return nil
 	}
 	detail := view.detail
-	out := make([]commentTarget, 0, len(detail.Comments)+1)
-	out = append(out, commentTarget{kind: commentDescription, identifier: detail.Identifier, author: detail.Author, body: detail.Body, reactions: detail.Reactions})
+	targets := make([]commentTarget, 0, len(detail.Comments)+1)
+	targets = append(targets, descriptionTarget(*detail))
 	for _, issueComment := range detail.Comments {
-		out = append(out, commentTarget{kind: commentTopLevel, identifier: issueComment.Identifier, author: issueComment.Author, body: issueComment.Body, reactions: issueComment.Reactions})
+		targets = append(targets, topLevelCommentTarget(issueComment))
 	}
-	return out
+	return targets
 }
 
 func commentTargetLabel(target commentTarget, width int) string {

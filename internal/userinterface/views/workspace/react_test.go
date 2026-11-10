@@ -763,10 +763,12 @@ func TestOverviewReactionLabelsFitNarrowPicker(test *testing.T) {
 	}
 }
 
-func TestReactNeedsLoadedDiffForCursorContext(test *testing.T) {
+func TestReactReportsUnloadedDiffBeforeHiddenCursor(test *testing.T) {
 	for _, name := range []string{"", "heart"} {
 		inliner := newInliner(test)
 		inliner.toComment(0)
+		inliner.press("h")
+		inliner.view.width = 20
 		inliner.view.diffPending = true
 		inliner.react(name)
 		if diff := cmp.Diff([]string{"diff not loaded"}, inliner.infoMessages()); diff != "" {

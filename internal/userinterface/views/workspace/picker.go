@@ -34,11 +34,11 @@ func (view *View) pickerKey(message tea.KeyPressMsg) tea.Cmd {
 		checks, target, selection := view.pickerChecks, view.pickerReaction, view.pickerComment
 		view.picker, view.pickerChecks, view.pickerReaction, view.pickerComment = nil, nil, nil, nil
 		if selection != nil {
-			selection.call.commentIdentifier = selection.targets[result.Index].identifier
+			selection.call.target.comment = selection.targets[result.Index]
 			return view.invoke(selection.action, selection.call)
 		}
 		if target != nil {
-			return view.invoke(view.entryNamed("react"), invocation{arguments: github.ReactionContents[result.Index].Shortcode(), commentIdentifier: target.identifier})
+			return view.invoke(view.entryNamed("react"), invocation{arguments: github.ReactionContents[result.Index].Shortcode(), target: resolvedTarget{comment: *target}})
 		}
 		if checks != nil {
 			return view.openCheck(checks[result.Index])

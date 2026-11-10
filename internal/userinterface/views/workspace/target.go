@@ -65,9 +65,9 @@ type resolvedTarget struct {
 	comment commentTarget
 }
 
-// resolveTarget turns the diff cursor into the target the request names, or
+// resolveTarget refreshes an explicit comment context or resolves the diff cursor, and
 // returns the command that tells why there is none. The caller has checked
-// that the diff pane is on screen (diffHidden) where the action needs it.
+// readiness and, for cursor contexts, that the diff pane is on screen.
 func (view *View) resolveTarget(request request) (resolvedTarget, tea.Cmd) {
 	if view.mode == contentComments && request.level == levelThread {
 		if item := view.selectedConversation(); item != nil && item.thread != nil {
@@ -87,9 +87,6 @@ func (view *View) resolveTarget(request request) (resolvedTarget, tea.Cmd) {
 	}
 	var context diffview.Context
 	if view.selection() > 0 { // the Overview has no diff cursor
-		if request.level.resolved() && !view.guardState().diffReady {
-			return resolvedTarget{}, userinterface.Info("diff not loaded")
-		}
 		context = view.filePane.Context()
 	}
 	switch request.level {
