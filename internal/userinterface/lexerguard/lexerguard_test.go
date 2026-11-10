@@ -1,6 +1,8 @@
 package lexerguard
 
 import (
+	"maps"
+	"slices"
 	"strings"
 	"testing"
 
@@ -23,8 +25,9 @@ var replacements = map[string]string{
 // TestListedLexersWereRegistered: init replaced every listed name, so a
 // rename in Chroma cannot leave one on the list that matches nothing.
 func TestListedLexersWereRegistered(test *testing.T) {
-	if diff := cmp.Diff(Names(), replaced); diff != "" {
-		test.Errorf("replaced names (-listed +replaced):\n%s", diff)
+	names := slices.Sorted(maps.Keys(replaced))
+	if difference := cmp.Diff(slices.Sorted(slices.Values(Names())), names); difference != "" {
+		test.Errorf("replaced names (-listed +replaced):\n%s", difference)
 	}
 	if len(Names()) != len(replacements) {
 		test.Fatalf("Names() = %v, want the entries of the test's table", Names())
@@ -64,11 +67,17 @@ func TestListedLexersArePlainText(test *testing.T) {
 	}
 }
 
-// checkPlain fails unless lexer is the plain replacement called name.
+// checkPlain fails unless lexer is the plain replacement called name. It
+// checks that lexer is the one init registered before lexing with it: the real
+// Jungle lexer hangs on any text, so without the replacement the test would
+// hang rather than fail.
 func checkPlain(test *testing.T, name string, lexer chroma.Lexer) {
 	test.Helper()
 	if lexer == nil || lexer.Config().Name != name {
 		test.Fatalf("lexer = %v, want one called %q", lexer, name)
+	}
+	if lexer != replaced[name] {
+		test.Fatalf("lexer %q is not the replacement init registered", name)
 	}
 	if lexer.AnalyseText("/* a /* b */") != 0 {
 		test.Errorf("the replacement of %q claims text", name)
@@ -85,7 +94,7 @@ func checkPlain(test *testing.T, name string, lexer chroma.Lexer) {
 		var joined strings.Builder
 		for _, token := range tokens {
 			if token.Type != chroma.Text {
-				test.Errorf("token %+v for %q is not plain text", token, text)
+				test.Fatalf("token %+v for %q is not plain text", token, text)
 			}
 			joined.WriteString(token.Value)
 		}

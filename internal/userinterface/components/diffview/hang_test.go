@@ -26,9 +26,10 @@ var hostileLines = []string{"/* a", `"a`, "<<EOF", `\`, "/* a /* b */", "/* a /*
 const sweepTimeout = 10 * time.Second
 
 // TestNoRegisteredLexerIsBroken lexes the hostile one-liners, alone and as a
-// block of two, with every lexer Chroma registers (the broken
-// ones are plain text by then, see lexerguard), and fails if one panics or does not finish. A lexer that hangs is left
-// spinning until the test binary exits: Go cannot stop it.
+// block of two, with every lexer Chroma registers (the broken ones are plain
+// text by then, see lexerguard), and fails if one panics or does not finish.
+// A lexer that hangs is left spinning until the test binary exits: Go cannot
+// stop it.
 func TestNoRegisteredLexerIsBroken(test *testing.T) {
 	type run struct {
 		name     string
@@ -74,20 +75,15 @@ func reportPanic(test *testing.T, name string, recovered any) {
 	}
 }
 
-// TestBrokenLexersAreReplaced: each name lexerguard lists resolves to a
-// lexer that diffview counts as broken, and lexing the hostile lines with it
-// returns the text intact.
-func TestBrokenLexersAreReplaced(test *testing.T) {
+// TestBrokenLexersAreCountedBroken: each name lexerguard lists resolves to a
+// lexer that diffview counts as broken, so its files stay plain. That the
+// lexer is the plain replacement is lexerguard's test; the sweep above lexes
+// the hostile lines with it.
+func TestBrokenLexersAreCountedBroken(test *testing.T) {
 	for _, name := range lexerguard.Names() {
 		lexer := lexers.Get(name)
 		if lexer == nil || lexer.Config().Name != name || !broken(lexer) {
-			test.Errorf("lexer %q is not registered under that name or not listed as broken", name)
-			continue
-		}
-		for _, line := range hostileLines {
-			if got := joined(lexLine(lexer, line)); got != line {
-				test.Errorf("%s: line %q lexes to %q", name, line, got)
-			}
+			test.Errorf("lexer %q is not registered under that name or not counted as broken", name)
 		}
 	}
 }

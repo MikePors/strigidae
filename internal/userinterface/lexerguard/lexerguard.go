@@ -35,9 +35,11 @@ type brokenLexer struct {
 	reason string
 }
 
-// replaced are the names init found registered and replaced; a test compares
-// them with the list, so a rename in Chroma fails it.
-var replaced []string
+// replaced holds the lexer init registered for each name it found and
+// replaced. Tests compare its names with the list, so a rename in Chroma fails
+// them, and check that lookups return these very lexers before lexing with
+// them: the real ones hang, so lexing is no way to tell them apart.
+var replaced map[string]chroma.Lexer
 
 func init() {
 	replaced = replaceBrokenLexers(lexers.GlobalLexerRegistry)
@@ -46,18 +48,17 @@ func init() {
 // replaceBrokenLexers swaps each listed lexer that registry holds for a plain
 // text lexer with the same lookup configuration. A listed name the registry
 // does not hold is left alone: registering it would invent a lexer. It returns
-// the names it replaced.
-func replaceBrokenLexers(registry *chroma.LexerRegistry) []string {
-	var names []string
+// the lexers it registered, by name.
+func replaceBrokenLexers(registry *chroma.LexerRegistry) map[string]chroma.Lexer {
+	registered := map[string]chroma.Lexer{}
 	for _, broken := range brokenLexers {
 		position := indexOf(registry, broken.name)
 		if position < 0 {
 			continue
 		}
-		registry.Register(plainLexer(registry.Lexers[position].Config()))
-		names = append(names, broken.name)
+		registered[broken.name] = registry.Register(plainLexer(registry.Lexers[position].Config()))
 	}
-	return names
+	return registered
 }
 
 // indexOf returns the position of the lexer called name in registry, or -1.
