@@ -240,3 +240,26 @@ func TestDetailReloadSupersedingFullRefreshStillLoadsDiff(test *testing.T) {
 		test.Fatal("newest detail did not complete the full refresh")
 	}
 }
+
+func TestDetailReloadWhileDiffRunsDoesNotDownloadAgain(test *testing.T) {
+	harness := loaded(test, 100, 30)
+	before := len(harness.client.Calls())
+	// Deliver only the refreshed detail, leaving its diff command in flight.
+	harness.view.sequence++
+	harness.view.diffPending = true
+	detail := harness.view.fetchPullRequest(true)()
+	_, diffCommand := harness.view.Update(detail)
+	for range 2 {
+		harness.send(harness.view.reloadPullRequest()())
+	}
+	harness.run(diffCommand)
+	downloads := 0
+	for _, call := range harness.client.Calls()[before:] {
+		if call.Method == fake.MethodGetDiff {
+			downloads++
+		}
+	}
+	if downloads != 1 {
+		test.Fatalf("diff downloads = %d, want 1", downloads)
+	}
+}

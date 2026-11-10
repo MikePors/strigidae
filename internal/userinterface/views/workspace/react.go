@@ -91,12 +91,9 @@ func (view *View) overviewReact(name string) tea.Cmd {
 		content, _ = reactionNamed(name)
 	}
 	targets := view.overviewReactionTargets()
-	if len(targets) == 0 {
-		return userinterface.Info("no comments to react to")
-	}
 	items := make([]string, len(targets))
 	for i, target := range targets {
-		items[i] = reactionTargetLabel(target)
+		items[i] = reactionTargetLabel(target, pickerLabelWidth(view.width))
 	}
 	view.pickerReactionTargets, view.pickerReactionName = targets, content
 	view.pickerReaction, view.pickerChecks = nil, nil
@@ -117,14 +114,14 @@ func (view *View) overviewReactionTargets() []commentTarget {
 	return out
 }
 
-func reactionTargetLabel(target commentTarget) string {
+func reactionTargetLabel(target commentTarget, width int) string {
 	kind := "Comment"
 	if target.kind == commentDescription {
 		kind = "Description"
 	}
 	body := strings.Join(strings.Fields(terminaltext.Clean(target.body)), " ")
 	prefix := kind + " · " + comment.Author(target.author) + " · "
-	return ansi.Truncate(prefix+body, 56, "…")
+	return ansi.Truncate(prefix+body, max(width, 0), "…")
 }
 
 func (view *View) resolveReactionTarget(identifier string) (commentTarget, bool) {

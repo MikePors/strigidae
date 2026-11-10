@@ -38,6 +38,8 @@ type invocation struct {
 // busy (the guard table), then run.
 type actionEntry struct {
 	keys.Action
+	// configure selects the entry policy for the current pane before dispatch.
+	configure func(*View, *actionEntry)
 	// level is what the action works on. The resolver finds lines, threads and
 	// comments; the others are for the table, and run finds its own.
 	level level
@@ -195,6 +197,12 @@ func (workspaceBindings *bindings) entries() []actionEntry {
 			Action: keys.Action{Name: "react", Command: "react"},
 			level:  levelComment, words: "react to it", diffVisible: true, guard: writeReaction,
 			check: checkReaction,
+			configure: func(view *View, entry *actionEntry) {
+				if onOverview(view) {
+					entry.level, entry.guard, entry.diffVisible = levelPullRequest, writeOverviewReaction, false
+					entry.run = func(view *View, call invocation) tea.Cmd { return view.overviewReact(call.arguments) }
+				}
+			},
 			run: func(view *View, call invocation) tea.Cmd {
 				return view.reactCommand(call.arguments, call.target.comment)
 			},
@@ -280,16 +288,13 @@ func (workspaceBindings *bindings) actions() []keys.Action {
 // invoke runs an entry for a key or a command. The steps and their order are
 // the ones every write used to repeat by hand; see actionEntry.
 func (view *View) invoke(chosen actionEntry, call invocation) tea.Cmd {
+	if chosen.configure != nil {
+		chosen.configure(view, &chosen)
+	}
 	if chosen.check != nil {
 		if refusal := chosen.check(call.arguments); refusal != nil {
 			return refusal
 		}
-	}
-	if chosen.Name == "react" && onOverview(view) {
-		if notice := view.guardState().admit(writeOverviewReaction); notice != nil {
-			return notice
-		}
-		return view.overviewReact(call.arguments)
 	}
 	if chosen.guard != writeNone {
 		if notice := view.guardState().ready(chosen.guard); notice != nil {

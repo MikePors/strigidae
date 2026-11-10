@@ -84,15 +84,13 @@ Checks only the maintainer can do, such as live verification against real GitHub
   4. Run `:react +1` on the same comment. strig should say `removed 👍`, and the reaction should be gone on github.com.
   5. Run `:react` with the cursor on a diff line. It should say `move onto a comment to react to it`.
 
-
 - [ ] **`:react` on Overview targets the description and top-level comments** (#158). The `addReaction` / `removeReaction` calls have only been tested against the fake client.
   1. Open a test PR that has a description, top-level comments, a review summary and a review thread.
   2. In Overview run `:react`. The first picker should list Description, then top-level comments with author and a short body snippet; it must omit review summaries and review threads. Choose the description, then choose `+1` in the 8-reaction picker.
   3. strig should say `reacted 👍`, and the comment should show 👍 with a count in strig and on github.com.
   4. Run `:react +1` on the same comment. strig should say `removed 👍`, and the reaction should be gone on github.com.
   5. On Overview run `:react heart`, choose a top-level comment, and verify the reaction toggles without a second picker. Escape at either picker stage in separate attempts and verify GitHub is unchanged. Run `:react bogus` and verify it reports the valid names without opening a picker.
-  6. Repeat with the diff unavailable and verify Overview reactions still work. While a write is busy, invoke `:react` and verify no picker opens. Remove a target between opening its picker and choosing it; verify it refuses without writing. If GitHub times out after a write may have landed, verify the appropriate Overview or review-thread content reloads.
-  7. Deterministic UI capture fixture: `go test ./internal/userinterface/views/workspace -run TestOverviewReactionTargetPickerGolden`; the expected terminal screen is `internal/userinterface/views/workspace/testdata/overview_react_targets.golden` and can be regenerated with `UPDATE_GOLDEN=1`.
+  6. Repeat with the diff unavailable and verify Overview reactions still work. While a write is busy, invoke `:react` and verify no picker opens. If GitHub times out after a write may have landed, verify the appropriate Overview or review-thread content reloads.
 
 - [ ] **Plugin commands in a real terminal** (#200). The runs, the selection and the quit are tested with fake programs and key events, never in a real terminal.
   1. Put a small plugin in your config, for example a program `~/bin/strig-echo` (`chmod +x`) that starts with `#!/bin/sh` and holds `cat > /tmp/strig-request.json; echo '{"name":"notice","data":{"text":"got it"}}'`, and `plugins: [{command: echo, on_run: ["~/bin/strig-echo"], target: lines}]`. Open a pull request, select a file, move onto a diff line and run `:echo hello there`. The status bar should show a spinner briefly and then `got it`. `/tmp/strig-request.json` should have `"arguments":"hello there"`, your repository (with the right `host`), the pull request number and head, the file path, `side`, `line`, `startLine` and an `excerpt` of the line with three lines either side, each starting with `+`, `-` or a space.

@@ -402,7 +402,7 @@ func TestReactOnOverviewOpensTargetPicker(test *testing.T) {
 	if got := []commentKind{inliner.view.pickerReactionTargets[0].kind, inliner.view.pickerReactionTargets[1].kind, inliner.view.pickerReactionTargets[2].kind}; !cmp.Equal(got, []commentKind{commentDescription, commentTopLevel, commentTopLevel}) {
 		test.Fatalf("target order = %v", got)
 	}
-	if got := reactionTargetLabel(inliner.view.pickerReactionTargets[1]); !strings.Contains(got, "bob") || !strings.Contains(got, "Thanks!") {
+	if got := reactionTargetLabel(inliner.view.pickerReactionTargets[1], pickerLabelWidth(inliner.view.width)); !strings.Contains(got, "bob") || !strings.Contains(got, "Thanks!") {
 		test.Errorf("target label lacks author/body distinction: %q", got)
 	}
 }
@@ -498,7 +498,7 @@ func TestOverviewReactionPickerStagesCancelAndToggle(test *testing.T) {
 
 func TestOverviewReactionLabelsCleanHostileText(test *testing.T) {
 	target := commentTarget{kind: commentTopLevel, author: "x\x1b[31m", body: "hello\u202e world\x9b"}
-	label := reactionTargetLabel(target)
+	label := reactionTargetLabel(target, 56)
 	if strings.ContainsRune(label, '\x1b') || strings.ContainsRune(label, '\u202e') || strings.ContainsRune(label, '\u009b') {
 		test.Errorf("unsafe label %q", label)
 	}
@@ -676,7 +676,7 @@ func BenchmarkOverviewReactionTargets(benchmark *testing.B) {
 	for i := range detail.Comments {
 		detail.Comments[i] = github.IssueComment{Identifier: fmt.Sprintf("comment-%d", i), Author: "reviewer", Body: strings.Repeat("discussion ", 100)}
 	}
-	view := &View{detail: &detail, theme: theme.New(true)}
+	view := &View{detail: &detail, theme: theme.New(true), width: 100}
 	benchmark.Run("open picker", func(benchmark *testing.B) {
 		benchmark.ReportAllocs()
 		for benchmark.Loop() {
@@ -713,5 +713,18 @@ func TestOverviewReactionReloadsIgnoreOlderResults(test *testing.T) {
 	calls := inliner.reactionCalls()
 	if len(calls) != 1 || calls[0].Method != fake.MethodAddReaction {
 		test.Fatalf("toggle used stale state: %+v", calls)
+	}
+}
+
+func TestOverviewReactionLabelsFitNarrowPicker(test *testing.T) {
+	for _, width := range []int{32, 48, 80} {
+		inliner := newInliner(test)
+		inliner.view.width = width
+		inliner.press("h", "g g", "l")
+		inliner.react("")
+		rendered := ansi.Strip(inliner.view.picker.Render(width, 20))
+		if !strings.Contains(rendered, "Description · alice") {
+			test.Fatalf("width %d lost target prefix:\n%s", width, rendered)
+		}
 	}
 }

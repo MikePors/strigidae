@@ -3,8 +3,8 @@ alice · changes requested · main ← feat/retry · [enhancement] [sync] · rev
 ╭─ Files 0/5 viewed ────────────╮╭─ Overview ────────────────────────────────────────────────────────────────╮
 │> Overview            ╭─ React to ───────────────────────────────────────────────────╮                      │
 │  Comments (9)        │> ▏                                                           │                      │
-│    M …ernal/sync/clie│> Description · alice · ## Summary This change adds a **r…    │                      │
-│    A …ernal/sync/retr│  Comment · bob · Thanks! Could you add a test for the **…    │ so transient         │
+│    M …ernal/sync/clie│> Description · alice · ## Summary This change adds a **ret…  │                      │
+│    A …ernal/sync/retr│  Comment · bob · Thanks! Could you add a test for the **ji…  │ so transient         │
 │    D …ernal/sync/lega│  Comment · alice · Done in the latest push.                  │eplaces the ad-       │
 │    R …cy-and-backoff.╰──────────────────────────────────────────────────────────────╯lper.                 │
 │    M README.md           +2 -1││                                                                           │

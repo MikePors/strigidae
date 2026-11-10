@@ -109,6 +109,7 @@ type View struct {
 	pullRequestPending bool
 	diffPending        bool
 	threadPending      bool
+	detailStartsDiff   bool                  // pending detail must start the full refresh
 	detailGeneration   int                   // latest detail load; older detail loads are stale
 	threadGeneration   int                   // latest thread load or in-place change; older thread loads are stale
 	threadLoaded       bool                  // a thread load has succeeded
