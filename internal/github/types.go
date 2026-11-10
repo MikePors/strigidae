@@ -119,6 +119,16 @@ type FilePatch struct {
 	// line, with no file header. GitHub leaves it empty for a binary file, a
 	// file too large on its own, and a file with no changed lines.
 	Patch string
+	// ObjectIdentifier is the file's blob at the pull request's head, as the
+	// file list gives it; empty when the list did not.
+	ObjectIdentifier string
+}
+
+// BlobText is the text of one blob read by Client.BlobTexts, or why it could
+// not be read.
+type BlobText struct {
+	Text string
+	Err  error
 }
 
 // ReviewState is the state of a submitted review.

@@ -1,0 +1,8 @@
+{"data": {"repository": {
+  "blob0": null,
+  "blob1": {"__typename": "Tree", "oid": "2222222abcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+  "blob2": {"__typename": "Blob", "oid": "3333333abcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "text": "binary bytes", "isBinary": true, "isTruncated": false, "byteSize": 12},
+  "blob3": {"__typename": "Blob", "oid": "4444444abcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "text": "very large file", "isBinary": false, "isTruncated": true, "byteSize": 9999999},
+  "blob4": {"__typename": "Blob", "oid": "9999999abcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "text": "a ref named like the id", "isBinary": false, "isTruncated": false, "byteSize": 23},
+  "blob5": {"__typename": "Blob", "oid": "ABCDEF0123bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "text": "upper case oid", "isBinary": false, "isTruncated": false, "byteSize": 14}
+}}}

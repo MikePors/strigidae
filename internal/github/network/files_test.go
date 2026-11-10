@@ -31,10 +31,10 @@ func TestListFilePatches(test *testing.T) {
 		test.Fatal(err)
 	}
 	want := []github.FilePatch{
-		{Path: "internal/diff/diff.go", Change: github.FileModified, Additions: 1, Deletions: 1, Patch: "@@ -1,3 +1,3 @@\n package diff\n-// old\n+// new\n \n"},
-		{Path: "docs/new.md", Change: github.FileAdded, Additions: 1, Patch: "@@ -0,0 +1 @@\n+# New"},
-		{Path: "docs/after.md", PreviousPath: "docs/before.md", Change: github.FileRenamed},
-		{Path: "assets/logo.png", Change: github.FileDeleted},
+		{Path: "internal/diff/diff.go", Change: github.FileModified, Additions: 1, Deletions: 1, Patch: "@@ -1,3 +1,3 @@\n package diff\n-// old\n+// new\n \n", ObjectIdentifier: "1111111111111111111111111111111111111111"},
+		{Path: "docs/new.md", Change: github.FileAdded, Additions: 1, Patch: "@@ -0,0 +1 @@\n+# New", ObjectIdentifier: "2222222222222222222222222222222222222222"},
+		{Path: "docs/after.md", PreviousPath: "docs/before.md", Change: github.FileRenamed, ObjectIdentifier: "3333333333333333333333333333333333333333"},
+		{Path: "assets/logo.png", Change: github.FileDeleted, ObjectIdentifier: "4444444444444444444444444444444444444444"},
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		test.Errorf("mismatch (-want +got):\n%s", diff)
