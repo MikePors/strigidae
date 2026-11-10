@@ -184,3 +184,21 @@ func TestLargeDiffFileListFails(test *testing.T) {
 		test.Errorf("the pane should say the diff is too large:\n%s", out)
 	}
 }
+
+func TestPerFileDiffObjectIdentifiers(test *testing.T) {
+	_, built, _ := perFileDiff([]github.FilePatch{
+		{Path: "modified.go", Change: github.FileModified, ObjectIdentifier: "aaa"},
+		{Path: "renamed.go", PreviousPath: "old.go", Change: github.FileRenamed, ObjectIdentifier: "bbb"},
+		{Path: "copied.go", PreviousPath: "src.go", Change: github.FileCopied, ObjectIdentifier: "ccc"},
+		{Path: "added.go", Change: github.FileAdded, ObjectIdentifier: "ddd"},
+		{Path: "deleted.go", Change: github.FileDeleted, ObjectIdentifier: "eee"},
+	})
+	var got [][2]string
+	for _, file := range built.Files {
+		got = append(got, [2]string{file.OldObjectIdentifier, file.NewObjectIdentifier})
+	}
+	want := [][2]string{{"", "aaa"}, {"", "bbb"}, {"", "ccc"}, {"", ""}, {"", ""}}
+	if diff := cmp.Diff(want, got); diff != "" {
+		test.Errorf("identifiers (-want +got):\n%s", diff)
+	}
+}

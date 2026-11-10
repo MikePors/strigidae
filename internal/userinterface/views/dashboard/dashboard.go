@@ -94,6 +94,9 @@ type View struct {
 	// hunkMarks keeps the hunks marked reviewed in every workspace opened
 	// from here, so they survive closing and reopening a pull request.
 	hunkMarks *workspace.HunkMarks
+	// wholeFiles keeps the files read whole, from the GitHub API (there is no
+	// checkout on the dashboard), for every workspace opened from here.
+	wholeFiles *workspace.WholeFiles
 
 	notice string // shown once as an info message when the view starts
 
@@ -145,12 +148,13 @@ func New(client github.Client, tabs []config.Tab, activeTheme theme.Theme, optio
 			nextSection:     key.NewBinding(key.WithKeys("]"), key.WithHelp("]", "next section")),
 			previousSection: key.NewBinding(key.WithKeys("["), key.WithHelp("[", "previous section")),
 		},
-		now:       options.Now,
-		open:      options.Open,
-		notice:    options.Notice,
-		timeouts:  options.Timeouts,
-		clipboard: options.Clipboard,
-		hunkMarks: workspace.NewHunkMarks(),
+		now:        options.Now,
+		open:       options.Open,
+		notice:     options.Notice,
+		timeouts:   options.Timeouts,
+		clipboard:  options.Clipboard,
+		hunkMarks:  workspace.NewHunkMarks(),
+		wholeFiles: workspace.NewWholeFiles(nil),
 	}
 	for _, configured := range tabs {
 		current := tab{name: configured.Name}
@@ -426,6 +430,7 @@ func (view *View) openSelected() tea.Cmd {
 		workspace.WithWrap(view.options.Wrap()),
 		workspace.WithTimeouts(view.timeouts),
 		workspace.WithClipboard(view.clipboard),
+		workspace.WithWholeFiles(view.wholeFiles),
 	))
 }
 

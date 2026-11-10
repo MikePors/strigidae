@@ -36,7 +36,12 @@ func perFileDiff(patches []github.FilePatch) (raw string, built *diff.Diff, err 
 				file.OldPath = patch.PreviousPath
 			}
 		}
-		fmt.Fprintf(&text, "%s\x00%s\x00%s\x00%d\x00%d\x00%s\n", patch.Change, patch.PreviousPath, patch.Path, patch.Additions, patch.Deletions, patch.Patch)
+		// The new side's blob lets the file be coloured whole, as for a diff
+		// with index lines; the old side has none.
+		if file.Status == diff.Modified || file.Status == diff.Renamed || file.Status == diff.Copied {
+			file.NewObjectIdentifier = patch.ObjectIdentifier
+		}
+		fmt.Fprintf(&text, "%s\x00%s\x00%s\x00%d\x00%d\x00%s\x00%s\n", patch.Change, patch.PreviousPath, patch.Path, patch.Additions, patch.Deletions, patch.ObjectIdentifier, patch.Patch)
 		if patch.Patch == "" {
 			pureMove := (file.Status == diff.Renamed || file.Status == diff.Copied) && patch.Additions+patch.Deletions == 0
 			file.PatchMissing = !pureMove
