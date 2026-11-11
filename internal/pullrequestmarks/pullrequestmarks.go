@@ -116,6 +116,9 @@ func (marks Marks) Clear(key Key) Marks {
 	return changed
 }
 
+// Empty reports whether there are no marks.
+func (marks Marks) Empty() bool { return len(marks.marks) == 0 }
+
 // Names returns the distinct marks in use, sorted, for completion.
 func (marks Marks) Names() []string {
 	names := make([]string, 0, len(marks.marks))

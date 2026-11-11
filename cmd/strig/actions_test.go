@@ -17,6 +17,8 @@ var sharedActionNames = map[string]bool{
 	"next-tab":         true, // dashboard and pull request list: next tab
 	"previous-tab":     true,
 	"copy-url":         true, // workspace, dashboard and list: copy the pull request's URL
+	"mark":             true, // dashboard and list: mark the pull request under the cursor
+	"unmark":           true,
 }
 
 // This lives in cmd/strig because it is the one package that imports every
