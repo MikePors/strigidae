@@ -134,3 +134,12 @@ func TestCommandNamesAreTheCommandsTheViewHandles(test *testing.T) {
 		test.Error("the dashboard handles :create")
 	}
 }
+
+func TestCopyURLUsesTheShownTab(test *testing.T) {
+	view, copier := copiedView(test)
+	settle(view, press(view, "g t"))
+	copyURLMessages(test, view)
+	if diff := cmp.Diff([]string{"https://github.com/acme/widgets/pull/40"}, copier.texts); diff != "" {
+		test.Errorf("piped (-want +got):\n%s", diff)
+	}
+}

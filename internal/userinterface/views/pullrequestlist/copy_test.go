@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/MikePors/strigidae/internal/config"
 	"github.com/MikePors/strigidae/internal/userinterface"
 )
 
@@ -108,5 +109,18 @@ func TestCopyURLRefusesControlCharacters(test *testing.T) {
 	}
 	if len(copier.texts) != 0 {
 		test.Errorf("piped %q", copier.texts)
+	}
+}
+
+func TestCopyURLUsesTheShownTab(test *testing.T) {
+	client := fakeWith(makePullRequests(2))
+	client.SetSearchResults("is:pr is:open repo:acme/widgets author:alice sort:updated-desc", authored("alice", 21))
+	view := tabbedWith(test, client, config.Tab{Name: "Alice", User: "alice"})
+	copier := &fakeCopier{}
+	view.clipboard = copier
+	deliver(test, view, press(view, "g t"))
+	copyURLMessages(test, view)
+	if diff := cmp.Diff([]string{"https://example.test/alice"}, copier.texts); diff != "" {
+		test.Errorf("piped (-want +got):\n%s", diff)
 	}
 }
