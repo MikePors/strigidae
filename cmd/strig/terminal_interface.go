@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"slices"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -67,9 +68,16 @@ func (application application) userInterfaceOptions(logger *slog.Logger, notice 
 
 // viewCommands collects the command names every view package declares, so the
 // shell can tell a command another view owns from a word that is no command.
-// A view with commands adds its Commands here.
+// A view with commands adds its Commands here. A name more than one view
+// handles (":copy-url") is listed once.
 func viewCommands() []string {
-	return append(workspace.Commands(), pullrequestlist.Commands()...)
+	var names []string
+	for _, name := range slices.Concat(workspace.Commands(), pullrequestlist.Commands(), dashboard.Commands()) {
+		if !slices.Contains(names, name) {
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 // askTerminal asks the controlling terminal for its palette, before the

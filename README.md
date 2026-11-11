@@ -113,7 +113,7 @@ In a repository's pull request list (any tab; not the dashboard), `:create` and 
 
 ## Clipboard
 
-`:copy-url` copies the open pull request's URL, and `:copy-filename` the selected file's path, in two ways. It sends the OSC 52 terminal escape, which also works over SSH, and it pipes the text to the first clipboard tool found on `PATH`: `pbcopy` on macOS; on Linux `wl-copy` (when `WAYLAND_DISPLAY` is set), then, when `DISPLAY` is set, `xclip -selection clipboard`, then `xsel --clipboard --input`. With no tool (or no display), only OSC 52 is used; a terminal that ignores OSC 52 then copies nothing. Over SSH the remote machine's tool fills the remote clipboard, so OSC 52 is what reaches your local one: inside tmux add `set -g set-clipboard on` to `~/.tmux.conf`, and allow OSC 52 in your terminal.
+`:copy-url` copies the open pull request's URL, and `:copy-filename` the selected file's path, in two ways. In the dashboard and in a repository's pull request list, `:copy-url` copies the URL of the pull request under the cursor (in whichever section it is); with no row there it says `no pull request URL to copy`. It has no key. It sends the OSC 52 terminal escape, which also works over SSH, and it pipes the text to the first clipboard tool found on `PATH`: `pbcopy` on macOS; on Linux `wl-copy` (when `WAYLAND_DISPLAY` is set), then, when `DISPLAY` is set, `xclip -selection clipboard`, then `xsel --clipboard --input`. With no tool (or no display), only OSC 52 is used; a terminal that ignores OSC 52 then copies nothing. Over SSH the remote machine's tool fills the remote clipboard, so OSC 52 is what reaches your local one: inside tmux add `set -g set-clipboard on` to `~/.tmux.conf`, and allow OSC 52 in your terminal.
 
 ## Command line
 
