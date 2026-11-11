@@ -21,14 +21,6 @@ func pad(text string, width int) string {
 	return text
 }
 
-// padLeft left-pads text with spaces to width columns (display columns).
-func padLeft(text string, width int) string {
-	if count := width - ansi.StringWidth(text); count > 0 {
-		return strings.Repeat(" ", count) + text
-	}
-	return text
-}
-
 // relativeAge formats how long ago timestamp was: "now", "5m", "3h", "2d", "4mo", "2y".
 func relativeAge(now, timestamp time.Time) string {
 	duration := now.Sub(timestamp)
