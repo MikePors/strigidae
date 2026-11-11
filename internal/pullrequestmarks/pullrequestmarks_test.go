@@ -494,3 +494,18 @@ func TestWriteReturnsPermissionError(test *testing.T) {
 		test.Errorf("Write error = %v, want a permission error", err)
 	}
 }
+
+func TestEmpty(test *testing.T) {
+	key := Key{Host: "github.com", Repository: github.Repository{Owner: "acme", Name: "widgets"}, Number: 1}
+	var marks Marks
+	if !marks.Empty() {
+		test.Error("zero value is not empty")
+	}
+	marks, err := marks.Set(key, "wip")
+	if err != nil || marks.Empty() {
+		test.Fatalf("after Set: empty %v, err %v", marks.Empty(), err)
+	}
+	if !marks.Clear(key).Empty() {
+		test.Error("not empty after Clear")
+	}
+}

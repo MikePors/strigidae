@@ -83,7 +83,17 @@ func (model *Model) completionCandidates(line string) (before string, candidates
 		}
 		return leading + name + gap, scheme.Names(), true
 	}
-	return "", nil, false
+	return model.viewCompletion(leading+name+gap, name)
+}
+
+// viewCompletion asks the top view for the arguments of one of its commands.
+func (model *Model) viewCompletion(before, name string) (string, []string, bool) {
+	completer, ok := model.top().(ArgumentCompleter)
+	if !ok || !slices.Contains(commandNames(model.top()), name) {
+		return "", nil, false
+	}
+	candidates := completer.CompleteArguments(name)
+	return before, candidates, len(candidates) > 0
 }
 
 // complete is Tab (step 1) and shift+tab (step -1) on the command line. The

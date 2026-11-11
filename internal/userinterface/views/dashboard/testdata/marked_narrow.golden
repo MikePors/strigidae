@@ -1,0 +1,9 @@
+ Me   Rivka 
+  REPO              #  TITLE                         AUTHOR     UPD  CI  RV  CMT
+Review requested  is:pr is:open review-requested:@me
+  acme/widgets    #12  Cache the parsed diff         octo-dev    1h  ✓   ?     0
+> acme/gadgets     #7  [draft] Fix a very long tit…  octo-dev    3h            0
+My PRs  is:pr is:open author:@me
+  rivka/dotfiles   #3  Tidy the shell prompt         octo-dev    1d            4
+Involved  is:pr is:open involves:@me -author:@me
+  No pull requests

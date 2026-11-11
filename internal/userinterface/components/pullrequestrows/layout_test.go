@@ -125,3 +125,57 @@ func TestBranchCellsAreTruncatedAndCleaned(test *testing.T) {
 		test.Errorf("hostile branch not cleaned: %q", row)
 	}
 }
+
+func TestMarkColumn(test *testing.T) {
+	pullRequests := []github.PullRequest{
+		{Number: 12, Title: "A title", Author: "octo-dev", HeadBranch: "feature", BaseBranch: "main"},
+		{Number: 13, Title: "Another", Author: "octo-dev", HeadBranch: "fix", BaseBranch: "main"},
+	}
+	marks := map[int]string{13: "waiting on author, then more"}
+	table := New(theme.Default(), time.Now, Options{Branches: true, Mark: func(pullRequest github.PullRequest) string { return marks[pullRequest.Number] }})
+	unmarked := New(theme.Default(), time.Now, Options{Branches: true})
+
+	if layout := unmarked.Layout(pullRequests, 100); layout.mark != 0 {
+		test.Errorf("mark column of %d without a Mark function", layout.mark)
+	}
+	layout := table.Layout(pullRequests, 100)
+	if layout.mark != maximumMark {
+		test.Fatalf("mark column is %d wide, want %d", layout.mark, maximumMark)
+	}
+	if header := ansi.Strip(table.Header(layout, 100)); !strings.Contains(header, "MARK") {
+		test.Errorf("header %q lacks MARK", header)
+	}
+	if row := ansi.Strip(table.Row(layout, pullRequests[1], false, false, 100)); !strings.Contains(row, "waiting on auth…") {
+		test.Errorf("row %q lacks the truncated mark", row)
+	}
+	if row := ansi.Strip(table.Row(layout, pullRequests[0], false, false, 100)); strings.Contains(row, "…") {
+		test.Errorf("unmarked row %q shows a mark", row)
+	}
+
+	// The mark goes before anything else on a narrow terminal.
+	wide := unmarked.Layout(pullRequests, 100)
+	for width := 100; width > 20; width-- {
+		layout := table.Layout(pullRequests, width)
+		if layout.mark == 0 {
+			plain := unmarked.Layout(pullRequests, width)
+			if layout != plain {
+				test.Errorf("width %d: mark dropped but the rest differs: %+v, want %+v", width, layout, plain)
+			}
+			break
+		}
+		if layout.head != wide.head || layout.base != wide.base {
+			test.Errorf("width %d: head %d base %d dropped before the mark", width, layout.head, layout.base)
+		}
+	}
+}
+
+func TestMarkIsCleanedBeforeItIsShown(test *testing.T) {
+	pullRequests := []github.PullRequest{{Number: 1, Title: "T", Author: "a"}}
+	table := New(theme.Default(), time.Now, Options{Mark: func(github.PullRequest) string { return "ok\x1b]52;c;x\x07\u202e" }})
+	layout := table.Layout(pullRequests, 80)
+	for _, row := range []string{table.Row(layout, pullRequests[0], false, false, 80), table.Row(layout, pullRequests[0], true, false, 80)} {
+		if strings.ContainsAny(ansi.Strip(row), "\x1b\x07\u202e") {
+			test.Errorf("row %q holds a control or bidirectional character", row)
+		}
+	}
+}

@@ -44,6 +44,8 @@ The repository's open pull requests (`strig` in a checkout, or `-R owner/name`).
 | `create` | none | `:create` | create a pull request: pick the head and base branches, write the title and body in $EDITOR, then confirm with y/N |
 | `create-draft` | none | `:create-draft` | create a draft pull request the same way, without the y/N |
 | `copy-url` | none | `:copy-url` | copy the URL of the pull request under the cursor to the clipboard |
+| `mark` | none | `:mark` | give the pull request under the cursor a private mark: `:mark <text>` replaces any existing mark |
+| `unmark` | none | `:unmark` | remove the private mark from the pull request under the cursor |
 
 ## Dashboard
 
@@ -56,6 +58,8 @@ The tabs of sections (`strig` outside a checkout, or with no GitHub remote).
 | `next-section` | `]` |  | next section |
 | `previous-section` | `[` |  | previous section |
 | `copy-url` | none | `:copy-url` | copy the URL of the pull request under the cursor to the clipboard |
+| `mark` | none | `:mark` | give the pull request under the cursor a private mark: `:mark <text>` replaces any existing mark |
+| `unmark` | none | `:unmark` | remove the private mark from the pull request under the cursor |
 
 ## Pull request workspace
 

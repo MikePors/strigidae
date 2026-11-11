@@ -17,6 +17,7 @@ import (
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/listcache"
 	"github.com/MikePors/strigidae/internal/options"
+	"github.com/MikePors/strigidae/internal/pullrequestmarks"
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/components/scroll"
 	"github.com/MikePors/strigidae/internal/userinterface/components/search"
@@ -84,7 +85,8 @@ type View struct {
 	cache      *listcache.Store
 	client     github.Client
 	theme      theme.Theme
-	options    options.Values // the `:set` options, sent by the root
+	options    options.Values         // the `:set` options, sent by the root
+	marks      pullrequestmarks.Marks // sent by the root; the mark column is derived from them
 	globalKeys keys.Global
 	bindings   bindings
 	now        func() time.Time
@@ -121,6 +123,8 @@ func (dashboardBindings *bindings) actions() []keys.Action {
 		{Name: "next-section", Binding: &dashboardBindings.nextSection},
 		{Name: "previous-section", Binding: &dashboardBindings.previousSection},
 		{Name: commandCopyURL, Command: commandCopyURL, Description: "copy the URL of the pull request under the cursor to the clipboard"},
+		{Name: commandMark, Command: commandMark, Description: "give the pull request under the cursor a private mark: `:mark <text>` replaces any existing mark"},
+		{Name: commandUnmark, Command: commandUnmark, Description: "remove the private mark from the pull request under the cursor"},
 	}
 }
 
@@ -142,11 +146,12 @@ func Actions() []keys.Action {
 }
 
 var (
-	_ userinterface.View          = (*View)(nil)
-	_ userinterface.Loader        = (*View)(nil)
-	_ userinterface.Prompter      = (*View)(nil)
-	_ userinterface.Commander     = (*View)(nil)
-	_ userinterface.CommandLister = (*View)(nil)
+	_ userinterface.View              = (*View)(nil)
+	_ userinterface.Loader            = (*View)(nil)
+	_ userinterface.Prompter          = (*View)(nil)
+	_ userinterface.Commander         = (*View)(nil)
+	_ userinterface.CommandLister     = (*View)(nil)
+	_ userinterface.ArgumentCompleter = (*View)(nil)
 )
 
 // New returns a dashboard of tabs. It loads the first tab when pushed (Init).
@@ -299,6 +304,8 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 	switch message := message.(type) {
 	case userinterface.OptionsMessage:
 		view.options = message.Values
+	case userinterface.MarksMessage:
+		view.marks = message.Marks
 	case userinterface.ThemeMessage:
 		view.theme = message.Theme
 	case sectionLoadedMessage:

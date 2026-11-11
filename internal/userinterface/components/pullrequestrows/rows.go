@@ -20,6 +20,7 @@ const (
 	draftPrefix         = "[draft] "
 	minimumTitleColumns = 12
 	maximumAuthor       = 16
+	maximumMark         = 16
 	maximumRepository   = 24
 	maximumHead         = 24
 	maximumBase         = 20
@@ -48,6 +49,9 @@ type Options struct {
 	Repository bool
 	// Branches adds the HEAD and BASE columns after the title.
 	Branches bool
+	// Mark gives the mark of a pull request, or "" when it has none. The MARK
+	// column after the title is shown only while some row has a mark.
+	Mark func(github.PullRequest) string
 }
 
 // New returns a Table drawing the columns options asks for.
@@ -57,7 +61,7 @@ func New(activeTheme theme.Theme, now func() time.Time, options Options) Table {
 
 // Layout holds the column widths for one render. A zero width hides a column.
 type Layout struct {
-	repository, number, title, head, base, author, age, checks, review, comments int
+	repository, number, title, mark, head, base, author, age, checks, review, comments int
 }
 
 // Layout sizes the columns for pullRequests in width columns (not counting the
@@ -66,6 +70,9 @@ func (table Table) Layout(pullRequests []github.PullRequest, width int) Layout {
 	layout := Layout{age: ageColumns, checks: checksColumns, review: reviewColumns, comments: commentColumns, number: len("#")}
 	for _, pullRequest := range pullRequests {
 		layout.number = max(layout.number, len(fmt.Sprintf("#%d", pullRequest.Number)))
+		if mark := table.mark(pullRequest); mark != "" {
+			layout.mark = min(maximumMark, max(layout.mark, ansi.StringWidth(mark)))
+		}
 		layout.author = min(maximumAuthor, max(layout.author, ansi.StringWidth(terminaltext.Clean(pullRequest.Author))))
 		if table.options.Branches {
 			layout.head = min(maximumHead, max(layout.head, ansi.StringWidth(terminaltext.Clean(pullRequest.HeadBranch))))
@@ -76,6 +83,9 @@ func (table Table) Layout(pullRequests []github.PullRequest, width int) Layout {
 		}
 	}
 	layout.author = max(layout.author, len("AUTHOR"))
+	if layout.mark > 0 {
+		layout.mark = max(layout.mark, len("MARK"))
+	}
 	if table.options.Branches {
 		layout.head = max(layout.head, len("HEAD"))
 		layout.base = max(layout.base, len("BASE"))
@@ -84,8 +94,9 @@ func (table Table) Layout(pullRequests []github.PullRequest, width int) Layout {
 		layout.repository = max(layout.repository, len("REPO"))
 	}
 	fits := func() bool { return layout.fixed() <= width-minimumTitleColumns }
-	// Drop the least important columns first on narrow terminals.
-	for _, drop := range []*int{&layout.head, &layout.base, &layout.author, &layout.comments, &layout.checks, &layout.review} {
+	// Drop the least important columns first on narrow terminals: the mark,
+	// which is only a private note, goes before everything else.
+	for _, drop := range []*int{&layout.mark, &layout.head, &layout.base, &layout.author, &layout.comments, &layout.checks, &layout.review} {
 		if fits() {
 			break
 		}
@@ -116,6 +127,14 @@ func (table Table) narrowRepository(layout *Layout, width int, fits func() bool)
 	}
 }
 
+// mark is the clean mark of a pull request, or "" without one.
+func (table Table) mark(pullRequest github.PullRequest) string {
+	if table.options.Mark == nil {
+		return ""
+	}
+	return terminaltext.Clean(table.options.Mark(pullRequest))
+}
+
 // shortRepository fits owner/name into width columns, giving up the owner
 // before the name: "…/widgets" rather than "acme/wi…". text must be clean.
 func shortRepository(text string, width int) string {
@@ -134,7 +153,7 @@ func shortRepository(text string, width int) string {
 // fixed is the width of every column but the title, including the gaps.
 func (layout Layout) fixed() int {
 	width := layout.number + len(gap) // number, then the gap before the title
-	for _, count := range []int{layout.repository, layout.head, layout.base, layout.author, layout.age, layout.checks, layout.review, layout.comments} {
+	for _, count := range []int{layout.repository, layout.mark, layout.head, layout.base, layout.author, layout.age, layout.checks, layout.review, layout.comments} {
 		if count > 0 {
 			width += count + len(gap)
 		}
@@ -144,12 +163,12 @@ func (layout Layout) fixed() int {
 
 // Header returns the column headings, padded to width.
 func (table Table) Header(layout Layout, width int) string {
-	return table.theme.PullRequestList.Header.Render(pad(noMarker+layout.row("REPO", "#", "TITLE", "HEAD", "BASE", "AUTHOR", "UPD", "CI", "RV", "CMT"), width))
+	return table.theme.PullRequestList.Header.Render(pad(noMarker+layout.row("REPO", "#", "TITLE", "MARK", "HEAD", "BASE", "AUTHOR", "UPD", "CI", "RV", "CMT"), width))
 }
 
 // row pads each cell to its column and joins them. Right-aligned columns are
 // numbers; the rest are left-aligned.
-func (layout Layout) row(repository, number, title, head, base, author, age, checks, review, comments string) string {
+func (layout Layout) row(repository, number, title, mark, head, base, author, age, checks, review, comments string) string {
 	var cells []string
 	if layout.repository > 0 {
 		cells = append(cells, pad(repository, layout.repository))
@@ -164,6 +183,7 @@ func (layout Layout) row(repository, number, title, head, base, author, age, che
 			cells = append(cells, pad(text, width))
 		}
 	}
+	add(mark, layout.mark, false)
 	add(head, layout.head, false)
 	add(base, layout.base, false)
 	add(author, layout.author, false)
@@ -216,6 +236,7 @@ func (table Table) IndentedRow(layout Layout, pullRequest github.PullRequest, de
 		title = draftPrefix + title
 	}
 	title = ansi.Truncate(indent+title, layout.title, "…")
+	mark := ansi.Truncate(table.mark(pullRequest), layout.mark, "…")
 	head := ansi.Truncate(terminaltext.Clean(pullRequest.HeadBranch), layout.head, "…")
 	base := ansi.Truncate(terminaltext.Clean(pullRequest.BaseBranch), layout.base, "…")
 	author := ansi.Truncate(terminaltext.Clean(pullRequest.Author), layout.author, "…")
@@ -233,7 +254,7 @@ func (table Table) IndentedRow(layout Layout, pullRequest github.PullRequest, de
 		if matched {
 			lead = search.SelectedGlyph
 		}
-		return table.theme.PullRequestList.Selected.Render(pad(lead+layout.row(repository, number, title, head, base, author, age, checksMark, reviewMark, comments), width))
+		return table.theme.PullRequestList.Selected.Render(pad(lead+layout.row(repository, number, title, mark, head, base, author, age, checksMark, reviewMark, comments), width))
 	}
 
 	styles := table.theme.PullRequestList
@@ -247,6 +268,9 @@ func (table Table) IndentedRow(layout Layout, pullRequest github.PullRequest, de
 		out = append(out, styles.Repository.Render(pad(repository, layout.repository)))
 	}
 	out = append(out, styles.Number.Render(padLeft(number, layout.number)), styledTitle+strings.Repeat(" ", max(0, layout.title-ansi.StringWidth(title))))
+	if layout.mark > 0 {
+		out = append(out, styles.Mark.Render(pad(mark, layout.mark)))
+	}
 	if layout.head > 0 {
 		out = append(out, styles.Branch.Render(pad(head, layout.head)))
 	}

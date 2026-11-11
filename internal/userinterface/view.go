@@ -103,6 +103,16 @@ type CommandLister interface {
 	CommandNames() []string
 }
 
+// ArgumentCompleter is optionally implemented by a Commander to complete the
+// arguments of its commands on the command line. The root asks only the top
+// view, after the shell's own commands, and only for a command that view lists.
+// CompleteArguments returns every whole argument the command may be given;
+// Tab keeps those the typed argument is a prefix of, spaces included, so an
+// argument may contain spaces. nil offers nothing.
+type ArgumentCompleter interface {
+	CompleteArguments(name string) []string
+}
+
 // Resumer is optionally implemented by views that want to know they are
 // visible again after the view above them was popped (for example to refresh).
 type Resumer interface {

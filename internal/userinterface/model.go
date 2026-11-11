@@ -15,6 +15,7 @@ import (
 
 	"github.com/MikePors/strigidae/internal/localthreads"
 	"github.com/MikePors/strigidae/internal/options"
+	"github.com/MikePors/strigidae/internal/pullrequestmarks"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
@@ -68,6 +69,12 @@ type Options struct {
 	// may be; localthreads.MaxFileSize by default, which is what a file is
 	// refused above when read.
 	LocalThreadBytes int
+	// Marks are the pull request marks cmd/strig read from the state directory
+	// before the program started. MarksError is why that read failed, if it
+	// did: it is shown once, and marks are then not saved, so the unusable
+	// file is not overwritten. With no StateDirectory marks are not saved.
+	Marks      pullrequestmarks.Marks
+	MarksError error
 }
 
 // Internal timer messages. The id/gen fields discard timers that were
@@ -104,6 +111,7 @@ type Model struct {
 	pluginRunning  sync.WaitGroup // runs whose command has not returned; see Close
 	quitting       bool           // quit began and is waiting for plugin runs
 	localThreads   localthreads.Store
+	marks          marksPart
 	localFiles     localthreads.Files
 	clock          func() time.Time
 
@@ -152,6 +160,10 @@ func New(root View, activeTheme theme.Theme, startup Options) *Model {
 	if len(startup.PluginCommands) > 0 {
 		root, _ = root.Update(PluginsMessage{Commands: startup.PluginCommands})
 	}
+	marks := newMarksPart(startup)
+	if !marks.marks.Empty() {
+		root, _ = root.Update(MarksMessage{Marks: marks.marks})
+	}
 	if startup.PluginQuitWait <= 0 {
 		startup.PluginQuitWait = DefaultPluginQuitWait
 	}
@@ -160,6 +172,7 @@ func New(root View, activeTheme theme.Theme, startup Options) *Model {
 	}
 	return &Model{
 		clock:           startup.Clock,
+		marks:           marks,
 		localThreads:    localthreads.Store{Limit: startup.LocalThreadLimit, Bytes: startup.LocalThreadBytes},
 		localFiles:      localthreads.Files{Directory: startup.StateDirectory, Logger: startup.Logger},
 		stack:           []View{root},
@@ -187,8 +200,16 @@ func New(root View, activeTheme theme.Theme, startup Options) *Model {
 // terminals.
 func (model *Model) Init() tea.Cmd {
 	commands := []tea.Cmd{model.top().Init(), tea.RequestBackgroundColor}
+	// In order, so the marks error, which matters more, is the one left showing.
+	var notices []tea.Cmd
 	if model.notice != "" {
-		commands = append(commands, Info(model.notice))
+		notices = append(notices, Info(model.notice))
+	}
+	if notice := model.marks.startupNotice(); notice != nil {
+		notices = append(notices, notice)
+	}
+	if len(notices) > 0 {
+		commands = append(commands, tea.Sequence(notices...))
 	}
 	return tea.Batch(commands...)
 }
@@ -251,6 +272,8 @@ func (model *Model) update(message tea.Msg) tea.Cmd {
 		return model.pluginResult(message)
 	case PullRequestOpenedMessage:
 		return model.pullRequestOpened(message)
+	case SetMarkMessage, ClearMarkMessage, marksSavedMessage:
+		return model.marks.update(message, model.broadcast)
 	case localThreadsLoadedMessage:
 		return model.localThreadsLoaded(message)
 	case localThreadsSavedMessage:
@@ -341,6 +364,10 @@ func (model *Model) push(view View) tea.Cmd {
 	}
 	if len(model.pluginCommands) > 0 {
 		view, _ = view.Update(PluginsMessage{Commands: model.pluginCommands})
+		model.stack[len(model.stack)-1] = view
+	}
+	if !model.marks.marks.Empty() {
+		view, _ = view.Update(MarksMessage{Marks: model.marks.marks})
 		model.stack[len(model.stack)-1] = view
 	}
 	if threads := model.localThreads.Snapshot(); len(threads) > 0 {

@@ -18,6 +18,7 @@ import (
 	"github.com/MikePors/strigidae/internal/clipboard"
 	"github.com/MikePors/strigidae/internal/environment"
 	"github.com/MikePors/strigidae/internal/logging"
+	"github.com/MikePors/strigidae/internal/pullrequestmarks"
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/theme/terminalpalette"
 	"github.com/MikePors/strigidae/internal/userinterface/views/dashboard"
@@ -58,12 +59,22 @@ func (application application) userInterfaceOptions(logger *slog.Logger, notice 
 	if err != nil {
 		logger.Warn("local threads are not kept between runs", "err", err)
 	}
+	marks, marksError := readMarks(stateDirectory)
 	return userinterface.Options{
-		StateDirectory: stateDirectory,
-		Logger:         logger, Notice: notice, StartingOptions: application.config.Options,
+		StateDirectory: stateDirectory, Marks: marks, MarksError: marksError,
+		Logger: logger, Notice: notice, StartingOptions: application.config.Options,
 		ViewCommands: append(viewCommands(), names...),
 		PluginRunner: runner, PluginCommands: commands,
 	}
+}
+
+// readMarks loads the saved pull request marks before the program starts. With
+// no state directory there is no file, and the marks live for the session only.
+func readMarks(stateDirectory string) (pullrequestmarks.Marks, error) {
+	if stateDirectory == "" {
+		return pullrequestmarks.Marks{}, nil
+	}
+	return pullrequestmarks.Read(pullrequestmarks.Path(stateDirectory))
 }
 
 // viewCommands collects the command names every view package declares, so the
