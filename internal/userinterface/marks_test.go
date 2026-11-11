@@ -336,14 +336,30 @@ func flattenMessages(command tea.Cmd) []tea.Msg {
 }
 
 func TestSaveFailureIsShownAndTheNextSaveStillRuns(test *testing.T) {
-	session := newMarksSession(test, Options{StateDirectory: test.TempDir()})
-	session.send(SetMarkMessage{Key: marksKey(1), Text: "first"})
-	session.send(marksSavedMessage{err: errors.New("disk full")})
-	if text, kind := session.status(); text != "marks not saved: disk full" || kind != statusError {
-		test.Errorf("status = %q (%v)", text, kind)
+	directory := test.TempDir()
+	session := newMarksSession(test, Options{StateDirectory: directory})
+	// The first save is held back, so it is in flight when the second change comes.
+	session.model.Update(SetMarkMessage{Key: marksKey(1), Text: "first"})
+	session.model.Update(SetMarkMessage{Key: marksKey(2), Text: "second"})
+
+	_, command := session.model.Update(marksSavedMessage{err: errors.New("disk full")})
+	var failed, followUps int
+	for _, message := range flattenMessages(command) { // runs the follow-up save
+		switch message := message.(type) {
+		case ErrorMessage:
+			failed++
+			if message.Err.Error() != "marks not saved: disk full" {
+				test.Errorf("error = %v", message.Err)
+			}
+		case marksSavedMessage:
+			followUps++
+		}
 	}
-	if session.model.marks.saving {
-		test.Error("still saving after the result")
+	if failed != 1 || followUps != 1 {
+		test.Fatalf("failures %d, follow-up saves %d, want 1 and 1", failed, followUps)
+	}
+	if names := savedMarks(test, directory).Names(); len(names) != 2 {
+		test.Errorf("saved marks = %v, want both", names)
 	}
 }
 
@@ -376,6 +392,17 @@ func TestViewsBelowTheTopHearOfChanges(test *testing.T) {
 
 func TestStartupNoticesKeepTheMarksErrorLast(test *testing.T) {
 	session := newMarksSession(test, Options{Notice: "no remote", MarksError: errors.New("marks file can't be decoded")})
+	// A batch would run the two notices at once, in no set order; only a
+	// sequence keeps the marks error last.
+	sequenced := false
+	for _, message := range flattenMessages(session.model.Init()) {
+		if reflect.TypeOf(message).Name() == "sequenceMsg" {
+			sequenced = true
+		}
+	}
+	if !sequenced {
+		test.Error("Init does not run the startup notices in a sequence")
+	}
 	session.settle(session.model.Init())
 	if text, kind := session.status(); kind != statusError || !strings.Contains(text, "decoded") {
 		test.Errorf("status = %q (%v)", text, kind)
