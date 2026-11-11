@@ -4,11 +4,11 @@
 
 Every action strig has, the view it belongs to, its default keys and its help text, read from the same registries the help overlay (`?`) uses. A multi-key sequence is written with spaces (`g g` means `g` then `g`); `ctrl+d` is the control key; a shifted letter is the letter itself (`G`).
 
-An action's name is the stable name it keeps whatever its keys are. A name that appears in more than one view (`next-tab`, `next-section`, `copy-url`) is the same action there. A command runs from the command line (`:` then `enter`); an action with no keys is reached only by its command.
+An action's name is the stable name it keeps whatever its keys are. A name that appears in more than one view (`next-tab`, `next-section`, `copy-url`) applies to that view's content. A command runs from the command line (`:` then `enter`); an action with no keys is reached only by its command.
 
-## All views
+## Shared defaults
 
-Movement, search and help keys every view shares.
+Movement, search and help defaults shared by the views. Each key applies where the active view and pane support its action.
 
 | Action | Keys | Command | Description |
 |---|---|---|---|
@@ -100,7 +100,7 @@ An open pull request: Overview, Files and Comments panes, and the diff.
 
 ## Diff pane
 
-Inside the pull request workspace, while the diff has focus.
+Inside the pull request workspace, while the diff has focus. Hunk and thread navigation (next-hunk, previous-hunk, next-thread and previous-thread) also works from the Files pane while a file is selected.
 
 | Action | Keys | Command | Description |
 |---|---|---|---|
