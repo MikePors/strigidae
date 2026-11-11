@@ -247,6 +247,8 @@ func TestUnusableFileIsNeverOverwritten(test *testing.T) {
 		{"unknown version", `{"version":2,"marks":[]}`, ErrUnknownVersion},
 		{"no version", `{"marks":[]}`, ErrUnknownVersion},
 		{"mark without a number", `{"version":1,"marks":[{"host":"github.com","owner":"octo","repository":"hello","text":"x"}]}`, ErrCorrupt},
+		{"untrimmed text", `{"version":1,"marks":[{"host":"github.com","owner":"octo","repository":"hello","number":1,"text":" x "}]}`, ErrCorrupt},
+		{"duplicate keys differing in case", `{"version":1,"marks":[{"host":"github.com","owner":"Octo","repository":"hello","number":1,"text":"x"},{"host":"github.com","owner":"octo","repository":"hello","number":1,"text":"y"}]}`, ErrCorrupt},
 		{"refused text", `{"version":1,"marks":[{"host":"github.com","owner":"octo","repository":"hello","number":1,"text":"a\u001bb"}]}`, ErrCorrupt},
 		{"too large", `{"version":1,"marks":[],"padding":"` + strings.Repeat("a", MaxFileSize) + `"}`, ErrTooLarge},
 	}
@@ -280,6 +282,21 @@ func TestUnusableFileIsNeverOverwritten(test *testing.T) {
 				test.Error("the unusable file was overwritten")
 			}
 		})
+	}
+}
+
+func TestOpenNormalisesKeys(test *testing.T) {
+	directory := test.TempDir()
+	if err := os.MkdirAll(filepath.Dir(marksPath(directory)), 0o700); err != nil {
+		test.Fatal(err)
+	}
+	content := `{"version":1,"marks":[{"host":"GitHub.com","owner":"Octo","repository":"Hello","number":1,"text":"waiting"}]}`
+	if err := os.WriteFile(marksPath(directory), []byte(content), 0o600); err != nil {
+		test.Fatal(err)
+	}
+	store := mustOpen(test, directory)
+	if text, ok := store.Mark(key("github.com", "octo", "hello", 1)); !ok || text != "waiting" {
+		test.Errorf("Mark = %q, %v, want waiting, true", text, ok)
 	}
 }
 
@@ -330,7 +347,9 @@ func TestNoStateDirectoryKeepsMarksForTheRun(test *testing.T) {
 }
 
 // TestConcurrentUse is for the race detector: Update changes the store while a
-// command saves it.
+// command saves it. It covers data races on the marks only; that an older
+// snapshot is never written after a newer one rests on Save taking its
+// snapshot under the save mutex, which this test can't observe.
 func TestConcurrentUse(test *testing.T) {
 	store := mustOpen(test, test.TempDir())
 	var group sync.WaitGroup

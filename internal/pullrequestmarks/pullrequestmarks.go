@@ -106,7 +106,11 @@ func Open(stateDirectory string) (*Store, error) {
 	}
 	for _, saved := range content.Marks {
 		key := Key{Host: saved.Host, Repository: github.Repository{Owner: saved.Owner, Name: saved.Repository}, Number: saved.Number}
-		if !key.valid() || validate(saved.Text) != nil {
+		// Refuse what Set would never have written: untrimmed text, and two
+		// entries for one pull request (spellings that differ only in case).
+		_, duplicate := store.marks[key.normalised()]
+		if !key.valid() || validate(saved.Text) != nil || saved.Text != strings.TrimSpace(saved.Text) || duplicate {
+			store.marks = map[Key]string{}
 			store.loadErr = ErrCorrupt
 			return store, ErrCorrupt
 		}
