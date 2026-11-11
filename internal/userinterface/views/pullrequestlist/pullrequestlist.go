@@ -14,6 +14,7 @@ import (
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/listcache"
 	"github.com/MikePors/strigidae/internal/options"
+	"github.com/MikePors/strigidae/internal/pullrequestmarks"
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/components/scroll"
 	"github.com/MikePors/strigidae/internal/userinterface/components/search"
@@ -123,7 +124,8 @@ type View struct {
 
 	tabs          []tab
 	active        int
-	options       options.Values // the `:set` options, sent by the root
+	options       options.Values         // the `:set` options, sent by the root
+	marks         pullrequestmarks.Marks // sent by the root; the mark column is derived from them
 	width, height int
 }
 
@@ -140,6 +142,8 @@ func (listBindings *bindings) actions() []keys.Action {
 		{Name: commandCreate, Command: commandCreate},
 		{Name: commandCreateDraft, Command: commandCreateDraft},
 		{Name: commandCopyURL, Command: commandCopyURL},
+		{Name: commandMark, Command: commandMark},
+		{Name: commandUnmark, Command: commandUnmark},
 	}
 }
 
@@ -155,11 +159,12 @@ func ActionNames() []string {
 }
 
 var (
-	_ userinterface.View        = (*View)(nil)
-	_ userinterface.Loader      = (*View)(nil)
-	_ userinterface.Prompter    = (*View)(nil)
-	_ userinterface.Commander   = (*View)(nil)
-	_ userinterface.KeyCapturer = (*View)(nil)
+	_ userinterface.View              = (*View)(nil)
+	_ userinterface.Loader            = (*View)(nil)
+	_ userinterface.Prompter          = (*View)(nil)
+	_ userinterface.Commander         = (*View)(nil)
+	_ userinterface.ArgumentCompleter = (*View)(nil)
+	_ userinterface.KeyCapturer       = (*View)(nil)
 )
 
 // New returns the PR list for repository. It starts loading when pushed (Init).
@@ -322,6 +327,8 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		return view, nil
 	case userinterface.OptionsMessage:
 		view.options = message.Values
+	case userinterface.MarksMessage:
+		view.marks = message.Marks
 	case userinterface.ThemeMessage:
 		view.theme = message.Theme
 	case pullRequestsLoadedMessage:
