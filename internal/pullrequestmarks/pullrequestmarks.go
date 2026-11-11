@@ -91,7 +91,7 @@ func (marks Marks) Mark(key Key) (string, bool) {
 // Set returns the marks with a pull request given a mark, replacing any it had.
 // The text is trimmed of surrounding white space. It is refused, and the marks
 // returned unchanged, when the key is incomplete, or the text is empty, too long,
-// or holds control or bidirectional characters.
+// not valid UTF-8, or holds control or bidirectional characters.
 func (marks Marks) Set(key Key, text string) (Marks, error) {
 	if !key.valid() {
 		return marks, ErrInvalidKey
