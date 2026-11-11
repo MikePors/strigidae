@@ -27,11 +27,8 @@ type SetMarkMessage struct {
 // it for `:unmark`, after checking that the pull request has one.
 type ClearMarkMessage struct{ Key pullrequestmarks.Key }
 
-// marksSavedMessage is the result of a save. Only the latest save started counts.
-type marksSavedMessage struct {
-	sequence int
-	err      error
-}
+// marksSavedMessage is the result of the save in flight.
+type marksSavedMessage struct{ err error }
 
 // marksPart is the root's slice of state for pull request marks: the marks, the
 // file they are saved in, and the bookkeeping of saves. The root hands it its
@@ -44,9 +41,12 @@ type marksPart struct {
 	// unreadable is why the file could not be read at startup. The file is
 	// then never written, so it is not overwritten before the user has looked.
 	unreadable error
-	// sequence numbers the saves; a result older than the latest started is
-	// ignored.
-	sequence int
+	// saving is true while a save is in flight. There is at most one, so an
+	// older copy can never land on disk after a newer one.
+	saving bool
+	// pending is true when marks changed during a save: when it ends, one save
+	// of the then-latest marks follows.
+	pending bool
 }
 
 func newMarksPart(startup Options) marksPart {
@@ -56,9 +56,6 @@ func newMarksPart(startup Options) marksPart {
 	}
 	return part
 }
-
-// any reports whether there is a mark to tell a view about.
-func (part *marksPart) any() bool { return len(part.marks.Names()) > 0 }
 
 // startupNotice is the command that tells the user, once, that the marks file
 // could not be used.
@@ -77,10 +74,7 @@ func (part *marksPart) update(message tea.Msg, broadcast func(tea.Msg) tea.Cmd) 
 	case ClearMarkMessage:
 		return part.clear(message, broadcast)
 	case marksSavedMessage:
-		if message.sequence != part.sequence || message.err == nil {
-			return nil
-		}
-		return Error(fmt.Errorf("marks not saved: %w", message.err))
+		return part.saved(message)
 	}
 	return nil
 }
@@ -92,36 +86,58 @@ func (part *marksPart) set(message SetMarkMessage, broadcast func(tea.Msg) tea.C
 	}
 	part.marks = changed
 	text, _ := changed.Mark(message.Key)
-	return part.changed(fmt.Sprintf("Marked #%d: %s", message.Key.Number, terminaltext.Clean(text)), broadcast)
+	return part.changed(fmt.Sprintf("Marked #%d", message.Key.Number), ": "+terminaltext.Clean(text), broadcast)
 }
 
 func (part *marksPart) clear(message ClearMarkMessage, broadcast func(tea.Msg) tea.Cmd) tea.Cmd {
 	part.marks = part.marks.Clear(message.Key)
-	return part.changed(fmt.Sprintf("Unmarked #%d", message.Key.Number), broadcast)
+	return part.changed(fmt.Sprintf("Unmarked #%d", message.Key.Number), "", broadcast)
 }
 
-// changed tells the views, starts the save and reports done in the status bar;
-// when the change can't be saved the report is an error that says so.
-func (part *marksPart) changed(done string, broadcast func(tea.Msg) tea.Cmd) tea.Cmd {
+// changed tells the views, starts or queues the save and reports done in the
+// status bar. The report is an error when the change can't be saved, and then
+// leaves the mark text out: the root logs every error it shows, and mark text
+// never goes in the log. detail is the part of the report that holds it.
+func (part *marksPart) changed(done, detail string, broadcast func(tea.Msg) tea.Cmd) tea.Cmd {
 	told := broadcast(MarksMessage{Marks: part.marks})
-	report := Info(done)
-	var save tea.Cmd
 	switch {
 	case part.path == "":
 		// Session only: nothing to save and nothing to say.
 	case part.unreadable != nil:
-		report = Error(errors.New(done + " (not saved: the marks file could not be read at startup)"))
+		return tea.Batch(told, Error(errors.New(done+" (not saved: the marks file could not be read at startup)")))
+	case part.saving:
+		part.pending = true
 	default:
-		data, err := pullrequestmarks.Encode(part.marks)
-		if err != nil {
-			report = Error(fmt.Errorf("%s (not saved: %w)", done, err))
-			break
-		}
-		part.sequence++
-		sequence, path := part.sequence, part.path
-		save = func() tea.Msg { return marksSavedMessage{sequence: sequence, err: pullrequestmarks.Write(path, data)} }
+		return tea.Batch(told, Info(done+detail), part.save(done))
 	}
-	return tea.Batch(told, report, save)
+	return tea.Batch(told, Info(done+detail))
+}
+
+// save starts a save of the current marks; the caller has checked that none is
+// in flight. An encoding failure is reported against done.
+func (part *marksPart) save(done string) tea.Cmd {
+	data, err := pullrequestmarks.Encode(part.marks)
+	if err != nil {
+		return Error(fmt.Errorf("%s (not saved: %w)", done, err))
+	}
+	part.saving = true
+	path := part.path
+	return func() tea.Msg { return marksSavedMessage{err: pullrequestmarks.Write(path, data)} }
+}
+
+// saved ends the save in flight, reports a failure and starts the save that
+// changes made meanwhile asked for.
+func (part *marksPart) saved(message marksSavedMessage) tea.Cmd {
+	part.saving = false
+	var failure tea.Cmd
+	if message.err != nil {
+		failure = Error(fmt.Errorf("marks not saved: %w", message.err))
+	}
+	if !part.pending {
+		return failure
+	}
+	part.pending = false
+	return tea.Batch(failure, part.save("Marks changed"))
 }
 
 // describeMarkError adds the limit to the error for a mark that is too long.
@@ -168,6 +184,9 @@ func MarkCommand(host string, pullRequest github.PullRequest, found bool, text s
 func UnmarkCommand(host string, marks pullrequestmarks.Marks, pullRequest github.PullRequest, found bool) tea.Cmd {
 	if !found {
 		return Error(errors.New("no pull request to unmark"))
+	}
+	if host == "" {
+		return Error(errors.New("not unmarked: the host of this list is unknown"))
 	}
 	key := MarkKey(host, pullRequest)
 	if _, marked := marks.Mark(key); !marked {

@@ -8,8 +8,8 @@ import (
 )
 
 // The marks commands act on the pull request under the cursor in the active
-// tab, in whichever section it is. The marks themselves live in the root; the list keeps the last it was
-// sent and asks the root to change them.
+// tab, in whichever section it is. The marks themselves live in the root; the
+// list keeps the last it was sent and asks the root to change them.
 const (
 	commandMark   = "mark"
 	commandUnmark = "unmark"

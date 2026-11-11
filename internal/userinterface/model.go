@@ -161,7 +161,7 @@ func New(root View, activeTheme theme.Theme, startup Options) *Model {
 		root, _ = root.Update(PluginsMessage{Commands: startup.PluginCommands})
 	}
 	marks := newMarksPart(startup)
-	if marks.any() {
+	if !marks.marks.Empty() {
 		root, _ = root.Update(MarksMessage{Marks: marks.marks})
 	}
 	if startup.PluginQuitWait <= 0 {
@@ -200,11 +200,16 @@ func New(root View, activeTheme theme.Theme, startup Options) *Model {
 // terminals.
 func (model *Model) Init() tea.Cmd {
 	commands := []tea.Cmd{model.top().Init(), tea.RequestBackgroundColor}
+	// In order, so the marks error, which matters more, is the one left showing.
+	var notices []tea.Cmd
 	if model.notice != "" {
-		commands = append(commands, Info(model.notice))
+		notices = append(notices, Info(model.notice))
 	}
 	if notice := model.marks.startupNotice(); notice != nil {
-		commands = append(commands, notice)
+		notices = append(notices, notice)
+	}
+	if len(notices) > 0 {
+		commands = append(commands, tea.Sequence(notices...))
 	}
 	return tea.Batch(commands...)
 }
@@ -361,7 +366,7 @@ func (model *Model) push(view View) tea.Cmd {
 		view, _ = view.Update(PluginsMessage{Commands: model.pluginCommands})
 		model.stack[len(model.stack)-1] = view
 	}
-	if model.marks.any() {
+	if !model.marks.marks.Empty() {
 		view, _ = view.Update(MarksMessage{Marks: model.marks.marks})
 		model.stack[len(model.stack)-1] = view
 	}

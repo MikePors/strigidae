@@ -1,9 +1,12 @@
 package userinterface
 
 import (
+	"bytes"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -70,6 +73,16 @@ func (session *marksSession) settle(command tea.Cmd) {
 			session.settle(inner)
 		}
 	default:
+		// tea.Sequence's message is an unexported slice of commands; run them in order.
+		if commands, ok := reflect.ValueOf(message).Interface().([]tea.Cmd); ok || reflect.TypeOf(message).ConvertibleTo(reflect.TypeOf([]tea.Cmd(nil))) {
+			if !ok {
+				commands = reflect.ValueOf(message).Convert(reflect.TypeOf(commands)).Interface().([]tea.Cmd)
+			}
+			for _, inner := range commands {
+				session.settle(inner)
+			}
+			return
+		}
 		_, next := session.model.Update(message)
 		session.settle(next)
 	}
@@ -217,7 +230,7 @@ func TestUnreadableFileIsShownOnceAndNeverWritten(test *testing.T) {
 
 	session.send(SetMarkMessage{Key: marksKey(12), Text: "wip"})
 	text, kind = session.status()
-	if want := "Marked #12: wip (not saved: the marks file could not be read at startup)"; text != want || kind != statusError {
+	if want := "Marked #12 (not saved: the marks file could not be read at startup)"; text != want || kind != statusError {
 		test.Errorf("status = %q (%v), want %q", text, kind, want)
 	}
 	if _, ok := mustLastMarks(test, session.root).Mark(marksKey(12)); !ok {
@@ -241,21 +254,130 @@ func TestFailedSaveIsShown(test *testing.T) {
 	}
 }
 
-func TestOlderSaveResultsAreIgnored(test *testing.T) {
+func TestChangeDuringASaveQueuesOneFollowUp(test *testing.T) {
+	directory := test.TempDir()
+	session := newMarksSession(test, Options{StateDirectory: directory})
+	part := &session.model.marks
+
+	// The first save is started but its command is held back, so it is in flight.
+	_, first := session.model.Update(SetMarkMessage{Key: marksKey(1), Text: "first"})
+	if !part.saving {
+		test.Fatal("no save in flight")
+	}
+	var held []tea.Cmd
+	for _, command := range []tea.Msg{SetMarkMessage{Key: marksKey(2), Text: "second"}, SetMarkMessage{Key: marksKey(3), Text: "third"}} {
+		_, next := session.model.Update(command)
+		held = append(held, next)
+	}
+	if !part.pending {
+		test.Error("changes during a save did not set pending")
+	}
+	// None of the later changes started a save of its own.
+	for _, command := range held {
+		for _, message := range flattenMessages(command) {
+			if _, ok := message.(marksSavedMessage); ok {
+				test.Fatal("a second save was started while one was in flight")
+			}
+		}
+	}
+	if _, err := os.Stat(pullrequestmarks.Path(directory)); !errors.Is(err, os.ErrNotExist) {
+		test.Fatalf("the file exists before the first save ran: %v", err)
+	}
+
+	// The first save ends; exactly one follow-up carries the latest marks.
+	var saves []marksSavedMessage
+	for _, message := range flattenMessages(first) {
+		if saved, ok := message.(marksSavedMessage); ok {
+			saves = append(saves, saved)
+		}
+	}
+	if len(saves) != 1 {
+		test.Fatalf("first command produced %d save results", len(saves))
+	}
+	_, followUp := session.model.Update(saves[0])
+	if part.pending || !part.saving {
+		test.Errorf("after the first result: pending %v, saving %v", part.pending, part.saving)
+	}
+	var followUps []marksSavedMessage
+	for _, message := range flattenMessages(followUp) {
+		if saved, ok := message.(marksSavedMessage); ok {
+			followUps = append(followUps, saved)
+		}
+	}
+	if len(followUps) != 1 {
+		test.Fatalf("%d follow-up saves, want 1", len(followUps))
+	}
+	if names := savedMarks(test, directory).Names(); len(names) != 3 {
+		test.Errorf("saved marks = %v, want all three", names)
+	}
+	session.send(followUps[0])
+	if part.saving || part.pending {
+		test.Error("still saving after the follow-up ended")
+	}
+}
+
+// flattenMessages runs a command and returns what it produced, batches opened.
+func flattenMessages(command tea.Cmd) []tea.Msg {
+	if command == nil {
+		return nil
+	}
+	switch message := command().(type) {
+	case nil:
+		return nil
+	case tea.BatchMsg:
+		var all []tea.Msg
+		for _, inner := range message {
+			all = append(all, flattenMessages(inner)...)
+		}
+		return all
+	default:
+		return []tea.Msg{message}
+	}
+}
+
+func TestSaveFailureIsShownAndTheNextSaveStillRuns(test *testing.T) {
 	session := newMarksSession(test, Options{StateDirectory: test.TempDir()})
 	session.send(SetMarkMessage{Key: marksKey(1), Text: "first"})
-	session.send(SetMarkMessage{Key: marksKey(2), Text: "second"})
-	if got := session.model.marks.sequence; got != 2 {
-		test.Fatalf("sequence = %d, want 2", got)
-	}
-	before, _ := session.status()
-
-	session.send(marksSavedMessage{sequence: 1, err: errors.New("disk full")})
-	if text, _ := session.status(); text != before {
-		test.Errorf("an older failure changed the status to %q", text)
-	}
-	session.send(marksSavedMessage{sequence: 2, err: errors.New("disk full")})
+	session.send(marksSavedMessage{err: errors.New("disk full")})
 	if text, kind := session.status(); text != "marks not saved: disk full" || kind != statusError {
+		test.Errorf("status = %q (%v)", text, kind)
+	}
+	if session.model.marks.saving {
+		test.Error("still saving after the result")
+	}
+}
+
+func TestMarkTextStaysOutOfTheLog(test *testing.T) {
+	directory := test.TempDir()
+	var logs bytes.Buffer
+	unreadable := errors.New("marks file can't be decoded")
+	session := newMarksSession(test, Options{StateDirectory: directory, MarksError: unreadable, Logger: slog.New(slog.NewTextHandler(&logs, nil))})
+	session.send(SetMarkMessage{Key: marksKey(12), Text: "secret-note"})
+	if text, _ := session.status(); strings.Contains(text, "secret-note") {
+		test.Errorf("status holds the mark: %q", text)
+	}
+	if strings.Contains(logs.String(), "secret-note") {
+		test.Errorf("log holds the mark: %s", logs.String())
+	}
+}
+
+func TestViewsBelowTheTopHearOfChanges(test *testing.T) {
+	session := newMarksSession(test, Options{})
+	session.send(PushMessage{View: newFake("top")})
+	session.send(SetMarkMessage{Key: marksKey(12), Text: "wip"})
+	if _, ok := mustLastMarks(test, session.root).Mark(marksKey(12)); !ok {
+		test.Error("the view below the top was not sent the new mark")
+	}
+	session.send(ClearMarkMessage{Key: marksKey(12)})
+	if _, ok := mustLastMarks(test, session.root).Mark(marksKey(12)); ok {
+		test.Error("the view below the top was not sent the cleared marks")
+	}
+}
+
+func TestStartupNoticesKeepTheMarksErrorLast(test *testing.T) {
+	session := newMarksSession(test, Options{Notice: "no remote", MarksError: errors.New("marks file can't be decoded")})
+	session.settle(session.model.Init())
+	if text, kind := session.status(); kind != statusError || !strings.Contains(text, "decoded") {
 		test.Errorf("status = %q (%v)", text, kind)
 	}
 }

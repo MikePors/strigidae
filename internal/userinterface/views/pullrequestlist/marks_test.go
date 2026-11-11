@@ -98,6 +98,11 @@ func TestUnmark(test *testing.T) {
 	if !ok || failure.Err.Error() != "#2 has no mark" {
 		test.Errorf("unmarked row: message = %#v", failure)
 	}
+	unhosted := loadedView(test, fakeWith(makePullRequests(2)), nil)
+	failure, ok = commandMessage(test, unhosted, "unmark", "").(userinterface.ErrorMessage)
+	if !ok || failure.Err.Error() != "not unmarked: the host of this list is unknown" {
+		test.Errorf("no host: message = %#v", failure)
+	}
 	empty := markedView(test, nil)
 	failure, ok = commandMessage(test, empty, "unmark", "").(userinterface.ErrorMessage)
 	if !ok || failure.Err.Error() != "no pull request to unmark" {
