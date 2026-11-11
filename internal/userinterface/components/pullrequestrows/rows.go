@@ -169,7 +169,8 @@ func (table Table) Header(layout Layout, width int) string {
 		head: headingCell("HEAD"), base: headingCell("BASE"), author: headingCell("AUTHOR"), age: headingCell("UPD"),
 		checks: headingCell("CI"), review: headingCell("RV"), comments: headingCell("CMT"),
 	}
-	return table.theme.PullRequestList.Header.Render(pad(noMarker+layout.row(headings).plain(), width))
+	line := append(cell{{text: noMarker}}, layout.row(headings)...)
+	return line.padRight(width).paintAll(table.theme.PullRequestList.Header)
 }
 
 // headingCell is a header cell; the header is painted in one style.
@@ -277,7 +278,8 @@ func (table Table) IndentedRow(layout Layout, pullRequest github.PullRequest, de
 		if matched {
 			lead = search.SelectedGlyph
 		}
-		return styles.Selected.Render(pad(lead+row.plain(), width))
+		line := append(cell{{text: lead}}, row...)
+		return line.padRight(width).paintAll(styles.Selected)
 	}
 	lead := noMarker
 	if matched {
@@ -287,7 +289,8 @@ func (table Table) IndentedRow(layout Layout, pullRequest github.PullRequest, de
 }
 
 // titleCell is the title indented by depth levels of indentColumns spaces and
-// cut to width, with a draft's marker in its own style.
+// cut to width, with a draft's marker in its own style. The indent and the
+// padding after the title take the Normal style, which adds nothing today.
 func (table Table) titleCell(pullRequest github.PullRequest, depth, width int) cell {
 	normal := table.theme.Normal
 	title := terminaltext.Clean(pullRequest.Title)

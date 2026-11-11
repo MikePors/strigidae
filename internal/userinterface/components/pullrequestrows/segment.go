@@ -60,9 +60,6 @@ func (content cell) truncate(width int) cell {
 		}
 		return out
 	}
-	if tail != "" && len(out) > 0 {
-		out[len(out)-1].text += tail
-	}
 	return out
 }
 
@@ -70,8 +67,11 @@ func (content cell) truncate(width int) cell {
 // it is width display columns wide. A cell already that wide is returned as is.
 func (content cell) padRight(width int) cell {
 	count := width - ansi.StringWidth(content.plain())
-	if count <= 0 || len(content) == 0 {
+	if count <= 0 {
 		return content
+	}
+	if len(content) == 0 {
+		return cell{{text: strings.Repeat(" ", count)}}
 	}
 	out := append(cell(nil), content...)
 	out[len(out)-1].text += strings.Repeat(" ", count)
@@ -81,8 +81,11 @@ func (content cell) padRight(width int) cell {
 // padLeft adds spaces before the cell, in the style of its first segment.
 func (content cell) padLeft(width int) cell {
 	count := width - ansi.StringWidth(content.plain())
-	if count <= 0 || len(content) == 0 {
+	if count <= 0 {
 		return content
+	}
+	if len(content) == 0 {
+		return cell{{text: strings.Repeat(" ", count)}}
 	}
 	out := append(cell(nil), content...)
 	out[0].text = strings.Repeat(" ", count) + out[0].text

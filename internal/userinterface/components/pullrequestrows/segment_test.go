@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/google/go-cmp/cmp"
 
@@ -52,6 +51,9 @@ func TestCellOfTwoSegmentsPads(test *testing.T) {
 	}
 	if got := twoSegments(activeTheme).padRight(3); got.plain() != "✓ newer" {
 		test.Errorf("a cell wider than the column was changed: %q", got.plain())
+	}
+	if got := (cell{}).padRight(4); got.plain() != "    " {
+		test.Errorf("an empty cell padded to %q, want four spaces", got.plain())
 	}
 }
 
@@ -146,10 +148,5 @@ func TestSelectedRowIsPaintedInTheSelectedStyleAlone(test *testing.T) {
 	selected := table.Row(layout, pullRequests[0], true, false, 60)
 	if want := styles.Selected.Render(pad("> "+unselected[len(noMarker):], 60)); selected != want {
 		test.Errorf("selected row %q, want %q", selected, want)
-	}
-	for _, own := range []lipgloss.Style{styles.Draft, styles.Approved, styles.ChecksPassing, styles.Author} {
-		if strings.Contains(selected, own.Render("alice")) || strings.Contains(selected, own.Render("[draft] ")) {
-			test.Errorf("selected row %q keeps a segment's own style", selected)
-		}
 	}
 }
