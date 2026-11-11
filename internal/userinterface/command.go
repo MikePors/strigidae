@@ -14,20 +14,37 @@ import (
 
 // commandDefinition is one entry in the command registry.
 type commandDefinition struct {
-	names []string // the command and its aliases, without the leading ":"
-	run   func(arguments string) tea.Cmd
+	names       []string // the command and its aliases, without the leading ":"
+	description string   // one line for the generated key reference
+	run         func(arguments string) tea.Cmd
 }
 
 // commandTable lists the commands the command line understands. Add new
 // commands here; parsing and dispatch need no other change.
 func commandTable() []commandDefinition {
 	return []commandDefinition{
-		{names: []string{"q", "quit"}, run: func(string) tea.Cmd { return Pop() }},
-		{names: []string{"qa", "qall", "quitall"}, run: func(string) tea.Cmd { return Quit() }},
-		{names: []string{"set"}, run: setCommand},
-		{names: []string{"help"}, run: helpCommand},
-		{names: []string{"theme"}, run: themeCommand},
+		{names: []string{"q", "quit"}, description: "close the current view; quits strig on the first view", run: func(string) tea.Cmd { return Pop() }},
+		{names: []string{"qa", "qall", "quitall"}, description: "quit strig", run: func(string) tea.Cmd { return Quit() }},
+		{names: []string{"set"}, description: "change a yes/no option for this session: `:set wrap`, `:set nowrap`, `:set wrap!`, `:set wrap?`, `:set wrap&`; `:set` alone lists the changed options and `:set all` every one", run: setCommand},
+		{names: []string{"help"}, description: "open a help overlay: `:help` lists the topics, `:help keys` is the key help, `:help config` lists the options", run: helpCommand},
+		{names: []string{"theme"}, description: "switch the colour theme to a bundled theme's name or a theme file", run: themeCommand},
 	}
+}
+
+// CommandDescription is a command of the shell with its aliases and a
+// one-line description, for the generated key reference.
+type CommandDescription struct {
+	Names       []string
+	Description string
+}
+
+// CommandDescriptions lists the shell's commands in table order.
+func CommandDescriptions() []CommandDescription {
+	var descriptions []CommandDescription
+	for _, definition := range commandTable() {
+		descriptions = append(descriptions, CommandDescription{Names: definition.names, Description: definition.description})
+	}
+	return descriptions
 }
 
 // CommandNames lists the commands the shell itself handles, so the wiring can

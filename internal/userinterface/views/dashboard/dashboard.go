@@ -122,10 +122,27 @@ func (dashboardBindings *bindings) actions() []keys.Action {
 		{Name: "previous-tab", Binding: &dashboardBindings.previousTab},
 		{Name: "next-section", Binding: &dashboardBindings.nextSection},
 		{Name: "previous-section", Binding: &dashboardBindings.previousSection},
-		{Name: commandCopyURL, Command: commandCopyURL},
-		{Name: commandMark, Command: commandMark},
-		{Name: commandUnmark, Command: commandUnmark},
+		{Name: commandCopyURL, Command: commandCopyURL, Description: "copy the URL of the pull request under the cursor to the clipboard"},
+		{Name: commandMark, Command: commandMark, Description: "give the pull request under the cursor a private mark: `:mark <text>` replaces any existing mark"},
+		{Name: commandUnmark, Command: commandUnmark, Description: "remove the private mark from the pull request under the cursor"},
 	}
+}
+
+// defaultBindings returns the dashboard's own bindings.
+func defaultBindings() bindings {
+	return bindings{
+		nextTab:         key.NewBinding(key.WithKeys("g t"), key.WithHelp("gt", "next tab")),
+		previousTab:     key.NewBinding(key.WithKeys("g T"), key.WithHelp("gT", "previous tab")),
+		nextSection:     key.NewBinding(key.WithKeys("]"), key.WithHelp("]", "next section")),
+		previousSection: key.NewBinding(key.WithKeys("["), key.WithHelp("[", "previous section")),
+	}
+}
+
+// Actions lists the dashboard's own actions with their default keys, for the
+// generated key reference.
+func Actions() []keys.Action {
+	dashboardBindings := defaultBindings()
+	return dashboardBindings.actions()
 }
 
 var (
@@ -150,12 +167,7 @@ func New(client github.Client, tabs []config.Tab, activeTheme theme.Theme, optio
 		client:     client,
 		theme:      activeTheme,
 		globalKeys: keys.DefaultGlobal(),
-		bindings: bindings{
-			nextTab:         key.NewBinding(key.WithKeys("g t"), key.WithHelp("gt", "next tab")),
-			previousTab:     key.NewBinding(key.WithKeys("g T"), key.WithHelp("gT", "previous tab")),
-			nextSection:     key.NewBinding(key.WithKeys("]"), key.WithHelp("]", "next section")),
-			previousSection: key.NewBinding(key.WithKeys("["), key.WithHelp("[", "previous section")),
-		},
+		bindings:   defaultBindings(),
 		now:        options.Now,
 		open:       options.Open,
 		notice:     options.Notice,

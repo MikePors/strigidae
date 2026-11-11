@@ -181,24 +181,24 @@ func (workspaceBindings *bindings) entries() []actionEntry {
 
 		// Commands without keys.
 		{
-			Action: keys.Action{Name: "comments", Command: "comments"},
+			Action: keys.Action{Name: "comments", Command: "comments", Description: "focus the Comments pane; `all` or `unresolved` filters it to every conversation or only unresolved review threads"},
 			check:  checkCommentsArguments,
 			run:    func(view *View, call invocation) tea.Cmd { return view.openComments(call.arguments) },
 		},
 		{
-			Action: keys.Action{Name: "resolve", Command: "resolve"},
+			Action: keys.Action{Name: "resolve", Command: "resolve", Description: "resolve the selected review thread, after a y/N"},
 			level:  levelThread, words: "resolve it", diffVisible: true, guard: writeThread, fresh: freshTarget,
 			run: func(view *View, call invocation) tea.Cmd { return view.resolveThread(resolveOnly, call.target.thread) },
 		},
 		{
-			Action: keys.Action{Name: "unresolve", Command: "unresolve"},
+			Action: keys.Action{Name: "unresolve", Command: "unresolve", Description: "unresolve the selected review thread, after a y/N"},
 			level:  levelThread, words: "resolve it", diffVisible: true, guard: writeThread, fresh: freshTarget,
 			run: func(view *View, call invocation) tea.Cmd {
 				return view.resolveThread(unresolveOnly, call.target.thread)
 			},
 		},
 		{
-			Action: keys.Action{Name: "react", Command: "react"},
+			Action: keys.Action{Name: "react", Command: "react", Description: "react to the comment under the diff cursor (or pick a target on the Overview); `:react <name>` toggles the named reaction: +1, -1, laugh, hooray, confused, heart, rocket, eyes"},
 			level:  levelComment, words: "react to it", diffVisible: true, guard: writeReaction, overviewGuard: writeOverviewReaction, commentPickerTitle: "React to",
 			check: checkReaction,
 			run: func(view *View, call invocation) tea.Cmd {
@@ -206,26 +206,26 @@ func (workspaceBindings *bindings) entries() []actionEntry {
 			},
 		},
 		{
-			Action: keys.Action{Name: "approve", Command: "approve"},
+			Action: keys.Action{Name: "approve", Command: "approve", Description: "submit an approving review, after a y/N"},
 			level:  levelPullRequest, guard: writeReview, fresh: freshHead,
 			run: func(view *View, _ invocation) tea.Cmd {
 				return view.review.start(view.reviewEnvironment(), github.ReviewEventApprove)
 			},
 		},
 		{
-			Action: keys.Action{Name: "request-changes", Command: "request-changes"},
+			Action: keys.Action{Name: "request-changes", Command: "request-changes", Description: "submit a review that requests changes, after a y/N"},
 			level:  levelPullRequest, guard: writeReview, fresh: freshHead,
 			run: func(view *View, _ invocation) tea.Cmd {
 				return view.review.start(view.reviewEnvironment(), github.ReviewEventRequestChanges)
 			},
 		},
 		{
-			Action: keys.Action{Name: "review", Command: "review"},
+			Action: keys.Action{Name: "review", Command: "review", Description: "open the review chooser to submit a verdict"},
 			level:  levelPullRequest, guard: writeReview, fresh: freshHead,
 			run: func(view *View, _ invocation) tea.Cmd { return view.review.openChooser(view.reviewEnvironment()) },
 		},
 		{
-			Action: keys.Action{Name: "merge", Command: "merge"},
+			Action: keys.Action{Name: "merge", Command: "merge", Description: "merge the pull request after a y/N; `merge`, `squash` or `rebase` picks the method, otherwise the first the repository allows"},
 			level:  levelPullRequest, guard: writeMerge, fresh: freshHead,
 			check: checkMergeArguments,
 			run: func(view *View, call invocation) tea.Cmd {
@@ -233,39 +233,39 @@ func (workspaceBindings *bindings) entries() []actionEntry {
 			},
 		},
 		{
-			Action: keys.Action{Name: "discard-review", Command: "discard-review"},
+			Action: keys.Action{Name: "discard-review", Command: "discard-review", Description: "delete your pending review and its draft comments, after a y/N"},
 			level:  levelPullRequest, guard: writeDiscard, fresh: freshTarget,
 			run: func(view *View, _ invocation) tea.Cmd { return view.discardReview() },
 		},
 		{
-			Action: keys.Action{Name: "edit-pull-request", Command: "edit-pull-request"},
+			Action: keys.Action{Name: "edit-pull-request", Command: "edit-pull-request", Description: "edit the title and body in $EDITOR, then confirm with y/N"},
 			level:  levelPullRequest, guard: writePullRequest, fresh: freshTarget,
 			run: func(view *View, _ invocation) tea.Cmd { return view.editPullRequest() },
 		},
 		{
-			Action: keys.Action{Name: "ready", Command: "ready"},
+			Action: keys.Action{Name: "ready", Command: "ready", Description: "mark the pull request ready for review, after a y/N"},
 			level:  levelPullRequest, guard: writeDraftState, fresh: freshTarget,
 			run: func(view *View, _ invocation) tea.Cmd { return view.changeDraftState(false) },
 		},
 		{
-			Action: keys.Action{Name: "draft", Command: "draft"},
+			Action: keys.Action{Name: "draft", Command: "draft", Description: "convert the pull request back to a draft, after a y/N"},
 			level:  levelPullRequest, guard: writeDraftState, fresh: freshTarget,
 			run: func(view *View, _ invocation) tea.Cmd { return view.changeDraftState(true) },
 		},
 		{
-			Action:        keys.Action{Name: "checks", Command: "checks"},
+			Action:        keys.Action{Name: "checks", Command: "checks", Description: "list the head commit's checks, failing first; enter opens the selected check in the browser"},
 			level:         levelPullRequest,
 			pluginsMayRun: true,
 			run:           func(view *View, _ invocation) tea.Cmd { return view.checksCommand() },
 		},
 		{
-			Action:        keys.Action{Name: "copy-filename", Command: "copy-filename"},
+			Action:        keys.Action{Name: "copy-filename", Command: "copy-filename", Description: "copy the selected file's path to the clipboard"},
 			level:         levelFile,
 			pluginsMayRun: true,
 			run:           func(view *View, _ invocation) tea.Cmd { return view.copyFilename() },
 		},
 		{
-			Action:        keys.Action{Name: "copy-url", Command: "copy-url"},
+			Action:        keys.Action{Name: "copy-url", Command: "copy-url", Description: "copy the pull request's URL to the clipboard"},
 			level:         levelPullRequest,
 			pluginsMayRun: true,
 			run:           func(view *View, _ invocation) tea.Cmd { return view.copyURL() },
