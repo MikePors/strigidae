@@ -137,10 +137,25 @@ func (listBindings *bindings) actions() []keys.Action {
 	return []keys.Action{
 		{Name: "next-tab", Binding: &listBindings.nextTab},
 		{Name: "previous-tab", Binding: &listBindings.previousTab},
-		{Name: commandCreate, Command: commandCreate},
-		{Name: commandCreateDraft, Command: commandCreateDraft},
-		{Name: commandCopyURL, Command: commandCopyURL},
+		{Name: commandCreate, Command: commandCreate, Description: "create a pull request: pick the head and base branches, write the title and body in $EDITOR, then confirm with y/N"},
+		{Name: commandCreateDraft, Command: commandCreateDraft, Description: "create a draft pull request the same way, without the y/N"},
+		{Name: commandCopyURL, Command: commandCopyURL, Description: "copy the URL of the pull request under the cursor to the clipboard"},
 	}
+}
+
+// defaultBindings returns the list's own bindings.
+func defaultBindings() bindings {
+	return bindings{
+		nextTab:     key.NewBinding(key.WithKeys("l", "g t"), key.WithHelp("l/gt", "next tab")),
+		previousTab: key.NewBinding(key.WithKeys("h", "g T"), key.WithHelp("h/gT", "previous tab")),
+	}
+}
+
+// Actions lists the list's own actions with their default keys, for the
+// generated key reference.
+func Actions() []keys.Action {
+	listBindings := defaultBindings()
+	return listBindings.actions()
 }
 
 // ActionNames lists the action names of the pull request list, for the check
@@ -186,15 +201,12 @@ func New(client github.Client, repository github.Repository, configured []config
 		tabs = append(tabs, tab{name: current.Name, author: author, query: authorQuery(repository, author)})
 	}
 	return &View{
-		cache:      options.Cache,
-		client:     client,
-		repository: repository,
-		theme:      activeTheme,
-		globalKeys: keys.DefaultGlobal(),
-		bindings: bindings{
-			nextTab:     key.NewBinding(key.WithKeys("l", "g t"), key.WithHelp("l/gt", "next tab")),
-			previousTab: key.NewBinding(key.WithKeys("h", "g T"), key.WithHelp("h/gT", "previous tab")),
-		},
+		cache:         options.Cache,
+		client:        client,
+		repository:    repository,
+		theme:         activeTheme,
+		globalKeys:    keys.DefaultGlobal(),
+		bindings:      defaultBindings(),
 		now:           options.Now,
 		open:          options.Open,
 		timeouts:      options.Timeouts,

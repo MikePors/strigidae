@@ -242,6 +242,19 @@ func (view *View) diffNavigation(message keys.Message) bool {
 	return key.Matches(message, bindings.NextHunk, bindings.PreviousHunk, bindings.NextThread, bindings.PreviousThread)
 }
 
+// Actions lists the workspace's actions with their default keys, in registry
+// order, for the generated key reference. The diff pane's are DiffActions.
+func Actions() []keys.Action {
+	workspaceBindings := defaultBindings()
+	return workspaceBindings.actions()
+}
+
+// DiffActions lists the diff pane's actions with their default keys.
+func DiffActions() []keys.Action {
+	paneBindings := defaultDiffBindings()
+	return paneBindings.actions()
+}
+
 // ActionNames lists the action names of the workspace and its diff pane, for
 // the check that views don't reuse each other's names by accident.
 func ActionNames() []string {

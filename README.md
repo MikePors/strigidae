@@ -117,6 +117,8 @@ In a repository's pull request list (any tab; not the dashboard), `:create` and 
 
 ## Command line
 
+Every action, its default keys and its `:command` are listed in [docs/keys.md](docs/keys.md), a page generated from the code (`make keys-docs` regenerates it).
+
 `:` opens the command line. `Tab` completes the command name you are typing, and after `:set ` an option name (with its `no` form), after `:help ` a help topic and after `:theme ` a theme name. `:help` lists the topics: `:help keys` is the key help (the same as `?`) and `:help config` lists every option with its value, default and meaning. In any help overlay `/` searches the rows (matching rows are marked while `hlsearch` is on), `n` / `N` move between matches, the first `esc` clears the search and the next closes the overlay. Only the commands that work in the current view are offered. The first `Tab` fills in the first match and lists all matches just above the command line; `Tab` moves to the next match and `shift+tab` to the previous one, both wrapping. Typing a character keeps the match shown and closes the list, `enter` runs the line as shown, and `esc` cancels it.
 
 In a diff, `V` starts a line selection for a comment. Use `j`/`k` or counts such as `5j` (the starting line plus five more lines), and `gg`/`G` to extend toward the top/bottom. Selections stop at hunk boundaries and cannot mix added and deleted lines. Press `c` to comment or `esc` to cancel.

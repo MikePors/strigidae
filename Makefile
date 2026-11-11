@@ -4,7 +4,7 @@ LDFLAGS := -X github.com/MikePors/strigidae/internal/version.Version=$(VERSION)
 # Each tool lives in its own module under tools/ so their dependency graphs never conflict.
 tool = go tool -modfile=tools/$(1)/go.mod $(1)
 
-.PHONY: build test golden lint fmt fmt-check tidy tidy-check vuln actionlint update-tools check run clean
+.PHONY: build test golden keys-docs lint fmt fmt-check tidy tidy-check vuln actionlint update-tools check run clean
 
 build:
 	go build -ldflags "$(LDFLAGS)" -o $(BIN) ./cmd/strig
@@ -17,6 +17,10 @@ test:
 # Regenerate golden files; review the diff before committing.
 golden:
 	UPDATE_GOLDEN=1 go test ./...
+
+# Regenerate docs/keys.md from the action registries; review the diff before committing.
+keys-docs:
+	UPDATE_KEYS_DOCS=1 go test ./cmd/strig -run '^TestKeysReferenceIsCurrent$$'
 
 lint:
 	$(call tool,golangci-lint) run ./...

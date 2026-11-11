@@ -13,11 +13,23 @@ import (
 // Binding points at the field that holds it, so it can be changed in place;
 // it is nil for an action that has a command and no keys. Command is the name
 // of the ":" command that runs the same action, without the colon, or empty.
-// A command name may equal the action's own name.
+// A command name may equal the action's own name. Description is the help
+// text of an action without a binding; one with a binding is described by the
+// binding's own help (see Help).
 type Action struct {
-	Name    string
-	Binding *key.Binding
-	Command string
+	Name        string
+	Binding     *key.Binding
+	Command     string
+	Description string
+}
+
+// Help returns the one-line description of the action: the help text of its
+// binding, or Description when it has none.
+func (action Action) Help() string {
+	if action.Binding != nil && action.Binding.Help().Desc != "" {
+		return action.Binding.Help().Desc
+	}
+	return action.Description
 }
 
 // Actions returns the global bindings with their action names. Count is left
