@@ -34,9 +34,9 @@ Checks only the maintainer can do, such as live verification against real GitHub
   3. With a working login (HTTPS credential helper, or SSH key in an agent), open the same file: the whole-file colours should appear. Afterwards `git status`, `git branch -a`, `git for-each-ref` and `.git/FETCH_HEAD` must look exactly as before.
   4. Report the transport, whether anything prompted or hung, and any ref or `FETCH_HEAD` change.
 
-- [ ] **`o` opens the browser without the token variables, in a real terminal** (#145). Only a fake command runner is tested.
-  1. With no `GH_BROWSER`, no `BROWSER` and no gh config `browser` set, open a pull request in strig and press `o`. The default browser should open the pull request and nothing should be printed over the TUI. Do this on Linux, on macOS and on Windows (Windows now runs `rundll32 url.dll,FileProtocolHandler` as a child process instead of an in-process call).
-  2. Run `GH_BROWSER='sh -c "env > /tmp/env.txt" --' GH_TOKEN=x strig`, press `o` on a pull request, then check `/tmp/env.txt`: it must contain no `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN` or `GITHUB_ENTERPRISE_TOKEN`, and should still have `PATH` and `HOME`.
+- [ ] **`o` opens the browser without the token variables, on macOS and Windows** (#145). Only a fake command runner is tested. Linux passed (2026-11-11).
+  1. With no `GH_BROWSER`, no `BROWSER` and no gh config `browser` set, open a pull request in strig and press `o`. The default browser should open the pull request and nothing should be printed over the TUI. Do this on macOS and on Windows (Windows now runs `rundll32 url.dll,FileProtocolHandler` as a child process instead of an in-process call).
+  2. On macOS, run `GH_TOKEN="$(gh auth token)" GH_BROWSER='sh -c "env > /tmp/env.txt" --' strig` (a real token, since strig logs in with it), press `o` on a pull request, then check `/tmp/env.txt` without printing it whole: `grep -cE '^(GH_TOKEN|GITHUB_TOKEN|GH_ENTERPRISE_TOKEN|GITHUB_ENTERPRISE_TOKEN)=' /tmp/env.txt` must print `0`, and `grep -E '^(PATH|HOME)=' /tmp/env.txt | cut -d= -f1` should list `PATH` and `HOME`. No browser opens in this step. Delete `/tmp/env.txt` afterwards.
   3. Report the platform, whether the browser opened, anything drawn over the TUI, and any token variable found in `/tmp/env.txt`.
 
 - [ ] **Comments pane in a real terminal** (#233).
