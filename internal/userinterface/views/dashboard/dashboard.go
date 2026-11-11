@@ -120,13 +120,16 @@ func (dashboardBindings *bindings) actions() []keys.Action {
 		{Name: "previous-tab", Binding: &dashboardBindings.previousTab},
 		{Name: "next-section", Binding: &dashboardBindings.nextSection},
 		{Name: "previous-section", Binding: &dashboardBindings.previousSection},
+		{Name: commandCopyURL, Command: commandCopyURL},
 	}
 }
 
 var (
-	_ userinterface.View     = (*View)(nil)
-	_ userinterface.Loader   = (*View)(nil)
-	_ userinterface.Prompter = (*View)(nil)
+	_ userinterface.View          = (*View)(nil)
+	_ userinterface.Loader        = (*View)(nil)
+	_ userinterface.Prompter      = (*View)(nil)
+	_ userinterface.Commander     = (*View)(nil)
+	_ userinterface.CommandLister = (*View)(nil)
 )
 
 // New returns a dashboard of tabs. It loads the first tab when pushed (Init).

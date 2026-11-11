@@ -139,6 +139,7 @@ func (listBindings *bindings) actions() []keys.Action {
 		{Name: "previous-tab", Binding: &listBindings.previousTab},
 		{Name: commandCreate, Command: commandCreate},
 		{Name: commandCreateDraft, Command: commandCreateDraft},
+		{Name: commandCopyURL, Command: commandCopyURL},
 	}
 }
 
