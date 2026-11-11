@@ -171,10 +171,10 @@ func TestMarkColumn(test *testing.T) {
 
 func TestMarkIsCleanedBeforeItIsShown(test *testing.T) {
 	pullRequests := []github.PullRequest{{Number: 1, Title: "T", Author: "a"}}
-	table := New(theme.Default(), time.Now, Options{Mark: func(github.PullRequest) string { return "ok\x1b]52;c;x\x07‮" }})
+	table := New(theme.Default(), time.Now, Options{Mark: func(github.PullRequest) string { return "ok\x1b]52;c;x\x07\u202e" }})
 	layout := table.Layout(pullRequests, 80)
 	for _, row := range []string{table.Row(layout, pullRequests[0], false, false, 80), table.Row(layout, pullRequests[0], true, false, 80)} {
-		if strings.ContainsAny(ansi.Strip(row), "\x1b\x07‮") {
+		if strings.ContainsAny(ansi.Strip(row), "\x1b\x07\u202e") {
 			test.Errorf("row %q holds a control or bidirectional character", row)
 		}
 	}

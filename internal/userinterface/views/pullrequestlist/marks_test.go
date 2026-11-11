@@ -168,4 +168,3 @@ func TestMarkGolden(test *testing.T) {
 		})
 	}
 }
-

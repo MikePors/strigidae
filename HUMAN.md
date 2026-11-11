@@ -120,6 +120,15 @@ Checks only the maintainer can do, such as live verification against real GitHub
   5. Push a new commit to the pull request's branch (or use another pull request head), press `R`: the thread should show `[outdated]`, muted, after the last row of its file. Report whether that reads clearly.
   6. Make the script print an answer with terminal escapes (`\u001b[2J\u001b]0;pwned\u0007x`): the screen must not clear and the terminal title must not change.
 
+## #293 — pull request marks
+
+- [ ] **Marks survive a restart, in a real terminal** (#293). The tests write to a temporary directory and render to text.
+  1. Run `strig` (dashboard, or in a checkout the list), move onto a row, and run `:mark waiting on author`. The status bar says `Marked #N: waiting on author` and a MARK column appears after the title. `:mark` with no text says `:mark needs a name`. `:mark w` then `Tab` completes to the mark in use.
+  2. `:unmark` on a row with no mark says `#N has no mark`; on the marked row it says `Unmarked #N` and the column goes when no row is marked.
+  3. Mark two rows, quit with `:qa`, start `strig` again: the marks are still there. Find the file with `strig --log-path` (same directory, `pull-request-marks.json`).
+  4. Narrow the terminal: the MARK column should go before any other column. Report the width where it went and whether it looked right in your theme.
+  5. Quit, replace the file's content with `not json`, start `strig`: the status bar shows the read error once. `:mark x` says it was not saved; quit and check the file still holds `not json`. Restore or delete the file afterwards.
+
 ## #92 — cached list startup
 
 - With `gh` logged in (no token environment override), run `strig -R OWNER/REPO`,
