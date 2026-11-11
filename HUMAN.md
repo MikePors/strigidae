@@ -76,6 +76,11 @@ Checks only the maintainer can do, such as live verification against real GitHub
   2. On Linux (Wayland with `wl-copy`, and X11 with `xclip` or `xsel` if you can), do the same inside and outside tmux. Report which tool was used and whether it pasted.
   3. Check nothing was printed on the screen, and `strig --log-path` shows no clipboard error.
 
+- [ ] **`:copy-url` in the dashboard and the repository pull request list reaches the system clipboard** (#296). Only the fake copier is tested.
+  1. Run `strig` with no arguments (dashboard). Move the cursor onto a row in a section other than the first (`]`), run `:copy-url`, and paste elsewhere. Report whether the pasted URL is that row's pull request.
+  2. Run `strig` in a checkout (or `-R owner/name`) to get the repository list. Move the cursor with `j`, run `:copy-url`, paste, and report whether it is the row's pull request URL. Try it on another tab (`l`) too.
+  3. Do both inside and outside tmux, on the platforms from the entry above. Check nothing was printed on the screen and `strig --log-path` shows no clipboard error.
+
 - [ ] **`:discard-review` deletes a pending review on GitHub** (#139, merged in #143). The delete call (GraphQL `deletePullRequestReview`) has only been tested against the fake client.
   1. On a test PR, add two or three inline draft comments, so you have a pending review.
   2. Run `:discard-review`. The question should name the number of drafts. Answer `y`.

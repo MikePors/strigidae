@@ -69,7 +69,7 @@ type (
 
 // Commands lists the command names of the pull request list, for the shell to
 // tell a command another view owns from a word that is no command at all.
-func Commands() []string { return []string{commandCreate, commandCreateDraft} }
+func Commands() []string { return []string{commandCreate, commandCreateDraft, commandCopyURL} }
 
 // CommandNames implements userinterface.CommandLister.
 func (view *View) CommandNames() []string { return Commands() }
@@ -81,6 +81,8 @@ func (view *View) Command(name, _ string) (tea.Cmd, bool) {
 		return view.startCreate(false), true
 	case commandCreateDraft:
 		return view.startCreate(true), true
+	case commandCopyURL:
+		return view.copyURL(), true
 	}
 	return nil, false
 }

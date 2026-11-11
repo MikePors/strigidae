@@ -19,8 +19,11 @@ func TestCreateIsNotAvailableOutsideTheList(test *testing.T) {
 	if !slices.Contains(viewCommands(), "create") {
 		test.Fatal(`the shell is not told about "create"`)
 	}
-	if _, ok := any(dashboard.New(fake.New(), nil, theme.Default(), dashboard.Options{})).(userinterface.Commander); ok {
-		test.Error("the dashboard is a Commander, so it could take :create")
+	board := dashboard.New(fake.New(), nil, theme.Default(), dashboard.Options{})
+	for _, name := range []string{"create", "create-draft"} {
+		if command, handled := board.Command(name, ""); handled || command != nil {
+			test.Errorf("the dashboard handled :%s", name)
+		}
 	}
 	view := workspace.New(fake.New(), github.Repository{Owner: "o", Name: "r"}, 1)
 	for _, name := range []string{"create", "create-draft"} {
@@ -84,7 +87,7 @@ func TestBlobReaderOnlyForTheCheckoutsRepository(test *testing.T) {
 // says "not available here" instead of "not a command".
 func TestViewCommandsAreCollectedFromTheViews(test *testing.T) {
 	got := viewCommands()
-	for _, name := range []string{"merge", "approve", "copy-filename", "edit-comment", "resolve", "create", "create-draft"} {
+	for _, name := range []string{"merge", "approve", "copy-filename", "edit-comment", "resolve", "create", "create-draft", "copy-url"} {
 		if !slices.Contains(got, name) {
 			test.Errorf("viewCommands() lacks %q", name)
 		}
