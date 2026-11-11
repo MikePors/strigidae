@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -185,5 +186,249 @@ func TestMarkGolden(test *testing.T) {
 			}
 			golden.Assert(test, testCase.name, out, false)
 		})
+	}
+}
+
+func TestMarkSections(test *testing.T) {
+	view := markedView(test, "github.com")
+	current := &view.tabs[0]
+	duplicate := current.sections[0].pullRequests[0]
+	current.sections[1].pullRequests = append(current.sections[1].pullRequests, duplicate)
+	current.selectIndex(0)
+	withMarks(test, view, map[pullrequestmarks.Key]string{
+		markKey("acme/widgets", 12):      "later",
+		markKey("rivka/dotfiles", 3):     "ahead",
+		markKey("absent/repository", 99): "invisible",
+	})
+	sections := current.displaySections()
+	if len(sections) != len(current.sections)+2 {
+		test.Fatalf("got %d sections", len(sections))
+	}
+	if sections[len(sections)-2].name != "ahead" || sections[len(sections)-1].name != "later" {
+		test.Fatal("mark sections are not sorted")
+	}
+	if current.total() != 3 {
+		test.Fatalf("got %d rows, want 3 unique rows", current.total())
+	}
+	selected, _ := current.selectedPullRequest()
+	if selected.Number != 7 {
+		test.Fatalf("cursor followed marked row: %d", selected.Number)
+	}
+	current.selectIndex(current.total() - 1)
+	withMarks(test, view, map[pullrequestmarks.Key]string{markKey("rivka/dotfiles", 3): "ahead"})
+	if _, _, ok := current.position(); !ok {
+		test.Fatal("cursor lost after removing last mark section")
+	}
+	withMarks(test, view, nil)
+	if len(current.displaySections()) != len(current.sections) {
+		test.Fatal("empty mark sections remain")
+	}
+	if len(current.sections[1].pullRequests) != 2 {
+		test.Fatal("loaded rows mutated")
+	}
+}
+
+func TestMarkCursorKeepsRow(test *testing.T) {
+	view := markedView(test, "github.com")
+	current := &view.tabs[0]
+	current.selectIndex(0)
+	withMarks(test, view, map[pullrequestmarks.Key]string{markKey("acme/widgets", 12): "later"})
+	section, row, _ := current.position()
+	if section != 0 || row != 0 {
+		test.Fatalf("cursor = %d/%d", section, row)
+	}
+	withMarks(test, view, nil)
+	section, row, _ = current.position()
+	if section != 0 || row != 1 {
+		test.Fatalf("cursor should retain its selected pull request after unrelated unmark: %d/%d", section, row)
+	}
+}
+
+func TestMarkSectionsUseEachTabsRows(test *testing.T) {
+	view := markedView(test, "github.com")
+	withMarks(test, view, map[pullrequestmarks.Key]string{
+		markKey("acme/widgets", 12): "later",
+		markKey("acme/gadgets", 7):  "later",
+		markKey("acme/widgets", 40): "teammate",
+	})
+	current := &view.tabs[0]
+	sections := current.displaySections()
+	for _, target := range sections {
+		if target.name == "teammate" {
+			test.Fatal("other tab mark leaked")
+		}
+	}
+	rows := sections[len(sections)-1].pullRequests
+	if len(rows) != 2 || rows[0].Number != 12 || rows[1].Number != 7 {
+		test.Fatalf("mark rows not newest first: %v", rows)
+	}
+	if len(current.searchList().Items()) != current.total() {
+		test.Fatal("search does not see all displayed rows")
+	}
+	settle(view, view.switchTab(1))
+	sections = view.tabs[1].displaySections()
+	if len(sections) != len(view.tabs[1].sections)+1 || sections[len(sections)-1].name != "teammate" {
+		test.Fatal("teammate tab does not derive its own mark sections")
+	}
+}
+
+func TestUnmarkKeepsCursorInMarkSection(test *testing.T) {
+	view := markedView(test, "github.com")
+	withMarks(test, view, map[pullrequestmarks.Key]string{
+		markKey("acme/widgets", 12): "later",
+		markKey("acme/gadgets", 7):  "later",
+	})
+	current := &view.tabs[0]
+	current.selectIndex(1)
+	section, row, _ := current.position()
+	withMarks(test, view, map[pullrequestmarks.Key]string{markKey("acme/gadgets", 7): "later"})
+	gotSection, gotRow, _ := current.position()
+	selected, _ := current.selectedPullRequest()
+	if gotSection != section || gotRow != row || selected.Number != 7 {
+		test.Fatalf("unmark cursor = %d/%d #%d, want %d/%d #7", gotSection, gotRow, selected.Number, section, row)
+	}
+}
+
+func TestMarkSectionIdentity(test *testing.T) {
+	for _, rename := range []bool{false, true} {
+		view := markedView(test, "github.com")
+		withMarks(test, view, map[pullrequestmarks.Key]string{
+			markKey("acme/widgets", 12): "later",
+			markKey("acme/gadgets", 7):  "later",
+		})
+		current := &view.tabs[0]
+		current.selectIndex(1)
+		marks := map[pullrequestmarks.Key]string{
+			markKey("acme/widgets", 12):  "later",
+			markKey("acme/gadgets", 7):   "later",
+			markKey("rivka/dotfiles", 3): "ahead",
+		}
+		want := 12
+		if rename {
+			marks[markKey("acme/widgets", 12)] = "aaa"
+			want = 7
+		}
+		withMarks(test, view, marks)
+		selected, _ := current.selectedPullRequest()
+		section, _, _ := current.position()
+		if selected.Number != want || current.displaySections()[section].mark != "later" {
+			test.Fatalf("rename %v: cursor on #%d in %q", rename, selected.Number, current.displaySections()[section].mark)
+		}
+	}
+}
+
+func TestUnrelatedMarksKeepUntouchedCursor(test *testing.T) {
+	view := markedView(test, "github.com")
+	withMarks(test, view, map[pullrequestmarks.Key]string{markKey("absent/repo", 99): "later"})
+	if view.tabs[0].anchor != nil {
+		test.Fatal("untouched cursor was anchored")
+	}
+}
+
+func TestMarkNavigationAndSearch(test *testing.T) {
+	view := markedView(test, "github.com")
+	withMarks(test, view, map[pullrequestmarks.Key]string{
+		markKey("acme/widgets", 12):  "ahead",
+		markKey("rivka/dotfiles", 3): "later",
+	})
+	pressCounted(view, "]", 2)
+	if got := selectedKey(test, view); got != "rivka/dotfiles#3" {
+		test.Fatal(got)
+	}
+	pressCounted(view, "k", 2)
+	if got := selectedKey(test, view); got != "acme/gadgets#7" {
+		test.Fatal(got)
+	}
+	press(view, "/")
+	promptResult(view, "acme", userinterface.PromptChanged)
+	promptResult(view, "acme", userinterface.PromptSubmitted)
+	press(view, "n")
+	if got := selectedKey(test, view); got != "acme/widgets#12" {
+		test.Fatal(got)
+	}
+	press(view, "N")
+	if got := selectedKey(test, view); got != "acme/gadgets#7" {
+		test.Fatal(got)
+	}
+}
+
+func TestReloadInsertsEarlierMarkSection(test *testing.T) {
+	view := markedView(test, "github.com")
+	current := &view.tabs[0]
+	withMarks(test, view, map[pullrequestmarks.Key]string{
+		markKey("acme/widgets", 12): "later",
+		markKey("acme/gadgets", 7):  "later",
+		markKey("acme/widgets", 99): "ahead",
+	})
+	current.selectIndex(1)
+	target := &current.sections[0]
+	rows := append([]github.PullRequest(nil), target.pullRequests...)
+	added := rows[0]
+	added.Number = 99
+	rows = append(rows, added)
+	view.loaded(sectionLoadedMessage{tab: 0, section: 0, sequence: target.sequence, page: github.Page[github.PullRequest]{Items: rows}})
+	if got := selectedKey(test, view); got != "acme/widgets#12" {
+		test.Fatal(got)
+	}
+	view.loaded(sectionLoadedMessage{tab: 0, section: 0, sequence: target.sequence, page: github.Page[github.PullRequest]{Items: rows[:2]}})
+	if got := selectedKey(test, view); got != "acme/widgets#12" {
+		test.Fatal(got)
+	}
+}
+
+func TestLastMarkSectionFallsBackToLastRow(test *testing.T) {
+	view := markedView(test, "github.com")
+	withMarks(test, view, map[pullrequestmarks.Key]string{markKey("acme/widgets", 12): "later"})
+	press(view, "G")
+	withMarks(test, view, nil)
+	if got := selectedKey(test, view); got != "rivka/dotfiles#3" {
+		test.Fatal(got)
+	}
+}
+
+func TestMarkedRowsRespectSectionLimit(test *testing.T) {
+	tabs := testTabs(test)
+	tabs[0].Sections[0].Limit = 1
+	client := fake.New()
+	seed(test, client, tabs)
+	view := newView(hostedClient{Client: client, host: "github.com"}, tabs, nil)
+	withMarks(test, view, map[pullrequestmarks.Key]string{markKey("acme/gadgets", 7): "excluded"})
+	settle(view, view.Init())
+	for _, target := range view.tabs[0].displaySections() {
+		if target.mark == "excluded" {
+			test.Fatal("row beyond configured limit appeared")
+		}
+	}
+}
+
+func TestMarkSectionsPreserveLoadStatus(test *testing.T) {
+	view := markedView(test, "github.com")
+	current := &view.tabs[0]
+	current.sections[0].stale = true
+	current.sections[0].err = errors.New("offline")
+	withMarks(test, view, map[pullrequestmarks.Key]string{
+		markKey("acme/widgets", 12): "later",
+		markKey("acme/gadgets", 7):  "later",
+	})
+	sections := current.displaySections()
+	target := sections[len(sections)-1]
+	if !target.stale || target.err == nil {
+		test.Fatal("mark section lost source status")
+	}
+	output := ansi.Strip(view.Render(120, 30))
+	if !strings.Contains(output, "later (stale) (refresh failed: offline)") {
+		test.Fatal(output)
+	}
+}
+
+func TestMarkNamesHaveDeterministicCaseSensitiveOrder(test *testing.T) {
+	view := markedView(test, "github.com")
+	withMarks(test, view, map[pullrequestmarks.Key]string{
+		markKey("acme/widgets", 12): "apple",
+		markKey("acme/gadgets", 7):  "Zed",
+	})
+	sections := view.tabs[0].displaySections()
+	if sections[len(sections)-2].mark != "Zed" || sections[len(sections)-1].mark != "apple" {
+		test.Fatal("unexpected mark name ordering")
 	}
 }

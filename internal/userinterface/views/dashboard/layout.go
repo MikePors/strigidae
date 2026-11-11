@@ -25,7 +25,7 @@ func (current *tab) lines(selectedIndex int) ([]line, int) {
 	var lines []line
 	selectedLine := 0
 	index := 0
-	for i, target := range current.sections {
+	for i, target := range current.displaySections() {
 		lines = append(lines, line{kind: headingLine, section: i})
 		if len(target.pullRequests) == 0 {
 			lines = append(lines, line{kind: noteLine, section: i})

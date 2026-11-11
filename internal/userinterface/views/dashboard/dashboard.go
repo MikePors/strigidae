@@ -57,6 +57,8 @@ type Options struct {
 
 // section is one search and what it found.
 type section struct {
+	mark     string
+	grouped  bool
 	name     string
 	query    string // as shown
 	search   string // as sent: query plus the sort qualifier
@@ -73,6 +75,8 @@ type section struct {
 type tab struct {
 	name      string
 	sections  []section
+	marks     pullrequestmarks.Marks
+	host      string
 	requested bool // the sections were asked for at least once
 
 	anchor *anchor // nil until the user moves the cursor
@@ -306,6 +310,15 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		view.options = message.Values
 	case userinterface.MarksMessage:
 		view.marks = message.Marks
+		for i := range view.tabs {
+			current := &view.tabs[i]
+			current.marks = message.Marks
+			current.host = userinterface.ClientHost(view.client)
+			if current.anchor != nil {
+				current.selectIndex(current.selectedIndex())
+			}
+			current.search.Refresh(current.searchList())
+		}
 	case userinterface.ThemeMessage:
 		view.theme = message.Theme
 	case sectionLoadedMessage:
@@ -336,6 +349,9 @@ func (view *View) loaded(message sectionLoadedMessage) {
 		}
 		target.stale = true
 		target.pullRequests = message.page.Items
+		if current.anchor != nil {
+			current.selectIndex(current.selectedIndex())
+		}
 		current.search.Refresh(current.searchList())
 		return
 	}
@@ -354,9 +370,7 @@ func (view *View) loaded(message sectionLoadedMessage) {
 	if current.total() == 0 {
 		current.anchor = nil // start from the top when rows come back
 	}
-	if current.anchor != nil && len(current.sections[current.anchor.section].pullRequests) == 0 {
-		// The anchored section emptied and the cursor is drawn in another one:
-		// it stays there even if the old section refills.
+	if current.anchor != nil {
 		current.selectIndex(current.selectedIndex())
 	}
 }
@@ -365,7 +379,16 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 	if len(view.tabs) == 0 {
 		return nil
 	}
-	current := &view.tabs[view.active]
+	stored := &view.tabs[view.active]
+	displayed := *stored
+	displayed.sections = stored.displaySections()
+	displayed.marks = pullrequestmarks.Marks{}
+	current := &displayed
+	defer func() {
+		stored.anchor = current.anchor
+		stored.window = current.window
+		stored.search = current.search
+	}()
 	switch {
 	case key.Matches(message, view.bindings.nextTab):
 		return view.switchTab(1)
