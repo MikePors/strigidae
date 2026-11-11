@@ -46,6 +46,7 @@ internal/editor/                        $EDITOR handoff for writing comments
 internal/browseropener/                 open a URL in the browser with the cleaned environment (non-UI)
 internal/environment/                   environment for programs strig starts (token variables removed)
 internal/localthreads/                  the local-thread store, the file that keeps it between runs, and the save bookkeeping (non-UI)
+internal/pullrequestmarks/              one private mark per pull request and the file that keeps them between runs (non-UI)
 internal/plugins/                       run the user's configured command plugins and read their effects (non-UI)
 internal/listcache/                     disposable, account-scoped list snapshots (non-UI)
 internal/logging/                       log file setup
@@ -69,7 +70,7 @@ cmd/strig ──► userinterface/views/* ──► userinterface/components ─
 ```
 
 - `internal/userinterface`, `userinterface/keys`, `userinterface/theme` and `userinterface/components` **never import `userinterface/views/*`**. Views may import other views, without cycles.
-- Non-UI packages (`github`, `diff`, `config`, `options`, `editor`, `environment`, `browseropener`, `localthreads`, `listcache`, `gitrepository`, `logging`, `plugins`, `version`) never import UI packages.
+- Non-UI packages (`github`, `diff`, `config`, `options`, `editor`, `environment`, `browseropener`, `localthreads`, `pullrequestmarks`, `listcache`, `gitrepository`, `logging`, `plugins`, `version`) never import UI packages.
 - Only `cmd/strig` imports `internal/github/network`.
 
 ## Process-wide rules
