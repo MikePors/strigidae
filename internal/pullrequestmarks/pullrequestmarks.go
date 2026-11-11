@@ -47,6 +47,7 @@ var (
 	ErrEmpty          = errors.New("mark is empty")
 	ErrTooLong        = errors.New("mark is too long")
 	ErrControl        = errors.New("mark contains control or bidirectional characters")
+	ErrInvalidUTF8    = errors.New("mark is not valid UTF-8")
 	ErrInvalidKey     = errors.New("pull request key needs a host, an owner, a repository name and a positive number")
 	ErrCorrupt        = errors.New("marks file can't be decoded")
 	ErrUnknownVersion = errors.New("marks file has an unknown version")
@@ -136,6 +137,11 @@ func validate(text string) error {
 	if strings.TrimSpace(text) == "" {
 		return ErrEmpty
 	}
+	// Invalid bytes would be written as U+FFFD, so the mark would change on
+	// the next load.
+	if !utf8.ValidString(text) {
+		return ErrInvalidUTF8
+	}
 	for _, character := range text {
 		if unicode.IsControl(character) || unicode.Is(unicode.Bidi_Control, character) {
 			return ErrControl
@@ -162,7 +168,8 @@ type file struct {
 }
 
 // Encode returns the file content for the marks. The entries are in a stable
-// order, so equal marks give equal bytes.
+// order, so equal marks give equal bytes. It can fail only if the entry types
+// stop being encodable; a caller treats an error like a failed save.
 func Encode(marks Marks) ([]byte, error) {
 	content := file{Version: Version, Marks: make([]entry, 0, len(marks.marks))}
 	for key, text := range marks.marks {
@@ -237,9 +244,14 @@ func Read(path string) (Marks, error) {
 		return Marks{}, fmt.Errorf("read pull request marks: %w", err)
 	}
 	if len(data) > MaxFileSize {
-		return Marks{}, ErrTooLarge
+		return Marks{}, fmt.Errorf("read pull request marks %s: %w", path, ErrTooLarge)
 	}
-	return Decode(data)
+	marks, err := Decode(data)
+	if err != nil {
+		// The path tells the user which file to fix or remove.
+		return Marks{}, fmt.Errorf("read pull request marks %s: %w", path, err)
+	}
+	return marks, nil
 }
 
 // Write replaces the file at path with data, which should come from Encode: it
@@ -272,5 +284,17 @@ func Write(path string, data []byte) error {
 		_ = os.Remove(name) // best effort: the write already failed
 		return fmt.Errorf("write pull request marks: %w", err)
 	}
+	syncDirectory(directory)
 	return nil
+}
+
+// syncDirectory makes the rename durable, as far as the file system allows. It
+// is best effort: the new file is already in place.
+func syncDirectory(directory string) {
+	handle, err := os.Open(directory)
+	if err != nil {
+		return
+	}
+	_ = handle.Sync()
+	_ = handle.Close()
 }

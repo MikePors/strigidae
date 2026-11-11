@@ -172,6 +172,7 @@ func TestSetRefusals(test *testing.T) {
 		{"c1 control", first, "a\u009bb", ErrControl},
 		{"bidi override", first, "abc\u202edef", ErrControl},
 		{"bidi isolate", first, "abc\u2066def", ErrControl},
+		{"invalid UTF-8", first, "a\xffb", ErrInvalidUTF8},
 		{"too long", first, strings.Repeat("a", MaxLength+1), ErrTooLong},
 		{"too long in characters", first, strings.Repeat("é", MaxLength+1), ErrTooLong},
 		{"no host", key("", "octo", "hello", 1), "ok", ErrInvalidKey},
@@ -422,14 +423,29 @@ func TestWriteFailureLeavesFileAndNoTemporaryFile(test *testing.T) {
 	}
 }
 
-func TestReadTooLarge(test *testing.T) {
+// paddedFile returns a valid, empty marks file of exactly size bytes.
+func paddedFile(size int) []byte {
+	prefix, suffix := `{"version":1,"marks":[],"padding":"`, `"}`
+	return []byte(prefix + strings.Repeat("a", size-len(prefix)-len(suffix)) + suffix)
+}
+
+func TestReadSizeLimit(test *testing.T) {
 	path := Path(test.TempDir())
-	if err := Write(path, []byte(`{"version":1,"marks":[],"padding":"`+strings.Repeat("a", MaxFileSize)+`"}`)); err != nil {
+	if err := Write(path, paddedFile(MaxFileSize)); err != nil {
+		test.Fatal(err)
+	}
+	if _, err := Read(path); err != nil {
+		test.Errorf("Read of a file of exactly MaxFileSize bytes: %v", err)
+	}
+	if err := Write(path, paddedFile(MaxFileSize+1)); err != nil {
 		test.Fatal(err)
 	}
 	marks, err := Read(path)
 	if !errors.Is(err, ErrTooLarge) {
 		test.Fatalf("Read error = %v, want %v", err, ErrTooLarge)
+	}
+	if !strings.Contains(err.Error(), path) {
+		test.Errorf("Read error %q does not name the file", err)
 	}
 	if len(marks.Names()) != 0 {
 		test.Errorf("Read kept marks %v with its error", marks.Names())
@@ -441,8 +457,12 @@ func TestReadDecodesTheFile(test *testing.T) {
 	if err := Write(path, []byte("this is not json")); err != nil {
 		test.Fatal(err)
 	}
-	if _, err := Read(path); !errors.Is(err, ErrCorrupt) {
-		test.Errorf("Read error = %v, want %v", err, ErrCorrupt)
+	_, err := Read(path)
+	if !errors.Is(err, ErrCorrupt) {
+		test.Fatalf("Read error = %v, want %v", err, ErrCorrupt)
+	}
+	if !strings.Contains(err.Error(), path) {
+		test.Errorf("Read error %q does not name the file", err)
 	}
 }
 
