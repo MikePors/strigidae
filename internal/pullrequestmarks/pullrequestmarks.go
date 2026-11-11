@@ -2,8 +2,11 @@
 // ("waiting on author", "left for Sam") and saves them between runs of strig.
 // Nothing is sent to GitHub.
 //
-// It knows nothing of the user interface or Bubble Tea. The root model owns a
-// Store, changes it from Update, and runs Save in a command.
+// It knows nothing of the user interface or Bubble Tea. The marks are a plain
+// value, [Marks], that the root model holds and changes only in Update. To save
+// them it passes the bytes from [Encode] to a command that calls [Write]; [Read]
+// loads them before the program starts. Nothing here is shared between Update and
+// a command, so there are no locks, and putting saves in order is the caller's job.
 package pullrequestmarks
 
 import (
@@ -14,11 +17,11 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
-	"sync"
 	"unicode"
 	"unicode/utf8"
 
@@ -69,98 +72,64 @@ func (key Key) valid() bool {
 	return key.Host != "" && key.Repository.Owner != "" && key.Repository.Name != "" && key.Number > 0
 }
 
-// Store holds the marks and the file they are kept in.
-//
-// It is safe for concurrent use, because the interface changes it from Update
-// while a command saves it. Two mutexes keep that cheap for Update: the state
-// mutex guards the marks and is held only for in-memory work, never across
-// disk access; the save mutex serialises writes and is held through the disk
-// write. Save takes its snapshot after it holds the save mutex, so a copy made
-// earlier can never be written after a newer one, and a stuck disk can hold
-// Save but never Set, Clear, Mark or Names.
-type Store struct {
-	path string
-
-	saveMutex sync.Mutex
-
-	stateMutex sync.Mutex
-	marks      map[Key]string
-	loadErr    error // why the file could not be used; Save refuses to overwrite it
-}
-
-// Open returns a store holding the marks saved under stateDirectory. An empty
-// directory keeps the marks for this run only. A missing file means no marks.
-// When the file can't be used, Open returns the error together with a store
-// that works in memory; its Save refuses to write, so the file is never
-// overwritten silently.
-func Open(stateDirectory string) (*Store, error) {
-	store := &Store{marks: map[Key]string{}}
-	if stateDirectory == "" {
-		return store, nil
-	}
-	store.path = filepath.Join(stateDirectory, "strig", "pull-request-marks.json")
-	content, err := read(store.path)
-	if err != nil {
-		store.loadErr = err
-		return store, err
-	}
-	for _, saved := range content.Marks {
-		key := Key{Host: saved.Host, Repository: github.Repository{Owner: saved.Owner, Name: saved.Repository}, Number: saved.Number}
-		// Refuse what Set would never have written: untrimmed text, and two
-		// entries for one pull request (spellings that differ only in case).
-		_, duplicate := store.marks[key.normalised()]
-		if !key.valid() || validate(saved.Text) != nil || saved.Text != strings.TrimSpace(saved.Text) || duplicate {
-			store.marks = map[Key]string{}
-			store.loadErr = ErrCorrupt
-			return store, ErrCorrupt
-		}
-		store.marks[key.normalised()] = saved.Text
-	}
-	return store, nil
+// Marks is the set of marks, at most one per pull request. It is a value: Set
+// and Clear return a changed copy and never change the receiver, so a copy
+// handed to a command can't be affected by later changes in Update. Each change
+// copies the whole map, which stays cheap because it holds one short mark per
+// pull request the user marked. The zero value holds no marks and is ready to use.
+type Marks struct {
+	marks map[Key]string // keyed by the normalised key; never changed once shared
 }
 
 // Mark returns the mark of a pull request, or false when it has none.
-func (store *Store) Mark(key Key) (string, bool) {
-	store.stateMutex.Lock()
-	defer store.stateMutex.Unlock()
-	text, ok := store.marks[key.normalised()]
+func (marks Marks) Mark(key Key) (string, bool) {
+	text, ok := marks.marks[key.normalised()]
 	return text, ok
 }
 
-// Set gives a pull request a mark, replacing any it had. The text is trimmed
-// of surrounding white space. It is refused when empty, too long, or holding
-// control or bidirectional characters.
-func (store *Store) Set(key Key, text string) error {
+// Set returns the marks with a pull request given a mark, replacing any it had.
+// The text is trimmed of surrounding white space. It is refused, and the marks
+// returned unchanged, when the key is incomplete, or the text is empty, too long,
+// or holds control or bidirectional characters.
+func (marks Marks) Set(key Key, text string) (Marks, error) {
 	if !key.valid() {
-		return ErrInvalidKey
+		return marks, ErrInvalidKey
 	}
 	text = strings.TrimSpace(text)
 	if err := validate(text); err != nil {
-		return err
+		return marks, err
 	}
-	store.stateMutex.Lock()
-	defer store.stateMutex.Unlock()
-	store.marks[key.normalised()] = text
-	return nil
+	changed := marks.copy(1)
+	changed.marks[key.normalised()] = text
+	return changed, nil
 }
 
-// Clear removes a pull request's mark. A pull request without one is left alone.
-func (store *Store) Clear(key Key) {
-	store.stateMutex.Lock()
-	defer store.stateMutex.Unlock()
-	delete(store.marks, key.normalised())
+// Clear returns the marks without the pull request's mark. A pull request
+// without one leaves the marks as they were.
+func (marks Marks) Clear(key Key) Marks {
+	if _, ok := marks.marks[key.normalised()]; !ok {
+		return marks
+	}
+	changed := marks.copy(0)
+	delete(changed.marks, key.normalised())
+	return changed
 }
 
 // Names returns the distinct marks in use, sorted, for completion.
-func (store *Store) Names() []string {
-	store.stateMutex.Lock()
-	defer store.stateMutex.Unlock()
-	names := make([]string, 0, len(store.marks))
-	for _, text := range store.marks {
+func (marks Marks) Names() []string {
+	names := make([]string, 0, len(marks.marks))
+	for _, text := range marks.marks {
 		names = append(names, text)
 	}
 	slices.Sort(names)
 	return slices.Compact(names)
+}
+
+// copy returns marks with its own map, with room for extra more entries.
+func (marks Marks) copy(extra int) Marks {
+	copied := make(map[Key]string, len(marks.marks)+extra)
+	maps.Copy(copied, marks.marks)
+	return Marks{marks: copied}
 }
 
 func validate(text string) error {
@@ -192,33 +161,13 @@ type file struct {
 	Marks   []entry `json:"marks"`
 }
 
-// Save writes the marks to the file, atomically. It does nothing for a store
-// without a state directory, and fails without writing when Open could not use
-// the file.
-func (store *Store) Save() error {
-	if store.path == "" {
-		return nil
-	}
-	store.saveMutex.Lock()
-	defer store.saveMutex.Unlock()
-	data, err := store.encode()
-	if err != nil {
-		return err
-	}
-	return write(store.path, data)
-}
-
-func (store *Store) encode() ([]byte, error) {
-	store.stateMutex.Lock()
-	defer store.stateMutex.Unlock()
-	if store.loadErr != nil {
-		return nil, fmt.Errorf("marks not saved, the file was not used: %w", store.loadErr)
-	}
-	content := file{Version: Version, Marks: make([]entry, 0, len(store.marks))}
-	for key, text := range store.marks {
+// Encode returns the file content for the marks. The entries are in a stable
+// order, so equal marks give equal bytes.
+func Encode(marks Marks) ([]byte, error) {
+	content := file{Version: Version, Marks: make([]entry, 0, len(marks.marks))}
+	for key, text := range marks.marks {
 		content.Marks = append(content.Marks, entry{Host: key.Host, Owner: key.Repository.Owner, Repository: key.Repository.Name, Number: key.Number, Text: text})
 	}
-	// A stable order keeps the file the same when the marks are.
 	slices.SortFunc(content.Marks, func(first, second entry) int {
 		return cmp.Or(
 			cmp.Compare(first.Host, second.Host),
@@ -236,44 +185,67 @@ func (store *Store) encode() ([]byte, error) {
 	return buffer.Bytes(), nil
 }
 
-// read loads the file at path. A file that doesn't exist holds no marks.
-func read(path string) (file, error) {
+// Decode reads the marks from file content. Any problem returns empty marks
+// together with the error, so a half-read file is never used.
+func Decode(data []byte) (Marks, error) {
+	var header struct {
+		Version int `json:"version"`
+	}
+	if err := json.Unmarshal(data, &header); err != nil {
+		return Marks{}, ErrCorrupt
+	}
+	if header.Version != Version {
+		return Marks{}, ErrUnknownVersion
+	}
+	var content file
+	if err := json.Unmarshal(data, &content); err != nil {
+		return Marks{}, ErrCorrupt
+	}
+	decoded := make(map[Key]string, len(content.Marks))
+	for _, saved := range content.Marks {
+		key := Key{Host: saved.Host, Repository: github.Repository{Owner: saved.Owner, Name: saved.Repository}, Number: saved.Number}
+		// Refuse what Set would never have written: untrimmed text, and two
+		// entries for one pull request (spellings that differ only in case).
+		_, duplicate := decoded[key.normalised()]
+		if !key.valid() || validate(saved.Text) != nil || saved.Text != strings.TrimSpace(saved.Text) || duplicate {
+			return Marks{}, ErrCorrupt
+		}
+		decoded[key.normalised()] = saved.Text
+	}
+	return Marks{marks: decoded}, nil
+}
+
+// Path returns where the marks file lives under the state directory.
+func Path(stateDirectory string) string {
+	return filepath.Join(stateDirectory, "strig", "pull-request-marks.json")
+}
+
+// Read loads the marks from the file at path. A file that doesn't exist holds
+// no marks. Any other problem returns empty marks together with the error.
+func Read(path string) (Marks, error) {
 	handle, err := os.Open(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return file{Version: Version}, nil
+		return Marks{}, nil
 	}
 	if err != nil {
-		return file{}, fmt.Errorf("open pull request marks: %w", err)
+		return Marks{}, fmt.Errorf("open pull request marks: %w", err)
 	}
 	defer func() { _ = handle.Close() }() // read only
 	// The limit applies to the reader, in case the file grows meanwhile.
 	data, err := io.ReadAll(io.LimitReader(handle, MaxFileSize+1))
 	if err != nil {
-		return file{}, fmt.Errorf("read pull request marks: %w", err)
+		return Marks{}, fmt.Errorf("read pull request marks: %w", err)
 	}
 	if len(data) > MaxFileSize {
-		return file{}, ErrTooLarge
+		return Marks{}, ErrTooLarge
 	}
-	var header struct {
-		Version int `json:"version"`
-	}
-	if err := json.Unmarshal(data, &header); err != nil {
-		return file{}, ErrCorrupt
-	}
-	if header.Version != Version {
-		return file{}, ErrUnknownVersion
-	}
-	var content file
-	if err := json.Unmarshal(data, &content); err != nil {
-		return file{}, ErrCorrupt
-	}
-	return content, nil
+	return Decode(data)
 }
 
-// write replaces the file at path with data: it writes a temporary file in the
-// same directory and renames it over path, so a reader sees the old file or the
-// new one and never half of one.
-func write(path string, data []byte) error {
+// Write replaces the file at path with data, which should come from Encode: it
+// writes a temporary file in the same directory and renames it over path, so a
+// reader sees the old file or the new one and never half of one.
+func Write(path string, data []byte) error {
 	directory := filepath.Dir(path)
 	if err := os.MkdirAll(directory, directoryMode); err != nil {
 		return fmt.Errorf("create pull request marks directory: %w", err)
