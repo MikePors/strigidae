@@ -689,28 +689,30 @@ func TestRunStandardErrorGoesThroughTheLogger(test *testing.T) {
 }
 
 // The plugin has a session of its own, so it has no controlling terminal.
+// Starting a session also makes the process the leader of a new process group,
+// and the group number is what POSIX ps can print (sid is not portable).
 func TestRunPluginIsASessionLeader(test *testing.T) {
 	if _, err := exec.LookPath("ps"); err != nil {
-		test.Skip("no ps to read the session from")
+		test.Skip("no ps to read the process group from")
 	}
 	runner := New([]config.Plugin{scriptPlugin("p", "session.sh", guard)}, Options{Environment: baseEnvironment(test.TempDir())})
 	effects, err := runner.Run(context.Background(), "p", Request{})
 	if err != nil || len(effects) != 1 {
 		test.Fatalf("Run: effects = %v, err = %v", effects, err)
 	}
-	processText, sessionText, _ := strings.Cut(effects[0].Text, " ")
-	if _, err := strconv.Atoi(sessionText); err != nil {
-		test.Skipf("ps cannot print a session number: %q", effects[0].Text)
+	processText, groupText, _ := strings.Cut(effects[0].Text, " ")
+	if _, err := strconv.Atoi(groupText); err != nil {
+		test.Skipf("ps cannot print a process group number: %q", effects[0].Text)
 	}
-	if processText != sessionText {
-		test.Errorf("process %s is in session %s, want it to lead its own", processText, sessionText)
+	if processText != groupText {
+		test.Errorf("process %s is in group %s, want it to lead its own", processText, groupText)
 	}
-	own, err := exec.Command("ps", "-o", "sid=", "-p", strconv.Itoa(os.Getpid())).Output()
+	own, err := exec.Command("ps", "-o", "pgid=", "-p", strconv.Itoa(os.Getpid())).Output()
 	if err != nil {
-		test.Fatal(err)
+		test.Skipf("ps cannot print the test's own process group: %v", err)
 	}
-	if sessionText == strings.TrimSpace(string(own)) {
-		test.Errorf("plugin shares strig's session %s", sessionText)
+	if groupText == strings.TrimSpace(string(own)) {
+		test.Errorf("plugin shares strig's process group %s", groupText)
 	}
 }
 
