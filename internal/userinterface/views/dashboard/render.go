@@ -5,6 +5,8 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/MikePors/strigidae/internal/pullrequestmarks"
+
 	"github.com/MikePors/strigidae/internal/userinterface/components/pullrequestrows"
 	"github.com/MikePors/strigidae/internal/userinterface/components/tabbar"
 	"github.com/MikePors/strigidae/internal/userinterface/terminaltext"
@@ -19,7 +21,12 @@ func (view *View) Render(width, height int) string {
 	if len(view.tabs) == 0 {
 		return clip(view.theme.Muted.Render("no tabs configured"), width, height)
 	}
-	current := &view.tabs[view.active]
+	stored := &view.tabs[view.active]
+	displayed := *stored
+	displayed.sections = stored.displaySections()
+	displayed.marks = pullrequestmarks.Marks{}
+	current := &displayed
+	defer func() { stored.window = current.window }()
 	table := pullrequestrows.New(view.theme, view.now, pullrequestrows.Options{Repository: true, Mark: view.markOf})
 	layout := table.Layout(current.pullRequests(), width-pullrequestrows.MarkerColumns)
 
@@ -46,7 +53,7 @@ func (view *View) tabBar(width int) string {
 
 // drawLine draws one line of the scrolling area.
 func (view *View) drawLine(table pullrequestrows.Table, layout pullrequestrows.Layout, current *tab, entry line, selectedIndex, width int) string {
-	target := current.sections[entry.section]
+	target := current.displaySections()[entry.section]
 	switch entry.kind {
 	case headingLine:
 		return view.heading(target, width)
@@ -65,7 +72,10 @@ func (view *View) heading(target section, width int) string {
 	if target.err != nil && len(target.pullRequests) > 0 {
 		title += " " + view.theme.ErrorText.Render("(refresh failed: "+terminaltext.SafeError(target.err).Error()+")")
 	}
-	query := "  " + view.theme.Muted.Render(terminaltext.Clean(target.query))
+	query := ""
+	if target.query != "" {
+		query = "  " + view.theme.Muted.Render(terminaltext.Clean(target.query))
+	}
 	return ansi.Truncate(title+query, width, "…")
 }
 
@@ -76,6 +86,8 @@ func (view *View) note(target section, width int) string {
 	case target.err != nil:
 		message := terminaltext.SafeError(target.err).Error()
 		return view.theme.ErrorText.Render(ansi.Truncate("  Could not load: "+message, width, "…"))
+	case target.grouped:
+		return view.theme.Muted.Render("  Pull requests shown in mark sections")
 	default:
 		return view.theme.Muted.Render("  No pull requests")
 	}
