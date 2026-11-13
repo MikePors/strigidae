@@ -20,6 +20,7 @@ type PullRequestListStyles struct {
 	Approved         lipgloss.Style // review decision glyphs
 	ChangesRequested lipgloss.Style
 	ReviewRequired   lipgloss.Style
+	NewCommits       lipgloss.Style // the glyph for commits pushed since the viewer's review
 	ChecksPassing    lipgloss.Style // check status glyphs (also used by the PR workspace header)
 	ChecksFailing    lipgloss.Style
 	ChecksRunning    lipgloss.Style
@@ -42,6 +43,7 @@ func newPullRequestListStyles(roles Roles) PullRequestListStyles {
 		Approved:         foreground(roles.Success),
 		ChangesRequested: foreground(roles.Error),
 		ReviewRequired:   foreground(roles.Warning),
+		NewCommits:       foreground(roles.Accent),
 		ChecksPassing:    foreground(roles.Added),
 		ChecksFailing:    foreground(roles.Removed),
 		ChecksRunning:    foreground(roles.Warning),

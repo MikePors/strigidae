@@ -256,7 +256,6 @@ func (table Table) Row(layout Layout, pullRequest github.PullRequest, selected, 
 func (table Table) IndentedRow(layout Layout, pullRequest github.PullRequest, depth int, selected, matched bool, width int) string {
 	styles := table.theme.PullRequestList
 	checksMark, checksStyle := table.checksMark(pullRequest.Checks)
-	reviewMark, reviewStyle := table.reviewMark(pullRequest.ReviewDecision)
 	row := layout.row(rowCells{
 		repository: styled(shortRepository(terminaltext.Clean(pullRequest.Repository.String()), layout.repository), styles.Repository),
 		number:     styled(fmt.Sprintf("#%d", pullRequest.Number), styles.Number),
@@ -267,7 +266,7 @@ func (table Table) IndentedRow(layout Layout, pullRequest github.PullRequest, de
 		author:     styled(terminaltext.Clean(pullRequest.Author), styles.Author).truncate(layout.author),
 		age:        styled(relativeAge(table.now(), pullRequest.UpdatedAt), styles.Age),
 		checks:     styled(checksMark, checksStyle),
-		review:     styled(reviewMark, reviewStyle),
+		review:     table.reviewCell(pullRequest),
 		comments:   styled(commentText(pullRequest.CommentCount), styles.Comments),
 	})
 

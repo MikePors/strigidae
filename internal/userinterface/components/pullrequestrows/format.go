@@ -49,6 +49,23 @@ func commentText(count int) string {
 	return fmt.Sprint(count)
 }
 
+// newCommitsMark is the glyph for commits pushed since the viewer's latest
+// review. The selected row is painted in one style, so the shape alone tells it
+// apart there.
+const newCommitsMark = "+"
+
+// reviewCell is the review column: the decision glyph, then the glyph for new
+// commits since the viewer's review. Each takes one column, padded as plain
+// text before it is styled.
+func (table Table) reviewCell(pullRequest github.PullRequest) cell {
+	decisionMark, decisionStyle := table.reviewMark(pullRequest.ReviewDecision)
+	content := cell{{text: pad(decisionMark, 1), style: decisionStyle}}
+	if pullRequest.ViewerReviewedSHA != "" && pullRequest.ViewerReviewedSHA != pullRequest.HeadSHA {
+		content = append(content, segment{text: newCommitsMark, style: table.theme.PullRequestList.NewCommits})
+	}
+	return content
+}
+
 // reviewMark returns the one-column glyph and style for a review decision.
 func (table Table) reviewMark(decision github.ReviewDecision) (string, lipgloss.Style) {
 	styles := table.theme.PullRequestList

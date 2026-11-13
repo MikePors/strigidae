@@ -52,10 +52,15 @@ type graphqlPullRequest struct {
 	HeadRefOid        string
 	IsCrossRepository bool
 	StatusCheckRollup *graphqlRollup
-	MergeStateStatus  string
-	Author            *graphqlActor
-	CommentCount      struct{ TotalCount int }
-	Repository        struct{ NameWithOwner string }
+	// ViewerLatestReview is null when the viewer has not reviewed.
+	ViewerLatestReview *struct {
+		State  string
+		Commit *struct{ Oid string }
+	}
+	MergeStateStatus string
+	Author           *graphqlActor
+	CommentCount     struct{ TotalCount int }
+	Repository       struct{ NameWithOwner string }
 }
 
 // graphqlRollup is the head commit's check rollup. Contexts is only selected
@@ -288,25 +293,37 @@ func mapPullRequest(node graphqlPullRequest) (github.PullRequest, error) {
 		return github.PullRequest{}, err
 	}
 	return github.PullRequest{
-		Identifier:     node.ID,
-		HeadSHA:        node.HeadRefOid,
-		Repository:     repository,
-		Number:         node.Number,
-		Title:          node.Title,
-		Author:         node.Author.login(),
-		State:          github.PullRequestState(node.State),
-		Draft:          node.IsDraft,
-		ReviewDecision: github.ReviewDecision(node.ReviewDecision),
-		Checks:         mapChecks(node),
-		CommentCount:   node.CommentCount.TotalCount,
-		CreatedAt:      node.CreatedAt,
-		UpdatedAt:      node.UpdatedAt,
-		URL:            node.URL,
-		HeadBranch:     node.HeadRefName,
-		BaseBranch:     node.BaseRefName,
+		Identifier:        node.ID,
+		HeadSHA:           node.HeadRefOid,
+		Repository:        repository,
+		Number:            node.Number,
+		Title:             node.Title,
+		Author:            node.Author.login(),
+		State:             github.PullRequestState(node.State),
+		Draft:             node.IsDraft,
+		ReviewDecision:    github.ReviewDecision(node.ReviewDecision),
+		ViewerReviewedSHA: mapViewerReviewedSHA(node),
+		Checks:            mapChecks(node),
+		CommentCount:      node.CommentCount.TotalCount,
+		CreatedAt:         node.CreatedAt,
+		UpdatedAt:         node.UpdatedAt,
+		URL:               node.URL,
+		HeadBranch:        node.HeadRefName,
+		BaseBranch:        node.BaseRefName,
 
 		CrossRepository: node.IsCrossRepository,
 	}, nil
+}
+
+// mapViewerReviewedSHA is the commit the viewer's latest review was made on,
+// or "" without a submitted review: a pending review is not one, and the
+// commit is null when GitHub no longer has it.
+func mapViewerReviewedSHA(node graphqlPullRequest) string {
+	review := node.ViewerLatestReview
+	if review == nil || review.Commit == nil || review.State == "PENDING" {
+		return ""
+	}
+	return review.Commit.Oid
 }
 
 // mapChecks reads the head commit's rollup; null means it has no checks.

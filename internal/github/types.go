@@ -41,6 +41,10 @@ type PullRequest struct {
 	State          PullRequestState
 	Draft          bool
 	ReviewDecision ReviewDecision
+	// ViewerReviewedSHA is the commit of the viewer's latest submitted review,
+	// or empty when the viewer has not reviewed. A dismissed review counts;
+	// an unsubmitted one does not.
+	ViewerReviewedSHA string
 	// Checks is the combined check state of the head commit.
 	Checks CheckState
 	// CommentCount counts top-level (conversation) comments only.

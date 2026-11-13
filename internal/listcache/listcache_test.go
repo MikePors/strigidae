@@ -145,3 +145,31 @@ func TestFutureSnapshotCanBeReplaced(test *testing.T) {
 		test.Fatal("future timestamp prevented recovery")
 	}
 }
+
+func TestViewerReviewedSHASurvivesTheCacheAndOldSnapshotsLackIt(test *testing.T) {
+	now := time.Date(2026, 11, 5, 12, 0, 0, 0, time.UTC)
+	directory := filepath.Join(test.TempDir(), "cache")
+	store := New(directory, "example.test", "alice", func() time.Time { return now })
+	key := Key{Kind: "search", Query: "author:@me", Limit: 30}
+	items := []github.PullRequest{{Number: 1, HeadSHA: "new", ViewerReviewedSHA: "old"}}
+	if err := store.Save(key, items, now); err != nil {
+		test.Fatal(err)
+	}
+	got, hit := store.Load(key)
+	if !hit {
+		test.Fatal("saved snapshot missed")
+	}
+	if difference := cmp.Diff(items, got); difference != "" {
+		test.Errorf("round trip (-want +got):\n%s", difference)
+	}
+
+	// A snapshot written before the field existed reads as "not reviewed".
+	oldSnapshot := `{"Version":1,"FetchedAt":"2026-11-05T12:00:00Z","Items":[{"Number":2,"HeadSHA":"new"}]}`
+	if err := os.WriteFile(store.path(key), []byte(oldSnapshot), 0o600); err != nil {
+		test.Fatal(err)
+	}
+	got, hit = store.Load(key)
+	if !hit || len(got) != 1 || got[0].ViewerReviewedSHA != "" {
+		test.Errorf("old snapshot loaded as %+v (hit %v), want no reviewed commit", got, hit)
+	}
+}
