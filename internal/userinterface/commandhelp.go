@@ -9,11 +9,16 @@ import (
 // CommandHelp describes a command in one view. Commands shared by views have
 // one entry per view, preserving each view's description and bindings.
 type CommandHelp struct {
-	Name        string
-	Arguments   string
+	// Name is the command or alias, without its leading colon.
+	Name string
+	// Arguments is the usage suffix, including optional or required markers.
+	Arguments string
+	// Description is the help text from the command's registry.
 	Description string
-	Keys        []string
-	View        string
+	// Keys lists the key sequences that invoke this command's action.
+	Keys []string
+	// View names the view in which the command works.
+	View string
 }
 
 func (model *Model) allCommandHelp() []CommandHelp {

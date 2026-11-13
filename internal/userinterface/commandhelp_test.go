@@ -51,6 +51,15 @@ func TestCommandHelpCompletionAcrossViews(test *testing.T) {
 			test.Errorf("missing %s from %v", name, candidates)
 		}
 	}
+	count := 0
+	for _, candidate := range candidates {
+		if candidate == "copy-url" {
+			count++
+		}
+	}
+	if count != 1 {
+		test.Errorf("copy-url appears %d times, want once: %v", count, candidates)
+	}
 	if slices.Contains(candidates, ":copy-url") {
 		test.Errorf("duplicate view created a false topic clash: %v", candidates)
 	}

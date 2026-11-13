@@ -221,7 +221,7 @@ func TestHelpEveryTopicIsListedAndCompletable(test *testing.T) {
 		}
 	}
 	if len(candidates) != len(helpTopicTable())+len(CommandNames()) {
-		test.Errorf("completion offers %v, want exactly the topics", candidates)
+		test.Errorf("completion offers %v, want the topics and shell commands", candidates)
 	}
 }
 
