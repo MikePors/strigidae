@@ -132,8 +132,17 @@ func TestCloseWritesWhenARunOutlastsTheWait(test *testing.T) {
 	spawn(session.model.update(session.request("stuck")))
 	<-runner.started
 	session.model.update(session.request("lost")) // its commands are dropped
+	// Force the flush to outlast Close too, as a slow disk can on CI.
+	release := session.model.localFiles.HoldForTest()
+	defer release()
 	session.model.Close()
 	close(runner.let)
+	release()
+	select {
+	case <-session.model.localFiles.Flushed():
+	case <-time.After(10 * time.Second):
+		test.Fatal("local thread flush did not finish")
+	}
 	saved := readSaved(test, session.path())
 	if len(saved) != 2 {
 		test.Errorf("file after Close = %+v, want both questions", saved)
