@@ -381,3 +381,10 @@ printed after that wait is not read.
 
 Once the program has exited by itself, its exit status decides the run, even if
 the timeout or a cancel arrives during that wait.
+
+### Command help
+
+An optional `description` string on a plugin supplies the text for
+`:help <command>`. Without it, help describes the plugin’s configured target.
+Help is available from every view; the plugin still runs only in the workspace.
+If its name is also a help topic (`config` or `keys`), use `:help :<command>`.

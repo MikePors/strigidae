@@ -16,6 +16,7 @@ import (
 type commandDefinition struct {
 	names       []string // the command and its aliases, without the leading ":"
 	description string   // one line for the generated key reference
+	arguments   string
 	run         func(arguments string) tea.Cmd
 }
 
@@ -25,9 +26,9 @@ func commandTable() []commandDefinition {
 	return []commandDefinition{
 		{names: []string{"q", "quit"}, description: "close the current view; quits strig on the first view", run: func(string) tea.Cmd { return Pop() }},
 		{names: []string{"qa", "qall", "quitall"}, description: "quit strig", run: func(string) tea.Cmd { return Quit() }},
-		{names: []string{"set"}, description: "change a yes/no option for this session: `:set wrap`, `:set nowrap`, `:set wrap!`, `:set wrap?`, `:set wrap&`; `:set` alone lists the changed options and `:set all` every one", run: setCommand},
-		{names: []string{"help"}, description: "open a help overlay: `:help` lists the topics, `:help keys` is the key help, `:help config` lists the options", run: helpCommand},
-		{names: []string{"theme"}, description: "switch the colour theme to a bundled theme's name or a theme file", run: themeCommand},
+		{names: []string{"set"}, arguments: "[option ... | all]", description: "change a yes/no option for this session: `:set wrap`, `:set nowrap`, `:set wrap!`, `:set wrap?`, `:set wrap&`; `:set` alone lists the changed options and `:set all` every one", run: setCommand},
+		{names: []string{"help"}, arguments: "[topic | command]", description: "open a help overlay: `:help` lists the topics, `:help keys` is the key help, `:help config` lists the options, `:help <command>` describes a command; prefix the command with `:` if its name is also a topic", run: helpCommand},
+		{names: []string{"theme"}, arguments: "<name or file>", description: "switch the colour theme to a bundled theme's name or a theme file", run: themeCommand},
 	}
 }
 

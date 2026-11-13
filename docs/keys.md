@@ -129,7 +129,7 @@ These work on any view. A command of a single view is in that view's table above
 | `:q`, `:quit` | close the current view; quits strig on the first view |
 | `:qa`, `:qall`, `:quitall` | quit strig |
 | `:set` | change a yes/no option for this session: `:set wrap`, `:set nowrap`, `:set wrap!`, `:set wrap?`, `:set wrap&`; `:set` alone lists the changed options and `:set all` every one |
-| `:help` | open a help overlay: `:help` lists the topics, `:help keys` is the key help, `:help config` lists the options |
+| `:help` | open a help overlay: `:help` lists the topics, `:help keys` is the key help, `:help config` lists the options, `:help <command>` describes a command; prefix the command with `:` if its name is also a topic |
 | `:theme` | switch the colour theme to a bundled theme's name or a theme file |
 
 ## Also in the help overlay

@@ -51,7 +51,7 @@ func TestPluginNamedLikeABuiltInIsRefused(test *testing.T) {
 }
 
 func TestPluginsReachTheUserInterface(test *testing.T) {
-	path := writeConfig(test, "plugins:\n  - {command: ask, on_run: [tool], target: lines}\n  - {command: summarize, on_run: [tool], target: pull-request}\n")
+	path := writeConfig(test, "plugins:\n  - {command: ask, description: Explain lines, on_run: [tool], target: lines}\n  - {command: summarize, on_run: [tool], target: pull-request}\n")
 	harness := newHarness(map[string]string{"origin": "git@github.com:o/r.git"}, true, nil)
 	var stdout, stderr bytes.Buffer
 	if code := run([]string{"--config", path}, &stdout, &stderr, harness.dependencies); code != 0 {
@@ -61,7 +61,7 @@ func TestPluginsReachTheUserInterface(test *testing.T) {
 	if got.PluginRunner == nil || len(got.PluginCommands) != 2 {
 		test.Fatalf("runner = %v, commands = %v", got.PluginRunner, got.PluginCommands)
 	}
-	if got.PluginCommands[0] != (userinterface.PluginCommand{Name: "ask", Target: config.TargetLines}) {
+	if got.PluginCommands[0] != (userinterface.PluginCommand{Name: "ask", Description: "Explain lines", Target: config.TargetLines}) {
 		test.Errorf("first command = %+v", got.PluginCommands[0])
 	}
 	for _, name := range []string{"ask", "summarize", "merge"} {

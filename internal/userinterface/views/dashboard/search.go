@@ -16,9 +16,9 @@ func (current *tab) searchList() search.List {
 	return search.List{
 		Items: func() []search.Item {
 			var items []search.Item
-			for i, target := range current.sections {
+			for i, target := range current.displaySections() {
 				items = append(items, pullrequestrows.SearchItems(target.pullRequests, func(_ int, pullRequest github.PullRequest) string {
-					return rowKey(i, pullRequest)
+					return sectionRowKey(i, target, pullRequest)
 				})...)
 			}
 			return items
@@ -30,7 +30,7 @@ func (current *tab) searchList() search.List {
 			}
 			if pullRequest, ok := current.selectedPullRequest(); ok {
 				section, _, _ := current.position()
-				return rowKey(section, pullRequest)
+				return sectionRowKey(section, current.displaySections()[section], pullRequest)
 			}
 			return ""
 		},
@@ -53,4 +53,11 @@ func (current *tab) searchList() search.List {
 // one pull request often appears in several sections.
 func rowKey(section int, pullRequest github.PullRequest) string {
 	return fmt.Sprintf("%d/%s#%d", section, pullRequest.Repository, pullRequest.Number)
+}
+
+func sectionRowKey(index int, target section, pullRequest github.PullRequest) string {
+	if target.mark != "" {
+		return fmt.Sprintf("mark/%q/%s#%d", target.mark, pullRequest.Repository, pullRequest.Number)
+	}
+	return rowKey(index, pullRequest)
 }

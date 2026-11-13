@@ -142,7 +142,7 @@ func (listBindings *bindings) actions() []keys.Action {
 		{Name: commandCreate, Command: commandCreate, Description: "create a pull request: pick the head and base branches, write the title and body in $EDITOR, then confirm with y/N"},
 		{Name: commandCreateDraft, Command: commandCreateDraft, Description: "create a draft pull request the same way, without the y/N"},
 		{Name: commandCopyURL, Command: commandCopyURL, Description: "copy the URL of the pull request under the cursor to the clipboard"},
-		{Name: commandMark, Command: commandMark, Description: "give the pull request under the cursor a private mark: `:mark <text>` replaces any existing mark"},
+		{Name: commandMark, Command: commandMark, Arguments: "<text>", Description: "give the pull request under the cursor a private mark: `:mark <text>` replaces any existing mark"},
 		{Name: commandUnmark, Command: commandUnmark, Description: "remove the private mark from the pull request under the cursor"},
 	}
 }

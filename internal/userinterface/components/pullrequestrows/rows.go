@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MikePors/strigidae/internal/github"
@@ -163,35 +164,58 @@ func (layout Layout) fixed() int {
 
 // Header returns the column headings, padded to width.
 func (table Table) Header(layout Layout, width int) string {
-	return table.theme.PullRequestList.Header.Render(pad(noMarker+layout.row("REPO", "#", "TITLE", "MARK", "HEAD", "BASE", "AUTHOR", "UPD", "CI", "RV", "CMT"), width))
+	headings := rowCells{
+		repository: headingCell("REPO"), number: headingCell("#"), title: headingCell("TITLE"), mark: headingCell("MARK"),
+		head: headingCell("HEAD"), base: headingCell("BASE"), author: headingCell("AUTHOR"), age: headingCell("UPD"),
+		checks: headingCell("CI"), review: headingCell("RV"), comments: headingCell("CMT"),
+	}
+	line := append(cell{{text: noMarker}}, layout.row(headings)...)
+	return line.padRight(width).paintAll(table.theme.PullRequestList.Header)
 }
 
-// row pads each cell to its column and joins them. Right-aligned columns are
-// numbers; the rest are left-aligned.
-func (layout Layout) row(repository, number, title, mark, head, base, author, age, checks, review, comments string) string {
-	var cells []string
+// headingCell is a header cell; the header is painted in one style.
+func headingCell(text string) cell { return styled(text, lipgloss.Style{}) }
+
+// rowCells holds the content of every column of one row. Columns the layout
+// hides are ignored.
+type rowCells struct {
+	repository, number, title, mark, head, base, author, age, checks, review, comments cell
+}
+
+// row pads each cell to its column and joins them with the gaps. Right-aligned
+// columns are numbers; the rest are left-aligned.
+func (layout Layout) row(cells rowCells) cell {
+	var columns []cell
 	if layout.repository > 0 {
-		cells = append(cells, pad(repository, layout.repository))
+		columns = append(columns, cells.repository.padRight(layout.repository))
 	}
-	cells = append(cells, padLeft(number, layout.number), pad(title, layout.title))
-	add := func(text string, width int, right bool) {
+	columns = append(columns, cells.number.padLeft(layout.number), cells.title.padRight(layout.title))
+	add := func(content cell, width int, right bool) {
 		switch {
 		case width == 0:
 		case right:
-			cells = append(cells, padLeft(text, width))
+			columns = append(columns, content.padLeft(width))
 		default:
-			cells = append(cells, pad(text, width))
+			columns = append(columns, content.padRight(width))
 		}
 	}
-	add(mark, layout.mark, false)
-	add(head, layout.head, false)
-	add(base, layout.base, false)
-	add(author, layout.author, false)
-	add(age, layout.age, true)
-	add(checks, layout.checks, false)
-	add(review, layout.review, false)
-	add(comments, layout.comments, true)
-	return strings.Join(cells, gap)
+	add(cells.mark, layout.mark, false)
+	add(cells.head, layout.head, false)
+	add(cells.base, layout.base, false)
+	add(cells.author, layout.author, false)
+	add(cells.age, layout.age, true)
+	add(cells.checks, layout.checks, false)
+	add(cells.review, layout.review, false)
+	add(cells.comments, layout.comments, true)
+
+	var out cell
+	for i, column := range columns {
+		if i > 0 {
+			out = append(out, segment{text: gap})
+		}
+		out = append(out, column...)
+	}
+	return out
 }
 
 // SearchText is the clean text a search looks in for a pull request: title,
@@ -230,22 +254,22 @@ func (table Table) Row(layout Layout, pullRequest github.PullRequest, selected, 
 // IndentedRow is Row with the title moved in by depth levels of indentColumns
 // spaces before it is truncated; the other columns stay where they are.
 func (table Table) IndentedRow(layout Layout, pullRequest github.PullRequest, depth int, selected, matched bool, width int) string {
-	indent := strings.Repeat(" ", indentColumns*max(depth, 0))
-	title := terminaltext.Clean(pullRequest.Title)
-	if pullRequest.Draft {
-		title = draftPrefix + title
-	}
-	title = ansi.Truncate(indent+title, layout.title, "…")
-	mark := ansi.Truncate(table.mark(pullRequest), layout.mark, "…")
-	head := ansi.Truncate(terminaltext.Clean(pullRequest.HeadBranch), layout.head, "…")
-	base := ansi.Truncate(terminaltext.Clean(pullRequest.BaseBranch), layout.base, "…")
-	author := ansi.Truncate(terminaltext.Clean(pullRequest.Author), layout.author, "…")
-	repository := shortRepository(terminaltext.Clean(pullRequest.Repository.String()), layout.repository)
-	number := fmt.Sprintf("#%d", pullRequest.Number)
-	age := relativeAge(table.now(), pullRequest.UpdatedAt)
+	styles := table.theme.PullRequestList
 	checksMark, checksStyle := table.checksMark(pullRequest.Checks)
 	reviewMark, reviewStyle := table.reviewMark(pullRequest.ReviewDecision)
-	comments := commentText(pullRequest.CommentCount)
+	row := layout.row(rowCells{
+		repository: styled(shortRepository(terminaltext.Clean(pullRequest.Repository.String()), layout.repository), styles.Repository),
+		number:     styled(fmt.Sprintf("#%d", pullRequest.Number), styles.Number),
+		title:      table.titleCell(pullRequest, depth, layout.title),
+		mark:       styled(table.mark(pullRequest), styles.Mark).truncate(layout.mark),
+		head:       styled(terminaltext.Clean(pullRequest.HeadBranch), styles.Branch).truncate(layout.head),
+		base:       styled(terminaltext.Clean(pullRequest.BaseBranch), styles.Branch).truncate(layout.base),
+		author:     styled(terminaltext.Clean(pullRequest.Author), styles.Author).truncate(layout.author),
+		age:        styled(relativeAge(table.now(), pullRequest.UpdatedAt), styles.Age),
+		checks:     styled(checksMark, checksStyle),
+		review:     styled(reviewMark, reviewStyle),
+		comments:   styled(commentText(pullRequest.CommentCount), styles.Comments),
+	})
 
 	if selected {
 		// A selected row that matches the search shows the match glyph next to
@@ -254,47 +278,35 @@ func (table Table) IndentedRow(layout Layout, pullRequest github.PullRequest, de
 		if matched {
 			lead = search.SelectedGlyph
 		}
-		return table.theme.PullRequestList.Selected.Render(pad(lead+layout.row(repository, number, title, mark, head, base, author, age, checksMark, reviewMark, comments), width))
-	}
-
-	styles := table.theme.PullRequestList
-	styledTitle := table.theme.Normal.Render(title)
-	if pullRequest.Draft && strings.HasPrefix(title, indent+draftPrefix) {
-		styledTitle = indent + styles.Draft.Render(draftPrefix) + table.theme.Normal.Render(strings.TrimPrefix(title, indent+draftPrefix))
-	}
-	// Style after padding so the escape codes don't skew the widths.
-	var out []string
-	if layout.repository > 0 {
-		out = append(out, styles.Repository.Render(pad(repository, layout.repository)))
-	}
-	out = append(out, styles.Number.Render(padLeft(number, layout.number)), styledTitle+strings.Repeat(" ", max(0, layout.title-ansi.StringWidth(title))))
-	if layout.mark > 0 {
-		out = append(out, styles.Mark.Render(pad(mark, layout.mark)))
-	}
-	if layout.head > 0 {
-		out = append(out, styles.Branch.Render(pad(head, layout.head)))
-	}
-	if layout.base > 0 {
-		out = append(out, styles.Branch.Render(pad(base, layout.base)))
-	}
-	if layout.author > 0 {
-		out = append(out, styles.Author.Render(pad(author, layout.author)))
-	}
-	if layout.age > 0 {
-		out = append(out, styles.Age.Render(padLeft(age, layout.age)))
-	}
-	if layout.checks > 0 {
-		out = append(out, checksStyle.Render(pad(checksMark, layout.checks)))
-	}
-	if layout.review > 0 {
-		out = append(out, reviewStyle.Render(pad(reviewMark, layout.review)))
-	}
-	if layout.comments > 0 {
-		out = append(out, styles.Comments.Render(padLeft(comments, layout.comments)))
+		line := append(cell{{text: lead}}, row...)
+		return line.padRight(width).paintAll(styles.Selected)
 	}
 	lead := noMarker
 	if matched {
 		lead = table.theme.SearchMarker.Render(search.Glyph) + " "
 	}
-	return lead + strings.Join(out, gap)
+	return lead + row.paint()
+}
+
+// titleCell is the title indented by depth levels of indentColumns spaces and
+// cut to width, with a draft's marker in its own style. The indent and the
+// padding after the title take the Normal style, which adds nothing today.
+func (table Table) titleCell(pullRequest github.PullRequest, depth, width int) cell {
+	normal := table.theme.Normal
+	title := terminaltext.Clean(pullRequest.Title)
+	indent := strings.Repeat(" ", indentColumns*max(depth, 0))
+	if !pullRequest.Draft {
+		return styled(indent+title, normal).truncate(width)
+	}
+	var content cell
+	if indent != "" {
+		content = styled(indent, normal)
+	}
+	content = append(content, segment{text: draftPrefix, style: table.theme.PullRequestList.Draft})
+	content = append(content, segment{text: title, style: normal}).truncate(width)
+	if text := content.plain(); !strings.HasPrefix(text, indent+draftPrefix) {
+		// A marker cut short is no longer a marker: the whole title is plain.
+		return styled(text, normal)
+	}
+	return content
 }
