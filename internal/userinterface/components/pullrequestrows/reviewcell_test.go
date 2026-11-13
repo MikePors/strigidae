@@ -44,7 +44,7 @@ func TestReviewCell(test *testing.T) {
 		test.Run(testCase.name, func(test *testing.T) {
 			got := table.reviewCell(testCase.pullRequest)
 			if diff := cmp.Diff(segmentTexts(testCase.want), segmentTexts(got)); diff != "" {
-				test.Errorf("review cell text mismatch (-want +got):\n%s", diff)
+				test.Fatalf("review cell text mismatch (-want +got):\n%s", diff)
 			}
 			for i := range got {
 				if got[i].style.Render("x") != testCase.want[i].style.Render("x") {

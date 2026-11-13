@@ -37,7 +37,7 @@ comments, followed by the reaction picker. `:react <name>` opens the same target
 picker and toggles the named reaction. Escape cancels either stage without
 writing; review summaries and inline review threads are not Overview targets.
 
-In the dashboard and the repository pull request list, the `RV` column shows the review decision (`✓` approved, `✗` changes requested, `?` review required) and, after it, a `+` when you have reviewed the pull request and its head commit has moved since your latest submitted review, so re-review work stands out. Only your own submitted reviews count (a dismissed one still does, a pending one doesn't), and new comments alone don't. The `+` comes from GitHub, so it works across machines and for reviews submitted on the web. On the selected row, which is drawn in one colour, the `+` is told apart by its shape.
+In the dashboard and the repository pull request list, the `RV` column shows the review decision (`✓` approved, `✗` changes requested, `?` review required) and, after it, a `+` when you have reviewed the pull request and its head commit has moved since your latest submitted review, so re-review work stands out. Only your own submitted reviews count (a dismissed one still does, a pending one doesn't), and comments or reviews from other people don't. The `+` comes from GitHub, so it works across machines and for reviews submitted on the web. On the selected row, which is drawn in one colour, the `+` is told apart by its shape.
 
 ## List cache
 
