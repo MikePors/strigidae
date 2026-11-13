@@ -21,6 +21,8 @@ type Action struct {
 	Binding     *key.Binding
 	Command     string
 	Description string
+	// Arguments documents the optional or required command arguments.
+	Arguments string
 }
 
 // Help returns the one-line description of the action: the help text of its

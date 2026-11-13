@@ -49,6 +49,8 @@ type Options struct {
 	// shell tell a command the top view lacks ("not available here") from a
 	// word that is no command at all.
 	ViewCommands []string
+	// CommandHelp describes view commands even when their view is not open.
+	CommandHelp []CommandHelp
 	// PluginRunner runs the configured plugins; nil when there are none.
 	PluginRunner PluginRunner
 	// PluginCommands are the configured plugins' commands. Views are told
@@ -119,13 +121,15 @@ type Model struct {
 	matcher            keys.Matcher
 	sequenceGeneration int
 
-	showHelp    bool
-	helpContent helpContent    // what the open help shows
-	helpOffset  int            // top body line of the help; always within the body
-	helpSearch  helpSearch     // the open help's search; cleared when it closes or changes page
-	confirm     *confirmPrompt // open yes/no question, or nil
-	commandLine commandLine
-	status      struct {
+	commandHelp     []CommandHelp
+	helpCommandName string
+	showHelp        bool
+	helpContent     helpContent    // what the open help shows
+	helpOffset      int            // top body line of the help; always within the body
+	helpSearch      helpSearch     // the open help's search; cleared when it closes or changes page
+	confirm         *confirmPrompt // open yes/no question, or nil
+	commandLine     commandLine
+	status          struct {
 		text       string
 		kind       statusKind
 		identifier int
@@ -186,6 +190,7 @@ func New(root View, activeTheme theme.Theme, startup Options) *Model {
 		themeLoader:     startup.LoadTheme,
 		options:         startup.StartingOptions,
 		viewCommands:    startup.ViewCommands,
+		commandHelp:     startup.CommandHelp,
 		pluginRunner:    startup.PluginRunner,
 		pluginCommands:  startup.PluginCommands,
 		pluginQuitWait:  startup.PluginQuitWait,
@@ -529,6 +534,8 @@ func (model *Model) helpLines() []string {
 	switch model.helpContent {
 	case helpTopics:
 		return helpTopicLines(model.theme)
+	case helpCommandPage:
+		return model.commandHelpLines(width)
 	case helpConfig:
 		return helpConfigLines(model.theme, model.options, width)
 	case helpKeys:
@@ -641,7 +648,7 @@ func (model *Model) content() string {
 	width, height := model.contentSize()
 	var text string
 	if model.showHelp {
-		text = renderHelp(model.theme, helpTitle(model.helpContent)+model.helpSearchHint(), model.markedHelpLines(), height, model.helpOffset)
+		text = renderHelp(model.theme, model.helpTitle()+model.helpSearchHint(), model.markedHelpLines(), height, model.helpOffset)
 	} else {
 		text = model.top().Render(width, height)
 	}

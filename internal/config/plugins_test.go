@@ -16,8 +16,8 @@ func TestParsePlugins(test *testing.T) {
 	}{
 		{
 			"all keys",
-			"plugins:\n  - command: ask\n    on_run: [strig-ask, --fast, '']\n    target: lines\n    timeout: 2m\n",
-			[]Plugin{{Command: "ask", OnRun: []string{"strig-ask", "--fast", ""}, Target: TargetLines, Timeout: 2 * time.Minute, Line: 2}},
+			"plugins:\n  - command: ask\n    description: Explain the selected lines\n    on_run: [strig-ask, --fast, '']\n    target: lines\n    timeout: 2m\n",
+			[]Plugin{{Command: "ask", Description: "Explain the selected lines", OnRun: []string{"strig-ask", "--fast", ""}, Target: TargetLines, Timeout: 2 * time.Minute, Line: 2}},
 		},
 		{
 			"absolute and home programs, relative arguments",
@@ -113,7 +113,7 @@ func TestParsePluginErrors(test *testing.T) {
 		{"zero timeout", "plugins:\n  - {command: ask, on_run: [x], target: lines, timeout: 0s}\n", "c.yml:2: plugin timeout must be a positive duration such as 10s or 1m30s"},
 		{"timeout without unit", "plugins:\n  - {command: ask, on_run: [x], target: lines, timeout: 30}\n", "c.yml:2: plugin timeout must be a positive duration such as 10s or 1m30s"},
 		{"negative timeout", "plugins:\n  - {command: ask, on_run: [x], target: lines, timeout: -1m}\n", "c.yml:2: plugin timeout must be a positive duration such as 10s or 1m30s"},
-		{"unknown key", "plugins:\n  - {command: ask, on_run: [x], target: lines, display: inline}\n", `c.yml:2: unknown key "display" in a plugin (valid keys: command, on_run, target, show, timeout, service)`},
+		{"unknown key", "plugins:\n  - {command: ask, on_run: [x], target: lines, display: inline}\n", `c.yml:2: unknown key "display" in a plugin (valid keys: command, description, on_run, target, show, timeout, service)`},
 		{"show value unknown", "plugins:\n  - {command: ask, on_run: [x], target: lines, show: inline}\n", `c.yml:2: show "inline" is not one of: thread`},
 		{"show is a list", "plugins:\n  - {command: ask, on_run: [x], target: lines, show: [thread]}\n", "c.yml:2: show must be a non-empty text value"},
 		{"show needs lines", "plugins:\n  - {command: ask, on_run: [x], target: pull-request, show: thread}\n", `c.yml:2: plugin "ask": show thread needs target lines`},

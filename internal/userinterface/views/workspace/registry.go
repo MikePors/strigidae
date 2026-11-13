@@ -181,7 +181,7 @@ func (workspaceBindings *bindings) entries() []actionEntry {
 
 		// Commands without keys.
 		{
-			Action: keys.Action{Name: "comments", Command: "comments", Description: "focus the Comments pane; `all` or `unresolved` filters it to every conversation or only unresolved review threads"},
+			Action: keys.Action{Name: "comments", Command: "comments", Arguments: "[all | unresolved]", Description: "focus the Comments pane; `all` or `unresolved` filters it to every conversation or only unresolved review threads"},
 			check:  checkCommentsArguments,
 			run:    func(view *View, call invocation) tea.Cmd { return view.openComments(call.arguments) },
 		},
@@ -198,7 +198,7 @@ func (workspaceBindings *bindings) entries() []actionEntry {
 			},
 		},
 		{
-			Action: keys.Action{Name: "react", Command: "react", Description: "react to the comment under the diff cursor (or pick a target on the Overview); `:react <name>` toggles the named reaction: +1, -1, laugh, hooray, confused, heart, rocket, eyes"},
+			Action: keys.Action{Name: "react", Command: "react", Arguments: "[name]", Description: "react to the comment under the diff cursor (or pick a target on the Overview); `:react <name>` toggles the named reaction: +1, -1, laugh, hooray, confused, heart, rocket, eyes"},
 			level:  levelComment, words: "react to it", diffVisible: true, guard: writeReaction, overviewGuard: writeOverviewReaction, commentPickerTitle: "React to",
 			check: checkReaction,
 			run: func(view *View, call invocation) tea.Cmd {
@@ -225,7 +225,7 @@ func (workspaceBindings *bindings) entries() []actionEntry {
 			run: func(view *View, _ invocation) tea.Cmd { return view.review.openChooser(view.reviewEnvironment()) },
 		},
 		{
-			Action: keys.Action{Name: "merge", Command: "merge", Description: "merge the pull request after a y/N; `merge`, `squash` or `rebase` picks the method, otherwise the first the repository allows"},
+			Action: keys.Action{Name: "merge", Command: "merge", Arguments: "[merge | squash | rebase]", Description: "merge the pull request after a y/N; `merge`, `squash` or `rebase` picks the method, otherwise the first the repository allows"},
 			level:  levelPullRequest, guard: writeMerge, fresh: freshHead,
 			check: checkMergeArguments,
 			run: func(view *View, call invocation) tea.Cmd {

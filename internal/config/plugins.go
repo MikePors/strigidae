@@ -48,6 +48,8 @@ var commandName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9-]*$`)
 type Plugin struct {
 	// Command is the plugin's name; it becomes a command of that name.
 	Command string
+	// Description is the optional help text shown by :help <command>.
+	Description string
 	// OnRun is the program and its arguments, started once per run.
 	OnRun  []string
 	Target Target
@@ -99,6 +101,8 @@ func (parser *parser) plugin(node *yaml.Node) (Plugin, string) {
 			if parser.err == nil && !commandName.MatchString(plugin.Command) {
 				parser.fail(node, "plugin command %q must be a plain word (a letter, then letters, digits and hyphens)", plugin.Command)
 			}
+		case "description":
+			plugin.Description = parser.stringValue(node, "plugin description")
 		case "on_run":
 			plugin.OnRun = parser.program(node, "on_run")
 			if parser.err == nil && !allowedProgram(plugin.OnRun[0]) {
@@ -116,7 +120,7 @@ func (parser *parser) plugin(node *yaml.Node) (Plugin, string) {
 				parser.fail(node, "plugin service %q must be a plain word (a letter, then letters, digits and hyphens)", plugin.Service)
 			}
 		}
-	}, []string{"command", "on_run", "target", "show", "timeout", "service"})
+	}, []string{"command", "description", "on_run", "target", "show", "timeout", "service"})
 	if parser.err == nil && plugin.Command == "" {
 		parser.fail(node, "plugin is missing a command")
 	}
