@@ -23,6 +23,7 @@ const (
 	helpTopics
 	// helpConfig is the list of options.
 	helpConfig
+	helpCommandPage
 )
 
 // helpTopic is one subject of `:help`.
@@ -44,7 +45,7 @@ func helpTopicTable() []helpTopic {
 // helpRequestedMessage asks the root to open a help topic.
 type helpRequestedMessage struct{ topic string }
 
-// helpCommand is `:help [topic]`: it reaches the root as a message because
+// helpCommand is `:help [topic | command]`: it reaches the root as a message because
 // the root owns the overlay and the option values.
 func helpCommand(arguments string) tea.Cmd {
 	return messageCommand(helpRequestedMessage{topic: arguments})
@@ -60,7 +61,14 @@ func (model *Model) help(topic string) tea.Cmd {
 			return model.openHelp(candidate.content)
 		}
 	}
-	return Error(fmt.Errorf("unknown help topic: %s", terminaltext.Clean(topic)))
+	name := strings.TrimPrefix(topic, ":")
+	for _, command := range model.allCommandHelp() {
+		if command.Name == name {
+			model.helpCommandName = name
+			return model.openHelp(helpCommandPage)
+		}
+	}
+	return Error(fmt.Errorf("unknown help topic or command: %s", terminaltext.Clean(topic)))
 }
 
 // openHelp shows a page. A prompt that was open (the top view's, or the help's
@@ -81,8 +89,10 @@ func (model *Model) openHelp(content helpContent) tea.Cmd {
 }
 
 // helpTitle names the open overlay on its title line.
-func helpTitle(content helpContent) string {
-	switch content {
+func (model *Model) helpTitle() string {
+	switch model.helpContent {
+	case helpCommandPage:
+		return "Help: :" + terminaltext.Clean(model.helpCommandName)
 	case helpTopics:
 		return "Help topics"
 	case helpConfig:
@@ -104,6 +114,7 @@ func helpTopicLines(activeTheme theme.Theme) []string {
 		pad := strings.Repeat(" ", width-lipgloss.Width(topic.name)+2)
 		lines = append(lines, activeTheme.HelpKey.Render(topic.name)+pad+activeTheme.HelpDescription.Render(topic.description))
 	}
+	lines = append(lines, "", activeTheme.HelpDescription.Render(":help <command> describes any command."), activeTheme.HelpDescription.Render("Use :help :<command> when its name is also a topic."))
 	return lines
 }
 

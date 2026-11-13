@@ -3,9 +3,9 @@ Help topics  ? / esc to close
   Topics (:help <topic>)                                   
   keys    the key bindings of the current view (same as ?) 
   config  every option, with its value, default and meaning
-
-
-
+                                                           
+  :help <command> describes any command.                   
+  Use :help :<command> when its name is also a topic.      
 
 
 

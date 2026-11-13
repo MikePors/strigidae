@@ -30,8 +30,10 @@ type PluginRunner interface {
 // PluginCommand is a configured plugin as the views see it: a command name
 // and what the command acts on.
 type PluginCommand struct {
-	Name   string
-	Target config.Target
+	Name string
+	// Description is the configured help text, if supplied.
+	Description string
+	Target      config.Target
 	// Show is where the answer is drawn; empty is the status bar.
 	Show config.Show
 }

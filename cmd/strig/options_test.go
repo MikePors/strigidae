@@ -24,6 +24,9 @@ func TestConfigOptionsReachTheUserInterface(test *testing.T) {
 	if !slices.Contains(got.ViewCommands, "merge") {
 		test.Errorf("view commands = %v, want the workspace commands", got.ViewCommands)
 	}
+	if diff := cmp.Diff(viewCommandHelp(), got.CommandHelp); diff != "" {
+		test.Errorf("command help did not reach the shell (-want +got):\n%s", diff)
+	}
 	if got.Notice != "a notice" {
 		test.Errorf("notice = %q", got.Notice)
 	}

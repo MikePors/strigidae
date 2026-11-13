@@ -76,6 +76,16 @@ func (model *Model) completionCandidates(line string) (before string, candidates
 		for _, topic := range helpTopicTable() {
 			names = append(names, topic.name)
 		}
+		topics := slices.Clone(names)
+		for _, command := range model.allCommandHelp() {
+			candidate := command.Name
+			if strings.HasPrefix(arguments, ":") || slices.Contains(topics, candidate) {
+				candidate = ":" + candidate
+			}
+			if !slices.Contains(names, candidate) {
+				names = append(names, candidate)
+			}
+		}
 		return leading + name + gap, names, true
 	case "theme":
 		if strings.Contains(arguments, " ") {

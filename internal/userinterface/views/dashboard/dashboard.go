@@ -127,7 +127,7 @@ func (dashboardBindings *bindings) actions() []keys.Action {
 		{Name: "next-section", Binding: &dashboardBindings.nextSection},
 		{Name: "previous-section", Binding: &dashboardBindings.previousSection},
 		{Name: commandCopyURL, Command: commandCopyURL, Description: "copy the URL of the pull request under the cursor to the clipboard"},
-		{Name: commandMark, Command: commandMark, Description: "give the pull request under the cursor a private mark: `:mark <text>` replaces any existing mark"},
+		{Name: commandMark, Command: commandMark, Arguments: "<text>", Description: "give the pull request under the cursor a private mark: `:mark <text>` replaces any existing mark"},
 		{Name: commandUnmark, Command: commandUnmark, Description: "remove the private mark from the pull request under the cursor"},
 	}
 }

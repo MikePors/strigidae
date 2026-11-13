@@ -105,8 +105,8 @@ func TestHelpUnknownTopicIsAnErrorAndOpensNothing(test *testing.T) {
 		line string
 		want string
 	}{
-		{"help nonsense", "unknown help topic: nonsense"},
-		{"help keys extra", "unknown help topic: keys extra"},
+		{"help nonsense", "unknown help topic or command: nonsense"},
+		{"help keys extra", "unknown help topic or command: keys extra"},
 	}
 	for _, testCase := range tests {
 		test.Run(testCase.line, func(test *testing.T) {
@@ -220,8 +220,8 @@ func TestHelpEveryTopicIsListedAndCompletable(test *testing.T) {
 			test.Errorf("topic %q is not completed after help ", topic.name)
 		}
 	}
-	if len(candidates) != len(helpTopicTable()) {
-		test.Errorf("completion offers %v, want exactly the topics", candidates)
+	if len(candidates) != len(helpTopicTable())+len(CommandNames()) {
+		test.Errorf("completion offers %v, want the topics and shell commands", candidates)
 	}
 }
 
@@ -231,8 +231,8 @@ func TestHelpTabCompletesTheTopic(test *testing.T) {
 	if got, want := model.commandLine.input.Value(), "help "+helpTopicTable()[0].name; got != want {
 		test.Errorf("line = %q, want %q", got, want)
 	}
-	if got := len(shown(model)); got != len(helpTopicTable()) {
-		test.Errorf("%d matches shown, want %d", got, len(helpTopicTable()))
+	if got := len(shown(model)); got != len(helpTopicTable())+len(CommandNames()) {
+		test.Errorf("%d matches shown, want %d", got, len(helpTopicTable())+len(CommandNames()))
 	}
 	model = newCompletionModel(newFake("v"))
 	typeKeys(model, "help co", "tab")
