@@ -1,0 +1,165 @@
+{
+  "data": {
+    "repository": {
+      "pullRequests": {
+        "totalCount": 5,
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": null
+        },
+        "nodes": [
+          {
+            "id": "PR_kwDOViewer11",
+            "number": 11,
+            "title": "reviewed at head",
+            "url": "https://github.com/MikePors/strigidae/pull/11",
+            "isDraft": false,
+            "state": "OPEN",
+            "createdAt": "2026-11-01T09:00:00Z",
+            "updatedAt": "2026-11-02T09:00:00Z",
+            "reviewDecision": null,
+            "baseRefName": "main",
+            "headRefName": "feat/x-11",
+            "headRefOid": "0000000000000000000000000000000000000011",
+            "isCrossRepository": false,
+            "statusCheckRollup": null,
+            "viewerLatestReview": {
+              "state": "COMMENTED",
+              "commit": {
+                "oid": "0000000000000000000000000000000000000011"
+              }
+            },
+            "author": {
+              "login": "ghost"
+            },
+            "commentCount": {
+              "totalCount": 0
+            },
+            "repository": {
+              "nameWithOwner": "MikePors/strigidae"
+            }
+          },
+          {
+            "id": "PR_kwDOViewer12",
+            "number": 12,
+            "title": "reviewed at an older commit",
+            "url": "https://github.com/MikePors/strigidae/pull/12",
+            "isDraft": false,
+            "state": "OPEN",
+            "createdAt": "2026-11-01T09:00:00Z",
+            "updatedAt": "2026-11-02T09:00:00Z",
+            "reviewDecision": null,
+            "baseRefName": "main",
+            "headRefName": "feat/x-12",
+            "headRefOid": "0000000000000000000000000000000000000012",
+            "isCrossRepository": false,
+            "statusCheckRollup": null,
+            "viewerLatestReview": {
+              "state": "APPROVED",
+              "commit": {
+                "oid": "0000000000000000000000000000000000000099"
+              }
+            },
+            "author": {
+              "login": "ghost"
+            },
+            "commentCount": {
+              "totalCount": 0
+            },
+            "repository": {
+              "nameWithOwner": "MikePors/strigidae"
+            }
+          },
+          {
+            "id": "PR_kwDOViewer13",
+            "number": 13,
+            "title": "never reviewed",
+            "url": "https://github.com/MikePors/strigidae/pull/13",
+            "isDraft": false,
+            "state": "OPEN",
+            "createdAt": "2026-11-01T09:00:00Z",
+            "updatedAt": "2026-11-02T09:00:00Z",
+            "reviewDecision": null,
+            "baseRefName": "main",
+            "headRefName": "feat/x-13",
+            "headRefOid": "0000000000000000000000000000000000000013",
+            "isCrossRepository": false,
+            "statusCheckRollup": null,
+            "viewerLatestReview": null,
+            "author": {
+              "login": "ghost"
+            },
+            "commentCount": {
+              "totalCount": 0
+            },
+            "repository": {
+              "nameWithOwner": "MikePors/strigidae"
+            }
+          },
+          {
+            "id": "PR_kwDOViewer14",
+            "number": 14,
+            "title": "only a pending review",
+            "url": "https://github.com/MikePors/strigidae/pull/14",
+            "isDraft": false,
+            "state": "OPEN",
+            "createdAt": "2026-11-01T09:00:00Z",
+            "updatedAt": "2026-11-02T09:00:00Z",
+            "reviewDecision": null,
+            "baseRefName": "main",
+            "headRefName": "feat/x-14",
+            "headRefOid": "0000000000000000000000000000000000000014",
+            "isCrossRepository": false,
+            "statusCheckRollup": null,
+            "viewerLatestReview": {
+              "state": "PENDING",
+              "commit": {
+                "oid": "0000000000000000000000000000000000000014"
+              }
+            },
+            "author": {
+              "login": "ghost"
+            },
+            "commentCount": {
+              "totalCount": 0
+            },
+            "repository": {
+              "nameWithOwner": "MikePors/strigidae"
+            }
+          },
+          {
+            "id": "PR_kwDOViewer15",
+            "number": 15,
+            "title": "dismissed review at an older commit",
+            "url": "https://github.com/MikePors/strigidae/pull/15",
+            "isDraft": false,
+            "state": "OPEN",
+            "createdAt": "2026-11-01T09:00:00Z",
+            "updatedAt": "2026-11-02T09:00:00Z",
+            "reviewDecision": null,
+            "baseRefName": "main",
+            "headRefName": "feat/x-15",
+            "headRefOid": "0000000000000000000000000000000000000015",
+            "isCrossRepository": false,
+            "statusCheckRollup": null,
+            "viewerLatestReview": {
+              "state": "DISMISSED",
+              "commit": {
+                "oid": "0000000000000000000000000000000000000098"
+              }
+            },
+            "author": {
+              "login": "ghost"
+            },
+            "commentCount": {
+              "totalCount": 0
+            },
+            "repository": {
+              "nameWithOwner": "MikePors/strigidae"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

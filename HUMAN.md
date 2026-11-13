@@ -4,6 +4,12 @@ Checks only the maintainer can do, such as live verification against real GitHub
 
 ## Live checks
 
+- [ ] **A reply to a review thread does not move the new-commits `+`, against real GitHub** (#295). The tests use a recorded fixture, not what GitHub returns for `viewerLatestReview` after your own thread reply or while you have a pending review. strig takes the commit of your latest submitted review, and a thread reply outside a pending review may be recorded as a review of its own.
+  1. In a pull request you have reviewed (a submitted review), have the author push a commit (or push one yourself from a second account's branch). Press `R` in the list: the row shows `+` after the decision glyph.
+  2. Reply to one of your old review threads in strig (`r`), without submitting a new review, then go back to the list and press `R`. The `+` should stay, because the new head was never reviewed. If it vanishes, or a `+` appears on a pull request you reviewed at its head, GitHub records the reply as a review; report which.
+  3. Start a pending review on a pull request that already has an older submitted review of yours (add a draft comment, don't submit), and push a commit. The row should still show `+`; if it shows nothing, `viewerLatestReview` returns the pending review.
+  4. Report the repository, each case's result, and the glyph you saw.
+
 - [ ] **Dashboard mark sections in a real terminal** (#294). Run `strig` outside a checkout with dashboard tabs configured. Mark two rows `:mark later`, then rename one `:mark ahead`; check that the cursor stays in the original section when it has another row. Try `:unmark`, `2]`, `/`, `n` and `N`, then `R` and a teammate tab. Report unexpected cursor movement or missing rows and attach a terminal screenshot. The committed PNGs render the deterministic golden fixtures, not a live GitHub session.
 
 - [ ] **A hunk that starts inside a comment is coloured from the whole file, in a real terminal** (#262). The tests use an in-memory blob reader and check token types, not the colours on screen or a real checkout.

@@ -24,6 +24,7 @@ fragment PullRequestFields on PullRequest {
   id number title url isDraft state createdAt updatedAt reviewDecision
   baseRefName headRefName headRefOid isCrossRepository
   statusCheckRollup { state }
+  viewerLatestReview { state commit { oid } }
   author { login }
   commentCount: comments { totalCount }
   repository { nameWithOwner }
