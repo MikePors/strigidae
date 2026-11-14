@@ -52,8 +52,8 @@ func stackOrder(pullRequests []github.PullRequest, order pullrequestrows.Sort) (
 	}
 	// A row is top-level when it has no parent, or when it is on a cycle and
 	// no other row of the cycle has been placed yet: the cycle opens at its
-	// first row in order, and the rest of it, with whatever hangs off it, is
-	// drawn below.
+	// first row in the sort (in the loaded order when there is none), and the
+	// rest of it, with whatever hangs off it, is drawn below.
 	for _, i := range sequence {
 		if !visited[i] && (parents[i] < 0 || onCycle[i]) {
 			place(i, 0)

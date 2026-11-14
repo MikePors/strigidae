@@ -407,6 +407,7 @@ func (view *View) loaded(message pullRequestsLoadedMessage) tea.Cmd {
 	current.err = nil
 	current.stale = false
 	current.next = message.page.Next
+	below := current.rowsBelowSelection()
 	if message.more {
 		current.setLoaded(append(current.loaded, message.page.Items...))
 	} else {
@@ -417,7 +418,17 @@ func (view *View) loaded(message pullRequestsLoadedMessage) tea.Cmd {
 	if message.tab != view.active {
 		return nil // paging resumes when it is shown
 	}
+	if message.more && current.rowsBelowSelection() <= below {
+		// A sorted tab can put the whole page above the selection, which stays
+		// near the end; asking again would pull in every page from one key.
+		return nil
+	}
 	return view.maybeLoadMore()
+}
+
+// rowsBelowSelection counts the rows drawn after the selected one.
+func (current *tab) rowsBelowSelection() int {
+	return max(len(current.pullRequests)-1-current.window.Cursor(), 0)
 }
 
 // setLoaded swaps in the loaded rows and arranges them for drawing, keeping

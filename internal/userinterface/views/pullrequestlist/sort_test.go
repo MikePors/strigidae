@@ -111,6 +111,30 @@ func TestSortTakesInANextPage(test *testing.T) {
 	}
 }
 
+func TestSortedNextPageAboveTheSelectionAsksForNoMore(test *testing.T) {
+	// Later pages hold lower numbers, so with :sort number every one lands
+	// above #150, which stays the last row.
+	client := fakeWith(makePullRequests(150))
+	view := loadedView(test, client, nil)
+	sortBy(test, view, "number")
+	if next := deliver(test, view, press(view, "G")); next != nil {
+		test.Fatal("a page that landed above the selection asked for the next one")
+	}
+	if got := len(view.current().pullRequests); got != 60 {
+		test.Fatalf("loaded %d rows, want 60", got)
+	}
+	if got := selectedNumber(view); got != 150 {
+		test.Errorf("cursor on #%d, want #150", got)
+	}
+	// Moving at the end asks for one page more.
+	if next := deliver(test, view, press(view, "j")); next != nil {
+		test.Error("the page asked for after j asked for another")
+	}
+	if got := len(view.current().pullRequests); got != 90 {
+		test.Errorf("after j loaded %d rows, want 90", got)
+	}
+}
+
 func TestSortIsPerTab(test *testing.T) {
 	client := fakeWith(makePullRequests(3))
 	client.SetSearchResults("is:pr is:open repo:acme/widgets author:alice sort:updated-desc", authored("alice", 3, 1, 2))
