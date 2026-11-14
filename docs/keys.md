@@ -46,6 +46,7 @@ The repository's open pull requests (`strig` in a checkout, or `-R owner/name`).
 | `copy-url` | none | `:copy-url` | copy the URL of the pull request under the cursor to the clipboard |
 | `mark` | none | `:mark` | give the pull request under the cursor a private mark: `:mark <text>` replaces any existing mark |
 | `unmark` | none | `:unmark` | remove the private mark from the pull request under the cursor |
+| `sort` | none | `:sort` | sort the tab's loaded rows in strig: by number, title, author, created, updated, review, checks, comments or draft, ascending unless `desc` follows; `:sort default` goes back to GitHub's order |
 
 ## Dashboard
 
@@ -60,6 +61,7 @@ The tabs of sections (`strig` outside a checkout, or with no GitHub remote).
 | `copy-url` | none | `:copy-url` | copy the URL of the pull request under the cursor to the clipboard |
 | `mark` | none | `:mark` | give the pull request under the cursor a private mark: `:mark <text>` replaces any existing mark |
 | `unmark` | none | `:unmark` | remove the private mark from the pull request under the cursor |
+| `sort` | none | `:sort` | sort the tab's loaded rows in strig: by number, title, author, created, updated, review, checks, comments or draft, ascending unless `desc` follows; `:sort default` goes back to GitHub's order |
 
 ## Pull request workspace
 
