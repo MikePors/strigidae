@@ -10,6 +10,8 @@ Checks only the maintainer can do, such as live verification against real GitHub
   3. Start a pending review on a pull request that already has an older submitted review of yours (add a draft comment, don't submit), and push a commit. The row should still show `+`; if it shows nothing, `viewerLatestReview` returns the pending review.
   4. Report the repository, each case's result, and the glyph you saw.
 
+- [ ] **`:sort` against real GitHub** (#312). In a checkout of a repository with more than 100 open pull requests (or with `-R`), run `strig`, then `:sort created`: the tab bar should say `↑ created (100 loaded)`. Hold `j` (or `G`) to page in more rows: they should sort in, the count should grow, and the cursor should stay on its pull request. Press `R`: the sort and the cursor stay. Try `:sort review desc` and `:sort checks`, and in the dashboard `:sort updated` with marks on, then `g t` to a tab that keeps its own order. Report any row that is out of place, a stack drawn apart from its parent, or a cursor that jumps, with a screenshot.
+
 - [ ] **Dashboard mark sections in a real terminal** (#294). Run `strig` outside a checkout with dashboard tabs configured. Mark two rows `:mark later`, then rename one `:mark ahead`; check that the cursor stays in the original section when it has another row. Try `:unmark`, `2]`, `/`, `n` and `N`, then `R` and a teammate tab. Report unexpected cursor movement or missing rows and attach a terminal screenshot. The committed PNGs render the deterministic golden fixtures, not a live GitHub session.
 
 - [ ] **A hunk that starts inside a comment is coloured from the whole file, in a real terminal** (#262). The tests use an in-memory blob reader and check token types, not the colours on screen or a real checkout.

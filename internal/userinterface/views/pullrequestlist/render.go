@@ -44,7 +44,7 @@ func (view *View) tabBar(width int) string {
 			names[i] += " (stale)"
 		}
 	}
-	return tabbar.Render(view.theme, names, view.active, width)
+	return tabbar.RenderWithNote(view.theme, names, view.active, width, view.current().sortNote())
 }
 
 // emptyText says why the shown tab has no rows.

@@ -24,7 +24,10 @@ func (view *View) Render(width, height int) string {
 	stored := &view.tabs[view.active]
 	displayed := *stored
 	displayed.sections = stored.displaySections()
+	// The copy's sections are already derived; with no marks or sort it
+	// derives nothing more.
 	displayed.marks = pullrequestmarks.Marks{}
+	displayed.order = pullrequestrows.Sort{}
 	current := &displayed
 	defer func() { stored.window = current.window }()
 	table := pullrequestrows.New(view.theme, view.now, pullrequestrows.Options{Repository: true, Mark: view.markOf})
@@ -48,7 +51,7 @@ func (view *View) tabBar(width int) string {
 	for i, current := range view.tabs {
 		names[i] = current.name
 	}
-	return tabbar.Render(view.theme, names, view.active, width)
+	return tabbar.RenderWithNote(view.theme, names, view.active, width, view.tabs[view.active].order.Label())
 }
 
 // drawLine draws one line of the scrolling area.

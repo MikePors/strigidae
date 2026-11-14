@@ -19,6 +19,7 @@ import (
 	"github.com/MikePors/strigidae/internal/options"
 	"github.com/MikePors/strigidae/internal/pullrequestmarks"
 	"github.com/MikePors/strigidae/internal/userinterface"
+	"github.com/MikePors/strigidae/internal/userinterface/components/pullrequestrows"
 	"github.com/MikePors/strigidae/internal/userinterface/components/scroll"
 	"github.com/MikePors/strigidae/internal/userinterface/components/search"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
@@ -79,7 +80,8 @@ type tab struct {
 	host      string
 	requested bool // the sections were asked for at least once
 
-	anchor *anchor // nil until the user moves the cursor
+	order  pullrequestrows.Sort // the `:sort` of this tab; zero keeps GitHub's order
+	anchor *anchor              // nil until the user moves the cursor
 	window scroll.Window
 	search search.State // each tab keeps its own search
 }
@@ -129,6 +131,7 @@ func (dashboardBindings *bindings) actions() []keys.Action {
 		{Name: commandCopyURL, Command: commandCopyURL, Description: "copy the URL of the pull request under the cursor to the clipboard"},
 		{Name: commandMark, Command: commandMark, Arguments: "<text>", Description: "give the pull request under the cursor a private mark: `:mark <text>` replaces any existing mark"},
 		{Name: commandUnmark, Command: commandUnmark, Description: "remove the private mark from the pull request under the cursor"},
+		{Name: commandSort, Command: commandSort, Arguments: pullrequestrows.SortArguments, Description: pullrequestrows.SortDescription},
 	}
 }
 
@@ -383,6 +386,7 @@ func (view *View) handleKey(message keys.Message) tea.Cmd {
 	displayed := *stored
 	displayed.sections = stored.displaySections()
 	displayed.marks = pullrequestmarks.Marks{}
+	displayed.order = pullrequestrows.Sort{}
 	current := &displayed
 	defer func() {
 		stored.anchor = current.anchor
