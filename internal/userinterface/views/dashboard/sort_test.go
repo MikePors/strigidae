@@ -65,6 +65,35 @@ func TestSortReordersEachSectionAndKeepsTheSelection(test *testing.T) {
 	}
 }
 
+func TestSortKeepsACursorThatWasNeverMoved(test *testing.T) {
+	view, _ := loadedView(test) // the cursor follows the first row, acme/widgets#12
+	sortBy(test, view, "number")
+	if got := selectedKey(test, view); got != "acme/widgets#12" {
+		test.Errorf("cursor on %s, want acme/widgets#12", got)
+	}
+}
+
+func TestSortMovesTheSearchMarks(test *testing.T) {
+	view, _ := loadedView(test)
+	view.Update(userinterface.PromptResultMessage{Prefix: "/", Text: "cache", State: userinterface.PromptChanged})
+	marked := func() []int {
+		var rows []int
+		for i := range view.tabs[view.active].pullRequests() {
+			if view.tabs[view.active].search.Marked(i) {
+				rows = append(rows, i)
+			}
+		}
+		return rows
+	}
+	if diff := cmp.Diff([]int{0}, marked()); diff != "" {
+		test.Fatalf("before the sort (-want +got):\n%s", diff)
+	}
+	sortBy(test, view, "number") // acme/widgets#12 "Cache the parsed diff" moves to the second row
+	if diff := cmp.Diff([]int{1}, marked()); diff != "" {
+		test.Errorf("after the sort (-want +got):\n%s", diff)
+	}
+}
+
 func TestSortSurvivesRefresh(test *testing.T) {
 	view, _ := loadedView(test)
 	sortBy(test, view, "number")

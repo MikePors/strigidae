@@ -1,22 +1,36 @@
 package pullrequestlist
 
-import "github.com/MikePors/strigidae/internal/github"
+import (
+	"slices"
 
-// stackOrder arranges pullRequests, in their loaded order, so that each pull
-// request is followed by the ones stacked on it, and reports how deep each row
-// is in its stack (0 for a top-level row).
+	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/userinterface/components/pullrequestrows"
+)
+
+// stackOrder arranges pullRequests so that each pull request is followed by
+// the ones stacked on it, and reports how deep each row is in its stack (0 for
+// a top-level row). The top-level rows, and the children of each row, come in
+// order (a stable sort of the loaded order; GitHub's order keeps it).
 //
 // A pull request is stacked on another when its base branch is the other's
 // head branch, both are open, and the other's head branch lives in this
 // repository: a fork's branch may share a name with one here. Pull requests
 // whose parent is not in the list stay top-level. When two candidates share a
-// head branch name the first in order is the parent. Every pull request
+// head branch name the first in the loaded order is the parent, whatever the
+// sort, so sorting never changes which stack a row is in. Every pull request
 // appears exactly once, even when bases and heads point at each other.
-func stackOrder(pullRequests []github.PullRequest) (ordered []github.PullRequest, depths []int) {
+func stackOrder(pullRequests []github.PullRequest, order pullrequestrows.Sort) (ordered []github.PullRequest, depths []int) {
 	parents := stackParents(pullRequests)
+	sequence := make([]int, len(pullRequests)) // indexes in drawing order
+	for i := range sequence {
+		sequence[i] = i
+	}
+	slices.SortStableFunc(sequence, func(left, right int) int {
+		return order.Compare(pullRequests[left], pullRequests[right])
+	})
 	children := make([][]int, len(pullRequests))
-	for i, parent := range parents {
-		if parent >= 0 {
+	for _, i := range sequence {
+		if parent := parents[i]; parent >= 0 {
 			children[parent] = append(children[parent], i)
 		}
 	}
@@ -40,7 +54,7 @@ func stackOrder(pullRequests []github.PullRequest) (ordered []github.PullRequest
 	// no other row of the cycle has been placed yet: the cycle opens at its
 	// first row in order, and the rest of it, with whatever hangs off it, is
 	// drawn below.
-	for i := range pullRequests {
+	for _, i := range sequence {
 		if !visited[i] && (parents[i] < 0 || onCycle[i]) {
 			place(i, 0)
 		}

@@ -428,7 +428,7 @@ func (current *tab) setLoaded(items []github.PullRequest) {
 		selected = pullRequest.Number
 	}
 	current.loaded = items
-	current.pullRequests, current.depths = stackOrder(current.order.Apply(items))
+	current.pullRequests, current.depths = stackOrder(items, current.order)
 	// If the selected PR is gone, stay on the same row (the window clamps it).
 	current.window.SetRows(len(current.pullRequests))
 	for i, pullRequest := range current.pullRequests {

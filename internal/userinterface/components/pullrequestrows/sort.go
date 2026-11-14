@@ -113,18 +113,26 @@ func (order Sort) Apply(pullRequests []github.PullRequest) []github.PullRequest 
 		return pullRequests
 	}
 	sorted := slices.Clone(pullRequests)
-	slices.SortStableFunc(sorted, func(left, right github.PullRequest) int {
-		result := cmp.Or(
-			order.compareKey(left, right),
-			cmp.Compare(left.Number, right.Number),
-			cmp.Compare(left.Repository.String(), right.Repository.String()),
-		)
-		if order.Descending {
-			return -result
-		}
-		return result
-	})
+	slices.SortStableFunc(sorted, order.Compare)
 	return sorted
+}
+
+// Compare orders two pull requests as Apply does: by the key, then number,
+// then repository, all reversed when descending. For GitHub's order every
+// pair is equal, so a stable sort keeps the loaded order.
+func (order Sort) Compare(left, right github.PullRequest) int {
+	if order.Key == SortDefault {
+		return 0
+	}
+	result := cmp.Or(
+		order.compareKey(left, right),
+		cmp.Compare(left.Number, right.Number),
+		cmp.Compare(left.Repository.String(), right.Repository.String()),
+	)
+	if order.Descending {
+		return -result
+	}
+	return result
 }
 
 // compareKey compares two pull requests by the key alone, ascending.

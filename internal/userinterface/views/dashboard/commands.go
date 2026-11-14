@@ -46,10 +46,11 @@ func (view *View) sort(arguments string) tea.Cmd {
 		return nil
 	}
 	current := &view.tabs[view.active]
+	// Pin the cursor to its pull request first: one never moved follows the
+	// first row, which the sort may change.
+	current.selectIndex(current.selectedIndex())
 	current.order = order
-	if current.anchor != nil {
-		current.selectIndex(current.selectedIndex())
-	}
+	current.selectIndex(current.selectedIndex())
 	current.search.Refresh(current.searchList())
 	return nil
 }
