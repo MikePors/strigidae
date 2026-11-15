@@ -6,6 +6,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/MikePors/strigidae/internal/github"
+	"github.com/MikePors/strigidae/internal/userinterface/components/pullrequestrows"
 )
 
 func stacked(number int, head, base string) github.PullRequest {
@@ -96,7 +97,7 @@ func TestStackOrder(test *testing.T) {
 		},
 	} {
 		test.Run(testCase.name, func(test *testing.T) {
-			ordered, depths := stackOrder(testCase.pullRequests)
+			ordered, depths := stackOrder(testCase.pullRequests, pullrequestrows.Sort{})
 			gotNumbers := make([]int, len(ordered))
 			for i, pullRequest := range ordered {
 				gotNumbers[i] = pullRequest.Number
@@ -108,5 +109,37 @@ func TestStackOrder(test *testing.T) {
 				test.Errorf("depths mismatch (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestStackParentDoesNotDependOnTheSort(test *testing.T) {
+	// #1 and #2 share the head branch feat; #3 builds on feat. Loaded first,
+	// #2 is its parent, in every sort.
+	loaded := []github.PullRequest{stacked(2, "feat", "release"), stacked(1, "feat", "main"), stacked(3, "child", "feat")}
+	for _, testCase := range []struct {
+		order pullrequestrows.Sort
+		want  []int
+	}{
+		{pullrequestrows.Sort{}, []int{2, 3, 1}},
+		{pullrequestrows.Sort{Key: pullrequestrows.SortNumber}, []int{1, 2, 3}},
+		{pullrequestrows.Sort{Key: pullrequestrows.SortNumber, Descending: true}, []int{2, 3, 1}},
+	} {
+		ordered, depths := stackOrder(loaded, testCase.order)
+		var numbers []int
+		for _, pullRequest := range ordered {
+			numbers = append(numbers, pullRequest.Number)
+		}
+		if diff := cmp.Diff(testCase.want, numbers); diff != "" {
+			test.Errorf("%+v rows (-want +got):\n%s", testCase.order, diff)
+		}
+		child := 0
+		for i, pullRequest := range ordered {
+			if pullRequest.Number == 3 {
+				child = i
+			}
+		}
+		if child == 0 || ordered[child-1].Number != 2 || depths[child] != 1 {
+			test.Errorf("%+v: #3 is not directly under #2: %v, depths %v", testCase.order, numbers, depths)
+		}
 	}
 }

@@ -5,6 +5,7 @@ import (
 
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/userinterface"
+	"github.com/MikePors/strigidae/internal/userinterface/components/pullrequestrows"
 )
 
 // The marks commands act on the pull request under the cursor in the active
@@ -32,10 +33,13 @@ func (view *View) unmark() tea.Cmd {
 }
 
 // CompleteArguments implements userinterface.ArgumentCompleter: `:mark` offers
-// the marks already in use.
+// the marks already in use, `:sort` its keys.
 func (view *View) CompleteArguments(name string) []string {
-	if name != commandMark {
-		return nil
+	switch name {
+	case commandMark:
+		return view.marks.Names()
+	case commandSort:
+		return pullrequestrows.SortCompletions()
 	}
-	return view.marks.Names()
+	return nil
 }

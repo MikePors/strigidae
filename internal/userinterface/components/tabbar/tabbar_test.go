@@ -29,3 +29,28 @@ func TestRender(test *testing.T) {
 		})
 	}
 }
+
+func TestRenderWithNote(test *testing.T) {
+	for _, testCase := range []struct {
+		name  string
+		names []string
+		width int
+		note  string
+		want  string
+	}{
+		{"note at the right end", []string{"All", "Me"}, 24, "↑ created", " All   Me      ↑ created"},
+		{"tabs cut before the note", []string{"Alpha", "Beta"}, 20, "↑ created", " Alpha   B ↑ created"},
+		{"no note", []string{"All"}, 12, "", " All "},
+		{"note dropped when it takes over half", []string{"All"}, 18, "↑ comments", " All "},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			got := ansi.Strip(RenderWithNote(theme.Default(), testCase.names, 0, testCase.width, testCase.note))
+			if got != testCase.want {
+				test.Errorf("got %q, want %q", got, testCase.want)
+			}
+			if testCase.note != "" && ansi.StringWidth(got) > testCase.width {
+				test.Errorf("width %d, want at most %d", ansi.StringWidth(got), testCase.width)
+			}
+		})
+	}
+}

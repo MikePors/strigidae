@@ -16,6 +16,7 @@ import (
 	"github.com/MikePors/strigidae/internal/options"
 	"github.com/MikePors/strigidae/internal/pullrequestmarks"
 	"github.com/MikePors/strigidae/internal/userinterface"
+	"github.com/MikePors/strigidae/internal/userinterface/components/pullrequestrows"
 	"github.com/MikePors/strigidae/internal/userinterface/components/scroll"
 	"github.com/MikePors/strigidae/internal/userinterface/components/search"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
@@ -80,9 +81,9 @@ type tab struct {
 	requested bool   // the rows were asked for at least once
 
 	// loaded holds the rows as the API returned them; pullRequests holds the
-	// same rows in the order drawn (stacks under their parents, see
-	// stackOrder), with the indent depth of each in depths. Everything the
-	// user sees or selects goes through pullRequests.
+	// same rows in the order drawn (sorted by order, then stacks under their
+	// parents, see stackOrder), with the indent depth of each in depths.
+	// Everything the user sees or selects goes through pullRequests.
 	stale        bool
 	loaded       []github.PullRequest
 	pullRequests []github.PullRequest
@@ -96,6 +97,7 @@ type tab struct {
 
 	window scroll.Window // cursor and top row over pullRequests
 	search search.State
+	order  pullrequestrows.Sort // the `:sort` of this tab; zero keeps GitHub's order
 }
 
 // View lists one repository's open pull requests.
@@ -144,6 +146,7 @@ func (listBindings *bindings) actions() []keys.Action {
 		{Name: commandCopyURL, Command: commandCopyURL, Description: "copy the URL of the pull request under the cursor to the clipboard"},
 		{Name: commandMark, Command: commandMark, Arguments: "<text>", Description: "give the pull request under the cursor a private mark: `:mark <text>` replaces any existing mark"},
 		{Name: commandUnmark, Command: commandUnmark, Description: "remove the private mark from the pull request under the cursor"},
+		{Name: commandSort, Command: commandSort, Arguments: pullrequestrows.SortArguments, Description: pullrequestrows.SortDescription},
 	}
 }
 
@@ -404,6 +407,7 @@ func (view *View) loaded(message pullRequestsLoadedMessage) tea.Cmd {
 	current.err = nil
 	current.stale = false
 	current.next = message.page.Next
+	below := current.rowsBelowSelection()
 	if message.more {
 		current.setLoaded(append(current.loaded, message.page.Items...))
 	} else {
@@ -414,7 +418,17 @@ func (view *View) loaded(message pullRequestsLoadedMessage) tea.Cmd {
 	if message.tab != view.active {
 		return nil // paging resumes when it is shown
 	}
+	if message.more && current.rowsBelowSelection() <= below {
+		// A sorted tab can put the whole page above the selection, which stays
+		// near the end; asking again would pull in every page from one key.
+		return nil
+	}
 	return view.maybeLoadMore()
+}
+
+// rowsBelowSelection counts the rows drawn after the selected one.
+func (current *tab) rowsBelowSelection() int {
+	return max(len(current.pullRequests)-1-current.window.Cursor(), 0)
 }
 
 // setLoaded swaps in the loaded rows and arranges them for drawing, keeping
@@ -425,7 +439,7 @@ func (current *tab) setLoaded(items []github.PullRequest) {
 		selected = pullRequest.Number
 	}
 	current.loaded = items
-	current.pullRequests, current.depths = stackOrder(items)
+	current.pullRequests, current.depths = stackOrder(items, current.order)
 	// If the selected PR is gone, stay on the same row (the window clamps it).
 	current.window.SetRows(len(current.pullRequests))
 	for i, pullRequest := range current.pullRequests {

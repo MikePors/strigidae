@@ -34,6 +34,20 @@ func Render(activeTheme theme.Theme, names []string, active, width int) string {
 	return ansi.Truncate(strings.Join(chips[first:], gap), width, "")
 }
 
+// RenderWithNote is Render with a note at the right end of the line, such as
+// the list's sort. The note is drawn only while it takes at most half the
+// width; the tabs get what is left. note must be clean.
+func RenderWithNote(activeTheme theme.Theme, names []string, active, width int, note string) string {
+	noteWidth := ansi.StringWidth(note)
+	if note == "" || 2*(noteWidth+len(gap)) > width {
+		return Render(activeTheme, names, active, width)
+	}
+	tabsWidth := width - noteWidth - len(gap)
+	tabs := Render(activeTheme, names, active, tabsWidth)
+	padding := strings.Repeat(" ", tabsWidth-ansi.StringWidth(tabs)+len(gap))
+	return tabs + padding + activeTheme.Muted.Render(note)
+}
+
 func sum(values []int) int {
 	total := 0
 	for _, value := range values {
