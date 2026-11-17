@@ -19,6 +19,7 @@ import (
 	"github.com/MikePors/strigidae/internal/environment"
 	"github.com/MikePors/strigidae/internal/logging"
 	"github.com/MikePors/strigidae/internal/pullrequestmarks"
+	"github.com/MikePors/strigidae/internal/pullrequestnotes"
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/theme/terminalpalette"
 	"github.com/MikePors/strigidae/internal/userinterface/views/dashboard"
@@ -60,8 +61,9 @@ func (application application) userInterfaceOptions(logger *slog.Logger, notice 
 		logger.Warn("local threads are not kept between runs", "err", err)
 	}
 	marks, marksError := readMarks(stateDirectory)
+	notes, notesError := readNotes(stateDirectory)
 	return userinterface.Options{
-		StateDirectory: stateDirectory, Marks: marks, MarksError: marksError,
+		StateDirectory: stateDirectory, Marks: marks, MarksError: marksError, Notes: notes, NotesError: notesError,
 		Logger: logger, Notice: notice, StartingOptions: application.config.Options,
 		ViewCommands: append(viewCommands(), names...),
 		CommandHelp:  viewCommandHelp(),
@@ -76,6 +78,16 @@ func readMarks(stateDirectory string) (pullrequestmarks.Marks, error) {
 		return pullrequestmarks.Marks{}, nil
 	}
 	return pullrequestmarks.Read(pullrequestmarks.Path(stateDirectory))
+}
+
+// readNotes loads the saved private pull request notes before the program
+// starts. With no state directory there is no file, and the notes live for the
+// session only.
+func readNotes(stateDirectory string) (pullrequestnotes.Notes, error) {
+	if stateDirectory == "" {
+		return pullrequestnotes.Notes{}, nil
+	}
+	return pullrequestnotes.Read(pullrequestnotes.Path(stateDirectory))
 }
 
 // viewCommands collects the command names every view package declares, so the

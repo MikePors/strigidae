@@ -141,7 +141,7 @@ func TestCommandsAreHandledAndOthersAreNot(test *testing.T) {
 	if command, handled := view.Command("frobnicate", ""); handled || command != nil {
 		test.Error("an unknown command was handled")
 	}
-	want := []string{"approve", "checks", "comments", "copy-filename", "copy-url", "delete-comment", "discard-review", "draft", "edit-comment", "edit-pull-request", "merge", "react", "ready", "request-changes", "resolve", "review", "unresolve"}
+	want := []string{"approve", "checks", "comments", "copy-filename", "copy-url", "delete-comment", "discard-review", "draft", "edit-comment", "edit-pull-request", "merge", "note", "note-delete", "react", "ready", "request-changes", "resolve", "review", "unresolve"}
 	if diff := cmp.Diff(want, slices.Sorted(slices.Values(names))); diff != "" {
 		test.Errorf("commands (-want +got):\n%s", diff)
 	}

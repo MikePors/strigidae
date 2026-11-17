@@ -51,6 +51,7 @@ linters:
             - "**/internal/plugins/**"
             - "**/internal/localthreads/**"
             - "**/internal/pullrequestmarks/**"
+            - "**/internal/pullrequestnotes/**"
             - "**/internal/listcache/**"
             - "**/internal/gitrepository/**"
             - "**/internal/logging/**"

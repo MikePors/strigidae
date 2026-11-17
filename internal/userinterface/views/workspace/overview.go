@@ -36,7 +36,7 @@ func (overview *overview) invalidate() { overview.dirty = true }
 
 // ensure sizes the viewport and rebuilds the content when the data, theme or
 // width changed. Markdown rendering is cached by the renderer.
-func (overview *overview) ensure(activeTheme theme.Theme, markdownRenderer *markdown.Renderer, detail *github.PullRequestDetail, threads threadsView, now time.Time, width, height int) {
+func (overview *overview) ensure(activeTheme theme.Theme, markdownRenderer *markdown.Renderer, detail *github.PullRequestDetail, note string, threads threadsView, now time.Time, width, height int) {
 	overview.viewport.SetWidth(width)
 	overview.viewport.SetHeight(height)
 	minute := now.Truncate(time.Minute)
@@ -50,6 +50,13 @@ func (overview *overview) ensure(activeTheme theme.Theme, markdownRenderer *mark
 		builder.WriteString(text)
 		builder.WriteString("\n")
 		line += strings.Count(text, "\n") + 1
+	}
+
+	if note != "" {
+		overview.sections = append(overview.sections, line)
+		add(activeTheme.SectionHeading.Render("Private note (only on this computer)"))
+		add(markdownRenderer.Render(terminaltext.CleanBlock(note), width))
+		add("")
 	}
 
 	overview.sections = append(overview.sections, line)

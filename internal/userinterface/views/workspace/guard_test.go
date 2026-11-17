@@ -19,7 +19,7 @@ var writeKinds = []writeKind{writeComment, writeOverviewComment, writeThread, wr
 
 // pluginKinds are the guard kinds of the plugin commands: they write nothing,
 // so busy states do not block them.
-var pluginKinds = []writeKind{usePluginLines, usePluginPullRequest}
+var pluginKinds = []writeKind{usePluginLines, usePluginPullRequest, useNote}
 
 // busyCase is one busy state: how to start it, what it is called and the
 // notice it gives; saving says whether it counts as a comment write in flight.

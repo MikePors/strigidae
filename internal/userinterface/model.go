@@ -16,6 +16,7 @@ import (
 	"github.com/MikePors/strigidae/internal/localthreads"
 	"github.com/MikePors/strigidae/internal/options"
 	"github.com/MikePors/strigidae/internal/pullrequestmarks"
+	"github.com/MikePors/strigidae/internal/pullrequestnotes"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
@@ -77,6 +78,9 @@ type Options struct {
 	// file is not overwritten. With no StateDirectory marks are not saved.
 	Marks      pullrequestmarks.Marks
 	MarksError error
+	// Notes and NotesError are the same for the private notes on pull requests.
+	Notes      pullrequestnotes.Notes
+	NotesError error
 }
 
 // Internal timer messages. The id/gen fields discard timers that were
@@ -114,6 +118,7 @@ type Model struct {
 	quitting       bool           // quit began and is waiting for plugin runs
 	localThreads   localthreads.Store
 	marks          marksPart
+	notes          notesPart
 	localFiles     localthreads.Files
 	clock          func() time.Time
 
@@ -168,6 +173,10 @@ func New(root View, activeTheme theme.Theme, startup Options) *Model {
 	if !marks.marks.Empty() {
 		root, _ = root.Update(MarksMessage{Marks: marks.marks})
 	}
+	notes := newNotesPart(startup)
+	if !notes.notes.Empty() {
+		root, _ = root.Update(NotesMessage{Notes: notes.notes})
+	}
 	if startup.PluginQuitWait <= 0 {
 		startup.PluginQuitWait = DefaultPluginQuitWait
 	}
@@ -177,6 +186,7 @@ func New(root View, activeTheme theme.Theme, startup Options) *Model {
 	return &Model{
 		clock:           startup.Clock,
 		marks:           marks,
+		notes:           notes,
 		localThreads:    localthreads.Store{Limit: startup.LocalThreadLimit, Bytes: startup.LocalThreadBytes},
 		localFiles:      localthreads.Files{Directory: startup.StateDirectory, Logger: startup.Logger},
 		stack:           []View{root},
@@ -211,6 +221,9 @@ func (model *Model) Init() tea.Cmd {
 		notices = append(notices, Info(model.notice))
 	}
 	if notice := model.marks.startupNotice(); notice != nil {
+		notices = append(notices, notice)
+	}
+	if notice := model.notes.startupNotice(); notice != nil {
 		notices = append(notices, notice)
 	}
 	if len(notices) > 0 {
@@ -279,6 +292,8 @@ func (model *Model) update(message tea.Msg) tea.Cmd {
 		return model.pullRequestOpened(message)
 	case SetMarkMessage, ClearMarkMessage, marksSavedMessage:
 		return model.marks.update(message, model.broadcast)
+	case SetNoteMessage, ClearNoteMessage, notesSavedMessage:
+		return model.notes.update(message, model.broadcast)
 	case localThreadsLoadedMessage:
 		return model.localThreadsLoaded(message)
 	case localThreadsSavedMessage:
@@ -373,6 +388,10 @@ func (model *Model) push(view View) tea.Cmd {
 	}
 	if !model.marks.marks.Empty() {
 		view, _ = view.Update(MarksMessage{Marks: model.marks.marks})
+		model.stack[len(model.stack)-1] = view
+	}
+	if !model.notes.notes.Empty() {
+		view, _ = view.Update(NotesMessage{Notes: model.notes.notes})
 		model.stack[len(model.stack)-1] = view
 	}
 	if threads := model.localThreads.Snapshot(); len(threads) > 0 {

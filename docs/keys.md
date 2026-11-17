@@ -100,6 +100,8 @@ An open pull request: Overview, Files and Comments panes, and the diff.
 | `edit-pull-request` | none | `:edit-pull-request` | edit the title and body in $EDITOR, then confirm with y/N |
 | `ready` | none | `:ready` | mark the pull request ready for review, after a y/N |
 | `draft` | none | `:draft` | convert the pull request back to a draft, after a y/N |
+| `note` | none | `:note` | write a private note on this pull request in $EDITOR; it stays on this computer and is shown on the Overview |
+| `note-delete` | none | `:note-delete` | delete this pull request's private note, after a y/N |
 | `checks` | none | `:checks` | list the head commit's checks, failing first; enter opens the selected check in the browser |
 | `copy-filename` | none | `:copy-filename` | copy the selected file's path to the clipboard |
 | `copy-url` | none | `:copy-url` | copy the pull request's URL to the clipboard |
