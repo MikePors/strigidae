@@ -24,7 +24,7 @@ type overview struct {
 	width    int       // content width the viewport was built for
 	builtAt  time.Time // minute the content was built in; relative times age with it
 	dirty    bool
-	sections []int // first line of the description and of the conversation
+	sections []int // first line of each section: the note when there is one, then the description, checks, conversation and review threads
 }
 
 func newOverview() overview {

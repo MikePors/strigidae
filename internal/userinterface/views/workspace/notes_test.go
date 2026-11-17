@@ -180,3 +180,71 @@ func TestOverviewIgnoresTheNoteOfAnotherPullRequest(test *testing.T) {
 		test.Error("another pull request's note is shown")
 	}
 }
+
+func TestNoteKeepsTextItCouldNotSaveAndOpensOnItNextTime(test *testing.T) {
+	for _, testCase := range []struct {
+		name string
+		body string
+		err  error
+		want string
+	}{
+		{"a character the store refuses", "kept\u200fwords", nil, "note not saved: note contains control or bidirectional characters (your text is kept"},
+		{"an editor error with text", "half written", errors.New("remove temporary file: busy"), "edit note: remove temporary file: busy (your text is kept"},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			composer := noteComposer(test)
+			composer.withNote("the saved note")
+			composer.body, composer.err = testCase.body, testCase.err
+			got := composer.noteResult()
+			if len(got) != 1 {
+				test.Fatalf("results = %v, want one", got)
+			}
+			failure, ok := got[0].(userinterface.ErrorMessage)
+			if !ok || !strings.Contains(failure.Err.Error(), testCase.want) {
+				test.Fatalf("result = %v, want an error containing %q", got[0], testCase.want)
+			}
+
+			// The next :note opens on the kept text, not on the saved note.
+			composer.openedOn = nil
+			composer.body, composer.err = pullrequestnotes.Clean(testCase.body), nil
+			composer.noteResult()
+			if diff := cmp.Diff([]string{pullrequestnotes.Clean(testCase.body)}, composer.openedOn); diff != "" {
+				test.Errorf("the editor opened on (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestNoteSavedTextClearsTheDraft(test *testing.T) {
+	composer := noteComposer(test)
+	composer.body = "bad\u200ftext"
+	composer.noteResult() // refused, kept
+	composer.body = "good text"
+	got := composer.noteResult()
+	if diff := cmp.Diff([]any{userinterface.SetNoteMessage{Key: noteKey, Text: "good text"}}, got); diff != "" {
+		test.Errorf("results (-want +got):\n%s", diff)
+	}
+	composer.openedOn = nil
+	composer.noteResult()
+	if diff := cmp.Diff([]string{""}, composer.openedOn); diff != "" {
+		test.Errorf("the editor opened on (-want +got):\n%s", diff)
+	}
+}
+
+func TestNoteKeepsTextWhenTheHostIsUnknown(test *testing.T) {
+	composer := noteComposer(test)
+	composer.view.detail.URL = ""
+	composer.body = "text with nowhere to go"
+	got := composer.noteResult()
+	if len(got) != 1 {
+		test.Fatalf("results = %v", got)
+	}
+	if failure, ok := got[0].(userinterface.ErrorMessage); !ok || !strings.Contains(failure.Err.Error(), "host of this pull request is unknown (your text is kept") {
+		test.Errorf("result = %v", got[0])
+	}
+	composer.openedOn = nil
+	composer.noteResult()
+	if diff := cmp.Diff([]string{"text with nowhere to go"}, composer.openedOn); diff != "" {
+		test.Errorf("the editor opened on (-want +got):\n%s", diff)
+	}
+}

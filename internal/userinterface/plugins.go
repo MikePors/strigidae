@@ -497,7 +497,8 @@ func (model *Model) Close() {
 	}
 	stopped := model.stopServices()
 	flushed := model.localFiles.Flush(&model.localThreads) // its file work runs in a goroutine, beside the wait for the runs
-	for _, finished := range []<-chan struct{}{flushed, stopped} {
+	notesFlushed := model.notes.flush(model.log)
+	for _, finished := range []<-chan struct{}{flushed, notesFlushed, stopped} {
 		select {
 		case <-finished:
 		case <-timeout:

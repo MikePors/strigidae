@@ -35,28 +35,53 @@ func (view *View) note() string {
 	return text
 }
 
-// editNote opens the editor on the note, empty when there is none.
+// editNote opens the editor on the text of an edit that could not be kept, or
+// else on the note, empty when there is none.
 func (view *View) editNote() tea.Cmd {
 	origin := view.origin()
-	return view.edit(view.note(), func(text string, err error) tea.Msg {
+	initial := view.noteDraft
+	if initial == "" {
+		initial = view.note()
+	}
+	return view.edit(initial, func(text string, err error) tea.Msg {
 		return noteTextMessage{origin: origin, text: text, err: err}
 	})
 }
 
-// noteEdited sends what the editor returned to the root. An empty note is an
-// error and not a deletion, so a failed editor can't lose the note.
+// noteEdited sends what the editor returned to the root, after checking it
+// here, while the text can still be kept: the editor's file is gone by now, so
+// text that can't be saved becomes the draft the next `:note` opens on. An empty
+// note is an error and not a deletion, so a failed editor can't lose the note.
 func (view *View) noteEdited(message noteTextMessage) tea.Cmd {
-	if message.err != nil {
-		return userinterface.Error(terminaltext.SafeError(fmt.Errorf("edit note: %w", message.err)))
-	}
 	text := pullrequestnotes.Clean(message.text)
-	switch {
-	case text == "":
+	if message.err != nil {
+		return view.noteKept(text, terminaltext.SafeError(fmt.Errorf("edit note: %w", message.err)))
+	}
+	if text == "" {
 		return userinterface.Error(errors.New("empty note, nothing saved (:note-delete removes it)"))
-	case text == view.note():
+	}
+	if err := pullrequestnotes.Validate(text); err != nil {
+		return view.noteKept(text, fmt.Errorf("note not saved: %w", err))
+	}
+	key := view.noteKey()
+	if key.Host == "" {
+		return view.noteKept(text, errors.New("note not saved: the host of this pull request is unknown"))
+	}
+	view.noteDraft = ""
+	if text == view.note() {
 		return userinterface.Info(noticeNoChanges)
 	}
-	return userinterface.SetNoteCommand(view.noteKey(), text)
+	return userinterface.SetNoteCommand(key, text)
+}
+
+// noteKept remembers text that could not be saved and shows why. An empty text
+// leaves the draft as it was.
+func (view *View) noteKept(text string, reason error) tea.Cmd {
+	if text == "" {
+		return userinterface.Error(reason)
+	}
+	view.noteDraft = text
+	return userinterface.Error(fmt.Errorf("%w (your text is kept: :note opens on it again)", reason))
 }
 
 // deleteNote asks before removing the note.

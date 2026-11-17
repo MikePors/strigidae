@@ -196,3 +196,44 @@ func TestSetNoteCommandNeedsAHost(test *testing.T) {
 		test.Error("a note with a host was not sent on")
 	}
 }
+
+func TestFlushAtQuitWritesTheLatestNotesOnce(test *testing.T) {
+	directory := test.TempDir()
+	session := newMarksSession(test, Options{StateDirectory: directory})
+	part := &session.model.notes
+	part.saving = true // a save is in flight, so nothing reaches the disk by itself
+
+	session.send(SetNoteMessage{Key: notesKey(12), Text: "written only at quit"})
+	if _, err := os.Stat(pullrequestnotes.Path(directory)); !errors.Is(err, os.ErrNotExist) {
+		test.Fatalf("the file exists before the flush: %v", err)
+	}
+	<-part.flush(session.model.log)
+	if note, _ := savedNotes(test, directory).Note(notesKey(12)); note != "written only at quit" {
+		test.Errorf("saved note = %q", note)
+	}
+
+	// The save that was in flight finishes after the flush with an older copy: it must not win.
+	older, _ := pullrequestnotes.Encode(pullrequestnotes.Notes{})
+	if err := part.saver.Save(part.generation-1, older); err != nil {
+		test.Fatal(err)
+	}
+	if note, _ := savedNotes(test, directory).Note(notesKey(12)); note != "written only at quit" {
+		test.Errorf("an older copy replaced the flushed notes: %q", note)
+	}
+}
+
+func TestFlushAtQuitHasNothingToDoWithoutChangesOrWithAnUnreadableFile(test *testing.T) {
+	directory := test.TempDir()
+	session := newMarksSession(test, Options{StateDirectory: directory})
+	<-session.model.notes.flush(session.model.log)
+	if _, err := os.Stat(pullrequestnotes.Path(directory)); !errors.Is(err, os.ErrNotExist) {
+		test.Errorf("a flush with no changes wrote a file: %v", err)
+	}
+
+	session = newMarksSession(test, Options{StateDirectory: directory, NotesError: errors.New("unreadable")})
+	session.send(SetNoteMessage{Key: notesKey(12), Text: "kept for the session"})
+	<-session.model.notes.flush(session.model.log)
+	if _, err := os.Stat(pullrequestnotes.Path(directory)); !errors.Is(err, os.ErrNotExist) {
+		test.Errorf("a flush overwrote an unreadable file: %v", err)
+	}
+}

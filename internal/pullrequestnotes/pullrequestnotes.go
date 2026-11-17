@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"unicode"
 	"unicode/utf8"
 
@@ -120,12 +121,19 @@ func (notes Notes) Clear(key Key) Notes {
 // Empty reports whether there are no notes.
 func (notes Notes) Empty() bool { return len(notes.notes) == 0 }
 
-// Clean is the text as Set stores it: LF line endings, no surrounding white
-// space. The editor's text is compared with the stored note through it.
+// Clean is the text as Set stores it: LF line endings (a CRLF pair or a lone
+// CR each become one LF), no surrounding white space. The editor's text is
+// compared with the stored note through it.
 func Clean(text string) string {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
+	text = strings.ReplaceAll(text, "\r", "\n")
 	return strings.TrimSpace(text)
 }
+
+// Validate says whether Set would keep the text, so a caller can refuse it
+// while the user still has it. It returns the same errors as Set, except for
+// the key's.
+func Validate(text string) error { return validate(Clean(text)) }
 
 // copy returns notes with its own map, with room for extra more entries.
 func (notes Notes) copy(extra int) Notes {
@@ -192,6 +200,10 @@ func Encode(notes Notes) ([]byte, error) {
 	encoder.SetEscapeHTML(false)
 	if err := encoder.Encode(content); err != nil {
 		return nil, fmt.Errorf("encode pull request notes: %w", err)
+	}
+	// Never write a file that Read would refuse: that would lose every note.
+	if buffer.Len() > MaxFileSize {
+		return nil, fmt.Errorf("encode pull request notes: %w", ErrFileTooLarge)
 	}
 	return buffer.Bytes(), nil
 }
@@ -289,6 +301,35 @@ func Write(path string, data []byte) error {
 		return fmt.Errorf("write pull request notes: %w", err)
 	}
 	syncDirectory(directory)
+	return nil
+}
+
+// Saver writes the notes file for the root and for the commands it starts. It
+// is the one place where saves meet, so it orders them: each save carries the
+// generation of the notes it holds, and one older than a save that has already
+// succeeded is skipped, so an old copy can never land after a newer one, even
+// when a save made at quit overtakes one still running.
+type Saver struct {
+	path    string
+	mutex   sync.Mutex
+	written int // the newest generation written so far
+}
+
+// NewSaver returns a saver for the file at path.
+func NewSaver(path string) *Saver { return &Saver{path: path} }
+
+// Save writes data, which holds the notes of the given generation (a number
+// that grows with every change), unless a newer generation was written already.
+func (saver *Saver) Save(generation int, data []byte) error {
+	saver.mutex.Lock()
+	defer saver.mutex.Unlock()
+	if generation <= saver.written {
+		return nil
+	}
+	if err := Write(saver.path, data); err != nil {
+		return err
+	}
+	saver.written = generation
 	return nil
 }
 

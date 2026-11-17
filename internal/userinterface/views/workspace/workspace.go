@@ -155,6 +155,9 @@ type View struct {
 	// notes are every private note, sent by the root; this pull request's is
 	// drawn at the top of the Overview.
 	notes pullrequestnotes.Notes
+	// noteDraft is the text of the last `:note` that could not be kept; the
+	// next one opens on it, so what the user wrote is not lost.
+	noteDraft string
 	// searchPane is the pane the search being typed belongs to; the prompt's
 	// results go to it.
 	searchPane     pane
