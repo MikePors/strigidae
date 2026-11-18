@@ -3,7 +3,6 @@ package userinterface
 import (
 	"errors"
 	"fmt"
-	"log/slog"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -44,17 +43,12 @@ type notesPart struct {
 	unreadable error
 	saving     bool
 	pending    bool
-	// saver writes the file for the saves and for the flush at quit; it orders
-	// them by generation, which grows with every change.
-	saver      *pullrequestnotes.Saver
-	generation int
 }
 
 func newNotesPart(startup Options) notesPart {
 	part := notesPart{notes: startup.Notes, unreadable: startup.NotesError}
 	if startup.StateDirectory != "" {
 		part.path = pullrequestnotes.Path(startup.StateDirectory)
-		part.saver = pullrequestnotes.NewSaver(part.path)
 	}
 	return part
 }
@@ -95,7 +89,6 @@ func (part *notesPart) set(message SetNoteMessage, broadcast func(tea.Msg) tea.C
 // status bar. The report never holds the note: the root logs every error it
 // shows, and note text never goes in the log.
 func (part *notesPart) changed(done string, broadcast func(tea.Msg) tea.Cmd) tea.Cmd {
-	part.generation++
 	told := broadcast(NotesMessage{Notes: part.notes})
 	switch {
 	case part.path == "":
@@ -118,35 +111,13 @@ func (part *notesPart) save(done string) tea.Cmd {
 		return Error(fmt.Errorf("%s (not kept: %w)", done, err))
 	}
 	part.saving = true
-	saver, generation := part.saver, part.generation
-	return func() tea.Msg { return notesSavedMessage{err: saver.Save(generation, data)} }
+	path := part.path
+	return func() tea.Msg { return notesSavedMessage{err: pullrequestnotes.Write(path, data)} }
 }
 
-// flush writes the latest notes at quit, in a goroutine, and closes the channel
-// it returns when that is done (at once when there is nothing to write). A save
-// still running, or queued behind one, is not waited for: the saver skips the
-// older copy. The error, which never holds a note, goes to the log.
-func (part *notesPart) flush(log *slog.Logger) <-chan struct{} {
-	finished := make(chan struct{})
-	if part.saver == nil || part.unreadable != nil || part.generation == 0 {
-		close(finished)
-		return finished
-	}
-	data, err := pullrequestnotes.Encode(part.notes)
-	if err != nil {
-		log.Warn("notes not saved at quit", "err", err)
-		close(finished)
-		return finished
-	}
-	saver, generation := part.saver, part.generation
-	go func() {
-		defer close(finished)
-		if err := saver.Save(generation, data); err != nil {
-			log.Warn("notes not saved at quit", "err", err)
-		}
-	}()
-	return finished
-}
+// busy reports whether a save is running or queued behind one. Quitting waits
+// while it is true, so the last change reaches the file.
+func (part *notesPart) busy() bool { return part.saving }
 
 // saved ends the save in flight, reports a failure and starts the save that
 // changes made meanwhile asked for.

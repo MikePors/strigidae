@@ -293,7 +293,11 @@ func (model *Model) update(message tea.Msg) tea.Cmd {
 	case SetMarkMessage, ClearMarkMessage, marksSavedMessage:
 		return model.marks.update(message, model.broadcast)
 	case SetNoteMessage, ClearNoteMessage, notesSavedMessage:
-		return model.notes.update(message, model.broadcast)
+		command := model.notes.update(message, model.broadcast)
+		if _, saved := message.(notesSavedMessage); saved && model.quitting && model.quitReady() {
+			return tea.Batch(command, tea.Quit) // the save quitting waited for is done
+		}
+		return command
 	case localThreadsLoadedMessage:
 		return model.localThreadsLoaded(message)
 	case localThreadsSavedMessage:

@@ -21,7 +21,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"sync"
 	"unicode"
 	"unicode/utf8"
 
@@ -301,35 +300,6 @@ func Write(path string, data []byte) error {
 		return fmt.Errorf("write pull request notes: %w", err)
 	}
 	syncDirectory(directory)
-	return nil
-}
-
-// Saver writes the notes file for the root and for the commands it starts. It
-// is the one place where saves meet, so it orders them: each save carries the
-// generation of the notes it holds, and one older than a save that has already
-// succeeded is skipped, so an old copy can never land after a newer one, even
-// when a save made at quit overtakes one still running.
-type Saver struct {
-	path    string
-	mutex   sync.Mutex
-	written int // the newest generation written so far
-}
-
-// NewSaver returns a saver for the file at path.
-func NewSaver(path string) *Saver { return &Saver{path: path} }
-
-// Save writes data, which holds the notes of the given generation (a number
-// that grows with every change), unless a newer generation was written already.
-func (saver *Saver) Save(generation int, data []byte) error {
-	saver.mutex.Lock()
-	defer saver.mutex.Unlock()
-	if generation <= saver.written {
-		return nil
-	}
-	if err := Write(saver.path, data); err != nil {
-		return err
-	}
-	saver.written = generation
 	return nil
 }
 

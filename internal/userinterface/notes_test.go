@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/pullrequestnotes"
 )
@@ -197,43 +199,82 @@ func TestSetNoteCommandNeedsAHost(test *testing.T) {
 	}
 }
 
-func TestFlushAtQuitWritesTheLatestNotesOnce(test *testing.T) {
-	directory := test.TempDir()
-	session := newMarksSession(test, Options{StateDirectory: directory})
-	part := &session.model.notes
-	part.saving = true // a save is in flight, so nothing reaches the disk by itself
-
-	session.send(SetNoteMessage{Key: notesKey(12), Text: "written only at quit"})
-	if _, err := os.Stat(pullrequestnotes.Path(directory)); !errors.Is(err, os.ErrNotExist) {
-		test.Fatalf("the file exists before the flush: %v", err)
+// drain runs a command, feeds what it produces back to the model, and reports
+// whether the program was told to quit.
+func drain(model *Model, command tea.Cmd) bool {
+	if command == nil {
+		return false
 	}
-	<-part.flush(session.model.log)
-	if note, _ := savedNotes(test, directory).Note(notesKey(12)); note != "written only at quit" {
-		test.Errorf("saved note = %q", note)
-	}
-
-	// The save that was in flight finishes after the flush with an older copy: it must not win.
-	older, _ := pullrequestnotes.Encode(pullrequestnotes.Notes{})
-	if err := part.saver.Save(part.generation-1, older); err != nil {
-		test.Fatal(err)
-	}
-	if note, _ := savedNotes(test, directory).Note(notesKey(12)); note != "written only at quit" {
-		test.Errorf("an older copy replaced the flushed notes: %q", note)
+	switch message := command().(type) {
+	case nil:
+		return false
+	case tea.QuitMsg:
+		return true
+	case tea.BatchMsg:
+		quit := false
+		for _, inner := range message {
+			quit = drain(model, inner) || quit
+		}
+		return quit
+	default:
+		return drain(model, model.update(message))
 	}
 }
 
-func TestFlushAtQuitHasNothingToDoWithoutChangesOrWithAnUnreadableFile(test *testing.T) {
+func TestQuitWaitsForTheNotesSaveInFlight(test *testing.T) {
 	directory := test.TempDir()
 	session := newMarksSession(test, Options{StateDirectory: directory})
-	<-session.model.notes.flush(session.model.log)
-	if _, err := os.Stat(pullrequestnotes.Path(directory)); !errors.Is(err, os.ErrNotExist) {
-		test.Errorf("a flush with no changes wrote a file: %v", err)
+	model := session.model
+	model.notes.saving = true // a save is in flight
+
+	if drain(model, model.update(QuitMessage{})) {
+		test.Fatal("quit at once with a notes save in flight")
+	}
+	if !model.quitting {
+		test.Fatal("quit did not begin")
+	}
+	if !drain(model, model.update(notesSavedMessage{})) {
+		test.Error("the end of the save did not quit")
+	}
+}
+
+func TestQuitSavesTheChangeMadeDuringTheLastSave(test *testing.T) {
+	directory := test.TempDir()
+	session := newMarksSession(test, Options{StateDirectory: directory})
+	model := session.model
+	model.notes.saving = true // a save is in flight, and the change below queues behind it
+	drain(model, model.update(SetNoteMessage{Key: notesKey(12), Text: "second"}))
+	if drain(model, model.update(QuitMessage{})) {
+		test.Fatal("quit at once with a notes save in flight")
 	}
 
-	session = newMarksSession(test, Options{StateDirectory: directory, NotesError: errors.New("unreadable")})
-	session.send(SetNoteMessage{Key: notesKey(12), Text: "kept for the session"})
-	<-session.model.notes.flush(session.model.log)
-	if _, err := os.Stat(pullrequestnotes.Path(directory)); !errors.Is(err, os.ErrNotExist) {
-		test.Errorf("a flush overwrote an unreadable file: %v", err)
+	// The save in flight ends; the queued one starts and runs, and only then does strig quit.
+	if !drain(model, model.update(notesSavedMessage{})) {
+		test.Error("did not quit once the queued save was done")
+	}
+	if note, _ := savedNotes(test, directory).Note(notesKey(12)); note != "second" {
+		test.Errorf("saved note = %q, want the change made during the save", note)
+	}
+}
+
+func TestQuitIsImmediateWithNoNotesSaveToWaitFor(test *testing.T) {
+	for _, testCase := range []struct {
+		name    string
+		options Options
+	}{
+		{"after a finished save", Options{StateDirectory: test.TempDir()}},
+		{"session only", Options{}},
+		{"unreadable file", Options{StateDirectory: test.TempDir(), NotesError: errors.New("unreadable")}},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			session := newMarksSession(test, testCase.options)
+			session.send(SetNoteMessage{Key: notesKey(12), Text: "kept for the session"})
+			if session.model.notes.busy() {
+				test.Fatal("the save did not finish")
+			}
+			if !drain(session.model, session.model.update(QuitMessage{})) {
+				test.Error("quit waited with no save in flight")
+			}
+		})
 	}
 }

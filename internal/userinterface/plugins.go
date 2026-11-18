@@ -252,7 +252,7 @@ func (model *Model) pluginResult(message pluginResultMessage) tea.Cmd {
 	if model.quitting {
 		// Nothing arriving after quit began is shown. The last run to end
 		// lets strig go before the wait is over.
-		if len(model.pluginRuns) == 0 {
+		if model.quitReady() {
 			return tea.Quit
 		}
 		return nil
@@ -467,15 +467,24 @@ func splitPluginCommand(line string) (name, arguments string) {
 	return strings.TrimSpace(name), strings.TrimSpace(arguments)
 }
 
-// quit ends the program. With plugin runs under way they are cancelled and
-// strig waits for them, but never longer than the quit wait; with none it
-// quits at once. A second request does not wait again.
+// quitReady reports whether nothing is left that quitting should wait for: no
+// plugin run under way and no save of the notes in flight.
+func (model *Model) quitReady() bool {
+	return len(model.pluginRuns) == 0 && !model.notes.busy()
+}
+
+// quit ends the program. With plugin runs under way they are cancelled, and
+// with a notes save in flight that is let finish; strig waits for them, but
+// never longer than the quit wait. With none it quits at once. A second
+// request does not wait again.
 func (model *Model) quit() tea.Cmd {
-	if model.quitting || len(model.pluginRuns) == 0 {
+	if model.quitting || model.quitReady() {
 		return tea.Quit
 	}
 	model.quitting = true
-	model.pluginCancel()
+	if model.pluginCancel != nil {
+		model.pluginCancel()
+	}
 	return model.tick(model.pluginQuitWait, func(time.Time) tea.Msg { return quitWaitedMessage{} })
 }
 
@@ -497,8 +506,7 @@ func (model *Model) Close() {
 	}
 	stopped := model.stopServices()
 	flushed := model.localFiles.Flush(&model.localThreads) // its file work runs in a goroutine, beside the wait for the runs
-	notesFlushed := model.notes.flush(model.log)
-	for _, finished := range []<-chan struct{}{flushed, notesFlushed, stopped} {
+	for _, finished := range []<-chan struct{}{flushed, stopped} {
 		select {
 		case <-finished:
 		case <-timeout:
