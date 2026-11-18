@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MikePors/strigidae/internal/atomicfile"
 	"github.com/MikePors/strigidae/internal/github"
 )
 
@@ -33,8 +34,7 @@ const (
 	// as unreadable.
 	MaxFileSize = 4 << 20
 
-	directoryMode = 0o700
-	fileMode      = 0o600
+	fileMode = 0o600
 	// UnreadableSuffix is appended to the name of a file that could not be
 	// used, when it is set aside.
 	UnreadableSuffix = ".unreadable"
@@ -183,49 +183,12 @@ func Read(path string) (File, error) {
 	return Decode(data)
 }
 
-// Write replaces the file at path with data: it writes a temporary file in the
-// same directory and renames it over path, so a reader sees the old file or
-// the new one and never half of one.
+// Write atomically replaces the file at path with data.
 func Write(path string, data []byte) error {
-	directory := filepath.Dir(path)
-	if err := os.MkdirAll(directory, directoryMode); err != nil {
-		return fmt.Errorf("create local threads directory: %w", err)
-	}
-	temporary, err := os.CreateTemp(directory, ".write-*")
-	if err != nil {
-		return fmt.Errorf("create temporary file: %w", err)
-	}
-	name := temporary.Name()
-	_, err = temporary.Write(data)
-	if err == nil {
-		err = temporary.Chmod(fileMode)
-	}
-	if err == nil {
-		err = temporary.Sync()
-	}
-	if closeErr := temporary.Close(); err == nil {
-		err = closeErr
-	}
-	if err == nil {
-		err = os.Rename(name, path)
-	}
-	if err != nil {
-		_ = os.Remove(name) // best effort: the write already failed
+	if err := atomicfile.Write(path, data, fileMode); err != nil {
 		return fmt.Errorf("write local threads: %w", err)
 	}
-	syncDirectory(directory)
 	return nil
-}
-
-// syncDirectory makes the rename durable. It is best effort: the new file is
-// already in place, and not every file system can sync a directory.
-func syncDirectory(directory string) {
-	handle, err := os.Open(directory)
-	if err != nil {
-		return
-	}
-	_ = handle.Sync()
-	_ = handle.Close()
 }
 
 // SetAside renames an unusable file to path + UnreadableSuffix so the next
