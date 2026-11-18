@@ -38,6 +38,10 @@ const (
 	writePullRequest
 	// writeDraftState: `:ready`, `:draft`. It needs no diff.
 	writeDraftState
+	// useNote: `:note` and `:note-delete` write nothing to GitHub (the note is
+	// private and kept by strig), so nothing blocks them but a pull request
+	// that has not loaded.
+	useNote
 	// usePluginLines and usePluginPullRequest are not writes: the commands of
 	// plugins (see plugins.go) write nothing to GitHub, so nothing blocks them
 	// but missing data. They share the guard so the "not loaded" notices are
@@ -78,6 +82,7 @@ var guardTable = map[writeKind]guardRule{
 	writePullRequest:      {busy: allBusy},
 	writeDraftState:       {busy: allBusy},
 
+	useNote:              {},
 	usePluginLines:       {needsDiff: true},
 	usePluginPullRequest: {},
 }

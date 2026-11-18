@@ -4,6 +4,12 @@ Checks only the maintainer can do, such as live verification against real GitHub
 
 ## Live checks
 
+- [ ] **Private notes in a real terminal** (`:note`). The tests stub the editor and the file.
+  1. Open a pull request, run `:note`: your `$EDITOR` opens on an empty file. Write two lines of Markdown and quit the editor. The status bar says `Saved the note on #N` and the Overview shows `Private note (only on this computer)` above the Description.
+  2. Quit strig and open the same pull request again: the note is still there. `:note` opens the editor on it; change a word and the Overview updates. Check `~/.local/state/strig/pull-request-notes.json` (or `$XDG_STATE_HOME`) holds it with mode 0600.
+  3. Paste a right-to-left mark (U+200F) into the note and save: an error says your text is kept, and `:note` opens on that text again, not on the saved note. Make the editor fail or empty the file: nothing is lost (an error, the note stays). Write a note and `:qa` at once, then reopen strig: the note is there. `:note-delete` asks `y/N`; `n` keeps it, `y` removes it, and the section disappears.
+  4. Open another pull request: it has no note. Report anything that looks wrong, with a screenshot of the Overview.
+
 - [ ] **A reply to a review thread does not move the new-commits `+`, against real GitHub** (#295). The tests use a recorded fixture, not what GitHub returns for `viewerLatestReview` after your own thread reply or while you have a pending review. strig takes the commit of your latest submitted review, and a thread reply outside a pending review may be recorded as a review of its own.
   1. In a pull request you have reviewed (a submitted review), have the author push a commit (or push one yourself from a second account's branch). Press `R` in the list: the row shows `+` after the decision glyph.
   2. Reply to one of your old review threads in strig (`r`), without submitting a new review, then go back to the list and press `R`. The `+` should stay, because the new head was never reviewed. If it vanishes, or a `+` appears on a pull request you reviewed at its head, GitHub records the reply as a review; report which.

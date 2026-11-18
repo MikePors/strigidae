@@ -42,7 +42,7 @@ func (view *View) layout() {
 	height := max(0, view.panesHeight()-2)
 	view.sizeFilePane(filesWidth, rightWidth, height)
 	if rightWidth > 0 {
-		view.overview.ensure(view.theme, view.markdownRenderer, view.detail, threadsView{view.threads, view.threadLoaded, view.threadPending, view.threadErr}, view.now(), max(1, rightWidth-4), height)
+		view.overview.ensure(view.theme, view.markdownRenderer, view.detail, view.note(), threadsView{view.threads, view.threadLoaded, view.threadPending, view.threadErr}, view.now(), max(1, rightWidth-4), height)
 	}
 	view.window.SetRows(len(view.rows))
 	view.window.SetSize(height)

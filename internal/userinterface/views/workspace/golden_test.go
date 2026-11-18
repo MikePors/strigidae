@@ -10,6 +10,7 @@ import (
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/github/fake"
 	"github.com/MikePors/strigidae/internal/golden"
+	"github.com/MikePors/strigidae/internal/pullrequestnotes"
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
@@ -39,6 +40,15 @@ func TestGolden(test *testing.T) {
 	test.Run("overview", func(test *testing.T) {
 		harness := loaded(test, 100, 40)
 		golden.Assert(test, "overview", harness.render(), false)
+	})
+	test.Run("overview_with_note", func(test *testing.T) {
+		harness := loaded(test, 100, 40)
+		notes, err := pullrequestnotes.Notes{}.Set(noteKey, "Checked the backoff maths: fine.\n\n- ask Bob about the **jitter** bounds\n- re-check `retry.go` once CI is green")
+		if err != nil {
+			test.Fatal(err)
+		}
+		harness.send(userinterface.NotesMessage{Notes: notes})
+		golden.Assert(test, "overview_note", harness.render(), false)
 	})
 	test.Run("overview_scrolled_to_conversation", func(test *testing.T) {
 		harness := loaded(test, 100, 24)

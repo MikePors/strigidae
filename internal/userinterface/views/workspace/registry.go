@@ -253,6 +253,16 @@ func (workspaceBindings *bindings) entries() []actionEntry {
 			run: func(view *View, _ invocation) tea.Cmd { return view.changeDraftState(true) },
 		},
 		{
+			Action: keys.Action{Name: "note", Command: "note", Description: "write a private note on this pull request in $EDITOR; it stays on this computer and is shown on the Overview"},
+			level:  levelPullRequest, guard: useNote,
+			run: func(view *View, _ invocation) tea.Cmd { return view.editNote() },
+		},
+		{
+			Action: keys.Action{Name: "note-delete", Command: "note-delete", Description: "delete this pull request's private note, after a y/N"},
+			level:  levelPullRequest, guard: useNote,
+			run: func(view *View, _ invocation) tea.Cmd { return view.deleteNote() },
+		},
+		{
 			Action:        keys.Action{Name: "checks", Command: "checks", Description: "list the head commit's checks, failing first; enter opens the selected check in the browser"},
 			level:         levelPullRequest,
 			pluginsMayRun: true,

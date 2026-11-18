@@ -14,6 +14,7 @@ import (
 	"github.com/MikePors/strigidae/internal/clipboard"
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/options"
+	"github.com/MikePors/strigidae/internal/pullrequestnotes"
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/components/markdown"
 	"github.com/MikePors/strigidae/internal/userinterface/components/picker"
@@ -151,6 +152,12 @@ type View struct {
 	// localThreads are every local thread of the program, sent by the root;
 	// the ones of this pull request are drawn with the GitHub threads.
 	localThreads []userinterface.LocalThread
+	// notes are every private note, sent by the root; this pull request's is
+	// drawn at the top of the Overview.
+	notes pullrequestnotes.Notes
+	// noteDraft is the text of the last `:note` that could not be kept; the
+	// next one opens on it, so what the user wrote is not lost.
+	noteDraft string
 	// searchPane is the pane the search being typed belongs to; the prompt's
 	// results go to it.
 	searchPane     pane
@@ -320,6 +327,14 @@ func (view *View) update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		view.optionsChanged()
 	case userinterface.PluginsMessage:
 		view.pluginCommands = message.Commands
+	case userinterface.NotesMessage:
+		view.notes = message.Notes
+		view.overview.invalidate()
+	case noteTextMessage:
+		if !view.owns(message.origin) {
+			return view, nil
+		}
+		return view, view.noteEdited(message)
 	case userinterface.LocalThreadsMessage:
 		view.localThreads = message.Threads
 		view.setPaneThreads()
