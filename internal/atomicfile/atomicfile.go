@@ -9,7 +9,8 @@ import (
 )
 
 // Write replaces path with data and the given permissions. New parent
-// directories are private. The temporary file is synced before the rename.
+// directories are private. Readers see the complete old file or its replacement.
+// The temporary file is synced before the rename.
 func Write(path string, data []byte, mode fs.FileMode) error {
 	directory := filepath.Dir(path)
 	if err := os.MkdirAll(directory, 0o700); err != nil {
