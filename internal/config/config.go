@@ -28,6 +28,9 @@ type Config struct {
 	// Timeouts are the GitHub call deadlines the file sets; a zero field
 	// means the file left it out and the user interface's default applies.
 	Timeouts Timeouts
+	// Keys are the key overrides the file sets, in file order; the names and
+	// keys are not checked here (see KeyOverride).
+	Keys []KeyOverride
 	// Plugins are the commands the file defines, in file order.
 	Plugins []Plugin
 }
