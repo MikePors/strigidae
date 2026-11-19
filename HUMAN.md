@@ -4,6 +4,12 @@ Checks only the maintainer can do, such as live verification against real GitHub
 
 ## Live checks
 
+- [ ] **Remapped global keys in a real terminal** (#104). The tests send key messages, not what your terminal sends.
+  1. Add a `keys:` section to your config, for example `down: [w, down]`, `help: f5` and `top: t t` (see `docs/config.md`). Run `strig`: `w` and the arrow move down, `f5` opens help, `t t` jumps to the top, and the old keys (`j`, `?`, `g g`) do nothing.
+  2. Open a pull request, then a file: the remapped keys still work in the workspace, and the help overlay and the status bar hint (`f5 help`) show your keys.
+  3. Try a key your terminal may send differently (`ctrl+h`, `alt+x`, `f1`) and report which work. Then set `keys: {help: g g}`: strig refuses to start with a message naming the config line.
+  4. Report the terminal, the keys that did not arrive, and anything that looks wrong in the help overlay.
+
 - [ ] **Private notes in a real terminal** (`:note`). The tests stub the editor and the file.
   1. Open a pull request, run `:note`: your `$EDITOR` opens on an empty file. Write two lines of Markdown and quit the editor. The status bar says `Saved the note on #N` and the Overview shows `Private note (only on this computer)` above the Description.
   2. Quit strig and open the same pull request again: the note is still there. `:note` opens the editor on it; change a word and the Overview updates. Check `~/.local/state/strig/pull-request-notes.json` (or `$XDG_STATE_HOME`) holds it with mode 0600.
