@@ -67,6 +67,39 @@ Either key may be left out and keeps its default. Values are Go durations
 negative or unparseable values are a config error at startup, and so is an
 empty `timeouts:` (use `{}` or leave the key out). There is no `:set` for these.
 
+### `keys`
+
+Optional. Changes the keys of the shared bindings: movement, paging, search,
+open in browser, refresh, cancel, help and the command line (the "Shared
+defaults" group of [keys.md](keys.md), which lists every action name). Each
+line names an action and gives its new key, or a list of keys.
+
+```yaml
+keys:
+  half-page-down: ctrl+j
+  half-page-up: ctrl+k
+  top: [g g, home]
+  command-line: ';'
+```
+
+- A key is written as in [keys.md](keys.md): `ctrl+d`, `G`, `enter`, `esc`,
+  `pgdown`, `f5`; a shifted character is the character itself (`G`, `}`, never
+  `shift+g`), and `shift+` is written only before a named key (`shift+tab`).
+  `g g` (a space between keys) is a sequence.
+- Terminals send `ctrl+i`, `ctrl+m` and `ctrl+[` as the same byte as `tab`,
+  `enter` and `esc`, so write those names.
+- Put keys that YAML treats specially in quotes: `';'`, `'?'`, `':'`, `'#'`.
+- An override replaces the action's default keys, so `top: home` leaves `g g`
+  unbound. Actions you don't list keep their defaults.
+- `help`, `cancel` and `command-line` take single keys, not sequences.
+- The help overlay (`?` by default) and the status bar hint show the keys in
+  use.
+- A name that is not a shared action, or a key that can't be written this way
+  (`ctrl-d`, `shift+g`, or `1` to `9` first, which begin a count), is an error
+  naming the line. Only the shared bindings can be changed so far, and strig
+  does not yet refuse two actions on one key: the one tested first wins, so
+  keep them apart.
+
 ### `plugins`
 
 Optional. Commands that run a program of your own, each with a `command` name
