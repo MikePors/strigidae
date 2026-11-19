@@ -107,20 +107,17 @@ func DefaultGlobal() Global {
 }
 
 // Bindings returns every global binding as a flat list, for sequence matching.
+// Count and Complete are documentation only (a bare digit is never a binding,
+// and tab is bound only on the command line), so they are left out. Search,
+// NextMatch and PreviousMatch are bindings of every view that searches, but
+// they stay reserved here so the matcher and the reserved-key test always
+// know them.
 func (global Global) Bindings() []key.Binding {
-	// Search, NextMatch and PreviousMatch are bindings of every view that
-	// searches, but they stay reserved here so the matcher and the reserved-key
-	// test always know them.
-	out := []key.Binding{global.Search, global.NextMatch, global.PreviousMatch}
-	for _, bindings := range global.FullHelp() {
-		for _, binding := range bindings {
-			// Count is documentation only; a bare digit is never a binding.
-			if helpKey := binding.Help().Key; helpKey != global.Count.Help().Key && helpKey != global.Complete.Help().Key {
-				out = append(out, binding)
-			}
-		}
+	var bindings []key.Binding
+	for _, action := range global.Actions() {
+		bindings = append(bindings, *action.Binding)
 	}
-	return out
+	return bindings
 }
 
 // FullHelp groups the global bindings for the help overlay. Search, NextMatch
