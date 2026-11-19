@@ -385,8 +385,8 @@ func TestWriteModeAndNoLeftovers(test *testing.T) {
 	if err != nil {
 		test.Fatal(err)
 	}
-	if directoryInfo.Mode().Perm() != directoryMode {
-		test.Errorf("directory mode = %v, want %v", directoryInfo.Mode().Perm(), os.FileMode(directoryMode))
+	if directoryInfo.Mode().Perm() != 0o700 {
+		test.Errorf("directory mode = %v, want %v", directoryInfo.Mode().Perm(), os.FileMode(0o700))
 	}
 	entries, err := os.ReadDir(filepath.Dir(path))
 	if err != nil {

@@ -50,6 +50,7 @@ linters:
             - "**/internal/environment/**"
             - "**/internal/plugins/**"
             - "**/internal/localthreads/**"
+            - "**/internal/atomicfile/**"
             - "**/internal/pullrequestmarks/**"
             - "**/internal/pullrequestnotes/**"
             - "**/internal/listcache/**"
