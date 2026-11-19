@@ -650,3 +650,21 @@ func TestWorkspacesShareWholeFiles(test *testing.T) {
 		test.Error("two workspaces opened from the dashboard do not share its whole-file cache")
 	}
 }
+
+func TestKeysMessageRemapsGlobalKeys(test *testing.T) {
+	view, _ := loadedView(test)
+	global := keys.DefaultGlobal()
+	if err := global.Override("down", []string{"w"}); err != nil {
+		test.Fatal(err)
+	}
+	view.Update(userinterface.KeysMessage{Global: global})
+	first := selectedKey(test, view)
+	press(view, "j")
+	if got := selectedKey(test, view); got != first {
+		test.Errorf("j moved to %s after down was remapped", got)
+	}
+	press(view, "w")
+	if got := selectedKey(test, view); got == first {
+		test.Error("the remapped key did not move the cursor")
+	}
+}

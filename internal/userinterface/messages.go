@@ -4,6 +4,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/MikePors/strigidae/internal/options"
+	"github.com/MikePors/strigidae/internal/userinterface/keys"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 )
 
@@ -26,6 +27,12 @@ type ErrorMessage struct{ Err error }
 // it to the root view when strig starts and to every view it pushes, so a
 // view always knows the current values. Until then a view has the defaults.
 type OptionsMessage struct{ Values options.Values }
+
+// KeysMessage tells views the global bindings the config file changed. The
+// root sends it to the root view when strig starts and to every view it
+// pushes, and only when the file changed some; until then a view has the
+// default bindings.
+type KeysMessage struct{ Global keys.Global }
 
 // ThemeMessage tells views the theme changed (after the terminal background
 // was detected, or `:theme`).

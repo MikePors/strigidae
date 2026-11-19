@@ -108,6 +108,10 @@ func execute(arguments []string, stdout, stderr io.Writer, dependencies dependen
 	if err := checkPluginCommands(configPath, configuration.Plugins); err != nil {
 		return err
 	}
+	keyOverrides, err := globalKeys(configPath, configuration.Keys)
+	if err != nil {
+		return err
+	}
 	chosen, terminalTheme, err := resolveTheme(configuration.Theme, filepath.Dir(configPath), dependencies)
 	if err != nil {
 		return err
@@ -116,6 +120,7 @@ func execute(arguments []string, stdout, stderr io.Writer, dependencies dependen
 	if err != nil {
 		return err
 	}
+	application.globalKeys = keyOverrides
 	application.scheme = chosen
 	application.terminalTheme = terminalTheme
 	return dependencies.start(application, stderr)

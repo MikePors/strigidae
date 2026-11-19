@@ -4,6 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
+	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
 )
 
@@ -175,5 +178,46 @@ func TestCountsInTheOverview(test *testing.T) {
 				test.Errorf("offset %d equals a single step: the count had no effect", got)
 			}
 		})
+	}
+}
+
+func TestKeysMessageRemapsGlobalKeys(test *testing.T) {
+	harness := openClientDiff(test, 100, 24)
+	global := keys.DefaultGlobal()
+	if err := global.Override("down", []string{"w"}); err != nil {
+		test.Fatal(err)
+	}
+	harness.send(userinterface.KeysMessage{Global: global})
+	before := harness.cursorText()
+	harness.press("j")
+	if got := harness.cursorText(); got != before {
+		test.Errorf("j moved the diff cursor to %q after down was remapped", got)
+	}
+	harness.press("w")
+	if got := harness.cursorText(); got == before {
+		test.Error("the remapped key did not move the diff cursor")
+	}
+}
+
+func TestKeysMessageShowsRemappedSearchKeysInHelp(test *testing.T) {
+	harness := openClientDiff(test, 100, 24)
+	global := keys.DefaultGlobal()
+	for name, pressed := range map[string]string{"search": "s", "next-match": "x", "previous-match": "X"} {
+		if err := global.Override(name, []string{pressed}); err != nil {
+			test.Fatal(err)
+		}
+	}
+	harness.send(userinterface.KeysMessage{Global: global})
+	shown := map[string]string{}
+	for _, binding := range harness.view.searchHelp() {
+		shown[binding.Help().Desc] = binding.Help().Key
+	}
+	want := map[string]string{
+		"search the focused pane (Files, Comments or diff)": "s",
+		"next match in the focused pane":                    "x",
+		"previous match in the focused pane":                "X",
+	}
+	if diff := cmp.Diff(want, shown); diff != "" {
+		test.Errorf("search help (-want +got):\n%s", diff)
 	}
 }

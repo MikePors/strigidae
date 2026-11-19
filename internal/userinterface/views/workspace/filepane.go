@@ -65,6 +65,9 @@ type FilePane interface {
 	// SetWrap turns wrapping of long lines on or off (the wrap option). Panes
 	// that never wrap ignore it.
 	SetWrap(wrap bool)
+	// SetGlobalKeys tells the pane the global bindings the config file changed.
+	// Panes that match no global binding ignore it.
+	SetGlobalKeys(global keys.Global)
 	// SetHideResolved leaves resolved review threads out, or shows them again
 	// (the hideresolved option). Panes without threads ignore it.
 	SetHideResolved(hide bool)
