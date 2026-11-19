@@ -86,6 +86,9 @@ func newDiffPane(activeTheme theme.Theme, now func() time.Time, wrap bool) *diff
 // SetWrap turns wrapping of long diff lines on or off.
 func (pane *diffPane) SetWrap(wrap bool) { pane.diffView.SetWrap(wrap) }
 
+// SetGlobalKeys replaces the global bindings the pane matches.
+func (pane *diffPane) SetGlobalKeys(global keys.Global) { pane.globalKeys = global }
+
 // SetHideResolved leaves resolved review threads out of the diff, or shows
 // them again.
 func (pane *diffPane) SetHideResolved(hide bool) { pane.diffView.SetHideResolved(hide) }

@@ -10,6 +10,7 @@ import (
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/gitrepository"
 	"github.com/MikePors/strigidae/internal/listcache"
+	"github.com/MikePors/strigidae/internal/userinterface/keys"
 	"github.com/MikePors/strigidae/internal/userinterface/theme"
 	"github.com/MikePors/strigidae/internal/userinterface/theme/scheme"
 	"github.com/MikePors/strigidae/internal/userinterface/theme/terminalpalette"
@@ -38,6 +39,9 @@ type application struct {
 	// config is the loaded config file: the dashboard's tabs and sections, and
 	// the yes/no options it sets.
 	config config.Config
+	// globalKeys are the global bindings with the config's keys: applied, or
+	// nil when it sets none.
+	globalKeys *keys.Global
 	// currentBranch is the checkout's branch, empty with -R, on a detached
 	// head or outside a checkout.
 	currentBranch string

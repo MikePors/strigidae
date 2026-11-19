@@ -45,6 +45,9 @@ type Options struct {
 	// StartingOptions are the starting values of the `:set` options, normally
 	// from the config file. The zero value is every option at its default.
 	StartingOptions options.Values
+	// GlobalKeys are the global bindings with the config file's overrides
+	// applied; nil keeps the defaults. Views are told through KeysMessage.
+	GlobalKeys *keys.Global
 	// ViewCommands are the names of the commands the views handle through
 	// Commander, collected by cmd/strig from each view package. They let the
 	// shell tell a command the top view lacks ("not available here") from a
@@ -93,9 +96,11 @@ type (
 // Model is the root Bubble Tea model. It owns the view stack, key sequence
 // resolution, the status bar, and the help overlay.
 type Model struct {
-	stack           []View
-	theme           theme.Theme
-	keys            keys.Global
+	stack []View
+	theme theme.Theme
+	keys  keys.Global
+	// customKeys is set when the keys were overridden, so a pushed view is told.
+	customKeys      bool
 	log             *slog.Logger
 	tick            TickFunction
 	sequenceWait    time.Duration
@@ -166,6 +171,11 @@ func New(root View, activeTheme theme.Theme, startup Options) *Model {
 	if startup.StartingOptions != nil {
 		root, _ = root.Update(OptionsMessage{Values: startup.StartingOptions})
 	}
+	globalKeys := keys.DefaultGlobal()
+	if startup.GlobalKeys != nil {
+		globalKeys = *startup.GlobalKeys
+		root, _ = root.Update(KeysMessage{Global: globalKeys})
+	}
 	if len(startup.PluginCommands) > 0 {
 		root, _ = root.Update(PluginsMessage{Commands: startup.PluginCommands})
 	}
@@ -191,7 +201,8 @@ func New(root View, activeTheme theme.Theme, startup Options) *Model {
 		localFiles:      localthreads.Files{Directory: startup.StateDirectory, Logger: startup.Logger},
 		stack:           []View{root},
 		theme:           activeTheme,
-		keys:            keys.DefaultGlobal(),
+		keys:            globalKeys,
+		customKeys:      startup.GlobalKeys != nil,
 		log:             startup.Logger,
 		tick:            startup.Tick,
 		sequenceWait:    startup.SequenceTimeout,
@@ -384,6 +395,10 @@ func (model *Model) push(view View) tea.Cmd {
 	model.log.Debug("push view", "title", view.Title(), "depth", len(model.stack))
 	if model.options != nil {
 		view, _ = view.Update(OptionsMessage{Values: model.options})
+		model.stack[len(model.stack)-1] = view
+	}
+	if model.customKeys {
+		view, _ = view.Update(KeysMessage{Global: model.keys})
 		model.stack[len(model.stack)-1] = view
 	}
 	if len(model.pluginCommands) > 0 {
@@ -694,7 +709,7 @@ func (model *Model) bar() statusBar {
 		pending: model.matcher.Display(),
 	}
 	if currentStatusBar.kind == statusNone {
-		currentStatusBar.text = shortHelp(model.top().ShortHelp())
+		currentStatusBar.text = shortHelp(model.keys.Help, model.top().ShortHelp())
 	}
 	if model.spinning {
 		currentStatusBar.spinner = model.spin.View()
@@ -702,8 +717,8 @@ func (model *Model) bar() statusBar {
 	return currentStatusBar
 }
 
-func shortHelp(bindings []key.Binding) string {
-	parts := []string{"? help"}
+func shortHelp(helpBinding key.Binding, bindings []key.Binding) string {
+	parts := []string{helpBinding.Help().Key + " help"}
 	for _, binding := range bindings {
 		if help := binding.Help(); binding.Enabled() && help.Desc != "" {
 			parts = append(parts, help.Key+" "+help.Desc)

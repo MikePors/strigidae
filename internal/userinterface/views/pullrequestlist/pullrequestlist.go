@@ -340,6 +340,8 @@ func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		view.width, view.height = message.Width, message.Height
 		view.current().window.SetSize(view.listHeight())
 		return view, nil
+	case userinterface.KeysMessage:
+		view.globalKeys = message.Global
 	case userinterface.OptionsMessage:
 		view.options = message.Values
 	case userinterface.MarksMessage:

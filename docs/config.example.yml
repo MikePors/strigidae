@@ -49,6 +49,13 @@ tabs:
         sort: created
         order: desc
 
+# Change the keys of the shared bindings (movement, paging, search, help, ...).
+# An override replaces the action's default keys. Action names: docs/keys.md.
+# keys:
+#   half-page-down: ctrl+j
+#   top: [g g, home]
+#   command-line: ';'          # quote keys YAML treats specially
+
 # Command plugins: each becomes a command that runs your own program. Plugins
 # are read only from this file. See docs/plugins.md.
 # plugins:

@@ -44,6 +44,7 @@ func (pane *stubPane) SetHighlightSearch(bool)                                {}
 func (pane *stubPane) SetWrap(bool)                               {}
 func (pane *stubPane) SetHideResolved(bool)                       {}
 func (pane *stubPane) SetSkipResolved(bool)                       {}
+func (pane *stubPane) SetGlobalKeys(keys.Global)                  {}
 func (pane *stubPane) SetRelativeNumber(bool)                     {}
 func (pane *stubPane) SetHunkReviewed(func(*diff.File, int) bool) {}
 

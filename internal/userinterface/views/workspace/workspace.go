@@ -266,7 +266,7 @@ func (view *View) Resumed() tea.Cmd { return nil }
 func (view *View) ShortHelp() []key.Binding {
 	if view.mode == contentComments {
 		selectKey := view.globalKeys.Select
-		selectKey.SetHelp("enter", "jump to code")
+		selectKey.SetHelp(selectKey.Help().Key, "jump to code")
 		return []key.Binding{view.bind.PaneLeft, selectKey, view.bind.Reply, view.bind.ResolveThread, view.globalKeys.Search}
 	}
 	return []key.Binding{view.bind.PaneLeft, view.bind.PaneRight, view.bind.FilePicker, view.globalKeys.Open}
@@ -325,6 +325,9 @@ func (view *View) update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		view.filePane.SetRelativeNumber(message.Values.RelativeNumber())
 		view.filePane.SetHighlightSearch(message.Values.HighlightSearch())
 		view.optionsChanged()
+	case userinterface.KeysMessage:
+		view.globalKeys = message.Global
+		view.filePane.SetGlobalKeys(message.Global)
 	case userinterface.PluginsMessage:
 		view.pluginCommands = message.Commands
 	case userinterface.NotesMessage:

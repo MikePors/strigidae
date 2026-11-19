@@ -64,7 +64,7 @@ func (application application) userInterfaceOptions(logger *slog.Logger, notice 
 	notes, notesError := readNotes(stateDirectory)
 	return userinterface.Options{
 		StateDirectory: stateDirectory, Marks: marks, MarksError: marksError, Notes: notes, NotesError: notesError,
-		Logger: logger, Notice: notice, StartingOptions: application.config.Options,
+		Logger: logger, Notice: notice, StartingOptions: application.config.Options, GlobalKeys: application.globalKeys,
 		ViewCommands: append(viewCommands(), names...),
 		CommandHelp:  viewCommandHelp(),
 		PluginRunner: runner, PluginCommands: commands,

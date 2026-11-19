@@ -23,9 +23,9 @@ func (view *View) PromptRequest() (prefix string, ok bool) {
 // searchHelp lists the search keys, which act on the focused pane.
 func (view *View) searchHelp() []key.Binding {
 	searchKey, next, previous := view.globalKeys.Search, view.globalKeys.NextMatch, view.globalKeys.PreviousMatch
-	searchKey.SetHelp("/", "search the focused pane (Files, Comments or diff)")
-	next.SetHelp("n", "next match in the focused pane")
-	previous.SetHelp("N", "previous match in the focused pane")
+	searchKey.SetHelp(searchKey.Help().Key, "search the focused pane (Files, Comments or diff)")
+	next.SetHelp(next.Help().Key, "next match in the focused pane")
+	previous.SetHelp(previous.Help().Key, "previous match in the focused pane")
 	return []key.Binding{searchKey, next, previous}
 }
 

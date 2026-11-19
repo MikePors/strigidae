@@ -309,6 +309,8 @@ func (view *View) search(tabIndex, sectionIndex int, target section) tea.Cmd {
 // Update implements userinterface.View.
 func (view *View) Update(message tea.Msg) (userinterface.View, tea.Cmd) {
 	switch message := message.(type) {
+	case userinterface.KeysMessage:
+		view.globalKeys = message.Global
 	case userinterface.OptionsMessage:
 		view.options = message.Values
 	case userinterface.MarksMessage:
