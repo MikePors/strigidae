@@ -109,6 +109,16 @@ func fixturePatches(test *testing.T) []github.FilePatch {
 		if start := strings.Index(sections[i], "@@"); start >= 0 {
 			patch.Patch = strings.TrimSuffix(sections[i][start:], "\n")
 		}
+		for _, hunk := range file.Hunks { // GitHub counts what the file changed
+			for _, line := range hunk.Lines {
+				switch line.Kind {
+				case diff.Add:
+					patch.Additions++
+				case diff.Delete:
+					patch.Deletions++
+				}
+			}
+		}
 		patches = append(patches, patch)
 	}
 	return append(patches, github.FilePatch{Path: "README.md", Change: github.FileModified, Additions: 2, Deletions: 1})
@@ -200,5 +210,18 @@ func TestPerFileDiffObjectIdentifiers(test *testing.T) {
 	want := [][2]string{{"", "aaa"}, {"", "bbb"}, {"", "ccc"}, {"", ""}, {"", ""}}
 	if diff := cmp.Diff(want, got); diff != "" {
 		test.Errorf("identifiers (-want +got):\n%s", diff)
+	}
+}
+
+func TestPatchMissingChangesIsTruncated(test *testing.T) {
+	_, built, err := perFileDiff([]github.FilePatch{
+		{Path: "whole.go", Change: github.FileModified, Additions: 1, Patch: "@@ -1 +1,2 @@\n a\n+b"},
+		{Path: "cut.go", Change: github.FileModified, Additions: 2, Deletions: 1, Patch: "@@ -1 +1,2 @@\n a\n+b"},
+	})
+	if err != nil {
+		test.Fatal(err)
+	}
+	if built.Files[0].Truncated || !built.Files[1].Truncated {
+		test.Errorf("Truncated = %v, %v; want false, true", built.Files[0].Truncated, built.Files[1].Truncated)
 	}
 }

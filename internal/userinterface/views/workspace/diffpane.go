@@ -143,6 +143,7 @@ func (pane *diffPane) SetFileSpans(side github.DiffSide, objectIdentifier string
 }
 
 func (pane *diffPane) SetDiff(diffState DiffState) {
+	pane.expanding = false // a request made for the diff replaced here
 	pane.state = diffState
 	pane.show()
 }

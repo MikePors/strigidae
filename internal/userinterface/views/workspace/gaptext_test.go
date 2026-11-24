@@ -215,7 +215,7 @@ func TestFailedReadShowsOnlySafeText(test *testing.T) {
 	}
 }
 
-func TestTextOpensTheGapThatAskedNotWhereTheCursorWent(test *testing.T) {
+func TestTextForOneGapNeverOpensAnother(test *testing.T) {
 	harness := gapHarness(test, gapHead, 60)
 	_, read := harness.view.Update(wantedText(test, harness)) // enter on the gap above the first hunk
 	harness.press("]", "]", "k")                              // meanwhile: onto the gap between the hunks
@@ -229,5 +229,32 @@ func TestTextOpensTheGapThatAskedNotWhereTheCursorWent(test *testing.T) {
 	}
 	if harness.pane().GapIndex() != 1 {
 		test.Error("the cursor was moved")
+	}
+}
+
+func TestRefreshBeforeTheTextArrivesOpensNothing(test *testing.T) {
+	harness := gapHarness(test, gapHead, 60)
+	_, read := harness.view.Update(wantedText(test, harness))
+	harness.view.filePane.SetDiff(harness.view.diff) // a refresh replaces the diff the request was made for
+	harness.run(read)
+	if !strings.Contains(harness.screen(), "9 hidden lines") {
+		test.Errorf("a request from before the refresh opened a gap:\n%s", harness.screen())
+	}
+}
+
+func TestReadsForTwoFilesDoNotRepeatEachOther(test *testing.T) {
+	harness := gapHarness(test, gapHead, 60)
+	first := wantedText(test, harness)
+	if _, fetch := harness.view.Update(first); len(messages(fetch)) != 1 {
+		test.Fatal("setup: the first request did not start a read")
+	}
+	harness.press("}")
+	second := fileTextWantedMessage{pane: harness.view.filePane, path: harness.view.paneFile.Path}
+	if _, fetch := harness.view.Update(second); len(messages(fetch)) != 1 {
+		test.Fatal("setup: the second file's request did not start a read")
+	}
+	harness.press("{")
+	if _, fetch := harness.view.Update(first); len(messages(fetch)) != 0 {
+		test.Error("asking again for a file already being read started another read")
 	}
 }

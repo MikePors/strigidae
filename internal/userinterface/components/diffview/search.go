@@ -59,14 +59,27 @@ func (model *Model) searchList() search.List {
 // searchItems returns every row as the search sees it.
 func (model *Model) searchItems() []search.Item {
 	items := make([]search.Item, len(model.rows))
+	// Identities must survive a gap opening, which numbers the base rows anew:
+	// a diff line is its hunk and its place among the hunk's lines.
+	hunk, inHunk := -1, 0
 	for i, row := range model.rows {
+		if row.threadRow == nil && !row.message && !row.revealed && row.line == nil {
+			hunk, inHunk = row.hunk, 0
+		}
 		switch {
 		case row.threadRow != nil:
 			thread := model.fileThreads[row.threadRow.threadIndex]
 			text := ansi.Strip(model.blocks[row.threadRow.threadIndex][row.threadRow.rowInBlock])
 			items[i] = search.Item{Text: text, Identity: "thread:" + thread.Identifier + ":" + strconv.Itoa(row.threadRow.rowInBlock)}
+		case row.revealed:
+			items[i] = search.Item{Text: row.text, Identity: "shown:" + strconv.Itoa(row.line.New)}
 		case row.isCode():
-			items[i] = search.Item{Text: row.text, Identity: "line:" + strconv.Itoa(row.baseIndex)}
+			items[i] = search.Item{Text: row.text, Identity: "line:" + strconv.Itoa(hunk) + ":" + strconv.Itoa(inHunk)}
+			inHunk++
+		case row.gap != nil:
+			items[i] = search.Item{Identity: "gap:" + strconv.Itoa(row.gap.index)}
+		case row.line == nil && !row.message:
+			items[i] = search.Item{Identity: "hunk:" + strconv.Itoa(row.hunk)}
 		default:
 			items[i] = search.Item{Identity: "base:" + strconv.Itoa(row.baseIndex)}
 		}

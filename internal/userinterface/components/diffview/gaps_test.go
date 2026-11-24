@@ -487,3 +487,75 @@ func TestGapNextToAHiddenHunkStillShowsItsLines(test *testing.T) {
 		test.Errorf("%d lines shown, want %d", len(shown), 19+gapChunk)
 	}
 }
+
+func TestTruncatedPatchHasNoGaps(test *testing.T) {
+	file := parseFile(test, twoHunks)
+	file.Truncated = true // changes the patch leaves out may lie between its hunks
+	model := New(theme.New(true))
+	model.SetFile(file)
+	model.SetSize(60, 60)
+	if texts := gapTexts(model); len(texts) != 0 {
+		test.Errorf("a truncated patch has gap rows %v", texts)
+	}
+}
+
+func TestShownLinesAreInNoHunk(test *testing.T) {
+	model := gapModel(test, twoHunks)
+	if err := model.SetFileText(numberedText(60)); err != nil {
+		test.Fatal(err)
+	}
+	goToGap(test, model, 0)
+	model.ExpandGap()
+	if context := model.Context(); context.InHunk {
+		test.Errorf("a line the diff leaves out is in hunk %d", context.Hunk)
+	}
+}
+
+func TestRefreshFindsItsGapWhenAHunkComesAbove(test *testing.T) {
+	model := gapModel(test, twoHunks)
+	goToGap(test, model, 1) // the gap above the hunk at line 50
+	const withNewHunk = "@@ -2,3 +2,3 @@\n x\n-y\n+Y\n z\n" + twoHunks
+	model.SetFile(parseFile(test, withNewHunk))
+	gap := model.rows[model.window.Cursor()].gap
+	if gap == nil || gap.index != 2 {
+		test.Errorf("cursor is on %+v, want the gap above the same hunk (gap 2)", model.rows[model.window.Cursor()])
+	}
+}
+
+func TestSearchPlaceSurvivesAGapOpening(test *testing.T) {
+	model := gapModel(test, twoHunks)
+	if err := model.SetFileText(numberedText(60)); err != nil {
+		test.Fatal(err)
+	}
+	identity := func() string {
+		for i, row := range model.rows {
+			if row.isLine() && row.line.Text == "c" {
+				return model.searchItems()[i].Identity
+			}
+		}
+		test.Fatal("no line c")
+		return ""
+	}
+	before := identity()
+	goToGap(test, model, 0)
+	model.ExpandGap()
+	if after := identity(); after != before {
+		test.Errorf("identity of line c changed from %q to %q", before, after)
+	}
+}
+
+func TestSecondTextChangesNothing(test *testing.T) {
+	model := gapModel(test, twoHunks)
+	if err := model.SetFileText(numberedText(60)); err != nil {
+		test.Fatal(err)
+	}
+	goToGap(test, model, 0)
+	model.ExpandGap()
+	cursor := model.window.Cursor()
+	if err := model.SetFileText(numberedText(60)); err != nil {
+		test.Fatal(err)
+	}
+	if model.window.Cursor() != cursor || !model.rows[cursor].revealed {
+		test.Errorf("a repeated text moved the cursor from row %d to %d", cursor, model.window.Cursor())
+	}
+}

@@ -43,10 +43,13 @@ func (view *View) fileTextWanted(message fileTextWantedMessage) tea.Cmd {
 		return userinterface.Info("can't show more lines: the head commit of the diff is not known")
 	}
 	key := fileTextKey{path: message.path, head: view.diffHead}
-	if view.fileTextPending == key {
+	if view.fileTextPending[key] {
 		return nil // already on its way
 	}
-	view.fileTextPending = key
+	if view.fileTextPending == nil {
+		view.fileTextPending = map[fileTextKey]bool{}
+	}
+	view.fileTextPending[key] = true
 	client, repository, timeouts, owner := view.client, view.repository, view.timeouts, view
 	return func() tea.Msg {
 		ctx, cancel := timeouts.LoadContext()
@@ -59,9 +62,7 @@ func (view *View) fileTextWanted(message fileTextWantedMessage) tea.Cmd {
 // fileTextRead gives the pane the text it asked for, if the file and the diff
 // are still the ones it was read for.
 func (view *View) fileTextRead(message fileTextMessage) tea.Cmd {
-	if view.fileTextPending == message.key {
-		view.fileTextPending = fileTextKey{}
-	}
+	delete(view.fileTextPending, message.key)
 	if message.key.path != view.paneFile.Path || message.key.head != view.diffHead {
 		return nil
 	}

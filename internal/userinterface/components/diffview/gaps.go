@@ -70,7 +70,7 @@ func oldEnd(hunk diff.Hunk) int {
 // exists on both sides, so the lines between them are on its new side. An
 // added or deleted file's diff holds the whole file.
 func canExpand(file *diff.File) bool {
-	if file == nil || file.Binary || len(file.Hunks) == 0 {
+	if file == nil || file.Binary || file.Truncated || len(file.Hunks) == 0 {
 		return false
 	}
 	return file.Status == diff.Modified || file.Status == diff.Renamed || file.Status == diff.Copied
@@ -204,6 +204,9 @@ func (model *Model) SetFileText(text string) error {
 	case strings.IndexByte(text, 0) >= 0:
 		return ErrFileBinary
 	}
+	if model.fileLines != nil {
+		return nil // already read: a second answer to a repeated request changes nothing
+	}
 	lines := strings.Split(text, "\n")
 	if lines[len(lines)-1] == "" {
 		lines = lines[:len(lines)-1] // the newline that ends the last line
@@ -212,7 +215,7 @@ func (model *Model) SetFileText(text string) error {
 		lines[i] = strings.TrimSuffix(line, "\r")
 	}
 	model.fileLines = lines
-	model.rebuild()
+	model.rebuild(0)
 	return nil
 }
 
@@ -229,14 +232,24 @@ func (model *Model) ExpandGap() {
 	if model.revealed == nil {
 		model.revealed = map[int]int{}
 	}
-	model.revealed[gap.index] = min(model.revealed[gap.index]+gapChunk, model.gapSpan(gap.index).size())
-	model.rebuild()
+	span := model.gapSpan(gap.index)
+	before := min(model.revealed[gap.index], span.size())
+	after := min(before+gapChunk, span.size())
+	model.revealed[gap.index] = after
+	// The first line this shows: the top gap opens upward from the hunk,
+	// the others downward from the one above.
+	focus := span.first + before
+	if gap.index == 0 {
+		focus = span.last - after + 1
+	}
+	model.rebuild(focus)
 }
 
 // rebuild lays the base rows out again after the gaps changed, keeping the
 // cursor and its place in the view: on the gap row it was on while that
-// remains, else on the diff line or thread it was on.
-func (model *Model) rebuild() {
+// remains, else on the shown line numbered focus (the first one the gap's
+// expansion shows), else on the diff line or thread it was on.
+func (model *Model) rebuild(focus int) {
 	cursor := model.window.Cursor()
 	cursorOffset := cursor - model.window.Top()
 	onGap, saved, savedOK := -1, position{}, false
@@ -267,14 +280,13 @@ func (model *Model) rebuild() {
 	}
 	switch {
 	case onGap >= 0:
-		// While the gap remains the cursor stays on its row. When it goes, the
-		// cursor lands on the first line shown: where its row was, except for
-		// a gap above the first hunk, whose lines come after the hunk's header.
+		// While the gap remains the cursor stays on its row; when it goes,
+		// it lands on the first line shown.
 		target := min(cursor, len(model.rows)-1)
 		if row := model.gapRowIndex(onGap); row >= 0 {
 			target = row
-		} else if onGap == 0 {
-			target = min(model.firstHeaderRow()+1, len(model.rows)-1)
+		} else if row := model.shownRow(focus); row >= 0 {
+			target = row
 		}
 		model.window.Restore(target, target-cursorOffset, model.window.HorizontalOffset())
 	case savedOK:
@@ -282,16 +294,15 @@ func (model *Model) rebuild() {
 	}
 }
 
-// firstHeaderRow is the row of the first hunk's header, or of its placeholder
-// when the hunk is hidden.
-func (model *Model) firstHeaderRow() int {
-	if row := model.placeholderRow(0); row >= 0 {
-		return row
+// shownRow returns the row of the line shown by a gap that has the new-side
+// number, or -1.
+func (model *Model) shownRow(number int) int {
+	for i, row := range model.rows {
+		if row.revealed && row.line.New == number {
+			return i
+		}
 	}
-	if len(model.hunkRow) > 0 {
-		return model.hunkRow[0]
-	}
-	return 0
+	return -1
 }
 
 // skipLeadingGap puts the cursor on the first row that is not a gap, so a file
@@ -304,6 +315,31 @@ func (model *Model) skipLeadingGap() {
 			return
 		}
 	}
+}
+
+// gapAnchor names a gap by the hunk below it, so it can be found again after
+// the diff is re-parsed and hunks come or go above it.
+type gapAnchor struct {
+	last             bool // the gap below the last hunk
+	hunkOld, hunkNew int
+}
+
+func (model *Model) gapAnchorOf(index int) gapAnchor {
+	if index >= len(model.file.Hunks) {
+		return gapAnchor{last: true}
+	}
+	hunk := model.file.Hunks[index]
+	return gapAnchor{hunkOld: hunk.OldStart, hunkNew: hunk.NewStart}
+}
+
+// gapRowAt returns the row of the gap anchored to the same hunk, or -1.
+func (model *Model) gapRowAt(anchor gapAnchor) int {
+	for i, row := range model.rows {
+		if row.gap != nil && model.gapAnchorOf(row.gap.index) == anchor {
+			return i
+		}
+	}
+	return -1
 }
 
 // gapRowIndex returns the row of gap index, or -1 when it has none.

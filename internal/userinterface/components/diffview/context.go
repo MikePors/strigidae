@@ -71,8 +71,8 @@ func (model *Model) cursorHunk() (hunk int, ok bool) {
 		}
 		cursorRow = model.base[cursorRow.baseIndex]
 	}
-	if cursorRow.message {
-		return 0, false
+	if cursorRow.message || cursorRow.revealed {
+		return 0, false // a notice, a gap, or a line the diff leaves out: in no hunk
 	}
 	return cursorRow.hunk, true
 }

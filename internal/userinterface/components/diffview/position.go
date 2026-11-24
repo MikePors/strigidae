@@ -21,7 +21,7 @@ type position struct {
 
 	// onGap is set when the cursor was on the row of gap gap.
 	onGap bool
-	gap   int
+	gap   gapAnchor
 
 	// thread and toff say where in a thread's rows the cursor was, so it can
 	// go back there when the thread is still shown.
@@ -46,7 +46,7 @@ func (model *Model) capture() position {
 		i-- // markers have no numbers; anchor to the line they belong to
 	}
 	if row := model.rows[i]; row.gap != nil {
-		currentPosition.onGap, currentPosition.gap = true, row.gap.index
+		currentPosition.onGap, currentPosition.gap = true, model.gapAnchorOf(row.gap.index)
 		return currentPosition
 	}
 	if row := model.rows[i]; row.threadRow != nil || row.message {
@@ -76,7 +76,7 @@ func (model *Model) restore(position position) {
 		row = model.threadRowFor(position.thread, position.threadOffset)
 	}
 	if row < 0 && position.onGap {
-		row = model.gapRowIndex(position.gap)
+		row = model.gapRowAt(position.gap)
 	}
 	if row < 0 {
 		if !position.ok {

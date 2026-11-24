@@ -48,6 +48,7 @@ func perFileDiff(patches []github.FilePatch) (raw string, built *diff.Diff, err 
 		} else {
 			hunks, parseError := diff.ParseHunks(patch.Patch)
 			file.Hunks = hunks
+			file.Truncated = parseError == nil && changedLines(hunks) != patch.Additions+patch.Deletions
 			if parseError != nil && err == nil {
 				err = fmt.Errorf("patch of %s: %w", patch.Path, parseError)
 			}
@@ -55,4 +56,17 @@ func perFileDiff(patches []github.FilePatch) (raw string, built *diff.Diff, err 
 		built.Files = append(built.Files, file)
 	}
 	return text.String(), built, err
+}
+
+// changedLines counts the added and deleted lines of hunks.
+func changedLines(hunks []diff.Hunk) int {
+	count := 0
+	for _, hunk := range hunks {
+		for _, line := range hunk.Lines {
+			if line.Kind == diff.Add || line.Kind == diff.Delete {
+				count++
+			}
+		}
+	}
+	return count
 }
