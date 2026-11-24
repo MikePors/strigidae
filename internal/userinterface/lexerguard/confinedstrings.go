@@ -10,14 +10,18 @@ import (
 const javaName = "Java"
 
 // textBlockOpener is the root rule of Chroma's Java lexer that starts a text
-// block: """ and a newline. The language allows spaces, tabs and form feeds
-// between them, which this rule does not, so confineJavaStrings widens it.
+// block: """ and a newline. The language allows white space between them,
+// which this rule does not, so confineJavaStrings widens it to spaces and
+// tabs. A form feed, also allowed, never reaches the lexer: the diff shows it
+// as a middle dot.
 const textBlockOpener = `"""\n`
 
 // javaStatePatterns are the patterns of the rules of the Java string states in
 // the Chroma version this was written against. confineJavaStrings rewrites
-// both states, so it refuses to run on any other shape rather than silently
-// drop a change Chroma made to them. An empty pattern is an include.
+// both states, so it refuses to run when their patterns differ rather than
+// silently drop a change Chroma made to them. Only the patterns are compared,
+// not the token types or mutators of the rules. An empty pattern is an
+// include.
 var javaStatePatterns = map[string][]string{
 	"string":           {`[^\\"]+`, `\\\\`, `\\"`, `\\`, `"`},
 	"multiline_string": {`"""`, `"`, ``},
@@ -61,7 +65,7 @@ func confineJavaStrings(registry *chroma.LexerRegistry) chroma.Lexer {
 	if opener < 0 {
 		return nil
 	}
-	confined["root"][opener].Pattern = `"""[ \t\f]*\n`
+	confined["root"][opener].Pattern = `"""[ \t]*\n`
 	confined["string"] = []chroma.Rule{
 		{Pattern: `[^\\"\n]+`, Type: chroma.LiteralString},
 		{Pattern: `\\\\`, Type: chroma.LiteralString},

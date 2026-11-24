@@ -4,6 +4,11 @@ Checks only the maintainer can do, such as live verification against real GitHub
 
 ## Live checks
 
+- [ ] **A stray `"` in a Java diff colours only its own line, in a real terminal** (#328). The tests check token types, not the colours on screen.
+  1. Run `strig -R owner/repo` and open a pull request that changes a Java file inside a Javadoc whose text holds a lone `"` (for example ` * Returns the "name of the user.`), so that the hunk shows that line but not the `/**` that opens the comment (with the opener in the hunk, both this build and `main` colour the line as a comment). The colours from the whole file replace the hunk's within a moment, so a file over 1 MiB is the reliable way to see the hunk's own colours. The lines after the `*/` keep their code colours; only the rest of the comment line is coloured as a string. On `main` they are all one string colour.
+  2. Open a change whose hunk starts in the body of a text block (`"""`): the closing `""";` colours only its own line. Open a complete text block too, including one whose opening `"""` has a trailing space: the whole block is one string colour, as before.
+  3. Report the file, a before/after screenshot (the "before" is a build of `main`), and any line coloured as a string that is not one.
+
 - [ ] **Remapped global keys in a real terminal** (#104). The tests send key messages, not what your terminal sends.
   1. Add a `keys:` section to your config, for example `down: [w, down]`, `help: f5` and `top: t t` (see `docs/config.md`). Run `strig`: `w` and the arrow move down, `f5` opens help, `t t` jumps to the top, and the old keys (`j`, `?`, `g g`) do nothing.
   2. Open a pull request, then a file: the remapped keys still work in the workspace, and the help overlay and the status bar hint (`f5 help`) show your keys.
@@ -141,11 +146,6 @@ Checks only the maintainer can do, such as live verification against real GitHub
   4. Run `:ask` while the sleep is running, then `:q` before it ends, and open the same pull request again from the list: the thread should be there and, once the run ends, answered. Quit strig: the answer is gone on the next start (it is kept in memory only).
   5. Push a new commit to the pull request's branch (or use another pull request head), press `R`: the thread should show `[outdated]`, muted, after the last row of its file. Report whether that reads clearly.
   6. Make the script print an answer with terminal escapes (`\u001b[2J\u001b]0;pwned\u0007x`): the screen must not clear and the terminal title must not change.
-
-- [ ] **A stray `"` in a Java diff colours only its own line, in a real terminal** (#328). The tests check token types, not the colours on screen.
-  1. Run `strig -R owner/repo` and open a pull request that changes Java code a few lines below the start of a Javadoc whose text holds a lone `"` (for example ` * Returns the "name of the user.`). Until the colours from the whole file arrive (for good on a file over 1 MiB), the lines after the `*/` keep their code colours; only the rest of the comment line is coloured as a string.
-  2. Open a change inside a text block (`"""`) so the hunk starts in its body: the closing `""";` colours only its own line. Then open a complete text block, including one whose opening `"""` has a trailing space: the whole block is one string colour.
-  3. Report the file, a before/after screenshot (the "before" is a build of `main`), and any line coloured as a string that is not one.
 
 ## #293 — pull request marks
 

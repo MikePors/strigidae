@@ -10,8 +10,8 @@ import (
 )
 
 // javaTokens lexes text with the registered Java lexer. It fails unless the
-// tokens join back to text: a lexer that drops a character (Chroma drops a
-// newline that no rule matches) shifts every later line.
+// tokens join back to text exactly, since a lexer that drops or adds a
+// character shifts every later line.
 func javaTokens(test *testing.T, text string) []chroma.Token {
 	test.Helper()
 	lexer := lexers.Get("java")
@@ -27,7 +27,7 @@ func javaTokens(test *testing.T, text string) []chroma.Token {
 	for _, token := range tokens {
 		joined.WriteString(token.Value)
 	}
-	if want := strings.TrimSuffix(joined.String(), "\n"); want != strings.TrimSuffix(text, "\n") {
+	if joined.String() != text {
 		test.Fatalf("tokens join to %q, want %q", joined.String(), text)
 	}
 	return tokens
