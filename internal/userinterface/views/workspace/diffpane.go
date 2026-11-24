@@ -77,8 +77,10 @@ type diffPane struct {
 	file    github.ChangedFile
 	hasFile bool
 	// expanding is set when enter on a gap row asked for the file's text, so
-	// the gap opens when it arrives.
-	expanding bool
+	// the gap opens when it arrives; expandingGap is that gap. It opens only
+	// if the cursor is still on it.
+	expanding    bool
+	expandingGap int
 }
 
 var _ FilePane = (*diffPane)(nil)
@@ -248,7 +250,7 @@ func (pane *diffPane) expandGap() tea.Cmd {
 		pane.diffView.ExpandGap()
 		return nil
 	}
-	pane.expanding = true
+	pane.expanding, pane.expandingGap = true, pane.diffView.GapIndex()
 	path := pane.file.Path
 	return func() tea.Msg { return fileTextWantedMessage{pane: pane, path: path} }
 }
@@ -259,7 +261,7 @@ func (pane *diffPane) SetFileText(path, text string) tea.Cmd {
 	if !pane.hasFile || pane.file.Path != path {
 		return nil
 	}
-	expanding := pane.expanding
+	expanding, expandingGap := pane.expanding, pane.expandingGap
 	pane.expanding = false
 	switch err := pane.diffView.SetFileText(text); {
 	case errors.Is(err, diffview.ErrFileBinary):
@@ -268,8 +270,8 @@ func (pane *diffPane) SetFileText(path, text string) tea.Cmd {
 		return userinterface.Info("can't show more lines: the file is too large")
 	case err != nil:
 		return userinterface.Info("can't show more lines of this file")
-	case expanding:
-		pane.diffView.ExpandGap() // nothing happens when the cursor has moved off the gap
+	case expanding && pane.diffView.GapIndex() == expandingGap:
+		pane.diffView.ExpandGap() // not when the cursor has moved to another gap or off them
 	}
 	return nil
 }

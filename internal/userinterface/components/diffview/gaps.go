@@ -165,6 +165,15 @@ func (model *Model) resetRowCaches() {
 	model.maximumWidth, model.numberWidth = 0, 0
 }
 
+// GapIndex returns which gap the cursor is on (the index of the hunk below it,
+// the number of hunks for the one after the last), or -1 when it is on none.
+func (model *Model) GapIndex() int {
+	if gap := model.cursorGap(); gap != nil {
+		return gap.index
+	}
+	return -1
+}
+
 // OnGap reports whether the cursor is on the row of a gap, the row that stands
 // for unchanged lines the diff leaves out.
 func (model *Model) OnGap() bool { return model.cursorGap() != nil }
@@ -238,10 +247,24 @@ func (model *Model) rebuild() {
 			saved, savedOK = model.capture(), true
 		}
 	}
-	model.visual = false // the base rows it points into are about to change
+	// A selection survives, found again by its diff line, unless the cursor
+	// was on a gap, which a selection never rests on.
+	var selected *diff.Line
+	if model.visual && onGap < 0 && model.visualBaseIndex < len(model.base) {
+		selected = model.base[model.visualBaseIndex].line
+	}
+	model.visual = false
 	model.resetRowCaches()
 	model.base = nil
 	model.build(model.file)
+	if selected != nil {
+		for i, row := range model.base {
+			if row.line == selected {
+				model.visual, model.visualBaseIndex = true, i
+				break
+			}
+		}
+	}
 	switch {
 	case onGap >= 0:
 		// While the gap remains the cursor stays on its row. When it goes, the
@@ -250,13 +273,25 @@ func (model *Model) rebuild() {
 		target := min(cursor, len(model.rows)-1)
 		if row := model.gapRowIndex(onGap); row >= 0 {
 			target = row
-		} else if onGap == 0 && len(model.hunkRow) > 0 {
-			target = min(model.hunkRow[0]+1, len(model.rows)-1)
+		} else if onGap == 0 {
+			target = min(model.firstHeaderRow()+1, len(model.rows)-1)
 		}
 		model.window.Restore(target, target-cursorOffset, model.window.HorizontalOffset())
 	case savedOK:
 		model.restore(saved)
 	}
+}
+
+// firstHeaderRow is the row of the first hunk's header, or of its placeholder
+// when the hunk is hidden.
+func (model *Model) firstHeaderRow() int {
+	if row := model.placeholderRow(0); row >= 0 {
+		return row
+	}
+	if len(model.hunkRow) > 0 {
+		return model.hunkRow[0]
+	}
+	return 0
 }
 
 // skipLeadingGap puts the cursor on the first row that is not a gap, so a file

@@ -1,11 +1,13 @@
 package workspace
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/MikePors/strigidae/internal/github/fake"
+	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
 )
 
@@ -92,7 +94,7 @@ func TestTheFileIsReadOnceForAllItsGaps(test *testing.T) {
 	if got := fileTextCalls(harness.client); got != 1 {
 		test.Errorf("FileText called %d times, want 1", got)
 	}
-	if !strings.Contains(harness.screen(), "2 hidden lines") {
+	if !strings.Contains(harness.screen(), "⋯ 2 hidden lines") {
 		test.Errorf("the gap between the hunks did not open by a chunk:\n%s", harness.screen())
 	}
 }
@@ -192,5 +194,40 @@ func TestFileTextForAnotherFileIsDropped(test *testing.T) {
 	harness.press("{") // back: the pane never got the text, so the gap is still closed
 	if harness.view.paneFile.Path != gapPath || !strings.Contains(harness.screen(), "9 hidden lines") {
 		test.Errorf("the late text opened a gap:\n%s", harness.screen())
+	}
+}
+
+func TestFailedReadShowsOnlySafeText(test *testing.T) {
+	harness := gapHarness(test, gapHead, 60)
+	harness.client.SetError(fake.MethodFileText, errors.New("get internal/\x1b]0;owned\x07evil\u009b31m.go"))
+	harness.press("enter")
+	var failure error
+	for _, message := range harness.messages {
+		if shown, ok := message.(userinterface.ErrorMessage); ok {
+			failure = shown.Err
+		}
+	}
+	if failure == nil {
+		test.Fatal("a failed read said nothing")
+	}
+	if text := failure.Error(); strings.ContainsAny(text, "\x1b\x07\u009b") || !strings.Contains(text, "read the file's lines") {
+		test.Errorf("the error carries terminal control text or lost its context: %q", text)
+	}
+}
+
+func TestTextOpensTheGapThatAskedNotWhereTheCursorWent(test *testing.T) {
+	harness := gapHarness(test, gapHead, 60)
+	_, read := harness.view.Update(wantedText(test, harness)) // enter on the gap above the first hunk
+	harness.press("]", "]", "k")                              // meanwhile: onto the gap between the hunks
+	if harness.pane().GapIndex() != 1 {
+		test.Fatalf("setup: the cursor is not on the second gap:\n%s", harness.screen())
+	}
+	harness.run(read)
+	screen := harness.screen()
+	if !strings.Contains(screen, "9 hidden lines") || strings.Contains(screen, "line 23 ") {
+		test.Errorf("the text opened a gap other than the one asked for:\n%s", screen)
+	}
+	if harness.pane().GapIndex() != 1 {
+		test.Error("the cursor was moved")
 	}
 }

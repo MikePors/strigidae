@@ -19,6 +19,10 @@ type position struct {
 	horizontalOffset int
 	ok               bool // false when there was no diff row to anchor to
 
+	// onGap is set when the cursor was on the row of gap gap.
+	onGap bool
+	gap   int
+
 	// thread and toff say where in a thread's rows the cursor was, so it can
 	// go back there when the thread is still shown.
 	thread       string
@@ -40,6 +44,10 @@ func (model *Model) capture() position {
 	}
 	if row := model.rows[i]; row.line != nil && row.line.Kind == diff.NoNewline && i > 0 {
 		i-- // markers have no numbers; anchor to the line they belong to
+	}
+	if row := model.rows[i]; row.gap != nil {
+		currentPosition.onGap, currentPosition.gap = true, row.gap.index
+		return currentPosition
 	}
 	if row := model.rows[i]; row.threadRow != nil || row.message {
 		return currentPosition // no diff row to anchor to
@@ -66,6 +74,9 @@ func (model *Model) restore(position position) {
 	row := -1
 	if position.thread != "" {
 		row = model.threadRowFor(position.thread, position.threadOffset)
+	}
+	if row < 0 && position.onGap {
+		row = model.gapRowIndex(position.gap)
 	}
 	if row < 0 {
 		if !position.ok {

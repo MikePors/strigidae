@@ -2,6 +2,7 @@ package diffview
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -346,5 +347,143 @@ func TestGapRowFillsTheWidthAtEveryWidth(test *testing.T) {
 				test.Errorf("width %d: row %d is %d cells wide", width, i, got)
 			}
 		}
+	}
+}
+
+// goToDiffLine puts the cursor on the row of the diff line with this text.
+func goToDiffLine(test *testing.T, model *Model, text string) {
+	test.Helper()
+	for i, row := range model.rows {
+		if row.isLine() && row.line.Text == text {
+			model.window.GotoRow(i)
+			return
+		}
+	}
+	test.Fatalf("no diff line %q", text)
+}
+
+func TestGapsAreLaidOutRightAroundAnyHunkShape(test *testing.T) {
+	// Each file is 8 lines. The gaps are opened one after the other, so what
+	// is shown is every unchanged line, written old:new.
+	for _, testCase := range []struct {
+		name  string
+		patch string
+		want  []string
+	}{
+		{"pure insertion", "@@ -3,0 +4,2 @@\n+x\n+y\n", []string{"1:1", "2:2", "3:3", "4:6", "5:7", "6:8"}},
+		{"pure deletion", "@@ -3,2 +2,0 @@\n-a\n-b\n", []string{"1:1", "2:2", "5:3", "6:4", "7:5", "8:6", "9:7", "10:8"}},
+		{"insertion at the start of the file", "@@ -0,0 +1,1 @@\n+x\n", []string{"1:2", "2:3", "3:4", "4:5", "5:6", "6:7", "7:8"}},
+		{"change at the start of the file", "@@ -1,2 +1,2 @@\n a\n-b\n+B\n", []string{"3:3", "4:4", "5:5", "6:6", "7:7", "8:8"}},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			model := gapModel(test, testCase.patch)
+			if err := model.SetFileText(numberedText(8)); err != nil {
+				test.Fatal(err)
+			}
+			for index := range len(model.file.Hunks) + 1 {
+				for model.gapRowIndex(index) >= 0 {
+					goToGap(test, model, index)
+					model.ExpandGap()
+				}
+			}
+			var got []string
+			for _, line := range shownLines(model) {
+				if want := "line " + strconv.Itoa(line.New); line.Text != want {
+					test.Errorf("line %d shows %q, want %q", line.New, line.Text, want)
+				}
+				got = append(got, fmt.Sprintf("%d:%d", line.Old, line.New))
+			}
+			if difference := cmp.Diff(testCase.want, got); difference != "" {
+				test.Errorf("lines shown, old:new (-want +got):\n%s", difference)
+			}
+		})
+	}
+}
+
+func TestSelectionSurvivesTheTextArriving(test *testing.T) {
+	model := gapModel(test, twoHunks)
+	goToDiffLine(test, model, "c")
+	if !model.VisualStart() {
+		test.Fatal("setup: no selection")
+	}
+	before, ok := model.selection()
+	if !ok {
+		test.Fatal("setup: no range")
+	}
+	if err := model.SetFileText(numberedText(60)); err != nil {
+		test.Fatal(err)
+	}
+	after, ok := model.selection()
+	if !model.VisualActive() || !ok {
+		test.Fatal("the text arriving ended the selection")
+	}
+	if difference := cmp.Diff(before, after); difference != "" {
+		test.Errorf("the selection moved (-before +after):\n%s", difference)
+	}
+}
+
+func TestExpandingAGapEndsTheSelectionOnIt(test *testing.T) {
+	model := gapModel(test, twoHunks)
+	if err := model.SetFileText(numberedText(60)); err != nil {
+		test.Fatal(err)
+	}
+	goToDiffLine(test, model, "c")
+	model.VisualStart()
+	goToGap(test, model, 1) // the cursor can leave the lines by other keys than the selection's
+	model.ExpandGap()
+	if model.VisualActive() {
+		test.Error("a selection outlived the gap the cursor was on")
+	}
+}
+
+func TestRefreshKeepsTheCursorOnItsGap(test *testing.T) {
+	for _, index := range []int{0, 1, 2} {
+		model := gapModel(test, twoHunks)
+		goToGap(test, model, index)
+		model.SetFile(parseFile(test, twoHunks))
+		if got := model.GapIndex(); got != index {
+			test.Errorf("after a refresh the cursor is on gap %d, want %d (row %d)", got, index, model.window.Cursor())
+		}
+	}
+}
+
+func TestGotoLineReachesShownLines(test *testing.T) {
+	model := gapModel(test, twoHunks)
+	if err := model.SetFileText(numberedText(60)); err != nil {
+		test.Fatal(err)
+	}
+	goToGap(test, model, 0)
+	model.ExpandGap() // lines 1 to 19 are shown
+	model.GotoLine(10)
+	if row := model.rows[model.window.Cursor()]; !row.revealed || row.line.New != 10 {
+		test.Errorf("cursor is on %+v, want shown line 10", row)
+	}
+}
+
+func TestGapNextToAHiddenHunkStillShowsItsLines(test *testing.T) {
+	// The hidden hunk's own lines stay out; the unchanged lines beside it show.
+	model := gapModel(test, twoHunks)
+	model.SetHunkHidden(func(file *diff.File, hunk int) bool { return file == model.file && hunk == 0 })
+	if err := model.SetFileText(numberedText(60)); err != nil {
+		test.Fatal(err)
+	}
+
+	goToGap(test, model, 1)
+	model.ExpandGap() // twenty of the 26 between the hunks
+	if shown := shownLines(model); len(shown) != gapChunk || shown[0].New != 23 {
+		test.Fatalf("%d lines shown from %+v, want %d from line 23", len(shown), shown, gapChunk)
+	}
+	if model.GapIndex() != 1 {
+		test.Errorf("the cursor left the gap that has lines left (row %d)", model.window.Cursor())
+	}
+
+	goToGap(test, model, 0)
+	model.ExpandGap() // the 19 above the hidden hunk, all of them
+	cursor := model.window.Cursor()
+	if row := model.rows[cursor]; !row.revealed || row.line.New != 1 || cursor != model.placeholderRow(0)+1 {
+		test.Errorf("cursor row %d is %+v, want line 1 under the hidden hunk's placeholder", cursor, row)
+	}
+	if shown := shownLines(model); len(shown) != 19+gapChunk {
+		test.Errorf("%d lines shown, want %d", len(shown), 19+gapChunk)
 	}
 }

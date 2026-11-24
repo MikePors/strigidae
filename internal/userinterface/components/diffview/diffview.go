@@ -490,8 +490,8 @@ func (model *Model) relayout(key cursorKey, found bool) {
 			} else {
 				model.hunkRow = append(model.hunkRow, len(model.rows))
 			}
-		case row.line != nil && row.hunk == hiddenHunk:
-			continue // with the threads on it
+		case row.line != nil && row.hunk == hiddenHunk && !row.revealed:
+			continue // with the threads on it; lines shown by a gap are not the hunk's
 		}
 		model.rows = append(model.rows, row)
 		pending = append(pending, model.attach[i]...)
@@ -534,7 +534,8 @@ func (model *Model) CursorRow() int { return model.window.Cursor() }
 // no hunk shows that line it goes to the shown line with the closest number,
 // preferring the later one on a tie. A deleted file has no new side, so its
 // old-side numbers are used. A line of a hidden hunk lands on the hunk's
-// placeholder. Without any numbered line it does nothing.
+// placeholder. Lines shown by expanding a gap count as shown. Without any
+// numbered line it does nothing.
 func (model *Model) GotoLine(line int) {
 	if model.file == nil {
 		return
@@ -542,7 +543,7 @@ func (model *Model) GotoLine(line int) {
 	deleted := model.file.Status == diff.Deleted
 	best, bestNumber := -1, 0
 	for i, row := range model.base {
-		if !row.isLine() {
+		if !row.isLine() && !row.revealed {
 			continue
 		}
 		number := row.line.New

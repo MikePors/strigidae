@@ -8,6 +8,7 @@ import (
 
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/userinterface"
+	"github.com/MikePors/strigidae/internal/userinterface/terminaltext"
 )
 
 // fileTextWantedMessage is how the file pane asks for the text of its file,
@@ -68,7 +69,7 @@ func (view *View) fileTextRead(message fileTextMessage) tea.Cmd {
 	case errors.Is(message.err, github.ErrNotFound), errors.Is(message.err, github.ErrNoFileText):
 		return userinterface.Info("can't show more lines: GitHub has no text for this file")
 	case message.err != nil:
-		return userinterface.Error(fmt.Errorf("read the file's lines: %w", message.err))
+		return userinterface.Error(terminaltext.SafeError(fmt.Errorf("read the file's lines: %w", message.err)))
 	}
 	return view.filePane.SetFileText(message.key.path, message.text)
 }
