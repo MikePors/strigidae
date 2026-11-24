@@ -13,8 +13,8 @@
 #   load: 30s      # diff, pull request details, threads, PR lists
 
 # Optional yes/no options (also `:set` while strig runs). wrapscan and
-# hlsearch default to true, wrap, hideviewed, hidereviewed, autoviewed,
-# hideresolved, skipresolved and relativenumber to false.
+# hlsearch and javatextblocks default to true, wrap, hideviewed, hidereviewed,
+# autoviewed, hideresolved, skipresolved and relativenumber to false.
 # wrapscan: false
 # hlsearch: false
 # wrap: true   # wrap long diff lines onto the next rows instead of cutting them off
@@ -24,6 +24,7 @@
 # hideresolved: true   # resolved comment threads leave the diff pane
 # skipresolved: true   # ) and ( jump over resolved comment threads
 # relativenumber: true   # number diff rows by distance from the cursor, for 5j / 5k
+# javatextblocks: false   # in a Java hunk, read a line of only """ as the start of a text block
 
 tabs:
   # Your own PRs. With no "user" and no "sections" a tab gets the default

@@ -81,7 +81,7 @@ type Option func(*Model)
 // WithHighlighter replaces the default Chroma highlighter (used by tests to
 // count calls or to keep output free of lexer details).
 func WithHighlighter(highlighter Highlighter) Option {
-	return func(model *Model) { model.highlight = highlighter }
+	return func(model *Model) { model.highlight, model.ownHighlighter = highlighter, false }
 }
 
 // WithClock sets the clock used for the relative times in review threads.
@@ -123,7 +123,11 @@ type threadRow struct{ threadIndex, rowInBlock int }
 type Model struct {
 	theme     theme.Theme
 	highlight Highlighter
-	styles    styleSet
+	// ownHighlighter is whether highlight is the default Chroma one, which
+	// SetJavaTextBlocks may replace; one given by WithHighlighter is not.
+	ownHighlighter bool
+	javaTextBlocks bool // see SetJavaTextBlocks
+	styles         styleSet
 
 	file    *diff.File
 	message string // when set, shown instead of the diff
@@ -201,7 +205,7 @@ type Model struct {
 
 // New returns an empty diff pane.
 func New(activeTheme theme.Theme, options ...Option) *Model {
-	model := &Model{theme: activeTheme, highlight: ChromaHighlighter(), cache: map[int][]Span{}, highlighted: map[int]bool{}, now: time.Now, open: map[string]bool{}}
+	model := &Model{theme: activeTheme, highlight: ChromaHighlighter(), ownHighlighter: true, javaTextBlocks: true, cache: map[int][]Span{}, highlighted: map[int]bool{}, now: time.Now, open: map[string]bool{}}
 	for _, option := range options {
 		option(model)
 	}

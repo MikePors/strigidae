@@ -77,6 +77,9 @@ type FilePane interface {
 	// SetRelativeNumber shows or hides row numbers counted from the cursor
 	// (the relativenumber option). Panes without a gutter ignore it.
 	SetRelativeNumber(on bool)
+	// SetJavaTextBlocks chooses how a Java hunk reads a line of only """ (the
+	// javatextblocks option). Panes without syntax colours ignore it.
+	SetJavaTextBlocks(on bool)
 	// SetDiff is called when a diff load starts and when it finishes.
 	SetDiff(diffState DiffState)
 	// SetThreads is called when the pull request's review threads load or

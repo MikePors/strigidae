@@ -107,6 +107,9 @@ func (pane *diffPane) SetSkipResolved(skip bool) {
 // SetRelativeNumber shows or hides the diff's relative-number column.
 func (pane *diffPane) SetRelativeNumber(on bool) { pane.diffView.SetRelativeNumber(on) }
 
+// SetJavaTextBlocks chooses how a Java hunk reads a line of only """.
+func (pane *diffPane) SetJavaTextBlocks(on bool) { pane.diffView.SetJavaTextBlocks(on) }
+
 func (pane *diffPane) SetTheme(activeTheme theme.Theme) { pane.diffView.SetTheme(activeTheme) }
 
 func (pane *diffPane) SetHunkReviewed(reviewed func(file *diff.File, hunk int) bool) {

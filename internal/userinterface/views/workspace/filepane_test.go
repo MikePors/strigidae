@@ -11,6 +11,7 @@ import (
 	"github.com/MikePors/strigidae/internal/diff"
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/github/fake"
+	"github.com/MikePors/strigidae/internal/options"
 	"github.com/MikePors/strigidae/internal/userinterface"
 	"github.com/MikePors/strigidae/internal/userinterface/components/diffview"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
@@ -22,6 +23,8 @@ type stubPane struct {
 	files []string
 	sizes [][2]int
 	keys  []string
+	// javaTextBlocks holds the values SetJavaTextBlocks was called with.
+	javaTextBlocks []bool
 }
 
 func (pane *stubPane) SetTheme(theme.Theme) {}
@@ -41,11 +44,14 @@ func (pane *stubPane) SearchStep(keys.Message, bool, bool) tea.Cmd            { 
 func (pane *stubPane) ClearSearch()                                           {}
 func (pane *stubPane) SetHighlightSearch(bool)                                {}
 
-func (pane *stubPane) SetWrap(bool)                               {}
-func (pane *stubPane) SetHideResolved(bool)                       {}
-func (pane *stubPane) SetSkipResolved(bool)                       {}
-func (pane *stubPane) SetGlobalKeys(keys.Global)                  {}
-func (pane *stubPane) SetRelativeNumber(bool)                     {}
+func (pane *stubPane) SetWrap(bool)              {}
+func (pane *stubPane) SetHideResolved(bool)      {}
+func (pane *stubPane) SetSkipResolved(bool)      {}
+func (pane *stubPane) SetGlobalKeys(keys.Global) {}
+func (pane *stubPane) SetRelativeNumber(bool)    {}
+func (pane *stubPane) SetJavaTextBlocks(on bool) {
+	pane.javaTextBlocks = append(pane.javaTextBlocks, on)
+}
 func (pane *stubPane) SetHunkReviewed(func(*diff.File, int) bool) {}
 
 func (pane *stubPane) SetHunkHiding(func(*diff.File, int) bool, func(*diff.File, int) int) {}
@@ -156,5 +162,26 @@ func TestFilePaneContractThroughRoot(test *testing.T) {
 	}
 	if view.selectedPath() != "internal/sync/client.go" {
 		test.Errorf("selection lost: %q", view.selectedPath())
+	}
+}
+
+// TestJavaTextBlocksOptionReachesThePane: the javatextblocks option, from the
+// config or :set, is passed to the pane with every OptionsMessage.
+func TestJavaTextBlocksOptionReachesThePane(test *testing.T) {
+	pane := &stubPane{}
+	view := New(fake.New(), testRepository, 7, WithTheme(theme.New(true)), WithFilePane(pane))
+	for _, testCase := range []struct {
+		name   string
+		values options.Values
+		want   bool
+	}{
+		{"default", nil, true},
+		{"off", options.Values{}.With(options.JavaTextBlocks, false), false},
+		{"on again", options.Values{}.With(options.JavaTextBlocks, true), true},
+	} {
+		view.Update(userinterface.OptionsMessage{Values: testCase.values})
+		if len(pane.javaTextBlocks) == 0 || pane.javaTextBlocks[len(pane.javaTextBlocks)-1] != testCase.want {
+			test.Errorf("%s: the pane was told %v, want %v last", testCase.name, pane.javaTextBlocks, testCase.want)
+		}
 	}
 }

@@ -325,6 +325,7 @@ func (view *View) update(message tea.Msg) (userinterface.View, tea.Cmd) {
 		view.filePane.SetHideResolved(message.Values.HideResolved())
 		view.filePane.SetSkipResolved(message.Values.SkipResolved())
 		view.filePane.SetRelativeNumber(message.Values.RelativeNumber())
+		view.filePane.SetJavaTextBlocks(message.Values.JavaTextBlocks())
 		view.filePane.SetHighlightSearch(message.Values.HighlightSearch())
 		view.optionsChanged()
 	case userinterface.KeysMessage:
