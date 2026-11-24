@@ -290,20 +290,33 @@ func TooLargeMessage() string {
 	return "This diff is too large to load through the GitHub API.\nOpen the pull request in the browser to view it."
 }
 
+// appendRow adds a row to base, numbering it.
+func (model *Model) appendRow(added row) {
+	added.baseIndex = len(model.base)
+	model.base = append(model.base, added)
+}
+
+// resetRowCaches forgets everything kept by base row index, which a change of
+// the base rows makes wrong.
+func (model *Model) resetRowCaches() {
+	model.cache = map[int][]Span{}
+	model.highlighted = map[int]bool{}
+	model.wholeRows = map[int]wholeRow{}
+	model.wrapStarts = nil
+	model.maximumWidth, model.numberWidth = 0, 0
+}
+
 func (model *Model) reset() {
 	model.revealedThread = ""
 	model.blockCache = nil
 	model.visual = false // base rows are about to change
 	model.base, model.rows, model.hunkRow = nil, nil, nil
 	model.fileThreads, model.attach, model.orphans, model.blocks, model.owners = nil, nil, nil, nil, nil
-	model.cache = map[int][]Span{}
-	model.highlighted = map[int]bool{}
+	model.resetRowCaches()
 	model.oldFirstLine, model.newFirstLine = "", ""
-	model.oldWhole, model.newWhole, model.wholeRows = wholeSide{}, wholeSide{}, map[int]wholeRow{}
+	model.oldWhole, model.newWhole = wholeSide{}, wholeSide{}
 	model.fileLines, model.revealed, model.revealedLines = nil, nil, nil
-	model.wrapStarts = nil
 	model.window.Reset()
-	model.maximumWidth, model.numberWidth = 0, 0
 	model.sync()
 	model.search.Refresh(model.searchList())
 }
