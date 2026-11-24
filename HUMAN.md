@@ -142,6 +142,11 @@ Checks only the maintainer can do, such as live verification against real GitHub
   5. Push a new commit to the pull request's branch (or use another pull request head), press `R`: the thread should show `[outdated]`, muted, after the last row of its file. Report whether that reads clearly.
   6. Make the script print an answer with terminal escapes (`\u001b[2J\u001b]0;pwned\u0007x`): the screen must not clear and the terminal title must not change.
 
+- [ ] **A stray `"` in a Java diff colours only its own line, in a real terminal** (#328). The tests check token types, not the colours on screen.
+  1. Run `strig -R owner/repo` and open a pull request that changes Java code a few lines below the start of a Javadoc whose text holds a lone `"` (for example ` * Returns the "name of the user.`). Until the colours from the whole file arrive (for good on a file over 1 MiB), the lines after the `*/` keep their code colours; only the rest of the comment line is coloured as a string.
+  2. Open a change inside a text block (`"""`) so the hunk starts in its body: the closing `""";` colours only its own line. Then open a complete text block, including one whose opening `"""` has a trailing space: the whole block is one string colour.
+  3. Report the file, a before/after screenshot (the "before" is a build of `main`), and any line coloured as a string that is not one.
+
 ## #293 — pull request marks
 
 - [ ] **Marks survive a restart, in a real terminal** (#293). The tests write to a temporary directory and render to text.

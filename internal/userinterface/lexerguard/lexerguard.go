@@ -1,6 +1,6 @@
 // Package lexerguard replaces the Chroma lexers that hang or panic on some
-// input with plain text, and ends the strings of the Java lexer at the end of
-// their line, once, when the package is initialised.
+// input with plain text, and ends the ordinary strings of the Java lexer at the
+// end of their line, once, when the package is initialised.
 //
 // Every path to a lexer in strig goes through Chroma's one global registry: a
 // file name or shebang in the diff view, the sub-lexer a Markdown or Gemtext
