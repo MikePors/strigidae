@@ -370,3 +370,24 @@ func TestLexBlockShowsAlteredLinesPlain(test *testing.T) {
 		test.Errorf("untouched line = %+v, want it highlighted", result[1])
 	}
 }
+
+// TestJavaHunkStartingInsideAComment: a hunk that begins in the middle of a
+// Javadoc has no comment opening, so its text is lexed as code, and a lone
+// double quote in the prose must not turn the lines below into a string.
+func TestJavaHunkStartingInsideAComment(test *testing.T) {
+	spans := rowSpans(test, hunkFile("Name.java", []codeLine{
+		{diff.Context, `     * Returns the "name of the user.`},
+		{diff.Context, `     */`},
+		{diff.Context, `    public String name() {`},
+		{diff.Add, `        return name;`},
+		{diff.Context, `    }`},
+	}))
+	for index, line := range spans[1:] {
+		if anyIn(line, chroma.LiteralString) {
+			test.Errorf("line %d after the lone quote has a string span: %+v", index+2, line)
+		}
+	}
+	if !anyIn(spans[2], chroma.Keyword) {
+		test.Errorf("the method line has no keyword span: %+v", spans[2])
+	}
+}

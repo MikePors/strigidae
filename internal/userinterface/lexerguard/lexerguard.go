@@ -1,5 +1,6 @@
 // Package lexerguard replaces the Chroma lexers that hang or panic on some
-// input with plain text, once, when the package is initialised.
+// input with plain text, and ends the strings of the Java lexer at the end of
+// their line, once, when the package is initialised.
 //
 // Every path to a lexer in strig goes through Chroma's one global registry: a
 // file name or shebang in the diff view, the sub-lexer a Markdown or Gemtext
@@ -8,7 +9,7 @@
 // of them. A lexer that spins without returning a token cannot be stopped from
 // Go, and a panic on the UI goroutine ends strig.
 //
-// The replacement happens in an init, which must run before any lexer lookup:
+// The changes happen in an init, which must run before any lexer lookup:
 // that is why both diffview and components/markdown import this package.
 // Nothing writes to the registry after startup.
 package lexerguard
@@ -41,8 +42,14 @@ type brokenLexer struct {
 // them: the real ones hang, so lexing is no way to tell them apart.
 var replaced map[string]chroma.Lexer
 
+// confinedJava is the Java lexer init registered with strings that end at the
+// end of their line (see confineJavaStrings), or nil when there was none to
+// replace.
+var confinedJava chroma.Lexer
+
 func init() {
 	replaced = replaceBrokenLexers(lexers.GlobalLexerRegistry)
+	confinedJava = confineJavaStrings(lexers.GlobalLexerRegistry)
 }
 
 // replaceBrokenLexers swaps each listed lexer that registry holds for a plain
