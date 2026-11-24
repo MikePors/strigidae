@@ -126,6 +126,10 @@ type File struct {
 	// PatchMissing is set on a diff built file by file when GitHub gave this
 	// file no patch: it is binary, or too large on its own.
 	PatchMissing bool
+	// Truncated is set on a diff built file by file when the patch holds fewer
+	// changed lines than GitHub counted for the file: the file has changes the
+	// patch leaves out, so the lines between its hunks are not all unchanged.
+	Truncated bool
 }
 
 // Path returns the new path, falling back to the old one (deleted files).

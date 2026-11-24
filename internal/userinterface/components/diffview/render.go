@@ -40,7 +40,7 @@ type variant struct {
 type styleSet struct {
 	variants    [2][numberKinds]variant // [cursor][kind]
 	hunk        [2]lipgloss.Style
-	placeholder [2]lipgloss.Style // a hidden hunk's row
+	placeholder [2]lipgloss.Style // a hidden hunk's row, and a gap's
 }
 
 func newStyleSet(activeTheme theme.Theme) styleSet {
@@ -93,6 +93,9 @@ func (model *Model) renderRow(i int) string {
 	}
 	if row.threadRow != nil {
 		return model.renderThreadRow(i, row)
+	}
+	if row.gap != nil {
+		return model.renderGap(i, row, current)
 	}
 	if row.message {
 		return model.renderNoticeRow(i, row)

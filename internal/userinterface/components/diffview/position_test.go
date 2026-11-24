@@ -59,7 +59,7 @@ func TestReparseKeepsHeaderAndMarkerAnchors(test *testing.T) {
 	model.SetSize(60, 10)
 	model.NextHunk()
 	model.SetFile(parseFile(test, withMarker))
-	if model.window.Cursor() != 5 {
+	if model.window.Cursor() != 6 { // after the first hunk's four rows and the marker, and the gap
 		test.Errorf("header anchor: cursor = %d", model.window.Cursor())
 	}
 	model.GotoTop()

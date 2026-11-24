@@ -34,7 +34,8 @@ type request struct {
 	// words finish the notices: "reply", "resolve it", "react to it". The
 	// focus notice is "focus the diff to " + words; the several-threads one
 	// ends in " to " + words; the lines one is "move onto a diff line to " +
-	// words.
+	// words, led by "this line is not part of the diff; " on a line shown by
+	// expanding a gap.
 	words string
 	// rule narrows a comment-level target to the comments the action may use;
 	// nil allows every comment.
@@ -92,6 +93,9 @@ func (view *View) resolveTarget(request request) (resolvedTarget, tea.Cmd) {
 	switch request.level {
 	case levelLines:
 		if !context.HasLines {
+			if context.OnExpandedLine {
+				return resolvedTarget{}, userinterface.Info("this line is not part of the diff; move onto a diff line to " + request.words)
+			}
 			return resolvedTarget{}, userinterface.Info("move onto a diff line to " + request.words)
 		}
 		return resolvedTarget{lines: context.Lines}, nil

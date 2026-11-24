@@ -99,8 +99,8 @@ func (model *Model) renderPlaceholder(i int, row row, current int) string {
 // has only those. (A placeholder's hunk has stopped fading.)
 func (model *Model) fadeOf(i int) int {
 	row := model.rows[i]
-	if i == model.window.Cursor() || row.message {
-		return 0
+	if i == model.window.Cursor() || row.message || row.revealed {
+		return 0 // lines a gap shows belong to no hunk, so they stay when it hides
 	}
 	fade := 0
 	if row.threadRow != nil {

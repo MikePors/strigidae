@@ -150,7 +150,7 @@ func TestSetFileKeepsPositionAcrossReparse(test *testing.T) {
 	model := New(theme.New(true))
 	model.SetFile(firstDiff.File("server.go"))
 	model.SetSize(60, 6)
-	model.CursorDown(15)
+	model.CursorDown(16)
 	model.ScrollRight(5)
 	cursor, top, horizontalOffset := model.window.Cursor(), model.window.Top(), model.window.HorizontalOffset()
 

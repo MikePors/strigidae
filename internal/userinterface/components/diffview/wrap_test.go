@@ -71,6 +71,7 @@ func TestWrapRendersContinuationRows(test *testing.T) {
 		"       ↪   klmnopqrst",
 		"       ↪   uvwxyz    ",
 		"   2      -gone      ",
+		"           ⋯ more lin",
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		test.Errorf("wrapped screen (-want +got):\n%s", diff)
@@ -252,6 +253,7 @@ func TestWrapNoNewlineMarker(test *testing.T) {
 		"          \\No newline",
 		"       ↪    at end of",
 		"       ↪    file     ",
+		"           ⋯ more lin",
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		test.Errorf("screen (-want +got):\n%s", diff)
@@ -267,7 +269,7 @@ func TestNoWrapAtTheBottomFillsTheView(test *testing.T) {
 		test.Fatalf("setup: top = %d, want 3", model.Top())
 	}
 	model.SetWrap(false)
-	if model.Top() != 0 {
-		test.Errorf("top = %d after nowrap, want 0 (all four rows fit)", model.Top())
+	if model.Top() != 1 { // five rows (a header, two lines, a gap and the long line), four on screen
+		test.Errorf("top = %d after nowrap, want 1 (the last four rows)", model.Top())
 	}
 }

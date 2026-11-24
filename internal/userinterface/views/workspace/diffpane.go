@@ -1,6 +1,7 @@
 package workspace
 
 import (
+	"errors"
 	"time"
 
 	"charm.land/bubbles/v2/key"
@@ -37,7 +38,7 @@ func defaultDiffBindings() diffBindings {
 		PreviousHunk:    bind("[", "[", "previous hunk"),
 		NextThread:      bind(")", ")", "next comment thread"),
 		PreviousThread:  bind("(", "(", "previous comment thread"),
-		ToggleThread:    bind("z a", "za", "toggle comment thread (also enter on a marked line)"),
+		ToggleThread:    bind("z a", "za", "toggle comment thread (also enter on a marked line); enter on a ⋯ row shows more hidden lines"),
 		OpenThread:      bind("z o", "zo", "open comment thread"),
 		CloseThread:     bind("z c", "zc", "close comment thread"),
 		ScrollLeft:      bind("z h", "zh", "scroll left"),
@@ -75,6 +76,11 @@ type diffPane struct {
 	state   DiffState
 	file    github.ChangedFile
 	hasFile bool
+	// expanding is set when enter on a gap row asked for the file's text, so
+	// the gap opens when it arrives; expandingGap is that gap. It opens only
+	// if the cursor is still on it.
+	expanding    bool
+	expandingGap int
 }
 
 var _ FilePane = (*diffPane)(nil)
@@ -140,6 +146,7 @@ func (pane *diffPane) SetFileSpans(side github.DiffSide, objectIdentifier string
 }
 
 func (pane *diffPane) SetDiff(diffState DiffState) {
+	pane.expanding = false // a request made for the diff replaced here
 	pane.state = diffState
 	pane.show()
 }
@@ -149,6 +156,9 @@ func (pane *diffPane) SetFile(file github.ChangedFile) {
 		// Another file, even one that shows only a message: the query
 		// belonged to the last one and must not come back with it.
 		pane.diffView.ClearSearch()
+	}
+	if !pane.hasFile || pane.file.Path != file.Path {
+		pane.expanding = false // the text asked for belongs to the last file
 	}
 	pane.file, pane.hasFile = file, true
 	pane.show()
@@ -216,6 +226,8 @@ func (pane *diffPane) Update(message keys.Message) tea.Cmd {
 		return pane.moveThread(message, true)
 	case key.Matches(message, pane.bind.PreviousThread):
 		return pane.moveThread(message, false)
+	case key.Matches(message, pane.globalKeys.Select) && diffView.OnGap():
+		return pane.expandGap()
 	case key.Matches(message, pane.bind.ToggleThread), key.Matches(message, pane.globalKeys.Select):
 		diffView.ToggleThread()
 	case key.Matches(message, pane.bind.OpenThread):
@@ -230,6 +242,45 @@ func (pane *diffPane) Update(message keys.Message) tea.Cmd {
 		diffView.HalfScrollLeft()
 	case key.Matches(message, pane.bind.HalfScrollRight):
 		diffView.HalfScrollRight()
+	}
+	return nil
+}
+
+// expandGap opens the gap under the cursor, or asks the workspace for the
+// file's text first (see fileTextWantedMessage), which it needs to know the
+// lines.
+func (pane *diffPane) expandGap() tea.Cmd {
+	if pane.diffView.HasFileText() {
+		pane.diffView.ExpandGap()
+		return nil
+	}
+	pane.expanding, pane.expandingGap = true, pane.diffView.GapIndex()
+	path := pane.file.Path
+	return func() tea.Msg { return fileTextWantedMessage{pane: pane, path: path} }
+}
+
+// HasFileText reports whether the pane holds the text of the file at path.
+func (pane *diffPane) HasFileText(path string) bool {
+	return pane.hasFile && pane.file.Path == path && pane.diffView.HasFileText()
+}
+
+// SetFileText gives the pane the text of its file; see FilePane. The gap the
+// cursor is on opens if the text was asked for by enter on it.
+func (pane *diffPane) SetFileText(path, text string) tea.Cmd {
+	if !pane.hasFile || pane.file.Path != path {
+		return nil
+	}
+	expanding, expandingGap := pane.expanding, pane.expandingGap
+	pane.expanding = false
+	switch err := pane.diffView.SetFileText(text); {
+	case errors.Is(err, diffview.ErrFileBinary):
+		return userinterface.Info("can't show more lines: this is a binary file")
+	case errors.Is(err, diffview.ErrFileTooLarge):
+		return userinterface.Info("can't show more lines: the file is too large")
+	case err != nil:
+		return userinterface.Info("can't show more lines of this file")
+	case expanding && pane.diffView.GapIndex() == expandingGap:
+		pane.diffView.ExpandGap() // not when the cursor has moved to another gap or off them
 	}
 	return nil
 }

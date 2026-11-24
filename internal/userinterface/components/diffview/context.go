@@ -26,6 +26,9 @@ type Context struct {
 	// one is in progress, else the cursor line. It is not set when the cursor
 	// is not on a diff line, or when the selection is invalid.
 	Lines Range
+	// OnExpandedLine reports whether the cursor is on a line shown by expanding
+	// a gap: unchanged text outside the diff, which takes no comment.
+	OnExpandedLine bool
 	// Threads are the shown threads the cursor is on: the one whose rows it is
 	// in, or those anchored to the diff line it is on.
 	Threads []github.ReviewThread
@@ -44,6 +47,7 @@ func (model *Model) Context() Context {
 	context := Context{File: model.file}
 	context.Hunk, context.InHunk = model.cursorHunk()
 	context.Lines, context.HasLines = model.anchorRange()
+	context.OnExpandedLine = model.window.Cursor() < len(model.rows) && model.rows[model.window.Cursor()].revealed
 	for _, threadIndex := range model.threadsAtCursor() {
 		context.Threads = append(context.Threads, model.fileThreads[threadIndex])
 	}
@@ -67,8 +71,8 @@ func (model *Model) cursorHunk() (hunk int, ok bool) {
 		}
 		cursorRow = model.base[cursorRow.baseIndex]
 	}
-	if cursorRow.message {
-		return 0, false
+	if cursorRow.message || cursorRow.revealed {
+		return 0, false // a notice, a gap, or a line the diff leaves out: in no hunk
 	}
 	return cursorRow.hunk, true
 }

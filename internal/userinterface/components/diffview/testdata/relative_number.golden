@@ -17,24 +17,26 @@
    12   8      -// Serve starts the HTTP server on the given address a
    13       9  +// Serve starts the HTTP server on the given address a
    14   9  10   func Serve(addr string) error {                       
-   15 @@ -30,8 +31,9 @@ func handler(w http.ResponseWriter, r *http.Re
-   16  30  31       switch r.Method {                                 
-   17  31  32       case "GET":                                       
-   18  32     ●-        fmt.Fprintln(w, "hello")                      
-   19           ▾ dave 1 comment · 2h ago                             
-   20           │ dave · 2h ago  👍 2                                 
-   21           │   Why drop the return?                              
-   22  33      -        return                                        
-   23      33  +        log.Println("GET", r.URL.Path)                
-   24      34  +        fmt.Fprintln(w, "こんにちは, world")          
-   25  34  35       default:                                          
-   26  35  36           http.Error(w, "nope", 405)                    
-   27  36  37       }                                                 
-   28      38  +    // done                                           
-   29  37  39   }                                                     
-   30          \No newline at end of file                             
-   31           ▾ server.go:4 erin 1 comment · 3d ago [outdated]      
-   32           │ erin · 3d ago  👍 2                                 
-   33           │   Old thought.                                      
-   34           ▾ server.go:999 frank 1 comment · 1h ago              
-   35           │ frank · 1h ago  👍 2                                
+   15           ⋯ 20 hidden lines                                     
+   16 @@ -30,8 +31,9 @@ func handler(w http.ResponseWriter, r *http.Re
+   17  30  31       switch r.Method {                                 
+   18  31  32       case "GET":                                       
+   19  32     ●-        fmt.Fprintln(w, "hello")                      
+   20           ▾ dave 1 comment · 2h ago                             
+   21           │ dave · 2h ago  👍 2                                 
+   22           │   Why drop the return?                              
+   23  33      -        return                                        
+   24      33  +        log.Println("GET", r.URL.Path)                
+   25      34  +        fmt.Fprintln(w, "こんにちは, world")          
+   26  34  35       default:                                          
+   27  35  36           http.Error(w, "nope", 405)                    
+   28  36  37       }                                                 
+   29      38  +    // done                                           
+   30  37  39   }                                                     
+   31          \No newline at end of file                             
+   32           ⋯ more lines                                          
+   33           ▾ server.go:4 erin 1 comment · 3d ago [outdated]      
+   34           │ erin · 3d ago  👍 2                                 
+   35           │   Old thought.                                      
+   36           ▾ server.go:999 frank 1 comment · 1h ago              
+   37           │ frank · 1h ago  👍 2                                

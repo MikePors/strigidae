@@ -4,6 +4,12 @@ Checks only the maintainer can do, such as live verification against real GitHub
 
 ## Live checks
 
+- [ ] **Expanding the unchanged lines between hunks, against real GitHub** (`enter` on a `⋯ N hidden lines` row). The tests use the in-memory client, not GitHub's file contents.
+  1. Open a pull request with a modified file that has two hunks far apart, and a first hunk below line 1. The file shows `⋯ N hidden lines` above the first hunk, between the hunks and `⋯ more lines` at the bottom. Put the cursor on one and press `enter`: the lines open after a short wait, 20 at a time (the whole gap when 20 or fewer remain), the cursor stays on the row while lines remain, and the counts are right (compare the line numbers with the file on github.com).
+  2. Press `enter` on the bottom row: it becomes `N hidden lines` or goes if the hunk ends the file. Check the old and new numbers of a shown line against the diff on github.com when lines were added or deleted above it.
+  3. Press `c` and `V` on a shown line: the status bar says the line is not part of the diff. Press `R`: the gaps close again.
+  4. Try a renamed file, a file over 1 MiB and a pull request from a fork. A file GitHub gives no text for says `can't show more lines`, and the gap stays closed. Report which cases worked, how long the wait was, and any wrong count or line, with a screenshot.
+
 - [ ] **A stray `"` in a Java diff colours only its own line, in a real terminal** (#328). The tests check token types, not the colours on screen.
   1. Run `strig -R owner/repo` and open a pull request that changes a Java file inside a Javadoc whose text holds a lone `"` (for example ` * Returns the "name of the user.`), so that the hunk shows that line but not the `/**` that opens the comment (with the opener in the hunk, both this build and `main` colour the line as a comment). The colours from the whole file replace the hunk's within a moment, so a file over 1 MiB is the reliable way to see the hunk's own colours. The lines after the `*/` keep their code colours; only the rest of the comment line is coloured as a string. On `main` they are all one string colour.
   2. Open a change whose hunk starts in the body of a text block (`"""`): the closing `""";` colours only its own line. Open a complete text block too, including one whose opening `"""` has a trailing space: the whole block is one string colour, as before.

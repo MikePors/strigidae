@@ -140,6 +140,8 @@ type View struct {
 	wholeFileRetried map[wholeFileKey]bool // sides read again after running out of time
 	wholeFileFailed  map[wholeFileKey]bool // sides that failed in a way that may pass; not asked again by this view
 
+	fileTextPending map[fileTextKey]bool // the texts being read to open gaps of unchanged lines, one per file; see gaptext.go
+
 	window  scroll.Window  // Files pane: over rows
 	rows    []int          // the entry each Files pane row shows; see hideviewed.go
 	current int            // the entry the right pane shows
@@ -375,6 +377,14 @@ func (view *View) update(message tea.Msg) (userinterface.View, tea.Cmd) {
 	case wholeFileMessage:
 		if message.owner == view {
 			view.wholeFileRead(message)
+		}
+	case fileTextWantedMessage:
+		if message.pane == view.filePane {
+			return view, view.fileTextWanted(message)
+		}
+	case fileTextMessage:
+		if message.owner == view {
+			return view, view.fileTextRead(message)
 		}
 	case viewedMessage:
 		if view.viewedMine(message) {

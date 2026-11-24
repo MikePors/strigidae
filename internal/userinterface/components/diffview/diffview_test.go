@@ -43,12 +43,14 @@ func newModel(test testing.TB, width, height int) *Model {
 	return model
 }
 
-// Rows of server.go: 0 hunk 1 header, 1..11 its lines, 12 hunk 2 header,
-// 13.. its lines. Row 15 is the first deleted line of hunk 2.
+// Rows of server.go: 0 hunk 1 header, 1..11 its lines, 12 the gap between the
+// hunks, 13 hunk 2 header, 14.. its lines, then the gap below the last hunk.
+// Row 16 is the first deleted line of hunk 2.
 const (
-	hunk2Row   = 12
-	deletedRow = 15
-	totalRows  = 25 // hunk 1: header + 11 lines; hunk 2: header + 12 lines (incl. marker)
+	hunk2Row   = 13
+	gapRowTwo  = 12
+	deletedRow = 16
+	totalRows  = 27 // hunk 1: header + 11 lines; a gap; hunk 2: header + 12 lines (incl. marker); a gap
 )
 
 func TestRowLayout(test *testing.T) {
@@ -177,7 +179,11 @@ func TestCursorInfo(test *testing.T) {
 	if !ok || cursorLine.Kind != diff.Delete || cursorLine.Side != github.SideLeft || cursorLine.Old != 32 || cursorLine.New != 0 || cursorLine.Number() != 32 || cursorLine.Hunk != 1 {
 		test.Errorf("delete line: %+v ok=%v", cursorLine, ok)
 	}
-	model.GotoBottom() // the no-newline marker
+	model.GotoBottom() // the gap below the last hunk
+	if _, ok := model.Cursor(); ok {
+		test.Error("gap row should not be commentable")
+	}
+	model.CursorUp(1) // the no-newline marker
 	if _, ok := model.Cursor(); ok {
 		test.Error("marker row should not be commentable")
 	}
@@ -272,9 +278,9 @@ func TestGolden(test *testing.T) {
 		width, height int
 		do            func(model *Model)
 	}{
-		{"normal", "server.go", 80, 25, nil},
-		{"scrolled_right", "server.go", 60, 14, func(model *Model) { model.ScrollRight(48) }},
-		{"cursor_on_deleted", "server.go", 70, 18, func(model *Model) { model.CursorDown(deletedRow) }},
+		{"normal", "server.go", 80, 27, nil},
+		{"scrolled_right", "server.go", 60, 15, func(model *Model) { model.ScrollRight(48) }},
+		{"cursor_on_deleted", "server.go", 70, 19, func(model *Model) { model.CursorDown(deletedRow) }},
 		{"second_hunk", "server.go", 70, 8, func(model *Model) { model.NextHunk(); model.CursorDown(2) }},
 		{"narrow", "server.go", 28, 12, nil},
 		{"narrow_scrolled", "server.go", 28, 12, func(model *Model) { model.ScrollRight(30) }},
@@ -501,7 +507,7 @@ func TestRenderUnknownTokenKeepsRowBackground(test *testing.T) {
 func TestRenderHighlightsMixedHunkOnce(test *testing.T) {
 	long := "x := \"" + strings.Repeat("a", maximumHighlightLength) + "\""
 	mixedHunk := func(large diff.LineKind) *diff.File {
-		hunk := diff.Hunk{OldStart: 1, NewStart: 1}
+		hunk := diff.Hunk{OldStart: 1, OldLines: 66, NewStart: 1, NewLines: 66} // counts as a real hunk has them, so no gap row opens the file
 		for i := range 3 {
 			hunk.Lines = append(hunk.Lines, diff.Line{Kind: diff.Context, Old: i + 1, New: i + 1, Text: fmt.Sprintf("var context%d = %d", i, i)})
 		}

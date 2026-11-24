@@ -116,7 +116,7 @@ Inside the pull request workspace, while the diff has focus. Hunk and thread nav
 | `previous-hunk` | `[` |  | previous hunk |
 | `next-thread` | `)` |  | next comment thread |
 | `previous-thread` | `(` |  | previous comment thread |
-| `toggle-thread` | `z a` |  | toggle comment thread (also enter on a marked line) |
+| `toggle-thread` | `z a` |  | toggle comment thread (also enter on a marked line); enter on a ⋯ row shows more hidden lines |
 | `open-thread` | `z o` |  | open comment thread |
 | `close-thread` | `z c` |  | close comment thread |
 | `scroll-left` | `z h` |  | scroll left |

@@ -312,12 +312,12 @@ func TestOutdatedThreadIsMuted(test *testing.T) {
 }
 
 func TestGoldenThreads(test *testing.T) {
-	model := threadModel(test, 70, 40)
+	model := threadModel(test, 70, 42)
 	golden.Assert(test, "threads", screen(model), false)
 	model.goToRow(test, `"log"`)
 	model.ToggleThread()
 	golden.Assert(test, "threads_collapsed", screen(model), false)
-	narrowModel := threadModel(test, 40, 24)
+	narrowModel := threadModel(test, 40, 26)
 	golden.Assert(test, "threads_narrow", screen(narrowModel), false)
 }
 

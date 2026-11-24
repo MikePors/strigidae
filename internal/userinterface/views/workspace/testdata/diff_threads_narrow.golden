@@ -1,6 +1,7 @@
 open #7 Add retry policy to sync client
 alice · changes requested · main ← feat/retry · [enhancemen…
 ╭─ internal/sync/client.go ────────────────────────────────╮
+│           ⋯ 9 hidden lines                               │
 │>@@ -10,8 +10,10 @@ import (                              │
 │  10  10       "context"                                  │
 │  11  11       "time"                                     │
@@ -20,5 +21,4 @@ alice · changes requested · main ← feat/retry · [enhancemen…
 │      16  +        return c.sync(ctx)                     │
 │      17  +    })                                         │
 │  16  18   }                                              │
-│  17  19                                                  │
 ╰──────────────────────────────────────────────────────────╯
