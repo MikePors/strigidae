@@ -70,19 +70,30 @@ const tokensPerClockRead = 16
 // shebang is looked up once. Both depend only on their key, so nothing it
 // remembers can go stale when a file is replaced. A file whose name picks no
 // lexer is coloured from the shebang in firstLine, and is plain without one.
-func ChromaHighlighter() Highlighter {
+func ChromaHighlighter() Highlighter { return chromaHighlighter(true) }
+
+// chromaHighlighter is ChromaHighlighter with the choice of whether a Java
+// block is lexed as a hunk, which can begin inside a text block (javaTextBlocks,
+// see lexerguard.JavaFragment), or as the registered Java lexer reads it.
+func chromaHighlighter(javaTextBlocks bool) Highlighter {
 	lexerFor := map[string]chroma.Lexer{}
 	lexerForFirstLine := map[string]chroma.Lexer{}
 	return func(path, firstLine string, lines []string) [][]Span {
 		lexer, seen := lexerFor[path]
 		if !seen {
 			lexer = lexerForPath(path)
+			if javaTextBlocks {
+				lexer = forHunk(lexer)
+			}
 			lexerFor[strings.Clone(path)] = lexer
 		}
 		if lexer == nil && strings.HasPrefix(firstLine, "#!") {
 			lexer, seen = lexerForFirstLine[firstLine]
 			if !seen {
 				lexer = languageFromShebang(firstLine)
+				if javaTextBlocks {
+					lexer = forHunk(lexer)
+				}
 				// The line is a slice of the whole diff text; a copy keeps
 				// the key from holding that text alive.
 				lexerForFirstLine[strings.Clone(firstLine)] = lexer
@@ -112,6 +123,20 @@ func lexerForPath(path string) chroma.Lexer {
 		return lexer
 	}
 	return nil
+}
+
+// forHunk returns the lexer to use for the text of a hunk when lexer is the
+// one the file name picked: for Java, the one that reads a """ alone on its
+// line as the end of a text block (the hunk may begin inside one); any other
+// lexer is returned as it is.
+func forHunk(lexer chroma.Lexer) chroma.Lexer {
+	if lexer == nil || lexer.Config().Name != "Java" {
+		return lexer
+	}
+	if fragment := lexerguard.JavaFragment(); fragment != nil {
+		return fragment
+	}
+	return lexer
 }
 
 // broken reports whether lexer is one known to hang or panic on some input
@@ -276,4 +301,24 @@ func standard(tokenType chroma.TokenType) chroma.TokenType {
 		}
 	}
 	return chroma.Text
+}
+
+// SetJavaTextBlocks chooses how the hunks of a Java file are lexed (the
+// javatextblocks option, on by default). On, a """ with only white space
+// before it on its line is read as the end of a text block, because a hunk
+// can begin inside one; off, it is read as the start of one, as in a whole
+// file. Colours from a whole file (SetFileSpans) do not depend on it. Hunks
+// are lexed again the next time they are drawn. A pane built with
+// WithHighlighter keeps its own.
+func (model *Model) SetJavaTextBlocks(on bool) {
+	if on == model.javaTextBlocks {
+		return
+	}
+	model.javaTextBlocks = on
+	if !model.ownHighlighter {
+		return
+	}
+	model.highlight = chromaHighlighter(on)
+	model.cache = map[int][]Span{}
+	model.highlighted = map[int]bool{}
 }

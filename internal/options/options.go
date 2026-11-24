@@ -17,6 +17,7 @@ const (
 	HideResolved    = "hideresolved"
 	SkipResolved    = "skipresolved"
 	RelativeNumber  = "relativenumber"
+	JavaTextBlocks  = "javatextblocks"
 )
 
 // Option is one declared setting.
@@ -42,6 +43,7 @@ func All() []Option {
 		{Name: HideResolved, Description: "hide resolved threads from the diff pane"},
 		{Name: SkipResolved, Description: "make ) and ( pass over resolved threads"},
 		{Name: RelativeNumber, Description: "number diff rows by distance from the cursor"},
+		{Name: JavaTextBlocks, Default: true, Description: "in a hunk, a \"\"\" line ends a Java text block"},
 	}
 }
 
@@ -107,6 +109,10 @@ func (values Values) SkipResolved() bool { return values.Get(SkipResolved) }
 // RelativeNumber reports whether the diff pane numbers its rows by distance
 // from the cursor.
 func (values Values) RelativeNumber() bool { return values.Get(RelativeNumber) }
+
+// JavaTextBlocks reports whether a Java hunk reads a """ with only white space
+// before it on its line as the end of a text block.
+func (values Values) JavaTextBlocks() bool { return values.Get(JavaTextBlocks) }
 
 // Describe writes one option's value the way `:set` shows it: its name, or
 // "no" and its name.

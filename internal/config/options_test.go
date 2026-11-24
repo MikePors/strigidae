@@ -14,10 +14,11 @@ func TestParseOptions(test *testing.T) {
 		yaml string
 		want options.Values
 	}{
-		"unset":     {"theme: x\n", nil},
-		"wrapscan":  {"wrapscan: false\n", options.Values{"wrapscan": false}},
-		"both":      {"wrapscan: true\nhlsearch: false\n", options.Values{"wrapscan": true, "hlsearch": false}},
-		"with tabs": {"hlsearch: false\ntabs:\n  - name: Me\n", options.Values{"hlsearch": false}},
+		"unset":          {"theme: x\n", nil},
+		"wrapscan":       {"wrapscan: false\n", options.Values{"wrapscan": false}},
+		"javatextblocks": {"javatextblocks: false\n", options.Values{"javatextblocks": false}},
+		"both":           {"wrapscan: true\nhlsearch: false\n", options.Values{"wrapscan": true, "hlsearch": false}},
+		"with tabs":      {"hlsearch: false\ntabs:\n  - name: Me\n", options.Values{"hlsearch": false}},
 	} {
 		test.Run(name, func(test *testing.T) {
 			parsed, err := Parse("c.yml", []byte(testCase.yaml))
