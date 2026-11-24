@@ -49,8 +49,12 @@ func TestDiffPaneKeys(test *testing.T) {
 		test.Errorf("k: cursor on %q, want the hunk header", harness.cursorText())
 	}
 	harness.press("G")
+	if harness.cursorText() != "" { // the gap row below the last hunk
+		test.Errorf("G: cursor on %q, want the gap row", harness.cursorText())
+	}
+	harness.press("k")
 	if !strings.Contains(harness.cursorText(), "}") {
-		test.Errorf("G: cursor on %q", harness.cursorText())
+		test.Errorf("G, k: cursor on %q", harness.cursorText())
 	}
 	harness.press("g g")
 	if harness.cursorText() != "" {
@@ -58,7 +62,7 @@ func TestDiffPaneKeys(test *testing.T) {
 	}
 
 	harness.press("ctrl+d")
-	if !strings.Contains(harness.cursorText(), "})") {
+	if !strings.Contains(harness.cursorText(), "return c.sync(ctx)") { // the gap between the hunks is a row
 		test.Errorf("ctrl+d: cursor on %q", harness.cursorText())
 	}
 	harness.press("ctrl+u")
@@ -66,7 +70,7 @@ func TestDiffPaneKeys(test *testing.T) {
 		test.Errorf("ctrl+u: cursor on %q", harness.cursorText())
 	}
 	harness.press("ctrl+f")
-	if !strings.Contains(harness.cursorText(), "}") {
+	if !strings.Contains(harness.cursorText(), "c.last = time.Now()") {
 		test.Errorf("ctrl+f: cursor on %q", harness.cursorText())
 	}
 	harness.press("ctrl+b")
@@ -74,8 +78,10 @@ func TestDiffPaneKeys(test *testing.T) {
 		test.Errorf("ctrl+b: cursor on %q", harness.cursorText())
 	}
 
-	// Hunks: ] goes to the second hunk's header, [ back to the first.
-	harness.press("]", "j")
+	// Hunks: ctrl+b left the cursor on the gap row above the first hunk, so the
+	// first ] goes to the first header, the second to the second hunk's; [ goes
+	// back to the first.
+	harness.press("]", "]", "j")
 	if !strings.Contains(harness.cursorText(), "c.conn.Ping") {
 		test.Errorf("]: cursor on %q", harness.cursorText())
 	}

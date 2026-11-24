@@ -12,9 +12,15 @@ import (
 
 func TestRelativeNumberOption(test *testing.T) {
 	inliner := newInliner(test)
+	// The cursor row: the first hunk header, under the gap above it.
 	firstDiffLine := func() string {
 		width, height := inliner.diffView().Size()
-		return ansi.Strip(strings.Split(inliner.diffView().Render(width, height), "\n")[0])
+		for _, line := range strings.Split(inliner.diffView().Render(width, height), "\n") {
+			if line = ansi.Strip(line); strings.HasPrefix(line, ">") {
+				return line
+			}
+		}
+		return ""
 	}
 	if line := firstDiffLine(); !strings.HasPrefix(line, ">@@") {
 		test.Fatalf("setup: the cursor should be on the first hunk header, got %q", line)

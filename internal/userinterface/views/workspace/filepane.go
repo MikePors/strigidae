@@ -99,6 +99,12 @@ type FilePane interface {
 	// while the file is shown, so it must be cheap then; spans for a file or
 	// side not shown are ignored. Panes without syntax colours ignore it.
 	SetFileSpans(side github.DiffSide, objectIdentifier string, lines [][]diffview.Span)
+	// SetFileText gives the text of the shown file at the diff's head, which
+	// the pane asked for with a fileTextWantedMessage from Update, so it can
+	// show the unchanged lines the diff leaves out. Text for another file than
+	// the one shown is ignored. The result is a notice command, or nil. Panes
+	// that show no such lines ignore it.
+	SetFileText(path, text string) tea.Cmd
 	// SetSize gives the pane's inner size; it is called whenever it changes.
 	SetSize(width, height int)
 	// Context returns what is at the pane's cursor: the threads and comment

@@ -4,6 +4,12 @@ Checks only the maintainer can do, such as live verification against real GitHub
 
 ## Live checks
 
+- [ ] **Expanding the unchanged lines between hunks, against real GitHub** (`enter` on a `⋯ N hidden lines` row). The tests use the in-memory client, not GitHub's file contents.
+  1. Open a pull request with a modified file that has two hunks far apart, and a first hunk below line 1. The file shows `⋯ N hidden lines` above the first hunk, between the hunks and `⋯ more lines` at the bottom. Put the cursor on one and press `enter`: the lines open after a short wait, 20 at a time (the whole gap when 20 or fewer remain), the cursor stays on the row while lines remain, and the counts are right (compare the line numbers with the file on github.com).
+  2. Press `enter` on the bottom row: it becomes `N hidden lines` or goes if the hunk ends the file. Check the old and new numbers of a shown line against the diff on github.com when lines were added or deleted above it.
+  3. Press `c` and `V` on a shown line: the status bar says the line is not part of the diff. Press `R`: the gaps close again.
+  4. Try a renamed file, a file over 1 MiB and a pull request from a fork. A file GitHub gives no text for says `can't show more lines`, and the gap stays closed. Report which cases worked, how long the wait was, and any wrong count or line, with a screenshot.
+
 - [ ] **Remapped global keys in a real terminal** (#104). The tests send key messages, not what your terminal sends.
   1. Add a `keys:` section to your config, for example `down: [w, down]`, `help: f5` and `top: t t` (see `docs/config.md`). Run `strig`: `w` and the arrow move down, `f5` opens help, `t t` jumps to the top, and the old keys (`j`, `?`, `g g`) do nothing.
   2. Open a pull request, then a file: the remapped keys still work in the workspace, and the help overlay and the status bar hint (`f5 help`) show your keys.
