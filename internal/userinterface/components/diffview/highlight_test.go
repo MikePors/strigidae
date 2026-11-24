@@ -477,3 +477,22 @@ func TestWholeFileJavaReadsAnOpenerAloneOnItsLine(test *testing.T) {
 		test.Errorf("the text block's body is not a string: %+v", spans[2])
 	}
 }
+
+// TestJavaTextBlocksApplyToAShebangFile: an extensionless file whose first line
+// names java gets the hunk lexer too, and the option turns it off there as well.
+func TestJavaTextBlocksApplyToAShebangFile(test *testing.T) {
+	lines := []string{`    """`, `return 1;`}
+	for _, testCase := range []struct {
+		name           string
+		javaTextBlocks bool
+		wantString     bool
+	}{
+		{"on", true, false},
+		{"off", false, true},
+	} {
+		spans := chromaHighlighter(testCase.javaTextBlocks)("query", "#!/usr/bin/java --source 21", lines)
+		if got := anyIn(spans[1], chroma.LiteralString); got != testCase.wantString {
+			test.Errorf("%s: the line below the quotes has a string span = %v, want %v: %+v", testCase.name, got, testCase.wantString, spans[1])
+		}
+	}
+}

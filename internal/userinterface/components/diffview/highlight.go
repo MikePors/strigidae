@@ -91,6 +91,9 @@ func chromaHighlighter(javaTextBlocks bool) Highlighter {
 			lexer, seen = lexerForFirstLine[firstLine]
 			if !seen {
 				lexer = languageFromShebang(firstLine)
+				if javaTextBlocks {
+					lexer = forHunk(lexer)
+				}
 				// The line is a slice of the whole diff text; a copy keeps
 				// the key from holding that text alive.
 				lexerForFirstLine[strings.Clone(firstLine)] = lexer
