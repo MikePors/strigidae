@@ -47,10 +47,23 @@ var replaced map[string]chroma.Lexer
 // replace.
 var confinedJava chroma.Lexer
 
+// fragmentJava is the Java lexer for the text of a diff hunk, which init does
+// not register, or nil when there was none to build (see JavaFragment).
+var fragmentJava chroma.Lexer
+
 func init() {
 	replaced = replaceBrokenLexers(lexers.GlobalLexerRegistry)
-	confinedJava = confineJavaStrings(lexers.GlobalLexerRegistry)
+	confinedJava, fragmentJava = confineJavaStrings(lexers.GlobalLexerRegistry)
 }
+
+// JavaFragment returns a Java lexer for the text of a diff hunk, or nil when
+// there is none. It is the registered Java lexer, except that a """ with only
+// white space before it on its line is read as the end of a text block rather
+// than the start of one, because a hunk can begin inside a text block and its
+// first """ is then a closer. The whole text of a file has no such doubt, so
+// it is lexed with the registered lexer. It is not in the registry, which
+// nothing writes after startup, so the caller chooses between the two.
+func JavaFragment() chroma.Lexer { return fragmentJava }
 
 // replaceBrokenLexers swaps each listed lexer that registry holds for a plain
 // text lexer with the same lookup configuration. A listed name the registry

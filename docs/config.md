@@ -153,6 +153,7 @@ The value must be an unquoted YAML boolean: `true` or `false` (`True` and
 | `hideresolved` | `false` | resolved comment threads leave the diff pane, one you resolve after a short fade (see below) |
 | `skipresolved` | `false` | `)` / `(` jump over resolved comment threads, which stay shown and reachable with `j` / `k` (see below) |
 | `relativenumber` | `false` | the diff pane numbers every row by its distance from the cursor, for counts with `j` / `k` (see below) |
+| `javatextblocks` | `true` | in a Java hunk, a line of only `"""` ends a text block rather than starting one (see below) |
 
 #### `wrap`
 
@@ -269,6 +270,23 @@ selection boundaries. Thus `5j` in visual mode need not land on the row marked
 hunk without mixing added and deleted lines.
 The column takes five cells from the code area. Outside visual mode, `G` with
 a count goes to a new-side line number; visual mode currently ignores that count.
+
+#### `javatextblocks`
+
+The diff pane colours each hunk on its own, and a hunk can begin inside a Java
+text block (the `"""` strings that span lines). Its first `"""` is then the end
+of the block, but it looks exactly like the start of one when it ends its line,
+and the rest of the hunk was coloured as a string. With `javatextblocks: true`
+(the default), a `"""` with only white space before it on its line is read as
+the end of a block, and one after code (`String sql = """`) as the start.
+
+The guess is wrong for a block whose opening `"""` stands alone on its line,
+which is rare: its text is coloured as code. Turn the option off with
+`:set nojavatextblocks` (or `javatextblocks: false`) to read every `"""` that
+ends its line as a start. It only changes hunks: once the whole file has loaded
+(a modified, renamed or copied file under 1 MiB), its colours come from the
+whole text and do not depend on the option. It does nothing for other
+languages.
 
 ### `tabs`
 

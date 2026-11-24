@@ -16,6 +16,18 @@ const javaName = "Java"
 // as a middle dot.
 const textBlockOpener = `"""\n`
 
+// javaFragmentOpener is the root rule of the fragment lexer that starts a text
+// block: a """ with something other than white space before it on its line,
+// then white space and a newline. A hunk can begin inside a text block, and
+// its first """ is then the end of the block; a closing """ that ends its line
+// looks just like an opener, but it stands at the start of its line, and an
+// opener almost always follows code (`String text = """`). The lookbehind stays
+// on one line: it holds one character that is not white space and then spaces
+// and tabs. An opener alone on its line (after a line break that follows an `=`
+// or a `(`) is read as a closer, which is why a whole file is lexed with the
+// registered lexer.
+const javaFragmentOpener = `(?<=\S[ \t]*)"""[ \t]*\n`
+
 // javaStatePatterns are the patterns of the rules of the Java string states in
 // the Chroma version this was written against. confineJavaStrings rewrites
 // both states, so it refuses to run when their patterns differ rather than
@@ -28,9 +40,11 @@ var javaStatePatterns = map[string][]string{
 }
 
 // confineJavaStrings replaces the Java lexer in registry with one whose
-// double-quoted strings end at the end of their line, and returns it, or
-// returns nil when registry holds no Java lexer or its rules are not the shape
-// this expects (TestJavaLexerIsConfined fails then).
+// double-quoted strings end at the end of their line, and returns it, along
+// with a second one for the hunks of a diff (see javaFragmentOpener) that it
+// does not register. It returns nil, nil when registry holds no Java lexer or
+// its rules are not the shape this expects (TestJavaLexerIsConfined fails
+// then).
 //
 // Chroma's Java string state accepts newlines, so one `"` that does not open a
 // string (the diff view lexes each hunk as a fragment, which can begin inside
@@ -40,30 +54,31 @@ var javaStatePatterns = map[string][]string{
 // runs to its closing """.
 //
 // A fragment cannot tell a closing """ that ends its line from an opener, so
-// it still reads one as an opener; only lexing the whole file (see diffview's
-// HighlightFile) gets that right.
-func confineJavaStrings(registry *chroma.LexerRegistry) chroma.Lexer {
+// the registered lexer still reads one as an opener, which is right for a
+// whole file (see diffview's HighlightFile). The fragment lexer is for the
+// text of a hunk.
+func confineJavaStrings(registry *chroma.LexerRegistry) (registered, fragment chroma.Lexer) {
 	position := indexOf(registry, javaName)
 	if position < 0 {
-		return nil
+		return nil, nil
 	}
 	original, ok := registry.Lexers[position].(*chroma.RegexLexer)
 	if !ok {
-		return nil
+		return nil, nil
 	}
 	rules, err := original.Rules()
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	for state, want := range javaStatePatterns {
 		if !slices.Equal(patternsOf(rules[state]), want) {
-			return nil
+			return nil, nil
 		}
 	}
 	confined := rules.Clone()
 	opener := slices.IndexFunc(confined["root"], func(rule chroma.Rule) bool { return rule.Pattern == textBlockOpener })
 	if opener < 0 {
-		return nil
+		return nil, nil
 	}
 	confined["root"][opener].Pattern = `"""[ \t]*\n`
 	confined["string"] = []chroma.Rule{
@@ -85,10 +100,14 @@ func confineJavaStrings(registry *chroma.LexerRegistry) chroma.Lexer {
 		{Pattern: `\\"`, Type: chroma.LiteralString},
 		{Pattern: `\\`, Type: chroma.LiteralString},
 	}
+	fragmentRules := confined.Clone()
+	fragmentRules["root"][opener].Pattern = javaFragmentOpener
 	configuration := *original.Config()
 	replacement := chroma.MustNewLexer(&configuration, func() chroma.Rules { return confined })
 	replacement.SetAnalyser(original.AnalyseText)
-	return registry.Register(replacement)
+	fragmentConfiguration := *original.Config()
+	fragmentLexer := chroma.MustNewLexer(&fragmentConfiguration, func() chroma.Rules { return fragmentRules })
+	return registry.Register(replacement), fragmentLexer
 }
 
 // patternsOf returns the pattern of each of rules.

@@ -9,15 +9,9 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-// javaTokens lexes text with the registered Java lexer. It fails unless the
-// tokens join back to text exactly, since a lexer that drops or adds a
-// character shifts every later line.
-func javaTokens(test *testing.T, text string) []chroma.Token {
+// lexerTokens lexes text with lexer, failing unless the tokens join back to it.
+func lexerTokens(test *testing.T, lexer chroma.Lexer, text string) []chroma.Token {
 	test.Helper()
-	lexer := lexers.Get("java")
-	if lexer == nil {
-		test.Fatal("no Java lexer is registered")
-	}
 	iterator, err := lexer.Tokenise(nil, text)
 	if err != nil {
 		test.Fatalf("tokenise: %v", err)
@@ -37,9 +31,19 @@ func javaTokens(test *testing.T, text string) []chroma.Token {
 // tokenType.
 func tokenLines(test *testing.T, text string, tokenType chroma.TokenType) []string {
 	test.Helper()
+	lexer := lexers.Get("java")
+	if lexer == nil {
+		test.Fatal("no Java lexer is registered")
+	}
+	return lexerTokenLines(test, lexer, text, tokenType)
+}
+
+// lexerTokenLines is tokenLines for the tokens of lexer.
+func lexerTokenLines(test *testing.T, lexer chroma.Lexer, text string, tokenType chroma.TokenType) []string {
+	test.Helper()
 	result := make([]string, strings.Count(text, "\n")+1)
 	line := 0
-	for _, token := range javaTokens(test, text) {
+	for _, token := range lexerTokens(test, lexer, text) {
 		for index, piece := range strings.Split(token.Value, "\n") {
 			if index > 0 {
 				line++
@@ -132,10 +136,82 @@ func TestJavaLexerIsConfined(test *testing.T) {
 
 func TestConfineJavaStringsWithoutJava(test *testing.T) {
 	registry := chroma.NewLexerRegistry()
-	if lexer := confineJavaStrings(registry); lexer != nil {
-		test.Errorf("confineJavaStrings(empty) = %v, want nil", lexer)
+	if registered, fragment := confineJavaStrings(registry); registered != nil || fragment != nil {
+		test.Errorf("confineJavaStrings(empty) = %v, %v, want nil, nil", registered, fragment)
 	}
 	if len(registry.Lexers) != 0 {
 		test.Errorf("confining in an empty registry registered %d lexers", len(registry.Lexers))
+	}
+}
+
+// TestJavaFragmentReadsALineOfOnlyTripleQuotesAsACloser: a hunk can begin
+// inside a text block, and its first """ is then the end of the block, though
+// it ends its line like an opener. The fragment lexer takes a """ with only
+// white space before it as a closer; the registered lexer, for whole files,
+// takes it as an opener.
+func TestJavaFragmentReadsALineOfOnlyTripleQuotesAsACloser(test *testing.T) {
+	for _, testCase := range []struct {
+		name         string
+		text         string
+		wantFragment []string // the string text on each line, in the fragment lexer
+		wantWhole    []string // and in the registered lexer
+	}{
+		{
+			name:         "a hunk starting inside a text block whose closer ends its line",
+			text:         "        select *\n        \"\"\"\n        .formatted(name);\n        int a = 1;",
+			wantFragment: []string{"", `"""`, "", ""},
+			wantWhole:    []string{"", `"""`, "        .formatted(name);", "        int a = 1;"},
+		},
+		{
+			name:         "an opener after code",
+			text:         "String sql = \"\"\"\n    select *\n    \"\"\";\nint a = 1;",
+			wantFragment: []string{`"""`, "    select *", `    """`, ""},
+			wantWhole:    []string{`"""`, "    select *", `    """`, ""},
+		},
+		{
+			name:         "an opener after code, then spaces and a tab",
+			text:         "foo(a, \"\"\" \t\n    text\n    \"\"\");\nint a = 1;",
+			wantFragment: []string{"\"\"\" \t", "    text", `    """`, ""},
+			wantWhole:    []string{"\"\"\" \t", "    text", `    """`, ""},
+		},
+		{
+			// The limit of the guess: an opener that starts its own line,
+			// after a line break that follows an = or a (, looks like a closer.
+			name:         "an opener alone on its line",
+			text:         "String sql =\n    \"\"\"\n    select *\n    \"\"\";",
+			wantFragment: []string{"", `"""`, "", `""";`},
+			wantWhole:    []string{"", `"""`, "    select *", `    """`},
+		},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			fragment := lexerTokenLines(test, fragmentJava, testCase.text, chroma.LiteralString)
+			if diff := cmp.Diff(testCase.wantFragment, fragment); diff != "" {
+				test.Errorf("fragment lexer, string text per line (-want +got):\n%s", diff)
+			}
+			whole := tokenLines(test, testCase.text, chroma.LiteralString)
+			if diff := cmp.Diff(testCase.wantWhole, whole); diff != "" {
+				test.Errorf("registered lexer, string text per line (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// TestJavaFragmentIsNotRegistered: the registry holds the lexer for whole
+// files, whatever lookup is used; the fragment lexer is a separate one that
+// is still called Java, so the checks that go by name treat it the same.
+func TestJavaFragmentIsNotRegistered(test *testing.T) {
+	if fragmentJava == nil || JavaFragment() != fragmentJava {
+		test.Fatal("init did not build the fragment lexer, or JavaFragment does not return it")
+	}
+	if fragmentJava == confinedJava {
+		test.Error("the fragment lexer is the registered one")
+	}
+	for _, lexer := range lexers.GlobalLexerRegistry.Lexers {
+		if lexer == fragmentJava {
+			test.Error("the fragment lexer is in the registry")
+		}
+	}
+	if fragmentJava.Config().Name != javaName {
+		test.Errorf("name = %q, want %q", fragmentJava.Config().Name, javaName)
 	}
 }

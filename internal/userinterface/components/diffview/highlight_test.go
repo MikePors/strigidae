@@ -391,3 +391,89 @@ func TestJavaHunkStartingInsideAComment(test *testing.T) {
 		test.Errorf("the method line has no keyword span: %+v", spans[2])
 	}
 }
+
+// textBlockHunk is a hunk that begins inside a Java text block: its first
+// """ closes the block and ends its line.
+var textBlockHunk = []codeLine{
+	{diff.Context, `        select *`},
+	{diff.Context, `        """`},
+	{diff.Context, `        .formatted(name);`},
+	{diff.Add, `    int count = 1;`},
+}
+
+// shownSpans returns the spans drawn for each line of model's file.
+func shownSpans(model *Model) [][]Span {
+	var spans [][]Span
+	for i, row := range model.rows {
+		if row.line != nil {
+			spans = append(spans, model.codeSpans(i))
+		}
+	}
+	return spans
+}
+
+// TestJavaHunkStartingInsideATextBlock: a closing """ that ends its line is not
+// read as the start of a text block, so the rows below it are code.
+func TestJavaHunkStartingInsideATextBlock(test *testing.T) {
+	spans := rowSpans(test, hunkFile("Query.java", textBlockHunk))
+	for index, line := range spans[2:] {
+		if anyIn(line, chroma.LiteralString) {
+			test.Errorf("line %d after the closing quotes has a string span: %+v", index+3, line)
+		}
+	}
+	if !anyIn(spans[3], chroma.Keyword) {
+		test.Errorf("the last line has no keyword span: %+v", spans[3])
+	}
+}
+
+// TestSetJavaTextBlocks: turning the guess off lexes the hunk again, reading
+// that """ as an opener, and turning it on puts it back.
+func TestSetJavaTextBlocks(test *testing.T) {
+	model := New(theme.New(true))
+	model.SetFile(hunkFile("Query.java", textBlockHunk))
+	stringBelow := func() bool { return anyIn(shownSpans(model)[2], chroma.LiteralString) }
+	if stringBelow() {
+		test.Fatal("by default the line below the closing quotes is a string")
+	}
+	model.SetJavaTextBlocks(false)
+	if !stringBelow() {
+		test.Error("with the guess off the line below the quotes is not a string")
+	}
+	model.SetJavaTextBlocks(true)
+	if stringBelow() {
+		test.Error("with the guess on again the line below the quotes is a string")
+	}
+}
+
+// TestSetJavaTextBlocksKeepsAGivenHighlighter: a pane built with its own
+// highlighter does not swap it for Chroma's.
+func TestSetJavaTextBlocksKeepsAGivenHighlighter(test *testing.T) {
+	calls := 0
+	model := New(theme.New(true), WithHighlighter(func(_, _ string, lines []string) [][]Span {
+		calls++
+		result := make([][]Span, len(lines))
+		for i, line := range lines {
+			result[i] = plain(line)
+		}
+		return result
+	}))
+	model.SetFile(hunkFile("Query.java", textBlockHunk))
+	model.SetJavaTextBlocks(false)
+	shownSpans(model)
+	if calls == 0 {
+		test.Error("the given highlighter was not used after SetJavaTextBlocks")
+	}
+}
+
+// TestWholeFileJavaReadsAnOpenerAloneOnItsLine: the whole text of a file has
+// no doubt about where a text block starts, so HighlightFile does not use the
+// hunk lexer.
+func TestWholeFileJavaReadsAnOpenerAloneOnItsLine(test *testing.T) {
+	spans, err := HighlightFile("Query.java", []byte("String sql =\n    \"\"\"\n    select *\n    \"\"\";\n"))
+	if err != nil {
+		test.Fatalf("HighlightFile: %v", err)
+	}
+	if !allIn(spans[2], chroma.LiteralString) {
+		test.Errorf("the text block's body is not a string: %+v", spans[2])
+	}
+}

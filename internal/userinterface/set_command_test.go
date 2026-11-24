@@ -23,8 +23,8 @@ func TestApplySet(test *testing.T) {
 		{name: "bare lists only what differs from the default", start: options.Values{"wrapscan": false, "wrap": true}, arguments: "  ", want: options.Values{"wrapscan": false, "wrap": true}, wantText: "nowrapscan wrap"},
 		{name: "bare skips a value set to its default", start: options.Values{"wrapscan": true, "hlsearch": false}, arguments: "", want: options.Values{"wrapscan": true, "hlsearch": false}, wantText: "nohlsearch"},
 		{name: "bare after setting back to the default", start: options.Values{"wrapscan": true}, arguments: "", want: options.Values{"wrapscan": true}, wantText: "no options changed"},
-		{name: "all lists every option", arguments: "all", wantText: "wrapscan hlsearch nowrap nohideviewed nohidereviewed noautoviewed nohideresolved noskipresolved norelativenumber"},
-		{name: "all shows the current values", start: options.Values{"wrapscan": false}, arguments: " all ", want: options.Values{"wrapscan": false}, wantText: "nowrapscan hlsearch nowrap nohideviewed nohidereviewed noautoviewed nohideresolved noskipresolved norelativenumber"},
+		{name: "all lists every option", arguments: "all", wantText: "wrapscan hlsearch nowrap nohideviewed nohidereviewed noautoviewed nohideresolved noskipresolved norelativenumber javatextblocks"},
+		{name: "all shows the current values", start: options.Values{"wrapscan": false}, arguments: " all ", want: options.Values{"wrapscan": false}, wantText: "nowrapscan hlsearch nowrap nohideviewed nohidereviewed noautoviewed nohideresolved noskipresolved norelativenumber javatextblocks"},
 		{name: "all can't be mixed with options", arguments: "all wrap", wantError: "unknown option: all"},
 		{name: "turn off", arguments: "nowrapscan", want: options.Values{"wrapscan": false}, wantText: "nowrapscan"},
 		{name: "turn on", start: options.Values{"hlsearch": false}, arguments: "hlsearch", want: options.Values{"hlsearch": true}, wantText: "hlsearch"},
@@ -123,7 +123,7 @@ func TestSetCommandChangesOptionsForEveryView(test *testing.T) {
 	}
 	drive(model, Info("stale"))
 	drive(model, parseCommand("set all", model.top(), model.viewCommands))
-	if model.status.text != "nowrapscan hlsearch nowrap nohideviewed nohidereviewed noautoviewed nohideresolved noskipresolved norelativenumber" {
+	if model.status.text != "nowrapscan hlsearch nowrap nohideviewed nohidereviewed noautoviewed nohideresolved noskipresolved norelativenumber javatextblocks" {
 		test.Errorf(":set all shows %q", model.status.text)
 	}
 	if got := len(optionsSeen(below)); got != 1 {
