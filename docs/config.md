@@ -280,10 +280,12 @@ and the rest of the hunk was coloured as a string. With `javatextblocks: true`
 (the default), a `"""` with only white space before it on its line is read as
 the end of a block, and one after code (`String sql = """`) as the start.
 
-The guess is wrong for a block whose opening `"""` stands alone on its line,
-which is rare: its text is coloured as code. Turn the option off with
+The guess is wrong in two cases. A block whose opening `"""` stands alone on its
+line has its text coloured as code; turn the option off with
 `:set nojavatextblocks` (or `javatextblocks: false`) to read every `"""` that
-ends its line as a start. It only changes hunks: once the whole file has loaded
+ends its line as a start. And a closing `"""` that follows text on its line
+(`</div>"""`) is read as a start with the option on or off, so the rest of the
+hunk is coloured as a string until the whole file loads. It only changes hunks: once the whole file has loaded
 (a modified, renamed or copied file under 1 MiB), its colours come from the
 whole text and do not depend on the option. It does nothing for other
 languages.

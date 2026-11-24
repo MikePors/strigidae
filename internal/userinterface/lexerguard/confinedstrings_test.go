@@ -175,6 +175,14 @@ func TestJavaFragmentReadsALineOfOnlyTripleQuotesAsACloser(test *testing.T) {
 			wantWhole:    []string{"\"\"\" \t", "    text", `    """`, ""},
 		},
 		{
+			// The other limit: a closer that follows text on its line looks
+			// like an opener after code, so the rest of the hunk is a string.
+			name:         "a closer after text on its line",
+			text:         "        <p>hi</p>\"\"\"\n        .formatted(x);\n        int a = 1;",
+			wantFragment: []string{`"""`, "        .formatted(x);", "        int a = 1;"},
+			wantWhole:    []string{`"""`, "        .formatted(x);", "        int a = 1;"},
+		},
+		{
 			// The limit of the guess: an opener that starts its own line,
 			// after a line break that follows an = or a (, looks like a closer.
 			name:         "an opener alone on its line",

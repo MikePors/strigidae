@@ -20,12 +20,16 @@ const textBlockOpener = `"""\n`
 // block: a """ with something other than white space before it on its line,
 // then white space and a newline. A hunk can begin inside a text block, and
 // its first """ is then the end of the block; a closing """ that ends its line
-// looks just like an opener, but it stands at the start of its line, and an
-// opener almost always follows code (`String text = """`). The lookbehind stays
-// on one line: it holds one character that is not white space and then spaces
-// and tabs. An opener alone on its line (after a line break that follows an `=`
-// or a `(`) is read as a closer, which is why a whole file is lexed with the
-// registered lexer.
+// looks just like an opener, but one that stands alone at the start of its
+// line has nothing before it, and an opener almost always follows code
+// (`String text = """`). The lookbehind stays on one line: it holds one
+// character that is not white space and then spaces and tabs.
+//
+// It is a guess with two known misses, both read the other way: an opener
+// alone on its line (after a line break that follows an `=` or a `(`) is read
+// as a closer, and a closer that follows text on its line (`</div>"""`) is
+// read as an opener. A whole file is lexed with the registered lexer, which
+// has neither.
 const javaFragmentOpener = `(?<=\S[ \t]*)"""[ \t]*\n`
 
 // javaStatePatterns are the patterns of the rules of the Java string states in
