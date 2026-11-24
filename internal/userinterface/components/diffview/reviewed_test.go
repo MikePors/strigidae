@@ -25,6 +25,12 @@ func TestContextHunk(test *testing.T) {
 		if row.line == nil && row.threadRow == nil && !row.message {
 			headers++
 		}
+		if row.gap != nil { // a gap is between hunks, in none
+			if ok {
+				test.Errorf("row %d: a gap row is in hunk %d", i, hunk)
+			}
+			continue
+		}
 		if row.threadRow != nil {
 			threadRows++
 			if !ok {

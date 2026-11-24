@@ -80,7 +80,7 @@ func wantNoticeInFull(test *testing.T, model *Model) {
 	test.Helper()
 	var shown []string
 	for k, line := range strings.Split(screen(model), "\n") {
-		if row := model.window.Top() + k; row < len(model.rows) && model.rows[row].message {
+		if row := model.window.Top() + k; row < len(model.rows) && model.rows[row].message && model.rows[row].gap == nil {
 			shown = append(shown, strings.TrimSpace(ansi.Cut(line, 1+model.relativeColumnWidth(), model.width)))
 		}
 	}
@@ -163,7 +163,7 @@ func TestRelativeNumberToggle(test *testing.T) {
 }
 
 func TestGoldenRelativeNumber(test *testing.T) {
-	model := threadModel(test, 70, 40)
+	model := threadModel(test, 70, 42)
 	model.SetRelativeNumber(true)
 	model.CursorDown(4)
 	golden.Assert(test, "relative_number", screen(model), false)

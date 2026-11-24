@@ -14,6 +14,7 @@
 //	z H / z L      HalfScrollLeft() / HalfScrollRight()
 //	z t / z z / z b  ScrollCursorTop() / ScrollCursorMiddle() / ScrollCursorBottom()
 //	z a / z o / z c  ToggleThread() / OpenThread() / CloseThread()
+//	enter on a gap row  OnGap() / HasFileText() / SetFileText() / ExpandGap()
 //	) / (          NextThread() / PreviousThread()
 //
 // Usage:
@@ -33,6 +34,11 @@
 // file never re-lexes a hunk. What opened above the hunk is not known until
 // the host gives the spans of the whole file (SetFileSpans); rows then take
 // those.
+//
+// The unchanged lines a diff leaves out (above the first hunk, between hunks,
+// below the last) are gap rows. Once the host gives the file's text
+// (SetFileText), ExpandGap on a gap row shows more of them as context lines
+// that are not part of the diff (see gaps.go).
 package diffview
 
 import (
@@ -89,16 +95,21 @@ type row struct {
 	text      string // display text: tabs expanded, controls replaced
 	baseIndex int    // index in base of this row, or of the row a thread row follows
 	threadRow *threadRow
-	message   bool // one line of the file's notice (binary, renamed, ...), shown above its threads
+	message   bool    // one line of the file's notice (binary, renamed, ...), shown above its threads; also set on gap rows, which are no hunk header or diff line either
+	gap       *gapRow // set on the row standing for unchanged lines the diff leaves out; see gaps.go
+	// revealed marks a context line shown by expanding a gap. It is not part of
+	// the diff, so no comment can go on it; see gaps.go.
+	revealed bool
 	// placeholder marks the header row of a hidden hunk, the one row left of
 	// it; see hidden.go.
 	placeholder bool
 }
 
 // isLine reports whether r is a diff line a comment can be written on: not a
-// hunk header, notice or thread row, and not a "no newline" marker.
+// hunk header, notice, gap or thread row, not a line shown by expanding a gap,
+// and not a "no newline" marker.
 func (row row) isLine() bool {
-	return row.threadRow == nil && row.line != nil && row.line.Kind != diff.NoNewline
+	return row.threadRow == nil && row.line != nil && row.line.Kind != diff.NoNewline && !row.revealed
 }
 
 // isCode reports whether row draws a diff line's text (a line or a "no
@@ -161,6 +172,14 @@ type Model struct {
 	oldWhole, newWhole wholeSide
 	wholeRows          map[int]wholeRow
 	saved              *position // position kept while a message replaces the file
+
+	// fileLines is the text of the shown file's new side, once SetFileText gave
+	// it, and revealed how many lines of each gap are shown (by gap index);
+	// revealedLines holds the lines those rows point at. All are reset with the
+	// file; see gaps.go.
+	fileLines     []string
+	revealed      map[int]int
+	revealedLines []diff.Line
 
 	width, height int
 
@@ -239,6 +258,8 @@ func (model *Model) SetFile(file *diff.File) {
 	}
 	if previous != nil {
 		model.restore(*previous)
+	} else {
+		model.skipLeadingGap()
 	}
 }
 
@@ -279,6 +300,7 @@ func (model *Model) reset() {
 	model.highlighted = map[int]bool{}
 	model.oldFirstLine, model.newFirstLine = "", ""
 	model.oldWhole, model.newWhole, model.wholeRows = wholeSide{}, wholeSide{}, map[int]wholeRow{}
+	model.fileLines, model.revealed, model.revealedLines = nil, nil, nil
 	model.wrapStarts = nil
 	model.window.Reset()
 	model.maximumWidth, model.numberWidth = 0, 0
@@ -291,19 +313,35 @@ func (model *Model) build(file *diff.File) {
 	for _, hunk := range file.Hunks {
 		total += len(hunk.Lines) + 1
 	}
-	model.base = make([]row, 0, total)
+	shown := 0
+	for _, count := range model.revealed {
+		shown += count
+	}
+	model.base = make([]row, 0, total+shown+len(file.Hunks)+1)
+	model.revealedLines = make([]diff.Line, 0, shown) // never grows: rows point into it
 	maximumNumber := 0
 	for high := range file.Hunks {
 		hunk := &file.Hunks[high]
-		model.base = append(model.base, row{hunk: high, baseIndex: len(model.base)})
+		if high == 0 {
+			model.appendGapRow(0)
+		} else {
+			model.appendRevealed(high, &maximumNumber)
+			model.appendGapRow(high)
+		}
+		model.appendRow(row{hunk: high})
+		if high == 0 {
+			model.appendRevealed(0, &maximumNumber)
+		}
 		maximumNumber = max(maximumNumber, hunk.OldStart+hunk.OldLines, hunk.NewStart+hunk.NewLines)
 		for lineIndex := range hunk.Lines {
 			line := &hunk.Lines[lineIndex]
 			text, width := displayText(line.Text)
 			model.maximumWidth = max(model.maximumWidth, width)
-			model.base = append(model.base, row{hunk: high, line: line, text: text, baseIndex: len(model.base)})
+			model.appendRow(row{hunk: high, line: line, text: text})
 		}
 	}
+	model.appendRevealed(len(file.Hunks), &maximumNumber)
+	model.appendGapRow(len(file.Hunks))
 	model.numberWidth = max(len(strconv.Itoa(maximumNumber)), 3)
 	model.oldFirstLine, model.newFirstLine = firstLines(file)
 	model.placeThreads()

@@ -17,6 +17,7 @@
    8      -// Serve starts the HTTP server on the given address and blocks until it is shut down or 
        9  +// Serve starts the HTTP server on the given address and blocks until it is shut down, fa
    9  10   func Serve(addr string) error {                                                          
+           ⋯ 20 hidden lines                                                                        
  @@ -30,8 +31,9 @@ func handler(w http.ResponseWriter, r *http.Request) {                           
   30  31       switch r.Method {                                                                    
   31  32       case "GET":                                                                          
@@ -33,6 +34,7 @@
       38  +    // done                                                                              
   37  39   }                                                                                        
           \No newline at end of file                                                                
+           ⋯ more lines                                                                             
            ▾ server.go:4 erin 1 comment · 3d ago [outdated]                                         
            │ erin · 3d ago  👍 2                                                                    
            │   Old thought.                                                                         

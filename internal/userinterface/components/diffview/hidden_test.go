@@ -134,7 +134,7 @@ func TestFadingHunkIsDrawnFainter(test *testing.T) {
 	for i, line := range normal {
 		text := ansi.Strip(line)
 		row := model.rows[model.Top()+i]
-		inHunk := row.hunk == 0 && row.threadRow == nil
+		inHunk := row.hunk == 0 && row.threadRow == nil && row.gap == nil // a gap row never fades
 		if row.threadRow != nil {
 			inHunk = !slices.Contains(model.orphans, row.threadRow.threadIndex) && model.base[row.baseIndex].hunk == 0
 		}
