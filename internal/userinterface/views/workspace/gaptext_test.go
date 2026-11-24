@@ -258,3 +258,32 @@ func TestReadsForTwoFilesDoNotRepeatEachOther(test *testing.T) {
 		test.Error("asking again for a file already being read started another read")
 	}
 }
+
+func TestSecondEnterAfterTheTextArrivedReadsNothing(test *testing.T) {
+	harness := gapHarness(test, gapHead, 60)
+	first := wantedText(test, harness)
+	second := wantedText(test, harness) // a second press before the first result
+	_, read := harness.view.Update(first)
+	harness.run(read)
+	if _, fetch := harness.view.Update(second); len(messages(fetch)) != 0 {
+		test.Error("a request that came after the text arrived started another read")
+	}
+	if got := fileTextCalls(harness.client); got != 1 {
+		test.Errorf("FileText called %d times, want 1", got)
+	}
+}
+
+func TestLateReadErrorIsNotSaidOffTheDiff(test *testing.T) {
+	harness := gapHarness(test, gapHead, 60)
+	harness.client.SetError(fake.MethodFileText, errors.New("boom"))
+	_, read := harness.view.Update(wantedText(test, harness))
+	harness.press("h", "g g") // back to the files list, up to Overview
+	if harness.view.mode == contentFile {
+		test.Fatal("setup: still showing a file")
+	}
+	infos := len(harness.messages)
+	harness.run(read)
+	if len(harness.messages) != infos {
+		test.Errorf("a late error said something on the Overview: %+v", harness.messages[infos:])
+	}
+}

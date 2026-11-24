@@ -213,6 +213,15 @@ func TestPerFileDiffObjectIdentifiers(test *testing.T) {
 	}
 }
 
+func TestPatchCutMidHunkIsTruncated(test *testing.T) {
+	_, built, _ := perFileDiff([]github.FilePatch{
+		{Path: "cut.go", Change: github.FileModified, Additions: 2, Patch: "@@ -1,2 +1,3 @@\n a\n+b\n@@ -9,2 +10,3 @@\n x\n+"},
+	})
+	if len(built.Files) != 1 || !built.Files[0].Truncated {
+		test.Errorf("a patch cut off in its second hunk is not marked truncated: %+v", built.Files)
+	}
+}
+
 func TestPatchMissingChangesIsTruncated(test *testing.T) {
 	_, built, err := perFileDiff([]github.FilePatch{
 		{Path: "whole.go", Change: github.FileModified, Additions: 1, Patch: "@@ -1 +1,2 @@\n a\n+b"},

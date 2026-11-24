@@ -39,6 +39,9 @@ func (view *View) fileTextWanted(message fileTextWantedMessage) tea.Cmd {
 	if message.pane != view.filePane || message.path != view.paneFile.Path {
 		return nil // not the file shown any more
 	}
+	if view.filePane.HasFileText(message.path) {
+		return nil // a request made before the text arrived, such as a second press of enter
+	}
 	if view.diffHead == "" {
 		return userinterface.Info("can't show more lines: the head commit of the diff is not known")
 	}
@@ -65,6 +68,9 @@ func (view *View) fileTextRead(message fileTextMessage) tea.Cmd {
 	delete(view.fileTextPending, message.key)
 	if message.key.path != view.paneFile.Path || message.key.head != view.diffHead {
 		return nil
+	}
+	if message.err != nil && view.mode != contentFile {
+		return nil // the reader has left the diff: nothing to say about it now
 	}
 	switch {
 	case errors.Is(message.err, github.ErrNotFound), errors.Is(message.err, github.ErrNoFileText):

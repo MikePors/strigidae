@@ -256,6 +256,11 @@ func (pane *diffPane) expandGap() tea.Cmd {
 	return func() tea.Msg { return fileTextWantedMessage{pane: pane, path: path} }
 }
 
+// HasFileText reports whether the pane holds the text of the file at path.
+func (pane *diffPane) HasFileText(path string) bool {
+	return pane.hasFile && pane.file.Path == path && pane.diffView.HasFileText()
+}
+
 // SetFileText gives the pane the text of its file; see FilePane. The gap the
 // cursor is on opens if the text was asked for by enter on it.
 func (pane *diffPane) SetFileText(path, text string) tea.Cmd {

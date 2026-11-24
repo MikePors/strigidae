@@ -48,7 +48,7 @@ func perFileDiff(patches []github.FilePatch) (raw string, built *diff.Diff, err 
 		} else {
 			hunks, parseError := diff.ParseHunks(patch.Patch)
 			file.Hunks = hunks
-			file.Truncated = parseError == nil && changedLines(hunks) != patch.Additions+patch.Deletions
+			file.Truncated = parseError != nil || changedLines(hunks) != patch.Additions+patch.Deletions
 			if parseError != nil && err == nil {
 				err = fmt.Errorf("patch of %s: %w", patch.Path, parseError)
 			}
