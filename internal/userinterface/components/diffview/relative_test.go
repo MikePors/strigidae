@@ -1,6 +1,8 @@
 package diffview
 
 import (
+	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -8,6 +10,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/MikePors/strigidae/internal/diff"
 	"github.com/MikePors/strigidae/internal/github"
 	"github.com/MikePors/strigidae/internal/golden"
 	"github.com/MikePors/strigidae/internal/userinterface/keys"
@@ -140,10 +143,10 @@ func TestRelativeDigitsFitTheLargestCount(test *testing.T) {
 
 func TestRelativeCellBeyondCountsIsBlank(test *testing.T) {
 	model := New(theme.New(true), WithRelativeNumber(true))
-	if got := strings.TrimSpace(model.relativeCell(keys.MaximumCount)); got != strconv.Itoa(keys.MaximumCount) {
+	if got := strings.TrimSpace(ansi.Strip(model.relativeCell(keys.MaximumCount, model.styles.plainRelative))); got != strconv.Itoa(keys.MaximumCount) {
 		test.Errorf("a row a count can reach shows %q", got)
 	}
-	if got := model.relativeCell(keys.MaximumCount + 1); strings.TrimSpace(got) != "" || len(got) != relativeDigits+1 {
+	if got := ansi.Strip(model.relativeCell(keys.MaximumCount+1, model.styles.plainRelative)); strings.TrimSpace(got) != "" || len(got) != relativeDigits+1 {
 		test.Errorf("a row beyond any count shows %q, want %d blank cells", got, relativeDigits+1)
 	}
 }
@@ -167,4 +170,62 @@ func TestGoldenRelativeNumber(test *testing.T) {
 	model.SetRelativeNumber(true)
 	model.CursorDown(4)
 	golden.Assert(test, "relative_number", screen(model), false)
+}
+
+// relativeText is the cell relativeCell draws for a row distance away.
+func relativeText(distance int) string { return fmt.Sprintf("%*d ", relativeDigits, distance) }
+
+func TestRelativeNumberStyles(test *testing.T) {
+	threads := threadModel(test, 70, 40)
+	gaps := gapModelWithText(test, twoHunks, 60)
+	for _, testCase := range []struct {
+		name   string
+		model  *Model
+		find   func(row row) bool
+		styles func(model *Model, current int) relativeStyles
+	}{
+		{"context line", threads, func(row row) bool { return row.isCode() && row.line.Kind == diff.Context }, func(model *Model, current int) relativeStyles {
+			return model.styles.variants[current][kindContext].relative
+		}},
+		{"added line", threads, func(row row) bool { return row.isCode() && row.line.Kind == diff.Add }, func(model *Model, current int) relativeStyles {
+			return model.styles.variants[current][kindAdd].relative
+		}},
+		{"hunk header", threads, func(row row) bool {
+			return row.line == nil && row.threadRow == nil && !row.message && !row.placeholder && row.gap == nil
+		}, func(model *Model, current int) relativeStyles {
+			return model.styles.hunkRelative[current]
+		}},
+		{"gap row", gaps, func(row row) bool { return row.gap != nil }, func(model *Model, current int) relativeStyles {
+			return model.styles.placeholderRelative[current]
+		}},
+		{"thread row", threads, func(row row) bool { return row.threadRow != nil }, func(model *Model, _ int) relativeStyles {
+			return model.styles.plainRelative
+		}},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			model := testCase.model
+			model.SetRelativeNumber(true)
+			target := slices.IndexFunc(model.rows, testCase.find)
+			if target < 0 {
+				test.Fatal("setup: no such row")
+			}
+			other := 0
+			if target == 0 {
+				other = 1
+			}
+			model.window.GotoRow(other)
+			distance := absolute(target - other)
+			if want := testCase.styles(model, 0).number.Render(relativeText(distance)); !strings.Contains(model.renderRow(target), want) {
+				test.Errorf("row %d away = %q, want it to hold the muted %q", distance, model.renderRow(target), want)
+			}
+			model.window.GotoRow(target)
+			if want := testCase.styles(model, 1).cursor.Render(relativeText(0)); !strings.Contains(model.renderRow(target), want) {
+				test.Errorf("cursor row = %q, want it to hold the highlighted %q", model.renderRow(target), want)
+			}
+		})
+	}
+	activeTheme := theme.New(true)
+	if activeTheme.DiffRelativeNumber.Render("0") == activeTheme.DiffRelativeNumberCursor.Render("0") {
+		test.Error("the cursor's 0 should be drawn differently from the other numbers")
+	}
 }

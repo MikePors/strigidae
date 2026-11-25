@@ -214,8 +214,7 @@ func (model *Model) renderNoticeRow(i int, row row) string {
 	if i == model.window.Cursor() {
 		lead = ">"
 	}
-	text := ansi.Truncate(lead+model.relativeCell(i)+row.text, model.width, "")
-	return model.theme.Muted.Render(text + spaces(model.width-ansi.StringWidth(text)))
+	return model.markedRow(i, lead, row.text, model.theme.Muted, model.styles.plainRelative)
 }
 
 // threadsAtCursor returns the threads the cursor is on: the one whose rows it
@@ -357,7 +356,7 @@ func (model *Model) renderThreadRow(i int, row row) string {
 	case model.searchMarked(i):
 		lead = model.theme.SearchMarker.Render(search.Glyph)
 	}
-	lead += model.relativeCell(i) + spaces(model.lineNumbersWidth())
+	lead += model.relativeCell(i, model.styles.plainRelative) + spaces(model.lineNumbersWidth())
 	text := ansi.Truncate(lead+model.blocks[row.threadRow.threadIndex][row.threadRow.rowInBlock], model.width, "")
 	return text + spaces(model.width-ansi.StringWidth(text))
 }

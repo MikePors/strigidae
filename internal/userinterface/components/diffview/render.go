@@ -33,6 +33,8 @@ type variant struct {
 	gutter lipgloss.Style
 	thread [2]lipgloss.Style // gutter marker: [0] quiet thread, [1] open thread
 	search lipgloss.Style    // the match marker in the cursor column
+
+	relative relativeStyles
 }
 
 // styleSet precomputes every style combination so rendering never builds
@@ -41,6 +43,11 @@ type styleSet struct {
 	variants    [2][numberKinds]variant // [cursor][kind]
 	hunk        [2]lipgloss.Style
 	placeholder [2]lipgloss.Style // a hidden hunk's row, and a gap's
+
+	// The relative-number cell on hunk headers and on placeholder and gap
+	// rows, [cursor], and on rows with no background of their own.
+	hunkRelative, placeholderRelative [2]relativeStyles
+	plainRelative                     relativeStyles
 }
 
 func newStyleSet(activeTheme theme.Theme) styleSet {
@@ -62,6 +69,7 @@ func newStyleSet(activeTheme theme.Theme) styleSet {
 			variantStyles.thread[0] = activeTheme.Muted.Background(gutter.GetBackground())
 			variantStyles.thread[1] = activeTheme.ThreadMarker.Background(gutter.GetBackground())
 			variantStyles.search = activeTheme.SearchMarker.Background(gutter.GetBackground())
+			variantStyles.relative = newRelativeStyles(activeTheme, gutter)
 			variantStyles.code = make(map[chroma.TokenType]lipgloss.Style, len(foreground))
 			for tokenType, style := range foreground {
 				variantStyles.code[tokenType] = style.Background(base.GetBackground())
@@ -73,6 +81,11 @@ func newStyleSet(activeTheme theme.Theme) styleSet {
 	style.hunk[1] = activeTheme.DiffHunkCursor
 	style.placeholder[0] = activeTheme.Muted
 	style.placeholder[1] = activeTheme.Muted.Background(cursorBackground)
+	for current := range 2 {
+		style.hunkRelative[current] = newRelativeStyles(activeTheme, style.hunk[current])
+		style.placeholderRelative[current] = newRelativeStyles(activeTheme, style.placeholder[current])
+	}
+	style.plainRelative = newRelativeStyles(activeTheme, activeTheme.Muted)
 	return style
 }
 
@@ -193,8 +206,12 @@ func (model *Model) gutterText(i int, mark string, variantStyles *variant) strin
 	if mark == search.Glyph {
 		head, mark = variantStyles.search.Render(mark), "" // only a match is drawn apart from the gutter
 	}
-	return head + variantStyles.gutter.Render(mark+model.relativeCell(i)+numberCell(line.Old, model.numberWidth)+" "+numberCell(line.New, model.numberWidth)+" ") +
-		titleStyle.Render(glyph) + variantStyles.gutter.Render(marker)
+	numbers := numberCell(line.Old, model.numberWidth) + " " + numberCell(line.New, model.numberWidth) + " "
+	lead := variantStyles.gutter.Render(mark + numbers)
+	if model.relativeNumber {
+		lead = variantStyles.gutter.Render(mark) + model.relativeCell(i, variantStyles.relative) + variantStyles.gutter.Render(numbers)
+	}
+	return head + lead + titleStyle.Render(glyph) + variantStyles.gutter.Render(marker)
 }
 
 func numberCell(count, width int) string {
@@ -211,9 +228,7 @@ func (model *Model) renderHunk(i int, header string, current int) string {
 		mark = ">"
 	}
 	header, _ = displayText(header) // the section text is copied from file content
-	text := ansi.Truncate(mark+model.relativeCell(i)+header, model.width, "")
-	text += spaces(model.width - ansi.StringWidth(text))
-	return model.styles.hunk[current].Render(text)
+	return model.markedRow(i, mark, header, model.styles.hunk[current], model.styles.hunkRelative[current])
 }
 
 // spansFor returns the highlighted spans of row i: from the whole file when
