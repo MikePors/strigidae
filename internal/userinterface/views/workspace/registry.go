@@ -206,7 +206,7 @@ func (workspaceBindings *bindings) entries() []actionEntry {
 			},
 		},
 		{
-			Action: keys.Action{Name: "approve", Command: "approve", Description: "submit an approving review, after a y/N; `-m <message>` gives the summary instead of opening $EDITOR (`-m \"\"` sends none)"},
+			Action: keys.Action{Name: "approve", Command: "approve", Arguments: "[-m <message>]", Description: "submit an approving review, after a y/N; `-m <message>` gives the summary instead of opening $EDITOR (`-m \"\"` sends none)"},
 			level:  levelPullRequest, guard: writeReview, fresh: freshHead,
 			check: checkVerdictArguments,
 			run: func(view *View, call invocation) tea.Cmd {
@@ -214,7 +214,7 @@ func (workspaceBindings *bindings) entries() []actionEntry {
 			},
 		},
 		{
-			Action: keys.Action{Name: "request-changes", Command: "request-changes", Description: "submit a review that requests changes, after a y/N; `-m <message>` gives the summary instead of opening $EDITOR"},
+			Action: keys.Action{Name: "request-changes", Command: "request-changes", Arguments: "[-m <message>]", Description: "submit a review that requests changes, after a y/N; `-m <message>` gives the summary instead of opening $EDITOR"},
 			level:  levelPullRequest, guard: writeReview, fresh: freshHead,
 			check: checkVerdictArguments,
 			run: func(view *View, call invocation) tea.Cmd {
@@ -222,7 +222,7 @@ func (workspaceBindings *bindings) entries() []actionEntry {
 			},
 		},
 		{
-			Action: keys.Action{Name: "review", Command: "review", Description: "open the review chooser to submit a verdict; `:review approve`, `request-changes` or `comment` skips it, and `-m <message>` after the verdict skips $EDITOR"},
+			Action: keys.Action{Name: "review", Command: "review", Arguments: "[approve | request-changes | comment [-m <message>]]", Description: "open the review chooser to submit a verdict; `:review approve`, `request-changes` or `comment` skips it, and `-m <message>` after the verdict skips $EDITOR"},
 			level:  levelPullRequest, guard: writeReview, fresh: freshHead,
 			check: checkReviewArguments,
 			run: func(view *View, call invocation) tea.Cmd {
