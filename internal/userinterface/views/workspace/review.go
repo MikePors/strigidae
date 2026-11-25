@@ -228,14 +228,22 @@ func (currentFlow *reviewFlow) chooserKey(message tea.KeyPressMsg, environment r
 	return nil
 }
 
-// start fetches the pending review (whose body pre-fills the editor); the
-// editor opens when it arrives.
-func (currentFlow *reviewFlow) start(environment reviewEnvironment, event github.ReviewEvent) tea.Cmd {
+// refuse is the notice that stops a review from starting, or nil.
+func (currentFlow *reviewFlow) refuse(environment reviewEnvironment, event github.ReviewEvent) tea.Cmd {
 	if notice := environment.guard.admit(writeReview); notice != nil {
 		return notice
 	}
 	if environment.ownPullRequest && event != github.ReviewEventComment {
 		return userinterface.Info(ownPullRequestText)
+	}
+	return nil
+}
+
+// start fetches the pending review (whose body pre-fills the editor); the
+// editor opens when it arrives.
+func (currentFlow *reviewFlow) start(environment reviewEnvironment, event github.ReviewEvent) tea.Cmd {
+	if refusal := currentFlow.refuse(environment, event); refusal != nil {
+		return refusal
 	}
 	currentFlow.sequence++
 	flow, sequence := currentFlow, currentFlow.sequence
@@ -245,6 +253,16 @@ func (currentFlow *reviewFlow) start(environment reviewEnvironment, event github
 		status, err := environment.client.GetReviewStatus(ctx, environment.repository, environment.number)
 		return reviewPendingMessage{flow: flow, repository: environment.repository, number: environment.number, sequence: sequence, event: event, pending: status.Pending, err: err}
 	}
+}
+
+// startWithMessage takes the summary from the command line: it goes straight
+// to the step after the editor, so the confirmation still follows.
+func (currentFlow *reviewFlow) startWithMessage(environment reviewEnvironment, event github.ReviewEvent, body string) tea.Cmd {
+	if refusal := currentFlow.refuse(environment, event); refusal != nil {
+		return refusal
+	}
+	currentFlow.sequence++
+	return currentFlow.edited(reviewEditedMessage{flow: currentFlow, repository: environment.repository, number: environment.number, sequence: currentFlow.sequence, event: event, body: body}, environment)
 }
 
 // pendingFetched opens the editor on the saved draft, or the pending
