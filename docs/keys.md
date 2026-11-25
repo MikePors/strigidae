@@ -92,9 +92,9 @@ An open pull request: Overview, Files and Comments panes, and the diff.
 | `resolve` | none | `:resolve` | resolve the selected review thread, after a y/N |
 | `unresolve` | none | `:unresolve` | unresolve the selected review thread, after a y/N |
 | `react` | none | `:react` | react to the comment under the diff cursor (or pick a target on the Overview); `:react <name>` toggles the named reaction: +1, -1, laugh, hooray, confused, heart, rocket, eyes |
-| `approve` | none | `:approve` | submit an approving review, after a y/N |
-| `request-changes` | none | `:request-changes` | submit a review that requests changes, after a y/N |
-| `review` | none | `:review` | open the review chooser to submit a verdict |
+| `approve` | none | `:approve` | submit an approving review, after a y/N; `-m <message>` gives the summary instead of opening $EDITOR (`-m ""` sends none) |
+| `request-changes` | none | `:request-changes` | submit a review that requests changes, after a y/N; `-m <message>` gives the summary instead of opening $EDITOR |
+| `review` | none | `:review` | open the review chooser to submit a verdict; `:review approve`, `request-changes` or `comment` skips it, and `-m <message>` after the verdict skips $EDITOR |
 | `merge` | none | `:merge` | merge the pull request after a y/N; `merge`, `squash` or `rebase` picks the method, otherwise the first the repository allows |
 | `discard-review` | none | `:discard-review` | delete your pending review and its draft comments, after a y/N |
 | `edit-pull-request` | none | `:edit-pull-request` | edit the title and body in $EDITOR, then confirm with y/N |

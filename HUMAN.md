@@ -200,3 +200,9 @@ Checks only the maintainer can do, such as live verification against real GitHub
   COLORTERM and any multiplexer. Run directly in each terminal first: truecolor
   is needed for the Kitty identifier, and the probe does not wrap tmux APC
   passthrough. Also run the Kitty probe in WezTerm to check its installed version.
+
+- [ ] **`-m <message>` on `:approve`, `:request-changes` and `:review`, against real GitHub** (#332). The tests use the in-memory client.
+  1. On a pull request someone else wrote (GitHub refuses approvals and change requests on your own), run `:approve -m "Looks good"`: no editor opens, the question reads `Approve #N in owner/repo?`, and after `y` the review on github.com is an approval with the summary `Looks good`. Try `:approve -m ""`: an approval with no summary. On a pull request with a pending review that already has a summary, `:approve -m ""` and `:approve -m x` show what happens to that summary on github.com, and report it.
+  2. Run `:request-changes -m Please fix the tests` and `:review comment -m A thought`, answering `y`: each shows on github.com with its summary. Add a draft comment first, then `:request-changes -m ""`: it sends the review with the draft comment and no summary. With no drafts, `:request-changes -m ""` says `empty review` and sends nothing.
+  3. Run `:approve -m` (no text), `:approve --empty` and `:review -m hi`: each gives an error and starts nothing. Bare `:review` still opens the chooser, and `:review approve` skips it and opens the editor.
+  4. Report anything that looks wrong, such as quotes kept in the summary or text lost from the end.
