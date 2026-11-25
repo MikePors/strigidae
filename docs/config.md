@@ -259,8 +259,9 @@ once in an open pull request.
 With `relativenumber: true`, the diff pane's gutter gains a column, left of
 the old and new line numbers, that numbers every row by its distance from the
 cursor: `0` on the cursor row, `1` on the rows next to it, and so on. The
-numbers are muted and the cursor row's `0` is highlighted, so the column stands
-apart from the line numbers. Every row the cursor stops on is numbered: diff
+numbers are muted, so they stand apart from the coloured line numbers of added
+and removed lines and from hunk headers, and the cursor row's `0` is
+highlighted. Every row the cursor stops on is numbered: diff
 lines, hunk headers, the placeholders of hidden hunks, notices and each line of
 a comment thread. So `5j` moves to the row marked `5` below. With `wrap` on, a
 long line's continuation rows have no number. Rows further than 9999 rows away

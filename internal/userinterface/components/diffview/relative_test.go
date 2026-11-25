@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/MikePors/strigidae/internal/diff"
@@ -175,35 +176,47 @@ func TestGoldenRelativeNumber(test *testing.T) {
 // relativeText is the cell relativeCell draws for a row distance away.
 func relativeText(distance int) string { return fmt.Sprintf("%*d ", relativeDigits, distance) }
 
+// Row finders for TestRelativeNumberStyles.
+func isLineOf(kind diff.LineKind) func(row row) bool {
+	return func(row row) bool { return row.isCode() && row.line.Kind == kind }
+}
+
+func isHunkHeader(row row) bool {
+	return row.line == nil && row.threadRow == nil && !row.message && !row.placeholder && row.gap == nil
+}
+func isPlaceholder(row row) bool { return row.placeholder }
+func isGapRow(row row) bool      { return row.gap != nil }
+func isNoticeRow(row row) bool   { return row.message && row.gap == nil } // gap rows are messages too
+func isThreadRow(row row) bool   { return row.threadRow != nil }
+
+// TestRelativeNumberStyles checks each row kind's cell against the theme's
+// own styles on that row's background, never the pane's precomputed ones, so
+// a cell drawn on the wrong background fails.
 func TestRelativeNumberStyles(test *testing.T) {
-	threads := threadModel(test, 70, 40)
-	gaps := gapModelWithText(test, twoHunks, 60)
+	activeTheme := theme.New(true)
+	cursorTint := activeTheme.DiffCursor.GetBackground()
+	onCursor := func(style lipgloss.Style) [2]lipgloss.Style {
+		return [2]lipgloss.Style{style, style.Background(cursorTint)}
+	}
+	noBackground := [2]lipgloss.Style{activeTheme.Normal, activeTheme.Normal} // notices and threads, on the cursor too
+	threads := func(test *testing.T) *Model { return threadModel(test, 70, 40) }
 	for _, testCase := range []struct {
-		name   string
-		model  *Model
-		find   func(row row) bool
-		styles func(model *Model, current int) relativeStyles
+		name       string
+		model      func(test *testing.T) *Model
+		find       func(row row) bool
+		background [2]lipgloss.Style // the row's own background, [cursor]
 	}{
-		{"context line", threads, func(row row) bool { return row.isCode() && row.line.Kind == diff.Context }, func(model *Model, current int) relativeStyles {
-			return model.styles.variants[current][kindContext].relative
-		}},
-		{"added line", threads, func(row row) bool { return row.isCode() && row.line.Kind == diff.Add }, func(model *Model, current int) relativeStyles {
-			return model.styles.variants[current][kindAdd].relative
-		}},
-		{"hunk header", threads, func(row row) bool {
-			return row.line == nil && row.threadRow == nil && !row.message && !row.placeholder && row.gap == nil
-		}, func(model *Model, current int) relativeStyles {
-			return model.styles.hunkRelative[current]
-		}},
-		{"gap row", gaps, func(row row) bool { return row.gap != nil }, func(model *Model, current int) relativeStyles {
-			return model.styles.placeholderRelative[current]
-		}},
-		{"thread row", threads, func(row row) bool { return row.threadRow != nil }, func(model *Model, _ int) relativeStyles {
-			return model.styles.plainRelative
-		}},
+		{"context line", threads, isLineOf(diff.Context), onCursor(activeTheme.DiffGutter)},
+		{"added line", threads, isLineOf(diff.Add), onCursor(activeTheme.DiffGutterAdd)},
+		{"removed line", threads, isLineOf(diff.Delete), onCursor(activeTheme.DiffGutterDelete)},
+		{"hunk header", threads, isHunkHeader, [2]lipgloss.Style{activeTheme.DiffHunk, activeTheme.DiffHunkCursor}},
+		{"placeholder", func(test *testing.T) *Model { return hidingModel(test, map[int]bool{1: true}, nil) }, isPlaceholder, onCursor(activeTheme.Muted)},
+		{"gap row", func(test *testing.T) *Model { return gapModelWithText(test, twoHunks, 60) }, isGapRow, onCursor(activeTheme.Muted)},
+		{"notice row", func(test *testing.T) *Model { return noticeWithThread(test, "logo.png", 60) }, isNoticeRow, noBackground},
+		{"thread row", threads, isThreadRow, noBackground},
 	} {
 		test.Run(testCase.name, func(test *testing.T) {
-			model := testCase.model
+			model := testCase.model(test)
 			model.SetRelativeNumber(true)
 			target := slices.IndexFunc(model.rows, testCase.find)
 			if target < 0 {
@@ -214,18 +227,34 @@ func TestRelativeNumberStyles(test *testing.T) {
 				other = 1
 			}
 			model.window.GotoRow(other)
-			distance := absolute(target - other)
-			if want := testCase.styles(model, 0).number.Render(relativeText(distance)); !strings.Contains(model.renderRow(target), want) {
-				test.Errorf("row %d away = %q, want it to hold the muted %q", distance, model.renderRow(target), want)
+			want := activeTheme.DiffRelativeNumber.Background(testCase.background[0].GetBackground()).Render(relativeText(absolute(target - other)))
+			if line := model.renderRow(target); !strings.Contains(line, want) {
+				test.Errorf("row off the cursor = %q, want it to hold the muted %q", line, want)
 			}
 			model.window.GotoRow(target)
-			if want := testCase.styles(model, 1).cursor.Render(relativeText(0)); !strings.Contains(model.renderRow(target), want) {
-				test.Errorf("cursor row = %q, want it to hold the highlighted %q", model.renderRow(target), want)
+			want = activeTheme.DiffRelativeNumberCursor.Background(testCase.background[1].GetBackground()).Render(relativeText(0))
+			if line := model.renderRow(target); !strings.Contains(line, want) {
+				test.Errorf("cursor row = %q, want it to hold the highlighted %q", line, want)
 			}
 		})
 	}
-	activeTheme := theme.New(true)
 	if activeTheme.DiffRelativeNumber.Render("0") == activeTheme.DiffRelativeNumberCursor.Render("0") {
 		test.Error("the cursor's 0 should be drawn differently from the other numbers")
+	}
+}
+
+// TestRelativeNumberOnSelectedRow: a selected row takes the cursor's tint,
+// and its number is muted on that tint.
+func TestRelativeNumberOnSelectedRow(test *testing.T) {
+	activeTheme := theme.New(true)
+	model := threadModel(test, 70, 40)
+	model.SetRelativeNumber(true)
+	model.CursorDown(4) // "import (", a context line followed by another
+	if !model.VisualStart() || model.VisualMove(1) != nil {
+		test.Fatal("setup: could not select two lines")
+	}
+	want := activeTheme.DiffRelativeNumber.Background(activeTheme.DiffCursor.GetBackground()).Render(relativeText(1))
+	if line := model.renderRow(4); !strings.Contains(line, want) {
+		test.Errorf("selected row = %q, want it to hold %q", line, want)
 	}
 }
