@@ -24,7 +24,10 @@ type reviewFlow struct {
 	chooserVerdicts []github.ReviewEvent
 	sequence        int    // latest review request; older results are stale
 	draft           string // unsent summary, kept until a review is submitted
-	submitting      bool   // a submission is in flight
+	// fromCommandLine says the latest attempt took its summary from -m, so a
+	// summary that turns out empty is not blamed on the editor.
+	fromCommandLine bool
+	submitting      bool // a submission is in flight
 }
 
 // reviewEnvironment is what the flow needs from the workspace at one moment.
@@ -246,6 +249,7 @@ func (currentFlow *reviewFlow) start(environment reviewEnvironment, event github
 		return refusal
 	}
 	currentFlow.sequence++
+	currentFlow.fromCommandLine = false
 	flow, sequence := currentFlow, currentFlow.sequence
 	return func() tea.Msg {
 		ctx, cancel := environment.timeouts.RequestContext()
@@ -256,13 +260,16 @@ func (currentFlow *reviewFlow) start(environment reviewEnvironment, event github
 }
 
 // startWithMessage takes the summary from the command line: it goes straight
-// to the step after the editor, so the confirmation still follows.
+// to the status query that follows the editor, so the confirmation still
+// follows. The text is not kept as the draft: a declined or failed attempt
+// must not replace a summary written in the editor earlier.
 func (currentFlow *reviewFlow) startWithMessage(environment reviewEnvironment, event github.ReviewEvent, body string) tea.Cmd {
 	if refusal := currentFlow.refuse(environment, event); refusal != nil {
 		return refusal
 	}
 	currentFlow.sequence++
-	return currentFlow.edited(reviewEditedMessage{flow: currentFlow, repository: environment.repository, number: environment.number, sequence: currentFlow.sequence, event: event, body: body}, environment)
+	currentFlow.fromCommandLine = true
+	return currentFlow.queryFresh(environment, event, strings.TrimRight(body, " \t\r\n"))
 }
 
 // pendingFetched opens the editor on the saved draft, or the pending
@@ -292,7 +299,12 @@ func (currentFlow *reviewFlow) edited(message reviewEditedMessage, environment r
 	if message.err != nil {
 		return userinterface.Error(terminaltext.SafeError(fmt.Errorf("edit review: %w", message.err)))
 	}
-	flow, sequence, event := currentFlow, currentFlow.sequence, message.event
+	return currentFlow.queryFresh(environment, message.event, body)
+}
+
+// queryFresh re-queries the review state to confirm against.
+func (currentFlow *reviewFlow) queryFresh(environment reviewEnvironment, event github.ReviewEvent, body string) tea.Cmd {
+	flow, sequence := currentFlow, currentFlow.sequence
 	return func() tea.Msg {
 		ctx, cancel := environment.timeouts.RequestContext()
 		defer cancel()
@@ -323,6 +335,9 @@ func (currentFlow *reviewFlow) confirm(message reviewFreshMessage, environment r
 		inline = status.Pending.CommentCount
 	}
 	if message.event != github.ReviewEventApprove && strings.TrimSpace(body) == "" && inline == 0 {
+		if currentFlow.fromCommandLine {
+			return userinterface.Error(errors.New("empty review, nothing sent (give a summary with -m or add draft comments)"))
+		}
 		return userinterface.Error(errors.New("empty review, nothing sent (did the editor fail?)"))
 	}
 	send := func() tea.Msg {
