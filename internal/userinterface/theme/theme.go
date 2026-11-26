@@ -119,6 +119,9 @@ type Theme struct {
 	Syntax           Syntax         // token styles, for the diff pane and Markdown code blocks
 	ThreadMarker     lipgloss.Style // gutter marker and header of an open review thread
 	ThreadBar        lipgloss.Style // left bar of a thread's comment lines
+
+	DiffRelativeNumber       lipgloss.Style // a row's distance from the cursor (relativenumber)
+	DiffRelativeNumberCursor lipgloss.Style // the cursor row's 0 in that column
 	// --- end diff pane ---
 
 	PullRequestList PullRequestListStyles // pull request tables
@@ -232,6 +235,9 @@ func newTheme(palette Palette, roles Roles, syntax string, overridden map[string
 		Syntax:           newSyntax(syntax, generatedPrefix+identifier, roles, overridden),
 		ThreadMarker:     bold(roles.Warning),
 		ThreadBar:        foreground(roles.Info),
+
+		DiffRelativeNumber:       foreground(roles.Muted),
+		DiffRelativeNumberCursor: bold(roles.Accent),
 		// --- end diff pane ---
 
 		PullRequestList: newPullRequestListStyles(roles),

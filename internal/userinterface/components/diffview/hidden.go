@@ -87,9 +87,7 @@ func (model *Model) renderPlaceholder(i int, row row, current int) string {
 		mark = ">"
 	}
 	header, _ := displayText(model.file.Hunks[row.hunk].Header()) // file content
-	text := ansi.Truncate(mark+model.relativeCell(i)+placeholderText+header, model.width, "")
-	text += spaces(model.width - ansi.StringWidth(text))
-	return model.styles.placeholder[current].Render(text)
+	return model.markedRow(i, mark, placeholderText+header, model.styles.placeholder[current], model.styles.placeholderRelative[current])
 }
 
 // fadeOf returns how far row i has faded: its hunk's fade, for the hunk's

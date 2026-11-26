@@ -3,8 +3,6 @@ package diffview
 import (
 	"strconv"
 
-	"github.com/charmbracelet/x/ansi"
-
 	"github.com/MikePors/strigidae/internal/diff"
 )
 
@@ -106,7 +104,6 @@ func (model *Model) renderGap(i int, row row, current int) string {
 	if current == 1 {
 		mark = ">"
 	}
-	text := ansi.Truncate(mark+model.relativeCell(i)+spaces(model.lineNumbersWidth())+gapText+hiddenText(row.gap.hidden), model.width, "")
-	text += spaces(model.width - ansi.StringWidth(text))
-	return model.styles.placeholder[current].Render(text)
+	text := spaces(model.lineNumbersWidth()) + gapText + hiddenText(row.gap.hidden)
+	return model.markedRow(i, mark, text, model.styles.placeholder[current], model.styles.placeholderRelative[current])
 }
