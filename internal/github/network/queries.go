@@ -22,7 +22,7 @@ const reactionSelection = `reactionGroups { content viewerHasReacted reactors { 
 const pullRequestFields = `
 fragment PullRequestFields on PullRequest {
   id number title url isDraft state createdAt updatedAt reviewDecision
-  baseRefName headRefName headRefOid isCrossRepository
+  baseRefName headRefName headRefOid isCrossRepository mergeStateStatus
   statusCheckRollup { state }
   viewerLatestReview { state commit { oid } }
   author { login }
@@ -76,7 +76,7 @@ query ` + operationPullRequestDetail + `($owner: String!, $name: String!, $numbe
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
       ...PullRequestFields
-      body additions deletions viewerDidAuthor viewerCanUpdate mergeStateStatus
+      body additions deletions viewerDidAuthor viewerCanUpdate
       ` + reactionSelection + `
       statusCheckRollup { contexts(first: 100) { totalCount nodes {
         __typename

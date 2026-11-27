@@ -1,4 +1,4 @@
  Me   Rivka 
-  REPO            #  TITLE                           AUTHOR     UPD  CI  RV  CMT
+  REPO            #  TITLE                       AUTHOR     UPD  CI  RV  CF  CMT
 Needs review  is:pr review-requested:rivka
-> acme/widgets  #40  Rivka's refactor                octo-dev    5m            0
+> acme/widgets  #40  Rivka's refactor            octo-dev    5m                0

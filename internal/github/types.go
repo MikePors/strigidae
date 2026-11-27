@@ -57,6 +57,9 @@ type PullRequest struct {
 	// CrossRepository is true when the head branch lives in a fork, so a
 	// branch of the same name here is a different branch.
 	CrossRepository bool
+	// MergeState says whether conflicts, a stale branch or branch protection
+	// stand in the way of merging.
+	MergeState MergeState
 }
 
 // Label is a repository label.
@@ -186,9 +189,6 @@ type PullRequestDetail struct {
 	// CheckTotal is how many there are in all, likewise without those.
 	CheckList  []Check
 	CheckTotal int
-	// MergeState says whether conflicts, a stale branch or branch protection
-	// stand in the way of merging.
-	MergeState MergeState
 }
 
 // ReactionContent is a kind of emoji reaction.

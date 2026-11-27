@@ -15,21 +15,26 @@ import (
 )
 
 const (
-	gap                 = "  "
-	marker              = "> " // prefix of the selected row, so selection survives without colour
-	noMarker            = "  "
-	draftPrefix         = "[draft] "
-	minimumTitleColumns = 12
-	maximumAuthor       = 16
-	maximumMark         = 16
-	maximumRepository   = 24
-	maximumHead         = 24
-	maximumBase         = 20
-	minimumRepository   = 10 // narrowest the repository column shrinks to before it is dropped
-	ageColumns          = 4
-	reviewColumns       = 2
-	checksColumns       = 2
-	commentColumns      = 3
+	gap                     = "  "
+	marker                  = "> " // prefix of the selected row, so selection survives without colour
+	noMarker                = "  "
+	draftPrefix             = "[draft] "
+	minimumTitleColumns     = 12
+	maximumAuthor           = 16
+	maximumMark             = 16
+	maximumRepository       = 24
+	maximumHead             = 24
+	maximumBase             = 20
+	minimumRepository       = 10 // narrowest the repository column shrinks to before it is dropped
+	ageColumns              = 4
+	reviewColumns           = 2
+	checksColumns           = 2
+	commentColumns          = 3
+	conflictsCompactColumns = 2 // the compact column: "CF" over "!"
+	conflictsWideColumns    = len(conflictsWord)
+	// comfortableTitleColumns is how much the title keeps before the conflicts
+	// column gives up the word for the glyph.
+	comfortableTitleColumns = 40
 )
 
 // MarkerColumns is the width of the selection marker in front of every row.
@@ -62,13 +67,13 @@ func New(activeTheme theme.Theme, now func() time.Time, options Options) Table {
 
 // Layout holds the column widths for one render. A zero width hides a column.
 type Layout struct {
-	repository, number, title, mark, head, base, author, age, checks, review, comments int
+	repository, number, title, mark, head, base, author, age, checks, review, conflicts, comments int
 }
 
 // Layout sizes the columns for pullRequests in width columns (not counting the
 // selection marker).
 func (table Table) Layout(pullRequests []github.PullRequest, width int) Layout {
-	layout := Layout{age: ageColumns, checks: checksColumns, review: reviewColumns, comments: commentColumns, number: len("#")}
+	layout := Layout{age: ageColumns, checks: checksColumns, review: reviewColumns, conflicts: conflictsWideColumns, comments: commentColumns, number: len("#")}
 	for _, pullRequest := range pullRequests {
 		layout.number = max(layout.number, len(fmt.Sprintf("#%d", pullRequest.Number)))
 		if mark := table.mark(pullRequest); mark != "" {
@@ -95,13 +100,36 @@ func (table Table) Layout(pullRequests []github.PullRequest, width int) Layout {
 		layout.repository = max(layout.repository, len("REPO"))
 	}
 	fits := func() bool { return layout.fixed() <= width-minimumTitleColumns }
-	// Drop the least important columns first on narrow terminals: the mark,
+	// The conflicts column spells the word out only while the title keeps a
+	// comfortable width, and is judged again after every column that goes.
+	settleConflicts := func() {
+		if layout.conflicts == 0 {
+			return
+		}
+		layout.conflicts = conflictsWideColumns
+		if layout.fixed() > width-comfortableTitleColumns {
+			layout.conflicts = conflictsCompactColumns
+		}
+	}
+	settleConflicts()
+	// Give up the least important columns first on narrow terminals: the mark,
 	// which is only a private note, goes before everything else.
-	for _, drop := range []*int{&layout.mark, &layout.head, &layout.base, &layout.author, &layout.comments, &layout.checks, &layout.review} {
+	steps := []func(){
+		func() { layout.mark = 0 },
+		func() { layout.head = 0 },
+		func() { layout.base = 0 },
+		func() { layout.author = 0 },
+		func() { layout.comments = 0 },
+		func() { layout.conflicts = 0 },
+		func() { layout.checks = 0 },
+		func() { layout.review = 0 },
+	}
+	for _, step := range steps {
 		if fits() {
 			break
 		}
-		*drop = 0
+		step()
+		settleConflicts()
 	}
 	if table.options.Repository {
 		table.narrowRepository(&layout, width, fits)
@@ -154,7 +182,7 @@ func shortRepository(text string, width int) string {
 // fixed is the width of every column but the title, including the gaps.
 func (layout Layout) fixed() int {
 	width := layout.number + len(gap) // number, then the gap before the title
-	for _, count := range []int{layout.repository, layout.mark, layout.head, layout.base, layout.author, layout.age, layout.checks, layout.review, layout.comments} {
+	for _, count := range []int{layout.repository, layout.mark, layout.head, layout.base, layout.author, layout.age, layout.checks, layout.review, layout.conflicts, layout.comments} {
 		if count > 0 {
 			width += count + len(gap)
 		}
@@ -167,7 +195,7 @@ func (table Table) Header(layout Layout, width int) string {
 	headings := rowCells{
 		repository: headingCell("REPO"), number: headingCell("#"), title: headingCell("TITLE"), mark: headingCell("MARK"),
 		head: headingCell("HEAD"), base: headingCell("BASE"), author: headingCell("AUTHOR"), age: headingCell("UPD"),
-		checks: headingCell("CI"), review: headingCell("RV"), comments: headingCell("CMT"),
+		checks: headingCell("CI"), review: headingCell("RV"), conflicts: headingCell(layout.conflictsHeading()), comments: headingCell("CMT"),
 	}
 	line := append(cell{{text: noMarker}}, layout.row(headings)...)
 	return line.padRight(width).paintAll(table.theme.PullRequestList.Header)
@@ -179,7 +207,7 @@ func headingCell(text string) cell { return styled(text, lipgloss.Style{}) }
 // rowCells holds the content of every column of one row. Columns the layout
 // hides are ignored.
 type rowCells struct {
-	repository, number, title, mark, head, base, author, age, checks, review, comments cell
+	repository, number, title, mark, head, base, author, age, checks, review, conflicts, comments cell
 }
 
 // row pads each cell to its column and joins them with the gaps. Right-aligned
@@ -206,6 +234,7 @@ func (layout Layout) row(cells rowCells) cell {
 	add(cells.age, layout.age, true)
 	add(cells.checks, layout.checks, false)
 	add(cells.review, layout.review, false)
+	add(cells.conflicts, layout.conflicts, false)
 	add(cells.comments, layout.comments, true)
 
 	var out cell
@@ -267,6 +296,7 @@ func (table Table) IndentedRow(layout Layout, pullRequest github.PullRequest, de
 		age:        styled(relativeAge(table.now(), pullRequest.UpdatedAt), styles.Age),
 		checks:     styled(checksMark, checksStyle),
 		review:     table.reviewCell(pullRequest),
+		conflicts:  table.conflictsCell(pullRequest, layout.conflicts),
 		comments:   styled(commentText(pullRequest.CommentCount), styles.Comments),
 	})
 

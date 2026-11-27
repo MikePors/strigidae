@@ -64,6 +64,7 @@ func seed(test *testing.T, client *fake.Client, tabs []config.Tab) {
 	review := pullRequest("acme/widgets", 12, "Cache the parsed diff", time.Hour)
 	review.ReviewDecision = github.ReviewDecisionReviewRequired
 	review.Checks = github.ChecksPassing
+	review.MergeState = github.MergeStateConflicts
 	other := pullRequest("acme/gadgets", 7, "Fix a very long title that will certainly need to be cut off somewhere", 3*time.Hour)
 	other.Draft = true
 	mine := pullRequest("rivka/dotfiles", 3, "Tidy the shell prompt", 26*time.Hour)
@@ -537,6 +538,11 @@ func TestGolden(test *testing.T) {
 			press(view, "j")
 			return view
 		}, 80, 12},
+		{"huge", func(test *testing.T) *View {
+			view, _ := loadedView(test)
+			press(view, "j")
+			return view
+		}, 200, 12},
 		{"second_tab", func(test *testing.T) *View {
 			view, _ := loadedView(test)
 			settle(view, press(view, "g t"))
