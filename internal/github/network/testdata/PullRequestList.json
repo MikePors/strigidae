@@ -38,6 +38,7 @@
             "headRefName": "chore/3-templates",
             "headRefOid": "0000000000000000000000000000000000002222",
             "isCrossRepository": true,
+            "mergeStateStatus": "DIRTY",
             "statusCheckRollup": {"state": "FAILURE"},
             "author": null,
             "commentCount": {"totalCount": 0},

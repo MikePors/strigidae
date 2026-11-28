@@ -124,16 +124,16 @@ func TestMarkCompletionOffersTheMarksInUse(test *testing.T) {
 
 func TestMarkColumnFollowsMarksMessage(test *testing.T) {
 	view := markedView(test, makePullRequests(3))
-	if out := ansi.Strip(view.Render(80, 8)); strings.Contains(out, "MARK") {
+	if out := ansi.Strip(view.Render(90, 8)); strings.Contains(out, "MARK") {
 		test.Errorf("column shown with no marks:\n%s", out)
 	}
 	withMarks(test, view, map[int]string{2: "waiting on author, then more"})
-	lines := strings.Split(ansi.Strip(view.Render(80, 8)), "\n")
+	lines := strings.Split(ansi.Strip(view.Render(90, 8)), "\n")
 	if !strings.Contains(lines[1], "MARK") || !strings.Contains(lines[3], "waiting on auth…") {
 		test.Errorf("marked list:\n%s", strings.Join(lines, "\n"))
 	}
 	withMarks(test, view, nil)
-	if out := ansi.Strip(view.Render(80, 8)); strings.Contains(out, "MARK") {
+	if out := ansi.Strip(view.Render(90, 8)); strings.Contains(out, "MARK") {
 		test.Errorf("column still shown after the marks went:\n%s", out)
 	}
 }

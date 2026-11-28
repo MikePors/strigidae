@@ -174,7 +174,7 @@ func TestListPullRequestsPagination(test *testing.T) {
 				Identifier: "PR_kwDOExample02", HeadSHA: sha(2), Repository: repository, Number: 26, Title: "chore: add issue forms and PR template", Author: "ghost",
 				State: github.PullRequestStateOpen, ReviewDecision: github.ReviewDecisionApproved, Checks: github.ChecksFailing,
 				CreatedAt: mustTime(test, "2026-10-17T12:00:00Z"), UpdatedAt: mustTime(test, "2026-10-18T10:15:00Z"),
-				URL: "https://github.com/MikePors/strigidae/pull/26", HeadBranch: "chore/3-templates", BaseBranch: "main", CrossRepository: true,
+				URL: "https://github.com/MikePors/strigidae/pull/26", HeadBranch: "chore/3-templates", BaseBranch: "main", CrossRepository: true, MergeState: github.MergeStateConflicts,
 			},
 		},
 	}
@@ -671,5 +671,27 @@ func TestSetFileViewedError(test *testing.T) {
 	err := client.SetFileViewed(context.Background(), "PR_x", "go.mod", true)
 	if !errors.Is(err, github.ErrNotFound) {
 		test.Errorf("err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestListAndSearchQueriesRequestTheMergeState(test *testing.T) {
+	testServer := &server{}
+	client := newTestClient(test, testServer)
+	ctx := context.Background()
+	if _, err := client.ListPullRequests(ctx, repository, github.PageRequest{}); err != nil {
+		test.Fatal(err)
+	}
+	if _, err := client.SearchPullRequests(ctx, "review-requested:@me", github.PageRequest{}); err != nil {
+		test.Fatal(err)
+	}
+	calls := testServer.Calls()
+	if len(calls) != 2 || calls[0].Operation != operationPullRequestList || calls[1].Operation != operationPullRequestSearch {
+		test.Fatalf("calls = %+v, want a list then a search query", calls)
+	}
+	for _, recorded := range calls {
+		// Without the field the conflicts column would stay blank against real GitHub.
+		if !strings.Contains(recorded.Query, "mergeStateStatus") {
+			test.Errorf("%s query does not select mergeStateStatus", recorded.Operation)
+		}
 	}
 }

@@ -407,6 +407,7 @@ func goldenPullRequests() []github.PullRequest {
 	pullRequests[1].CommentCount = 0
 	pullRequests[2].ReviewDecision = github.ReviewDecisionChangesRequested
 	pullRequests[2].CommentCount = 120
+	pullRequests[2].MergeState = github.MergeStateConflicts
 	pullRequests[3].ReviewDecision = github.ReviewDecisionReviewRequired
 	pullRequests[3].Draft = true
 	pullRequests[3].Title = "Draft with a very long title that gets truncated after the marker is shown"
@@ -441,6 +442,9 @@ func TestGolden(test *testing.T) {
 		{"wide", func(test *testing.T) *View {
 			return loadedView(test, fakeWith(goldenPullRequests()), nil)
 		}, 120, 10},
+		{"huge", func(test *testing.T) *View {
+			return loadedView(test, fakeWith(goldenPullRequests()), nil)
+		}, 200, 10},
 		{"narrow", func(test *testing.T) *View {
 			return loadedView(test, fakeWith(goldenPullRequests()), nil)
 		}, 36, 10},

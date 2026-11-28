@@ -310,6 +310,7 @@ func mapPullRequest(node graphqlPullRequest) (github.PullRequest, error) {
 		URL:               node.URL,
 		HeadBranch:        node.HeadRefName,
 		BaseBranch:        node.BaseRefName,
+		MergeState:        github.MergeStateFromStatus(node.MergeStateStatus),
 
 		CrossRepository: node.IsCrossRepository,
 	}, nil
@@ -408,7 +409,6 @@ func mapDetail(node graphqlPullRequestDetail, files []graphqlFile, comments []gr
 		Additions:       node.Additions,
 		Deletions:       node.Deletions,
 	}
-	detail.MergeState = github.MergeStateFromStatus(node.MergeStateStatus)
 	if node.StatusCheckRollup != nil {
 		detail.CheckTotal = node.StatusCheckRollup.Contexts.TotalCount
 		var contexts []graphqlCheckContext

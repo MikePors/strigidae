@@ -24,6 +24,7 @@ type PullRequestListStyles struct {
 	ChecksPassing    lipgloss.Style // check status glyphs (also used by the PR workspace header)
 	ChecksFailing    lipgloss.Style
 	ChecksRunning    lipgloss.Style
+	Conflicts        lipgloss.Style // the glyph for a pull request that cannot merge for conflicts
 	Comments         lipgloss.Style
 }
 
@@ -47,6 +48,7 @@ func newPullRequestListStyles(roles Roles) PullRequestListStyles {
 		ChecksPassing:    foreground(roles.Added),
 		ChecksFailing:    foreground(roles.Removed),
 		ChecksRunning:    foreground(roles.Warning),
+		Conflicts:        foreground(roles.Removed),
 		Comments:         muted,
 	}
 }

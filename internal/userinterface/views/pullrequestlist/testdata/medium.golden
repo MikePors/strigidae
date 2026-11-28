@@ -1,10 +1,10 @@
  All   Me 
-   #  TITLE          AUTHOR             UPD  CI  RV  CMT
-> #8  Add a really…  someone-with-a-…   now  ✓   ✓     4
-  #7  [draft] WIP:…  alice               1h  ●         0
-  #6  Change numbe…  alice               2h  ✗   ✗   99+
-  #5  [draft] Draf…  alice               3h      ?     0
-  #2  Change numbe…  alice               6h            0
-  #1  Change numbe…  alice               7h            0
-  #4  Change numbe…  alice               2d            0
-  #3  Change numbe…  alice              3mo            0
+   #  TITLE                         UPD  CI  RV  CF  CMT
+> #8  Add a really quite extraor…   now  ✓   ✓         4
+  #7  [draft] WIP: rework the pa…    1h  ●             0
+  #6  Change number 6                2h  ✗   ✗   !   99+
+  #5  [draft] Draft with a very …    3h      ?         0
+  #2  Change number 2                6h                0
+  #1  Change number 1                7h                0
+  #4  Change number 4                2d                0
+  #3  Change number 3               3mo                0

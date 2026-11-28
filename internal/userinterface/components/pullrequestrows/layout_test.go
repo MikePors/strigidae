@@ -15,9 +15,9 @@ func TestIndentedDraftKeepsItsStyle(test *testing.T) {
 	activeTheme := theme.Default()
 	pullRequests := []github.PullRequest{{Number: 7, Title: "Second step", Author: "alice", Draft: true}}
 	table := New(activeTheme, time.Now, Options{})
-	layout := table.Layout(pullRequests, 60)
+	layout := table.Layout(pullRequests, 80)
 
-	row := table.IndentedRow(layout, pullRequests[0], 2, false, false, 60)
+	row := table.IndentedRow(layout, pullRequests[0], 2, false, false, 80)
 	if want := "    " + activeTheme.PullRequestList.Draft.Render("[draft] "); !strings.Contains(row, want) {
 		test.Errorf("row %q lacks the indent followed by the styled draft marker %q", row, want)
 	}
@@ -95,8 +95,8 @@ func TestBranchColumnsDropHeadFirstThenBase(test *testing.T) {
 		wantHead, wantBase, wantAuthor int
 	}{
 		{120, maximumHead, maximumBase, 8},
-		{70, 0, maximumBase, 8},
-		{50, 0, 0, 8},
+		{74, 0, maximumBase, 8},
+		{54, 0, 0, 8},
 		{30, 0, 0, 0}, // then the existing order
 	}
 	for _, testCase := range tests {

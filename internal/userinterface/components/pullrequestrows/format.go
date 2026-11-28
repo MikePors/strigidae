@@ -81,6 +81,36 @@ func (table Table) reviewMark(decision github.ReviewDecision) (string, lipgloss.
 	}
 }
 
+// conflictsMark and conflictsWord say that a pull request's branch conflicts
+// with its base: the glyph for the compact column, the word for the wide one.
+const (
+	conflictsMark = "!"
+	conflictsWord = "conflicts"
+)
+
+// conflictsHeading is the heading of the conflicts column in its width.
+func (layout Layout) conflictsHeading() string {
+	if layout.conflicts >= conflictsWideColumns {
+		return "CONFLICTS"
+	}
+	return "CF"
+}
+
+// conflictsCell is the conflicts column, width columns wide: the word or the
+// glyph for a pull request that cannot merge for conflicts, blank otherwise.
+// Only the shape shows on the selected row, which is painted in one style.
+func (table Table) conflictsCell(pullRequest github.PullRequest, width int) cell {
+	text := ""
+	switch {
+	case pullRequest.MergeState != github.MergeStateConflicts:
+	case width >= conflictsWideColumns:
+		text = conflictsWord
+	default:
+		text = conflictsMark
+	}
+	return styled(text, table.theme.PullRequestList.Conflicts)
+}
+
 // checksMark returns the one-column glyph and style for the head commit's
 // check state; no checks gives a blank.
 func (table Table) checksMark(state github.CheckState) (string, lipgloss.Style) {
