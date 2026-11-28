@@ -673,3 +673,25 @@ func TestSetFileViewedError(test *testing.T) {
 		test.Errorf("err = %v, want ErrNotFound", err)
 	}
 }
+
+func TestListAndSearchQueriesRequestTheMergeState(test *testing.T) {
+	testServer := &server{}
+	client := newTestClient(test, testServer)
+	ctx := context.Background()
+	if _, err := client.ListPullRequests(ctx, repository, github.PageRequest{}); err != nil {
+		test.Fatal(err)
+	}
+	if _, err := client.SearchPullRequests(ctx, "review-requested:@me", github.PageRequest{}); err != nil {
+		test.Fatal(err)
+	}
+	calls := testServer.Calls()
+	if len(calls) != 2 || calls[0].Operation != operationPullRequestList || calls[1].Operation != operationPullRequestSearch {
+		test.Fatalf("calls = %+v, want a list then a search query", calls)
+	}
+	for _, recorded := range calls {
+		// Without the field the conflicts column would stay blank against real GitHub.
+		if !strings.Contains(recorded.Query, "mergeStateStatus") {
+			test.Errorf("%s query does not select mergeStateStatus", recorded.Operation)
+		}
+	}
+}

@@ -114,16 +114,16 @@ func TestConflictsCell(test *testing.T) {
 	}
 }
 
+// wantTitleColumns is the title width the conflicts word must leave. It is
+// written out here, not read from the code under test, so that changing the
+// code's constant fails the tests.
+const wantTitleColumns = 40
+
 func conflictsTestPullRequests() []github.PullRequest {
 	return []github.PullRequest{
 		{Number: 1, Title: "clean", Author: "alice"},
 		{Number: 2, Title: "conflicting", Author: "alice", MergeState: github.MergeStateConflicts},
 	}
-}
-
-// titleColumns is how wide the title is in a table drawn width columns wide.
-func titleColumns(table Table, pullRequests []github.PullRequest, width int) int {
-	return table.Layout(pullRequests, width).title
 }
 
 func TestConflictsColumnSpellsItselfOutWhileTheTitleKeepsFortyColumns(test *testing.T) {
@@ -142,7 +142,7 @@ func TestConflictsColumnSpellsItselfOutWhileTheTitleKeepsFortyColumns(test *test
 			table := New(theme.Default(), time.Now, testCase.options)
 			pullRequests := conflictsTestPullRequests()
 			// The width at which the title is exactly comfortable with the word.
-			roomy := table.Layout(pullRequests, 500).fixed() + comfortableTitleColumns
+			roomy := table.Layout(pullRequests, 500).fixed() + wantTitleColumns
 			for _, step := range []struct {
 				width       int
 				wantWord    bool
@@ -156,8 +156,14 @@ func TestConflictsColumnSpellsItselfOutWhileTheTitleKeepsFortyColumns(test *test
 				if got := layout.conflicts == conflictsWideColumns; got != step.wantWord {
 					test.Fatalf("width %d: word shown = %v, want %v (layout %+v)", step.width, got, step.wantWord, layout)
 				}
-				if step.wantWord && titleColumns(table, pullRequests, step.width) < comfortableTitleColumns {
-					test.Errorf("width %d: the word leaves the title %d columns", step.width, layout.title)
+				// The word takes seven more columns than the glyph, so one column
+				// below the boundary the title has 40 - 1 + 7 columns.
+				wantTitle := wantTitleColumns
+				if !step.wantWord {
+					wantTitle = wantTitleColumns - 1 + 7
+				}
+				if layout.title != wantTitle {
+					test.Errorf("width %d: title has %d columns, want %d", step.width, layout.title, wantTitle)
 				}
 				header := ansi.Strip(table.Header(layout, step.width))
 				row := ansi.Strip(table.Row(layout, pullRequests[1], false, false, step.width))
@@ -186,7 +192,7 @@ func TestMarkDoesNotCostTheTitleItsComfort(test *testing.T) {
 	marks := 0
 	for width := 200; width > 30; width-- {
 		layout := table.Layout(pullRequests, width)
-		if layout.conflicts == conflictsWideColumns && layout.title < comfortableTitleColumns {
+		if layout.conflicts == conflictsWideColumns && layout.title < wantTitleColumns {
 			test.Errorf("width %d: CONFLICTS shown with a title of %d columns (layout %+v)", width, layout.title, layout)
 		}
 		if layout.mark > 0 {
